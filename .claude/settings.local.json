@@ -8,9 +8,26 @@
       "Bash(ls:*)",
       "Bash(python3:*)",
       "Bash(grep:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)"
     ],
     "deny": [],
     "ask": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '📝 RAPPEL: Fichier modifié - penser à git commit/push'"
+          }
+        ]
+      }
+    ]
   }
 }

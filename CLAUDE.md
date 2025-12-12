@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## RÈGLE OBLIGATOIRE : Git Commit après modifications
+
+**Après chaque session de modifications de fichiers, tu DOIS :**
+
+1. Vérifier les fichiers modifiés : `git status`
+2. Ajouter les fichiers : `git add .`
+3. Créer un commit descriptif : `git commit -m "Description concise des changements"`
+4. Pousser vers GitHub : `git push`
+
+**Format du message de commit :**
+- Fix: pour les corrections de bugs
+- Feat: pour les nouvelles fonctionnalités
+- Config: pour les changements de configuration
+- Refactor: pour les refactorisations
+
+Exemple : `git commit -m "Fix: correction bug GOTO demi-tour dans tracker.py"`
+
+---
+
 ## Project Overview
 
 **DriftApp** - Intelligent astronomical observatory dome tracking system with parallax compensation, adaptive modes, and real-time feedback. Designed for Raspberry Pi with Terminal UI (TUI).
