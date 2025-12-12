@@ -1,0 +1,154 @@
+{
+  "_comment": "Configuration complète DriftApp - Toutes les constantes centralisées",
+  "_version": "2.1",
+  "_date": "2025-11-16",
+  "_changes": "Suppression mode CAUTIOUS - Simplification à 3 modes (NORMAL/CRITICAL/CONTINUOUS)",
+  
+  "site": {
+    "latitude": 44.15,
+    "longitude": 5.23,
+    "altitude": 800,
+    "nom": "Observatoire Ubik",
+    "fuseau": "Europe/Paris",
+    "tz_offset": 1
+  },
+  
+  "geometrie": {
+    "deport_tube_cm": 40.0,
+    "rayon_coupole_cm": 120.0
+  },
+  
+  "suivi": {
+    "seuil_correction_deg": 0.5,
+    "intervalle_verification_sec": 60,
+    "abaque_file": "data/Loi_coupole.xlsx",
+    "_intervalle_comment": "60s = valeur du mode adaptatif NORMAL"
+  },
+
+  "simulation": false,
+
+  "moteur": {
+    "_comment": "Configuration du moteur pas-à-pas",
+    
+    "gpio_pins": {
+      "_comment": "Numérotation BCM",
+      "dir": 17,
+      "step": 18
+    },
+
+    "steps_per_revolution": 200,
+    "_steps_comment": "200 en full step, 400 avec microstep 2, 800 avec microstep 4",
+
+    "microsteps": 4,
+    "_microsteps_comment": "Valeurs possibles: 1, 2, 4, 8, 16, 32 (selon driver)",
+
+    "gear_ratio": 2230,
+    "_gear_ratio_comment": "Rapport de réduction mécanique",
+
+    "steps_correction_factor": 1.08849,
+    "_correction_comment": "Facteur de correction mesuré (1.0 = pas de correction)",
+
+    "max_speed_steps_per_sec": 1000,
+    "acceleration_steps_per_sec2": 500,
+    "motor_delay_base": 0.002
+  },
+  
+  "encodeur": {
+    "_comment": "Configuration encodeur magnétique EMS22A",
+    
+    "enabled": true,
+    "_enabled_comment": "Activer la boucle fermée avec encodeur",
+    
+    "spi": {
+      "bus": 0,
+      "device": 0,
+      "speed_hz": 1000000,
+      "mode": 0
+    },
+    
+    "mecanique": {
+      "wheel_diameter_mm": 50.0,
+      "ring_diameter_mm": 2303.0,
+      "counts_per_rev": 1024,
+      "_counts_comment": "Résolution 10 bits = 1024 positions"
+    },
+    
+    "calibration_factor": 0.010851,
+    "_calibration_comment": "Facteur corrigé le 5 décembre 2025 - Valeur = 0.01077/0.9925 (cohérent avec script direct SPI)"
+  },
+  
+  "adaptive_tracking": {
+    "_comment": "Système de suivi adaptatif automatique - VERSION SIMPLIFIÉE (3 modes)",
+    
+    "altitudes": {
+      "_comment": "Seuils d'altitude pour changement de mode (degrés)",
+      "critical": 68.0,
+      "zenith": 75.0
+    },
+    
+    "movements": {
+      "_comment": "Seuils de mouvement pour détection (degrés)",
+      "critical": 30.0,
+      "extreme": 50.0,
+      "min_for_continuous": 1.0,
+      "_comment_min": "Mouvement minimum pour déclencher CONTINUOUS en haute altitude. Si < 1°, reste en CRITICAL."
+    },
+    
+    
+    "modes": {
+      "_comment": "Paramètres validés sur site le 12/12/2025 (voir capture_Vitesses.png)",
+
+      "normal": {
+        "_comment": "Altitude < 68° - Suivi standard",
+        "interval_sec": 60,
+        "threshold_deg": 0.5,
+        "motor_delay": 0.0011,
+        "_speed": "9.0°/min (mesuré OK)"
+      },
+
+      "critical": {
+        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché",
+        "interval_sec": 30,
+        "threshold_deg": 0.35,
+        "motor_delay": 0.00055,
+        "_speed": "16.9°/min (mesuré OK)"
+      },
+
+      "continuous": {
+        "_comment": "Altitude ≥ 75° ou mouvement extrême - Corrections fréquentes",
+        "interval_sec": 30,
+        "threshold_deg": 0.3,
+        "motor_delay": 0.00012,
+        "_speed": "45.0°/min (mesuré OK - limite stable)"
+      },
+
+      "fast_track": {
+        "_comment": "Basculement méridien ou GOTO - Vitesse maximale",
+        "interval_sec": 5,
+        "threshold_deg": 0.5,
+        "motor_delay": 0.00012,
+        "_speed": "45.0°/min (mesuré OK - limite stable)"
+      }
+    },
+    
+    "critical_zones": [
+      {
+        "_comment": "Zone problématique Nord-Est (haute altitude)",
+        "name": "Zone Nord-Est haute",
+        "alt_min": 68.0,
+        "alt_max": 73.0,
+        "az_min": 50.0,
+        "az_max": 70.0,
+        "enabled": true
+      }
+    ]
+  },
+
+  "logging": {
+    "_comment": "Configuration des logs (optionnel)",
+    "level": "INFO",
+    "log_dir": "logs",
+    "max_file_size_mb": 10,
+    "backup_count": 5
+  }
+}

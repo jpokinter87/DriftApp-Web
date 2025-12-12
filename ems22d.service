@@ -1,0 +1,15 @@
+[Unit]
+Description=EMS22A calibrated daemon
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/slenk/Dome_v4_5
+ExecStart=/usr/bin/python3 /home/slenk/Dome_v4_5/ems22d_calibrated.py
+Restart=always
+User=slenk
+# Variables d'environnement
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

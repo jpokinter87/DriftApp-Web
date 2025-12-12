@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(cp:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(grep:*)",
+      "Bash(wc:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

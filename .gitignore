@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Logs (garder le dossier mais pas les fichiers)
+logs/*.log
+logs/*.json
+!logs/.gitkeep
+
+# Fichiers temporaires
+*.tmp
+*.bak
+*~
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Fichiers de données temporaires
+/dev/shm/
+
+# Secrets et config locale (si applicable)
+.env
+*.secret
+
+# Cache uv/pip
+.cache/
+*.egg-info/
+dist/
+build/
+
+# Tests sur site - fichiers volumineux
+tests_sur_site/*.mp4
+tests_sur_site/*.avi
+tests_sur_site/*.mov
+tests_sur_site/*.png
+tests_sur_site/*.jpg
+
+# Captures d'écran à la racine
+capture_*.png
