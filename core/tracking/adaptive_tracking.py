@@ -231,10 +231,12 @@ class AdaptiveTrackingManager:
         Returns:
             tuple (TrackingMode, list[str] raisons)
         """
-        # Priorité 0 : Grand déplacement (>30°) → FAST_TRACK
-        # Typiquement un basculement de méridien ou un GOTO initial
+        # Priorité 0 : Grand déplacement (>30°) → CRITICAL (TEST)
+        # TODO: Revenir à FAST_TRACK quand le problème de vitesse sera résolu
+        # Le mode FAST_TRACK cause des problèmes moteur malgré le même délai
+        # fonctionnant dans calibration_moteur.py
         if delta >= 30.0:
-            return TrackingMode.FAST_TRACK, [f"Grand déplacement ({delta:.1f}°) - Mode rapide"]
+            return TrackingMode.CRITICAL, [f"Grand déplacement ({delta:.1f}°) - Mode CRITICAL (test)"]
 
         # Priorité 1 : Mouvement extrême → CONTINUOUS
         if movement_level == "extreme":
