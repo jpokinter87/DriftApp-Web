@@ -118,16 +118,16 @@
         "_comment": "Altitude ≥ 75° ou mouvement extrême - Corrections fréquentes",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.00012,
-        "_speed": "45.0°/min (mesuré OK - limite stable)"
+        "motor_delay": 0.00014,
+        "_speed": "42°/min (mesuré OK - marge sécurité)"
       },
 
       "fast_track": {
         "_comment": "Basculement méridien ou GOTO - Vitesse maximale",
         "interval_sec": 5,
         "threshold_deg": 0.5,
-        "motor_delay": 0.00012,
-        "_speed": "45.0°/min (mesuré OK - limite stable)"
+        "motor_delay": 0.00014,
+        "_speed": "42°/min (mesuré OK - marge sécurité)"
       }
     },
     
