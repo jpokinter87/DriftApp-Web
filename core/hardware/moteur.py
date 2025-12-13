@@ -263,12 +263,19 @@ class MoteurCoupole:
         )
 
     def _init_parametres_rampe(self):
-        """Initialise les paramètres de rampe d'accélération."""
-        self.ramp_start_delay = 0.003  # Délai initial lent (3ms)
-        self.ramp_steps = 400          # Pas pour atteindre vitesse nominale (augmenté de 200 à 400)
-        self.ramp_enabled = True
-        # Seuil pour désactiver automatiquement la rampe (vitesses très rapides)
-        self.ramp_disable_threshold = 0.0005  # En dessous de 0.5ms, pas de rampe
+        """
+        Paramètres de rampe - NON UTILISÉS.
+
+        La rampe a été désactivée pour s'aligner sur calibration_moteur.py.
+        Ces paramètres sont conservés au cas où on voudrait réactiver la rampe.
+        Voir _calculer_delai_rampe() qui retourne maintenant un délai constant.
+        """
+        # DÉSACTIVÉ - Paramètres conservés pour référence
+        # self.ramp_start_delay = 0.003  # Délai initial lent (3ms)
+        # self.ramp_steps = 400          # Pas pour atteindre vitesse nominale
+        # self.ramp_enabled = True
+        # self.ramp_disable_threshold = 0.0005  # Seuil désactivation
+        pass
 
     # =========================================================================
     # ABSTRACTION GPIO (méthodes unifiées)
@@ -457,64 +464,40 @@ class MoteurCoupole:
     def _calculer_delai_rampe(self, step_index: int, total_steps: int,
                                vitesse_nominale: float) -> float:
         """
-        Calcule le délai pour un pas donné avec rampe d'accélération/décélération.
+        Retourne le délai constant - PAS DE RAMPE.
 
-        La rampe est trapézoïdale :
-        - Phase 1 : Accélération (ramp_steps pas)
-        - Phase 2 : Vitesse nominale
-        - Phase 3 : Décélération (ramp_steps pas)
+        ALIGNEMENT SUR calibration_moteur.py qui fonctionne parfaitement.
 
-        IMPORTANT : Pour les vitesses très élevées (FAST_TRACK), la rampe est
-        adaptée pour éviter les résonances mécaniques.
+        La rampe a été supprimée car elle causait des problèmes :
+        - Démarrage brutal pour vitesses rapides (rampe désactivée à tort)
+        - Délai forcé à 0.0015s pour petits mouvements (<50 pas)
+        - Comportement différent de calibration_moteur.py
+
+        Les vitesses testées sur site (0.00012s à 0.0011s) fonctionnent
+        en délai constant. Voir capture_Vitesses.png pour les mesures.
 
         Args:
-            step_index: Index du pas actuel (0 à total_steps-1)
-            total_steps: Nombre total de pas
+            step_index: Index du pas actuel (ignoré)
+            total_steps: Nombre total de pas (ignoré)
             vitesse_nominale: Délai cible en secondes
 
         Returns:
-            Délai à appliquer pour ce pas
+            Délai constant = vitesse_nominale
         """
-        # Pour les vitesses très rapides (FAST_TRACK), PAS DE RAMPE
-        # La rampe crée des résonances/vibrations mécaniques à haute vitesse
-        # FAST_TRACK est utilisé uniquement pour GOTO manuel, pas besoin de rampe
-        if vitesse_nominale <= self.ramp_disable_threshold:
-            return vitesse_nominale
-
-        # Rampe standard pour les vitesses normales
-        if not self.ramp_enabled or total_steps < self.ramp_steps * 2:
-            # Pas assez de pas pour une rampe complète, utiliser vitesse constante
-            # mais légèrement plus lente pour les petits mouvements
-            if total_steps < 50:
-                return max(vitesse_nominale, self.ramp_start_delay * 0.5)
-            return vitesse_nominale
-
-        # Phase d'accélération
-        if step_index < self.ramp_steps:
-            # Interpolation linéaire du délai (lent → rapide)
-            ratio = step_index / self.ramp_steps
-            delai = self.ramp_start_delay - (self.ramp_start_delay - vitesse_nominale) * ratio
-            return delai
-
-        # Phase de décélération
-        steps_restants = total_steps - step_index - 1
-        if steps_restants < self.ramp_steps:
-            # Interpolation linéaire du délai (rapide → lent)
-            ratio = steps_restants / self.ramp_steps
-            delai = self.ramp_start_delay - (self.ramp_start_delay - vitesse_nominale) * ratio
-            return delai
-
-        # Phase vitesse nominale
         return vitesse_nominale
 
     def rotation(self, angle_deg: float, vitesse: float = 0.0015):
         """
-        Fait tourner la coupole d'un angle donné AVEC rampe d'accélération.
+        Fait tourner la coupole d'un angle donné.
 
         Args:
             angle_deg: Angle en degrés (positif = horaire)
             vitesse: Délai nominal entre les pas en secondes
         """
+        # IMPORTANT: Réinitialiser stop_requested pour éviter que
+        # la rotation soit bloquée par un arrêt précédent
+        self.clear_stop_request()
+
         self.definir_direction(1 if angle_deg >= 0 else -1)
 
         deg_per_step = 360.0 / self.steps_per_dome_revolution
@@ -524,19 +507,16 @@ class MoteurCoupole:
             return
 
         self.logger.debug(
-            f"Rotation de {angle_deg:.2f}° ({steps} pas, "
-            f"rampe={'ON' if self.ramp_enabled else 'OFF'})"
+            f"Rotation de {angle_deg:.2f}° ({steps} pas, délai={vitesse}s)"
         )
 
+        # Boucle simple comme calibration_moteur.py
         for i in range(steps):
-            # Vérifier arrêt demandé
             if self.stop_requested:
                 self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
                 break
 
-            # Calculer le délai avec rampe
-            delai = self._calculer_delai_rampe(i, steps, vitesse)
-            self.faire_un_pas(delai)
+            self.faire_un_pas(vitesse)
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
                         vitesse: float = 0.0015):

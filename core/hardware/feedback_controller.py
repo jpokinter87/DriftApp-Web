@@ -141,14 +141,18 @@ class FeedbackController:
     def _executer_pas_avec_verification(self, steps: int, vitesse: float,
                                          angle_cible: float,
                                          tolerance: float) -> None:
-        """Exécute les pas avec vérifications périodiques."""
+        """
+        Exécute les pas avec vérifications périodiques.
+
+        ALIGNEMENT SUR calibration_moteur.py : utilise délai constant.
+        """
         for i in range(steps):
             if self.stop_requested:
                 self.logger.info(f"Arrêt demandé pendant l'exécution ({i}/{steps})")
                 break
 
-            delai = self.moteur._calculer_delai_rampe(i, steps, vitesse)
-            self.moteur.faire_un_pas(delai=delai)
+            # Délai constant comme calibration_moteur.py (pas de rampe)
+            self.moteur.faire_un_pas(delai=vitesse)
 
             # Vérification tous les 500 pas
             if (i + 1) % 500 == 0:
