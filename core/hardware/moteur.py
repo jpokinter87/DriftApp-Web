@@ -202,8 +202,7 @@ class MoteurCoupole:
 
         self.logger.info(
             f"Moteur initialisé ({self.gpio_lib}) - "
-            f"Steps/tour coupole: {self.steps_per_dome_revolution} - "
-            f"Rampe: {self.ramp_steps} pas"
+            f"Steps/tour coupole: {self.steps_per_dome_revolution}"
         )
 
     # =========================================================================
