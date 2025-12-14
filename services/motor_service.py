@@ -32,6 +32,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
 from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
+from core.hardware.moteur_simule import MoteurSimule
+from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager, TrackingMode
 from core.tracking.tracker import TrackingSession
@@ -43,6 +45,46 @@ from core.utils.angle_utils import shortest_angular_distance
 COMMAND_FILE = Path("/dev/shm/motor_command.json")
 STATUS_FILE = Path("/dev/shm/motor_status.json")
 ENCODER_FILE = Path("/dev/shm/ems22_position.json")
+
+
+class SimulatedDaemonReader:
+    """
+    Lecteur simulé pour le daemon encodeur.
+
+    En mode simulation, lit la position depuis MoteurSimule
+    au lieu du fichier /dev/shm/ems22_position.json.
+    """
+
+    def __init__(self):
+        self.logger = logging.getLogger("SimulatedDaemonReader")
+
+    def is_available(self) -> bool:
+        """Toujours disponible en simulation."""
+        return True
+
+    def read_raw(self) -> dict:
+        """Retourne un statut simulé."""
+        from core.hardware.moteur_simule import _simulated_position
+        return {
+            'angle': _simulated_position,
+            'calibrated': True,
+            'status': 'OK (simulation)',
+            'raw': 0
+        }
+
+    def read_angle(self, timeout_ms: int = 200) -> float:
+        """Retourne la position simulée."""
+        from core.hardware.moteur_simule import _simulated_position
+        return _simulated_position
+
+    def read_status(self) -> dict:
+        """Retourne le statut complet simulé."""
+        return self.read_raw()
+
+    def read_stable(self, num_samples: int = 3, delay_ms: int = 10,
+                    stabilization_ms: int = 50) -> float:
+        """Retourne la position simulée (pas de moyennage nécessaire)."""
+        return self.read_angle()
 
 # Configuration logging
 logging.basicConfig(
@@ -79,15 +121,29 @@ class MotorService:
         # Charger la configuration
         self.config = ConfigLoader().load()
 
-        # Initialiser le moteur
-        self.moteur = MoteurCoupole(self.config.moteur)
-        self.daemon_reader = DaemonEncoderReader()
-        self.feedback_controller = FeedbackController(self.moteur, self.daemon_reader)
+        # Détection automatique du matériel (comme dans l'app Kivy)
+        is_production, hw_info = HardwareDetector.detect_hardware()
+        self.simulation_mode = not is_production
+
+        # Afficher le résumé de détection
+        logger.info(HardwareDetector.get_hardware_summary(hw_info))
+
+        # Initialiser le moteur (réel ou simulé)
+        if self.simulation_mode:
+            logger.info("MODE SIMULATION ACTIVÉ (Raspberry Pi non détecté)")
+            self.moteur = MoteurSimule(self.config.motor)
+            self.daemon_reader = SimulatedDaemonReader()
+            self.feedback_controller = self.moteur  # MoteurSimule implémente l'interface
+        else:
+            logger.info("MODE PRODUCTION - GPIO actif")
+            self.moteur = MoteurCoupole(self.config.motor)
+            self.daemon_reader = DaemonEncoderReader()
+            self.feedback_controller = FeedbackController(self.moteur, self.daemon_reader)
 
         # Gestionnaire adaptatif
         self.adaptive_manager = AdaptiveTrackingManager(
-            base_interval=self.config.suivi.intervalle_verification_sec,
-            base_threshold=self.config.suivi.seuil_correction_deg,
+            base_interval=self.config.tracking.intervalle_verification_sec,
+            base_threshold=self.config.tracking.seuil_correction_deg,
             adaptive_config=self.config.adaptive
         )
 
@@ -100,13 +156,15 @@ class MotorService:
             'mode': 'idle',
             'tracking_object': None,
             'error': None,
+            'simulation': self.simulation_mode,
             'last_update': datetime.now().isoformat()
         }
 
         # Dernière commande traitée (pour éviter les doublons)
         self.last_command_id = None
 
-        logger.info("Motor Service initialisé")
+        mode_str = "SIMULATION" if self.simulation_mode else "PRODUCTION"
+        logger.info(f"Motor Service initialisé en mode {mode_str}")
 
     # =========================================================================
     # GESTION DES FICHIERS IPC
@@ -324,12 +382,12 @@ class MotorService:
                 moteur=self.moteur,
                 calc=calc,
                 logger=tracking_logger,
-                seuil=self.config.suivi.seuil_correction_deg,
-                intervalle=self.config.suivi.intervalle_verification_sec,
-                abaque_file=self.config.suivi.abaque_file,
+                seuil=self.config.tracking.seuil_correction_deg,
+                intervalle=self.config.tracking.intervalle_verification_sec,
+                abaque_file=self.config.tracking.abaque_file,
                 adaptive_config=self.config.adaptive,
-                motor_config=self.config.moteur,
-                encoder_config=self.config.encodeur
+                motor_config=self.config.motor,
+                encoder_config=self.config.encoder
             )
 
             # Démarrer le suivi
@@ -537,15 +595,18 @@ class MotorService:
 
 def main():
     """Point d'entrée principal."""
-    # Vérifier les permissions (nécessite sudo pour GPIO)
-    if os.geteuid() != 0:
-        print("ERREUR: Ce service nécessite les privilèges root (sudo)")
-        print("Usage: sudo python3 services/motor_service.py")
-        sys.exit(1)
-
     # Créer le répertoire de logs si nécessaire
     logs_dir = Path(__file__).parent.parent / 'logs'
     logs_dir.mkdir(exist_ok=True)
+
+    # Détection automatique du matériel
+    is_production, _ = HardwareDetector.detect_hardware()
+
+    # En production (Raspberry Pi), vérifier les permissions (nécessite sudo pour GPIO)
+    if is_production and os.geteuid() != 0:
+        print("ERREUR: Ce service nécessite les privilèges root (sudo) sur Raspberry Pi")
+        print("Usage: sudo python3 services/motor_service.py")
+        sys.exit(1)
 
     # Créer et lancer le service
     service = MotorService()
