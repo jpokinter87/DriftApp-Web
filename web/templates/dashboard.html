@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriftApp - Contrôle Coupole</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <!-- En-tête -->
+        <header class="header">
+            <h1>DriftApp</h1>
+            <span class="subtitle">Contrôle de Coupole - Observatoire Ubik</span>
+            <div class="status-indicator" id="service-status">
+                <span class="status-dot"></span>
+                <span class="status-text">Connexion...</span>
+            </div>
+        </header>
+
+        <!-- Zone principale -->
+        <main class="main-content">
+            <!-- Colonne gauche: Boussole -->
+            <section class="compass-section">
+                <h2>Position Coupole</h2>
+                <div class="compass-container">
+                    <canvas id="compass" width="300" height="300"></canvas>
+                </div>
+                <div class="position-info">
+                    <div class="info-item">
+                        <label>Position:</label>
+                        <span id="dome-position">--°</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Cible:</label>
+                        <span id="dome-target">--°</span>
+                    </div>
+                    <div class="info-item">
+                        <label>Calibré:</label>
+                        <span id="encoder-calibrated">--</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Colonne droite: Contrôles -->
+            <section class="control-section">
+                <!-- Suivi d'objet -->
+                <div class="control-panel">
+                    <h3>Suivi d'Objet</h3>
+                    <div class="input-group">
+                        <input type="text" id="object-name" placeholder="Ex: M31, Vega, Jupiter...">
+                        <button id="btn-search" class="btn btn-secondary">Rechercher</button>
+                    </div>
+                    <div id="object-info" class="object-info hidden">
+                        <span id="object-coords">--</span>
+                    </div>
+                    <div class="button-group">
+                        <button id="btn-start-tracking" class="btn btn-primary" disabled>
+                            Démarrer le Suivi
+                        </button>
+                        <button id="btn-stop-tracking" class="btn btn-danger" disabled>
+                            Stopper
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Info suivi actif -->
+                <div id="tracking-info" class="tracking-info hidden">
+                    <h3>Suivi Actif</h3>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <label>Objet:</label>
+                            <span id="tracking-object">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Azimut:</label>
+                            <span id="tracking-az">--°</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Altitude:</label>
+                            <span id="tracking-alt">--°</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Mode:</label>
+                            <span id="tracking-mode">--</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Corrections:</label>
+                            <span id="tracking-corrections">0</span>
+                        </div>
+                        <div class="info-item">
+                            <label>Prochain check:</label>
+                            <span id="tracking-remaining">--s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôle manuel -->
+                <div class="control-panel">
+                    <h3>Contrôle Manuel</h3>
+                    <div class="jog-buttons">
+                        <button id="btn-jog-ccw-10" class="btn btn-jog">-10°</button>
+                        <button id="btn-jog-ccw-1" class="btn btn-jog">-1°</button>
+                        <button id="btn-stop" class="btn btn-stop">STOP</button>
+                        <button id="btn-jog-cw-1" class="btn btn-jog">+1°</button>
+                        <button id="btn-jog-cw-10" class="btn btn-jog">+10°</button>
+                    </div>
+                    <div class="goto-group">
+                        <input type="number" id="goto-angle" min="0" max="360" placeholder="Angle (0-360)">
+                        <button id="btn-goto" class="btn btn-secondary">GOTO</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Zone de logs -->
+        <section class="logs-section">
+            <h3>Journal</h3>
+            <div id="logs" class="logs-container">
+                <div class="log-entry">Démarrage de l'interface...</div>
+            </div>
+        </section>
+
+        <!-- Pied de page -->
+        <footer class="footer">
+            <span>DriftApp v4.3 - Interface Web</span>
+            <span id="last-update">Dernière mise à jour: --</span>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

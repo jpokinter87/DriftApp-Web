@@ -1,0 +1,562 @@
+#!/usr/bin/env python3
+"""
+Motor Service - Processus dédié pour le contrôle moteur GPIO.
+
+Ce service tourne dans un processus séparé avec son propre GIL,
+garantissant un timing optimal pour les pulses GPIO sans interférence
+avec l'interface web Django.
+
+Communication:
+- Reçoit commandes via /dev/shm/motor_command.json
+- Publie état via /dev/shm/motor_status.json
+- Lit position encodeur via /dev/shm/ems22_position.json (daemon existant)
+
+Usage:
+    sudo python3 services/motor_service.py
+
+Date: Décembre 2025
+"""
+
+import json
+import logging
+import os
+import signal
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Any, Optional
+
+# Ajouter le répertoire parent au path pour les imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from core.config.config_loader import ConfigLoader
+from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
+from core.hardware.feedback_controller import FeedbackController
+from core.tracking.adaptive_tracking import AdaptiveTrackingManager, TrackingMode
+from core.tracking.tracker import TrackingSession
+from core.observatoire import AstronomicalCalculations
+from core.tracking.tracking_logger import TrackingLogger
+from core.utils.angle_utils import shortest_angular_distance
+
+# Chemins des fichiers IPC
+COMMAND_FILE = Path("/dev/shm/motor_command.json")
+STATUS_FILE = Path("/dev/shm/motor_status.json")
+ENCODER_FILE = Path("/dev/shm/ems22_position.json")
+
+# Configuration logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(
+            Path(__file__).parent.parent / 'logs' / 'motor_service.log',
+            mode='a'
+        )
+    ]
+)
+logger = logging.getLogger("MotorService")
+
+
+class MotorService:
+    """
+    Service de contrôle moteur avec boucle de suivi intégrée.
+
+    Ce service gère:
+    - Les commandes GOTO manuelles
+    - Les rotations relatives (jog)
+    - Le suivi automatique d'objets célestes
+    - Le feedback encodeur en boucle fermée
+    """
+
+    def __init__(self):
+        """Initialise le service moteur."""
+        self.running = False
+        self.tracking_active = False
+        self.tracking_session: Optional[TrackingSession] = None
+
+        # Charger la configuration
+        self.config = ConfigLoader().load()
+
+        # Initialiser le moteur
+        self.moteur = MoteurCoupole(self.config.moteur)
+        self.daemon_reader = DaemonEncoderReader()
+        self.feedback_controller = FeedbackController(self.moteur, self.daemon_reader)
+
+        # Gestionnaire adaptatif
+        self.adaptive_manager = AdaptiveTrackingManager(
+            base_interval=self.config.suivi.intervalle_verification_sec,
+            base_threshold=self.config.suivi.seuil_correction_deg,
+            adaptive_config=self.config.adaptive
+        )
+
+        # État actuel
+        self.current_status = {
+            'status': 'idle',
+            'position': 0.0,
+            'target': None,
+            'progress': 0,
+            'mode': 'idle',
+            'tracking_object': None,
+            'error': None,
+            'last_update': datetime.now().isoformat()
+        }
+
+        # Dernière commande traitée (pour éviter les doublons)
+        self.last_command_id = None
+
+        logger.info("Motor Service initialisé")
+
+    # =========================================================================
+    # GESTION DES FICHIERS IPC
+    # =========================================================================
+
+    def read_command(self) -> Optional[Dict[str, Any]]:
+        """
+        Lit une commande depuis le fichier IPC.
+
+        Returns:
+            dict: Commande à exécuter ou None si aucune nouvelle commande
+        """
+        if not COMMAND_FILE.exists():
+            return None
+
+        try:
+            text = COMMAND_FILE.read_text()
+            if not text.strip():
+                return None
+
+            command = json.loads(text)
+
+            # Vérifier si c'est une nouvelle commande
+            cmd_id = command.get('id')
+            if cmd_id == self.last_command_id:
+                return None
+
+            self.last_command_id = cmd_id
+            return command
+
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Erreur lecture commande: {e}")
+            return None
+
+    def write_status(self):
+        """Écrit l'état actuel dans le fichier IPC."""
+        self.current_status['last_update'] = datetime.now().isoformat()
+
+        try:
+            # Écriture atomique avec fichier temporaire
+            tmp_file = STATUS_FILE.with_suffix('.tmp')
+            tmp_file.write_text(json.dumps(self.current_status, indent=2))
+            tmp_file.rename(STATUS_FILE)
+        except IOError as e:
+            logger.error(f"Erreur écriture status: {e}")
+
+    def clear_command(self):
+        """Efface le fichier de commande après traitement."""
+        try:
+            if COMMAND_FILE.exists():
+                COMMAND_FILE.write_text('')
+        except IOError:
+            pass
+
+    def read_encoder_position(self) -> Optional[float]:
+        """
+        Lit la position de l'encodeur depuis le daemon existant.
+
+        Returns:
+            float: Position en degrés ou None si non disponible
+        """
+        try:
+            return self.daemon_reader.read_angle(timeout_ms=100)
+        except RuntimeError:
+            return None
+
+    # =========================================================================
+    # COMMANDES MOTEUR
+    # =========================================================================
+
+    def handle_goto(self, angle: float, speed: Optional[float] = None):
+        """
+        Exécute un GOTO vers une position absolue.
+
+        Args:
+            angle: Angle cible (0-360°)
+            speed: Vitesse moteur (delay en secondes), None = config fast_track
+        """
+        logger.info(f"GOTO vers {angle:.1f}°")
+
+        # Vitesse par défaut = fast_track
+        if speed is None:
+            fast_track = self.config.adaptive.modes.get('fast_track')
+            speed = fast_track.motor_delay if fast_track else 0.00015
+
+        self.current_status['status'] = 'moving'
+        self.current_status['target'] = angle
+        self.current_status['progress'] = 0
+        self.write_status()
+
+        try:
+            # Utiliser le feedback si disponible
+            if self.daemon_reader.is_available():
+                result = self.feedback_controller.rotation_avec_feedback(
+                    angle_cible=angle,
+                    vitesse=speed,
+                    tolerance=0.5,
+                    max_iterations=10,
+                    max_correction_par_iteration=180.0
+                )
+
+                self.current_status['status'] = 'idle' if result['success'] else 'error'
+                self.current_status['position'] = result['position_finale']
+                self.current_status['progress'] = 100
+
+                if not result['success']:
+                    self.current_status['error'] = f"Erreur finale: {result['erreur_finale']:.2f}°"
+
+                logger.info(
+                    f"GOTO terminé: {result['position_initiale']:.1f}° -> "
+                    f"{result['position_finale']:.1f}° ({result['iterations']} iter)"
+                )
+            else:
+                # Sans feedback - rotation simple
+                current_pos = self.current_status.get('position', 0)
+                delta = shortest_angular_distance(current_pos, angle)
+                self.moteur.rotation(delta, speed)
+
+                self.current_status['status'] = 'idle'
+                self.current_status['position'] = angle
+                self.current_status['progress'] = 100
+
+                logger.info(f"GOTO (sans feedback) terminé: delta={delta:.1f}°")
+
+        except Exception as e:
+            logger.error(f"Erreur GOTO: {e}")
+            self.current_status['status'] = 'error'
+            self.current_status['error'] = str(e)
+
+        self.current_status['target'] = None
+        self.write_status()
+
+    def handle_jog(self, delta: float, speed: Optional[float] = None):
+        """
+        Exécute une rotation relative (jog).
+
+        Args:
+            delta: Déplacement relatif en degrés (+ = horaire)
+            speed: Vitesse moteur (delay en secondes)
+        """
+        logger.info(f"JOG de {delta:+.1f}°")
+
+        if speed is None:
+            fast_track = self.config.adaptive.modes.get('fast_track')
+            speed = fast_track.motor_delay if fast_track else 0.00015
+
+        self.current_status['status'] = 'moving'
+        self.write_status()
+
+        try:
+            if self.daemon_reader.is_available():
+                result = self.feedback_controller.rotation_relative_avec_feedback(
+                    delta_deg=delta,
+                    vitesse=speed,
+                    tolerance=0.5,
+                    max_iterations=5
+                )
+                self.current_status['position'] = result['position_finale']
+            else:
+                self.moteur.rotation(delta, speed)
+                current = self.current_status.get('position', 0)
+                self.current_status['position'] = (current + delta) % 360
+
+            self.current_status['status'] = 'idle'
+
+        except Exception as e:
+            logger.error(f"Erreur JOG: {e}")
+            self.current_status['status'] = 'error'
+            self.current_status['error'] = str(e)
+
+        self.write_status()
+
+    def handle_stop(self):
+        """Arrête immédiatement tout mouvement."""
+        logger.info("STOP demandé")
+
+        # Arrêter le feedback en cours
+        self.feedback_controller.request_stop()
+        self.moteur.request_stop()
+
+        # Arrêter le suivi si actif
+        if self.tracking_active and self.tracking_session:
+            self.tracking_session.stop()
+            self.tracking_active = False
+            self.tracking_session = None
+
+        self.current_status['status'] = 'idle'
+        self.current_status['tracking_object'] = None
+        self.write_status()
+
+    # =========================================================================
+    # SUIVI D'OBJETS
+    # =========================================================================
+
+    def handle_tracking_start(self, object_name: str):
+        """
+        Démarre le suivi d'un objet céleste.
+
+        Args:
+            object_name: Nom de l'objet (M31, Vega, Jupiter, etc.)
+        """
+        logger.info(f"Démarrage suivi de {object_name}")
+
+        try:
+            # Créer les calculateurs
+            calc = AstronomicalCalculations(
+                self.config.site.latitude,
+                self.config.site.longitude,
+                self.config.site.altitude
+            )
+            tracking_logger = TrackingLogger(logger)
+
+            # Créer la session de suivi
+            self.tracking_session = TrackingSession(
+                moteur=self.moteur,
+                calc=calc,
+                logger=tracking_logger,
+                seuil=self.config.suivi.seuil_correction_deg,
+                intervalle=self.config.suivi.intervalle_verification_sec,
+                abaque_file=self.config.suivi.abaque_file,
+                adaptive_config=self.config.adaptive,
+                motor_config=self.config.moteur,
+                encoder_config=self.config.encodeur
+            )
+
+            # Démarrer le suivi
+            success, message = self.tracking_session.start(object_name)
+
+            if success:
+                self.tracking_active = True
+                self.current_status['status'] = 'tracking'
+                self.current_status['tracking_object'] = object_name
+                self.current_status['mode'] = 'normal'
+                logger.info(f"Suivi démarré: {message}")
+            else:
+                self.current_status['status'] = 'error'
+                self.current_status['error'] = message
+                logger.error(f"Échec démarrage suivi: {message}")
+
+        except Exception as e:
+            logger.error(f"Erreur démarrage suivi: {e}")
+            self.current_status['status'] = 'error'
+            self.current_status['error'] = str(e)
+
+        self.write_status()
+
+    def handle_tracking_stop(self):
+        """Arrête le suivi en cours."""
+        logger.info("Arrêt du suivi")
+
+        if self.tracking_session:
+            self.tracking_session.stop()
+            self.tracking_session = None
+
+        self.tracking_active = False
+        self.current_status['status'] = 'idle'
+        self.current_status['tracking_object'] = None
+        self.current_status['mode'] = 'idle'
+        self.write_status()
+
+    def update_tracking(self):
+        """
+        Met à jour le suivi (appelé périodiquement).
+
+        Cette méthode vérifie si une correction est nécessaire
+        et l'applique le cas échéant.
+        """
+        if not self.tracking_active or not self.tracking_session:
+            return
+
+        try:
+            # Vérifier et corriger si nécessaire
+            correction_applied, message = self.tracking_session.check_and_correct()
+
+            if correction_applied:
+                logger.info(message)
+
+            # Mettre à jour le status
+            status = self.tracking_session.get_status()
+            if status.get('running'):
+                self.current_status['position'] = status.get('position_relative', 0)
+                self.current_status['mode'] = status.get('adaptive_mode', 'normal')
+
+                # Infos supplémentaires pour l'interface
+                self.current_status['tracking_info'] = {
+                    'azimut': status.get('obj_az_raw', 0),
+                    'altitude': status.get('obj_alt', 0),
+                    'position_cible': status.get('position_cible', 0),
+                    'remaining_seconds': status.get('remaining_seconds', 0),
+                    'total_corrections': status.get('total_corrections', 0),
+                    'mode_icon': status.get('mode_icon', '')
+                }
+            else:
+                # Le suivi s'est arrêté (erreur ou fin)
+                self.tracking_active = False
+                self.current_status['status'] = 'idle'
+                self.current_status['tracking_object'] = None
+
+        except Exception as e:
+            logger.error(f"Erreur mise à jour suivi: {e}")
+
+    # =========================================================================
+    # TRAITEMENT DES COMMANDES
+    # =========================================================================
+
+    def process_command(self, command: Dict[str, Any]):
+        """
+        Traite une commande reçue.
+
+        Args:
+            command: Dictionnaire de commande avec 'type' et paramètres
+        """
+        cmd_type = command.get('command', command.get('type'))
+
+        if not cmd_type:
+            logger.warning(f"Commande invalide: {command}")
+            return
+
+        logger.info(f"Traitement commande: {cmd_type}")
+
+        if cmd_type == 'goto':
+            angle = command.get('angle', 0)
+            speed = command.get('speed')
+            self.handle_goto(angle, speed)
+
+        elif cmd_type == 'jog':
+            delta = command.get('delta', 0)
+            speed = command.get('speed')
+            self.handle_jog(delta, speed)
+
+        elif cmd_type == 'stop':
+            self.handle_stop()
+
+        elif cmd_type == 'tracking_start':
+            object_name = command.get('object', command.get('name'))
+            if object_name:
+                self.handle_tracking_start(object_name)
+            else:
+                logger.warning("tracking_start sans nom d'objet")
+
+        elif cmd_type == 'tracking_stop':
+            self.handle_tracking_stop()
+
+        elif cmd_type == 'status':
+            # Commande de statut - juste mettre à jour
+            pass
+
+        else:
+            logger.warning(f"Commande inconnue: {cmd_type}")
+
+        # Effacer la commande après traitement
+        self.clear_command()
+
+    # =========================================================================
+    # BOUCLE PRINCIPALE
+    # =========================================================================
+
+    def run(self):
+        """Boucle principale du service."""
+        self.running = True
+        logger.info("Motor Service démarré - En attente de commandes...")
+
+        # Lire la position initiale
+        pos = self.read_encoder_position()
+        if pos is not None:
+            self.current_status['position'] = pos
+            logger.info(f"Position initiale: {pos:.1f}°")
+
+        self.write_status()
+
+        last_tracking_update = time.time()
+        tracking_interval = 1.0  # Vérification suivi chaque seconde
+
+        while self.running:
+            try:
+                # Lire et traiter les commandes
+                command = self.read_command()
+                if command:
+                    self.process_command(command)
+
+                # Mettre à jour le suivi si actif
+                now = time.time()
+                if self.tracking_active and (now - last_tracking_update) >= tracking_interval:
+                    self.update_tracking()
+                    last_tracking_update = now
+                    self.write_status()
+
+                # Mettre à jour la position depuis l'encodeur
+                pos = self.read_encoder_position()
+                if pos is not None and not self.tracking_active:
+                    self.current_status['position'] = pos
+
+                # Pause courte pour ne pas saturer le CPU
+                time.sleep(0.05)  # 50ms = 20Hz de polling
+
+            except KeyboardInterrupt:
+                logger.info("Interruption clavier - Arrêt du service")
+                break
+            except Exception as e:
+                logger.error(f"Erreur boucle principale: {e}")
+                time.sleep(1)
+
+        self.cleanup()
+
+    def cleanup(self):
+        """Nettoie les ressources à l'arrêt."""
+        logger.info("Nettoyage des ressources...")
+
+        # Arrêter le suivi
+        if self.tracking_session:
+            self.tracking_session.stop()
+
+        # Nettoyer le moteur
+        if self.moteur:
+            self.moteur.nettoyer()
+
+        # Mettre à jour le status final
+        self.current_status['status'] = 'stopped'
+        self.write_status()
+
+        logger.info("Motor Service arrêté proprement")
+
+    def signal_handler(self, signum, frame):
+        """Gestionnaire de signaux pour arrêt propre."""
+        logger.info(f"Signal {signum} reçu - Arrêt en cours...")
+        self.running = False
+
+
+def main():
+    """Point d'entrée principal."""
+    # Vérifier les permissions (nécessite sudo pour GPIO)
+    if os.geteuid() != 0:
+        print("ERREUR: Ce service nécessite les privilèges root (sudo)")
+        print("Usage: sudo python3 services/motor_service.py")
+        sys.exit(1)
+
+    # Créer le répertoire de logs si nécessaire
+    logs_dir = Path(__file__).parent.parent / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+
+    # Créer et lancer le service
+    service = MotorService()
+
+    # Installer les gestionnaires de signaux
+    signal.signal(signal.SIGTERM, service.signal_handler)
+    signal.signal(signal.SIGINT, service.signal_handler)
+
+    # Lancer la boucle principale
+    service.run()
+
+
+if __name__ == '__main__':
+    main()
