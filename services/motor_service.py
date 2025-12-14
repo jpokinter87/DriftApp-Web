@@ -375,7 +375,7 @@ class MotorService:
                 self.config.site.longitude,
                 self.config.site.altitude
             )
-            tracking_logger = TrackingLogger(logger)
+            tracking_logger = TrackingLogger()
 
             # Créer la session de suivi
             self.tracking_session = TrackingSession(

@@ -45,6 +45,8 @@ dependencies = [
     "matplotlib>=3.5.0",
     "panda>=0.3.1",
     "pandas>=2.3.3",
+    "django>=6.0",
+    "djangorestframework>=3.16.1",
 ]
 
 [project.optional-dependencies]
