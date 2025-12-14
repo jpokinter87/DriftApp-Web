@@ -451,14 +451,35 @@ class MoteurCoupole:
         """
         Fait faire un pas au moteur.
 
+        VERSION OPTIMISÉE INLINE (alignée sur Dome_v4) :
+        - Pas d'appels de méthodes internes (6 appels → 0)
+        - delai_min réduit à 10µs (était 50µs)
+        - Code GPIO inline pour timing optimal
+
         Args:
             delai: Délai en secondes entre les impulsions
         """
         if self.gpio_handle is None:
             raise RuntimeError("GPIO non initialisé")
 
-        delai = self._valider_delai(delai)
-        self._pulse_step(delai)
+        # Validation inline (comme Dome_v4)
+        delai_min = 0.00001  # 10µs comme Dome_v4 (était 50µs)
+        if delai < delai_min:
+            self.logger.warning(f"Délai {delai:.6f}s < minimum {delai_min:.6f}s")
+            delai = delai_min
+
+        # GPIO inline (comme Dome_v4) - PAS d'appels de méthodes
+        if self.gpio_lib == "lgpio":
+            import lgpio
+            lgpio.gpio_write(self.gpio_handle, self.STEP, 1)
+            time.sleep(delai / 2)
+            lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+            time.sleep(delai / 2)
+        else:  # RPi.GPIO
+            self.gpio_handle.output(self.STEP, self.gpio_handle.HIGH)
+            time.sleep(delai / 2)
+            self.gpio_handle.output(self.STEP, self.gpio_handle.LOW)
+            time.sleep(delai / 2)
 
     def _calculer_delai_rampe(self, step_index: int, total_steps: int,
                                vitesse_nominale: float) -> float:
@@ -489,14 +510,15 @@ class MoteurCoupole:
         """
         Fait tourner la coupole d'un angle donné.
 
+        VERSION OPTIMISÉE (alignée sur Dome_v4) :
+        - Boucle simple sans vérification stop_requested à chaque pas
+        - Timing optimal pour flux continu de pulses
+
         Args:
             angle_deg: Angle en degrés (positif = horaire)
             vitesse: Délai nominal entre les pas en secondes
         """
-        # IMPORTANT: Réinitialiser stop_requested pour éviter que
-        # la rotation soit bloquée par un arrêt précédent
         self.clear_stop_request()
-
         self.definir_direction(1 if angle_deg >= 0 else -1)
 
         deg_per_step = 360.0 / self.steps_per_dome_revolution
@@ -509,12 +531,9 @@ class MoteurCoupole:
             f"Rotation de {angle_deg:.2f}° ({steps} pas, délai={vitesse}s)"
         )
 
-        # Boucle simple comme calibration_moteur.py
-        for i in range(steps):
-            if self.stop_requested:
-                self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
-                break
-
+        # Boucle simple comme Dome_v4 et calibration_moteur.py
+        # PAS de vérification stop_requested dans la boucle pour timing optimal
+        for _ in range(steps):
             self.faire_un_pas(vitesse)
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,

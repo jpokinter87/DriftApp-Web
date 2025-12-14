@@ -46,3 +46,6 @@ tests_sur_site/*.jpg
 
 # Captures d'écran à la racine
 capture_*.png
+
+# Précédente version
+Dome_v4/

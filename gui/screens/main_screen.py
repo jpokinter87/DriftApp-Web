@@ -354,15 +354,10 @@ class MainScreen(Screen):
 
         self._manual_control_active = True
 
-        # Utiliser la vitesse FAST_TRACK pour le contrôle manuel
+        # Utiliser la vitesse FAST_TRACK depuis config.json pour le contrôle manuel
         if hasattr(self, 'moteur') and self.moteur:
-            # Obtenir le délai moteur depuis la config
-            # Utiliser 0.00022s = ~42°/min (recommandation max utilisateur)
-            fast_track_delay = 0.00022
-            if hasattr(self.config, 'adaptive') and self.config.adaptive:
-                fast_track_mode = self.config.adaptive.modes.get('fast_track')
-                if fast_track_mode:
-                    fast_track_delay = fast_track_mode.motor_delay
+            fast_track_mode = self.config.adaptive.modes.get('fast_track')
+            fast_track_delay = fast_track_mode.motor_delay
 
             # Définir la direction une seule fois
             self.moteur.definir_direction(direction)
@@ -375,10 +370,13 @@ class MainScreen(Screen):
             )
             self._manual_rotation_thread.start()
 
-            # Démarrer la mise à jour de l'affichage pendant la rotation manuelle
-            self._manual_display_event = Clock.schedule_interval(
-                self._update_manual_display, 0.1  # Rafraîchir toutes les 100ms
-            )
+            # DÉSACTIVÉ : La lecture daemon toutes les 100ms causait des saccades
+            # car elle provoque des contentions GIL pendant les pulses GPIO.
+            # calibration_moteur.py fonctionne parfaitement car il ne lit JAMAIS le daemon.
+            # L'affichage se met à jour après l'arrêt de la rotation via _stop_manual_rotation.
+            # self._manual_display_event = Clock.schedule_interval(
+            #     self._update_manual_display, 0.1
+            # )
 
     def _manual_rotation_loop(self, direction: int, delay: float):
         """
@@ -409,14 +407,12 @@ class MainScreen(Screen):
             self._manual_rotation_event.cancel()
             self._manual_rotation_event = None
 
-        # Arrêter la mise à jour de l'affichage
-        if hasattr(self, '_manual_display_event') and self._manual_display_event:
-            self._manual_display_event.cancel()
-            self._manual_display_event = None
-
         # Demander l'arrêt au moteur si disponible
         if hasattr(self, 'moteur') and self.moteur:
             self.moteur.request_stop()
+
+        # Mettre à jour l'affichage une seule fois APRÈS l'arrêt (pas pendant)
+        Clock.schedule_once(lambda dt: self._update_manual_display(dt), 0.2)
 
     def _update_manual_display(self, dt):
         """Met à jour l'affichage pendant la rotation manuelle."""
@@ -659,7 +655,7 @@ class MainScreen(Screen):
             self.append_log("[color=FF0000]Entrez un objet.[/color]")
             return
 
-        # Rechercher l'objet
+        # Rechercher l'objet (UI - reste dans le thread principal)
         self.append_log(f"[color=00FFFF]Recherche de '{objet}'...[/color]")
         success, result = self.search_and_display_object(objet)
 
@@ -667,8 +663,30 @@ class MainScreen(Screen):
             self.append_log(f"[color=FF0000]{result}[/color]")
             return
 
-        # Créer session
+        # Lancer le démarrage dans un thread dédié pour ne pas bloquer Kivy
+        # IMPORTANT: Le GOTO initial peut prendre plusieurs secondes et doit
+        # s'exécuter dans un thread séparé comme la rotation manuelle
+        import threading
+        self.append_log("[color=00FFFF]Démarrage du GOTO initial...[/color]")
+        thread = threading.Thread(
+            target=self._start_tracking_thread,
+            args=(objet,),
+            daemon=True
+        )
+        thread.start()
+
+    def _start_tracking_thread(self, objet):
+        """
+        Thread dédié pour le démarrage du suivi (inclut GOTO initial).
+
+        IMPORTANT: Cette méthode s'exécute dans un thread séparé pour
+        permettre un flux de pulses moteur continu sans interruption
+        par l'event loop Kivy. Identique à l'approche de rotation manuelle.
+        """
         from core.tracking import TrackingSession
+
+        # Signaler qu'un mouvement est en cours (pour suspendre _update_status)
+        self._correction_in_progress = True
 
         try:
             self.tracking_session = TrackingSession(
@@ -682,16 +700,29 @@ class MainScreen(Screen):
                 motor_config=self.config.motor,
                 encoder_config=self.config.encoder
             )
+
+            # Démarrer le suivi (inclut GOTO initial si encodeur calibré)
+            success_start, msg = self.tracking_session.start(objet)
+
+            # GOTO initial terminé
+            self._correction_in_progress = False
+
+            # Mettre à jour l'UI depuis le thread principal via Clock
+            Clock.schedule_once(
+                lambda dt: self._on_tracking_started(success_start, msg), 0
+            )
+
         except Exception as e:
-            self.append_log(f"[color=FF0000]Erreur : {e}[/color]")
+            self._correction_in_progress = False  # Toujours remettre à False
             import traceback
             traceback.print_exc()
-            return
+            Clock.schedule_once(
+                lambda dt: self.append_log(f"[color=FF0000]Erreur : {e}[/color]"), 0
+            )
 
-        # Démarrer
-        success_start, msg = self.tracking_session.start(objet)
-
-        if success_start:
+    def _on_tracking_started(self, success: bool, msg: str):
+        """Callback appelé après le démarrage du suivi (depuis le thread principal)."""
+        if success:
             mode_str = "SIM" if self.simulation else "PROD"
 
             self.append_log("[color=00FF00]" + "=" * 50 + "[/color]")
@@ -702,9 +733,12 @@ class MainScreen(Screen):
             )
             self.append_log("[color=00FF00]" + "=" * 50 + "[/color]")
 
-            # Timers
+            # Timers (doivent être créés dans le thread principal)
             self._status_timer = Clock.schedule_interval(self._update_status, 1)
             self._corr_timer = Clock.schedule_interval(self._do_correction, self.intervalle)
+
+            # Mise à jour immédiate de l'interface (ne pas attendre 1 seconde)
+            self._update_status(0)
         else:
             self.append_log(f"[color=FF0000]{msg}[/color]")
 
@@ -736,6 +770,11 @@ class MainScreen(Screen):
     def _update_status(self, dt):
         """Mise à jour statut."""
         if not self.tracking_session or not self.tracking_session.running:
+            return
+
+        # Ne pas lire le daemon pendant une correction moteur en cours
+        # (évite les contentions GIL qui causent des saccades)
+        if getattr(self, '_correction_in_progress', False):
             return
 
         session = self.tracking_session
@@ -791,7 +830,13 @@ class MainScreen(Screen):
             return
 
         try:
+            # Signaler qu'une correction est en cours (pour suspendre _update_status)
+            self._correction_in_progress = True
+
             correction_applied, log_msg = self.tracking_session.check_and_correct()
+
+            # Correction terminée
+            self._correction_in_progress = False
 
             if log_msg:
                 self.append_log(log_msg)
@@ -811,6 +856,7 @@ class MainScreen(Screen):
                     f"(mode {params.mode.value})[/color]"
                 )
         except Exception as e:
+            self._correction_in_progress = False  # Toujours remettre à False
             self.append_log(f"[color=FF0000]Erreur: {e}[/color]")
             import traceback
             traceback.print_exc()

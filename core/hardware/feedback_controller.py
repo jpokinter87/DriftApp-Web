@@ -142,22 +142,22 @@ class FeedbackController:
                                          angle_cible: float,
                                          tolerance: float) -> None:
         """
-        Exécute les pas avec vérifications périodiques.
+        Exécute les pas - VERSION OPTIMISÉE alignée sur calibration_moteur.py.
 
-        ALIGNEMENT SUR calibration_moteur.py : utilise délai constant.
+        CHANGEMENT CRITIQUE : Plus de vérification pendant le mouvement !
+        - Le feedback se fait APRÈS le mouvement complet, pas pendant
+        - Cela garantit un flux de pulses continu sans interruption
+        - Identique au comportement de calibration_moteur.py qui fonctionne
+
+        AJOUT : Vérification stop_requested tous les 1000 pas pour permettre
+        l'arrêt via bouton STOPPER (overhead négligeable : 1 check / 1000 pas).
         """
+        # Boucle avec vérification arrêt périodique (tous les 1000 pas)
         for i in range(steps):
-            if self.stop_requested:
-                self.logger.info(f"Arrêt demandé pendant l'exécution ({i}/{steps})")
+            if i % 1000 == 0 and self.stop_requested:
+                self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
                 break
-
-            # Délai constant comme calibration_moteur.py (pas de rampe)
             self.moteur.faire_un_pas(delai=vitesse)
-
-            # Vérification tous les 500 pas
-            if (i + 1) % 500 == 0:
-                if self._verifier_arret_anticipe(angle_cible, tolerance, i, steps):
-                    break
 
     def _verifier_arret_anticipe(self, angle_cible: float, tolerance: float,
                                   step_index: int, total_steps: int) -> bool:
@@ -283,7 +283,7 @@ class FeedbackController:
         vitesse: float = 0.001,
         tolerance: float = 0.5,
         max_iterations: int = 10,
-        max_correction_par_iteration: float = 45.0
+        max_correction_par_iteration: float = 180.0
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -294,6 +294,7 @@ class FeedbackController:
             tolerance: Tolérance acceptable (°), défaut 0.5°
             max_iterations: Nombre max d'itérations, défaut 10
             max_correction_par_iteration: Correction max par itération (°)
+                                          180° = mouvement continu sans interruption
 
         Returns:
             dict: Statistiques du mouvement (success, positions, erreur, etc.)

@@ -231,12 +231,12 @@ class AdaptiveTrackingManager:
         Returns:
             tuple (TrackingMode, list[str] raisons)
         """
-        # Priorité 0 : Grand déplacement (>30°) → CRITICAL (TEST)
-        # TODO: Revenir à FAST_TRACK quand le problème de vitesse sera résolu
-        # Le mode FAST_TRACK cause des problèmes moteur malgré le même délai
-        # fonctionnant dans calibration_moteur.py
+        # Priorité 0 : Grand déplacement (>30°) → FAST_TRACK
+        # CORRIGÉ (Dec 2025): Le problème était la lecture daemon pendant rotation
+        # qui causait des contentions GIL. calibration_moteur.py fonctionne car
+        # il ne lit jamais le daemon. Voir main_screen.py _update_manual_display.
         if delta >= 30.0:
-            return TrackingMode.CRITICAL, [f"Grand déplacement ({delta:.1f}°) - Mode CRITICAL (test)"]
+            return TrackingMode.FAST_TRACK, [f"Grand déplacement ({delta:.1f}°) - GOTO rapide"]
 
         # Priorité 1 : Mouvement extrême → CONTINUOUS
         if movement_level == "extreme":

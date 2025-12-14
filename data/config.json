@@ -96,38 +96,38 @@
     
     
     "modes": {
-      "_comment": "Paramètres validés sur site le 12/12/2025 (voir capture_Vitesses.png)",
+      "_comment": "Vitesses ALIGNÉES sur Dome_v4 (version stable) - 13/12/2025",
 
       "normal": {
-        "_comment": "Altitude < 68° - Suivi standard",
+        "_comment": "Altitude < 68° - Suivi standard (vitesse Dome_v4)",
         "interval_sec": 60,
         "threshold_deg": 0.5,
-        "motor_delay": 0.0011,
-        "_speed": "9.0°/min (mesuré OK)"
+        "motor_delay": 0.002,
+        "_speed": "~5°/min - Dome_v4 stable"
       },
 
       "critical": {
-        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché",
+        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché (vitesse Dome_v4)",
         "interval_sec": 30,
         "threshold_deg": 0.35,
-        "motor_delay": 0.00055,
-        "_speed": "16.9°/min (mesuré OK)"
+        "motor_delay": 0.001,
+        "_speed": "~9°/min - Dome_v4 stable"
       },
 
       "continuous": {
-        "_comment": "Altitude ≥ 75° ou mouvement extrême - Corrections fréquentes",
+        "_comment": "Altitude ≥ 75° ou mouvement extrême (vitesse Dome_v4)",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.00014,
-        "_speed": "42°/min (mesuré OK - marge sécurité)"
+        "motor_delay": 0.0001,
+        "_speed": "~45°/min - Dome_v4 stable"
       },
 
       "fast_track": {
-        "_comment": "Basculement méridien ou GOTO - Vitesse maximale",
+        "_comment": "GOTO rapide - Validé par calibration_moteur.py à 0.00013s",
         "interval_sec": 5,
         "threshold_deg": 0.5,
-        "motor_delay": 0.00014,
-        "_speed": "42°/min (mesuré OK - marge sécurité)"
+        "motor_delay": 0.00015,
+        "_speed": "~36°/min - Pour GOTO manuels et automatiques"
       }
     },
     
