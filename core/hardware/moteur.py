@@ -584,7 +584,8 @@ class MoteurCoupole:
         vitesse: float = 0.001,
         tolerance: float = 0.5,
         max_iterations: int = 10,
-        max_correction_par_iteration: float = 45.0
+        max_correction_par_iteration: float = 45.0,
+        allow_large_movement: bool = False
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -597,6 +598,8 @@ class MoteurCoupole:
             tolerance: Tolérance acceptable (°), défaut 0.5°
             max_iterations: Nombre max d'itérations, défaut 10
             max_correction_par_iteration: Correction max par itération (°)
+            allow_large_movement: Si True, autorise les grands mouvements (> 20°)
+                                  Utilisé pour GOTO initial après calibration
 
         Returns:
             dict: Statistiques du mouvement (success, positions, erreur, etc.)
@@ -607,7 +610,8 @@ class MoteurCoupole:
             vitesse=vitesse,
             tolerance=tolerance,
             max_iterations=max_iterations,
-            max_correction_par_iteration=max_correction_par_iteration
+            max_correction_par_iteration=max_correction_par_iteration,
+            allow_large_movement=allow_large_movement
         )
 
     def rotation_relative_avec_feedback(

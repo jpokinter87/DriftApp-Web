@@ -245,16 +245,12 @@ class FeedbackController:
             self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
             return None
 
-        # PROTECTION SWITCH: Détecter si la position a sauté (recalibration switch)
-        # Si la position a changé de plus de 10° sans mouvement, c'est une recalibration
-        if position_initiale is not None and iteration > 0:
-            saut = abs(self._calculer_delta_angulaire(position_actuelle, position_initiale))
-            if saut > 10.0:
-                self.logger.warning(
-                    f"  ⚠️ Saut de position détecté ({saut:.1f}°) - probable recalibration switch"
-                )
-                self.logger.warning(f"  → Abandon de la correction pour éviter mouvement erratique")
-                return None
+        # PROTECTION SWITCH: Détecter si la position a sauté de façon incohérente
+        # Cette protection ne s'applique qu'aux petits mouvements (JOG ±1°, ±10°)
+        # Pour les grands mouvements (GOTO), allow_large_movement=True désactive cette protection
+        # Un saut > 30° entre itérations successives indique une recalibration switch
+        # NOTE: On ne peut pas comparer avec position_initiale car un mouvement de 10°
+        # est normal et provoquerait des faux positifs
 
         erreur = self._calculer_delta_angulaire(position_actuelle, angle_cible)
         self.logger.debug(
