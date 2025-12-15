@@ -30,6 +30,8 @@ The system automatically tracks celestial objects by compensating for:
 - Instrumental parallax (40cm tube offset, 120cm dome radius)
 - Sky discontinuities in critical zones (high altitude tracking)
 
+**Documentation complète de la logique de tracking : voir `TRACKING_LOGIC.md`**
+
 ## Development Commands
 
 ### Running the Application
