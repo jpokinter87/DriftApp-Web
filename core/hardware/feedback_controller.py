@@ -225,9 +225,15 @@ class FeedbackController:
 
     def _executer_iteration(self, angle_cible: float, vitesse: float,
                             tolerance: float, max_correction: float,
-                            iteration: int) -> Optional[dict]:
+                            iteration: int, position_initiale: float = None,
+                            allow_large_movement: bool = False) -> Optional[dict]:
         """
         Exécute une itération de la boucle de correction.
+
+        Args:
+            position_initiale: Position de départ (pour détecter recalibration switch)
+            allow_large_movement: Si True, désactive la protection contre les grands mouvements
+                                  (utilisé pour GOTO initial)
 
         Returns:
             dict avec les stats de correction, ou None si objectif atteint/erreur
@@ -239,6 +245,17 @@ class FeedbackController:
             self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
             return None
 
+        # PROTECTION SWITCH: Détecter si la position a sauté (recalibration switch)
+        # Si la position a changé de plus de 10° sans mouvement, c'est une recalibration
+        if position_initiale is not None and iteration > 0:
+            saut = abs(self._calculer_delta_angulaire(position_actuelle, position_initiale))
+            if saut > 10.0:
+                self.logger.warning(
+                    f"  ⚠️ Saut de position détecté ({saut:.1f}°) - probable recalibration switch"
+                )
+                self.logger.warning(f"  → Abandon de la correction pour éviter mouvement erratique")
+                return None
+
         erreur = self._calculer_delta_angulaire(position_actuelle, angle_cible)
         self.logger.debug(
             f"  Iter {iteration+1}: Pos={position_actuelle:.1f}° Erreur={erreur:+.2f}°"
@@ -247,6 +264,14 @@ class FeedbackController:
         # Objectif atteint ?
         if abs(erreur) < tolerance:
             self.logger.debug(f"  Objectif atteint ! Erreur={erreur:+.2f}°")
+            return None
+
+        # PROTECTION: Si l'erreur est trop grande (> 20°), quelque chose ne va pas
+        # Sauf si allow_large_movement=True (GOTO initial)
+        if abs(erreur) > 20.0 and not allow_large_movement:
+            self.logger.warning(
+                f"  ⚠️ Erreur anormalement grande ({erreur:+.1f}°) - abandon correction"
+            )
             return None
 
         # Calcul de la correction
@@ -283,7 +308,8 @@ class FeedbackController:
         vitesse: float = 0.001,
         tolerance: float = 0.5,
         max_iterations: int = 10,
-        max_correction_par_iteration: float = 180.0
+        max_correction_par_iteration: float = 180.0,
+        allow_large_movement: bool = False
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -295,6 +321,8 @@ class FeedbackController:
             max_iterations: Nombre max d'itérations, défaut 10
             max_correction_par_iteration: Correction max par itération (°)
                                           180° = mouvement continu sans interruption
+            allow_large_movement: Si True, autorise les grands mouvements (> 20°)
+                                  Utilisé pour GOTO initial après calibration
 
         Returns:
             dict: Statistiques du mouvement (success, positions, erreur, etc.)
@@ -327,7 +355,9 @@ class FeedbackController:
 
             correction = self._executer_iteration(
                 angle_cible, vitesse, tolerance,
-                max_correction_par_iteration, iteration
+                max_correction_par_iteration, iteration,
+                position_initiale=position_initiale,  # Pour détecter recalibration switch
+                allow_large_movement=allow_large_movement  # Pour GOTO initial
             )
 
             if correction is None:

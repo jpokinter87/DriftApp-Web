@@ -23,6 +23,7 @@ import os
 import signal
 import sys
 import time
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -32,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
 from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
-from core.hardware.moteur_simule import MoteurSimule
+from core.hardware.moteur_simule import MoteurSimule, set_simulated_position
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager, TrackingMode
@@ -157,14 +158,45 @@ class MotorService:
             'tracking_object': None,
             'error': None,
             'simulation': self.simulation_mode,
-            'last_update': datetime.now().isoformat()
+            'last_update': datetime.now().isoformat(),
+            'tracking_logs': []  # Correction 3: Logs de suivi pour l'interface web
         }
+
+        # Liste des logs récents (max 20)
+        self.recent_tracking_logs = []
+        self.max_tracking_logs = 20
 
         # Dernière commande traitée (pour éviter les doublons)
         self.last_command_id = None
 
+        # Thread pour mouvement continu (simulation)
+        self.continuous_thread: Optional[threading.Thread] = None
+        self.continuous_stop_flag = threading.Event()
+
         mode_str = "SIMULATION" if self.simulation_mode else "PRODUCTION"
         logger.info(f"Motor Service initialisé en mode {mode_str}")
+
+    def add_tracking_log(self, message: str, log_type: str = 'info'):
+        """
+        Ajoute un log de suivi pour l'interface web.
+
+        Args:
+            message: Message à afficher
+            log_type: Type de log (info, correction, warning, error)
+        """
+        log_entry = {
+            'time': datetime.now().isoformat(),
+            'message': message,
+            'type': log_type
+        }
+        self.recent_tracking_logs.append(log_entry)
+
+        # Limiter le nombre de logs
+        if len(self.recent_tracking_logs) > self.max_tracking_logs:
+            self.recent_tracking_logs = self.recent_tracking_logs[-self.max_tracking_logs:]
+
+        # Mettre à jour le status (10 derniers logs)
+        self.current_status['tracking_logs'] = self.recent_tracking_logs[-10:]
 
     # =========================================================================
     # GESTION DES FICHIERS IPC
@@ -256,6 +288,12 @@ class MotorService:
         self.write_status()
 
         try:
+            # En mode simulation, synchroniser _simulated_position avant le goto
+            if self.simulation_mode:
+                current_pos = self.current_status.get('position', 0)
+                set_simulated_position(current_pos)
+                logger.debug(f"Sync position simulée avant goto: {current_pos:.2f}°")
+
             # Utiliser le feedback si disponible
             if self.daemon_reader.is_available():
                 result = self.feedback_controller.rotation_avec_feedback(
@@ -315,6 +353,13 @@ class MotorService:
         self.write_status()
 
         try:
+            # En mode simulation, synchroniser _simulated_position avant le jog
+            # pour que le FeedbackController lise la bonne position de départ
+            if self.simulation_mode:
+                current_pos = self.current_status.get('position', 0)
+                set_simulated_position(current_pos)
+                logger.debug(f"Sync position simulée avant jog: {current_pos:.2f}°")
+
             if self.daemon_reader.is_available():
                 result = self.feedback_controller.rotation_relative_avec_feedback(
                     delta_deg=delta,
@@ -341,6 +386,9 @@ class MotorService:
         """Arrête immédiatement tout mouvement."""
         logger.info("STOP demandé")
 
+        # Arrêter le thread de mouvement continu
+        self._stop_continuous_thread()
+
         # Arrêter le feedback en cours
         self.feedback_controller.request_stop()
         self.moteur.request_stop()
@@ -354,6 +402,115 @@ class MotorService:
         self.current_status['status'] = 'idle'
         self.current_status['tracking_object'] = None
         self.write_status()
+
+    def handle_continuous(self, direction: str):
+        """
+        Démarre un mouvement continu dans une direction.
+
+        Args:
+            direction: 'cw' pour horaire, 'ccw' pour anti-horaire
+        """
+        logger.info(f"Mouvement continu {direction.upper()}")
+
+        # Arrêter tout mouvement/suivi en cours
+        if self.tracking_active:
+            self.handle_stop()
+
+        # Arrêter tout mouvement continu précédent
+        self._stop_continuous_thread()
+
+        self.current_status['status'] = 'moving'
+        self.current_status['target'] = None  # Pas de cible fixe
+        self.write_status()
+
+        # En mode simulation, synchroniser _simulated_position
+        if self.simulation_mode:
+            current_pos = self.current_status.get('position', 0)
+            set_simulated_position(current_pos)
+
+        # Démarrer le thread de mouvement continu
+        self.continuous_stop_flag.clear()
+        self.continuous_thread = threading.Thread(
+            target=self._continuous_movement_loop,
+            args=(direction,),
+            daemon=True
+        )
+        self.continuous_thread.start()
+
+    def _stop_continuous_thread(self):
+        """Arrête le thread de mouvement continu s'il est actif."""
+        if self.continuous_thread and self.continuous_thread.is_alive():
+            # Signaler l'arrêt au thread ET au moteur
+            self.continuous_stop_flag.set()
+            self.moteur.request_stop()
+
+            # Attendre que le thread se termine
+            self.continuous_thread.join(timeout=2.0)
+
+            # Si le thread ne s'est pas terminé, forcer l'arrêt
+            if self.continuous_thread.is_alive():
+                logger.warning("Thread continu n'a pas répondu, forçage arrêt moteur")
+                self.moteur.request_stop()
+
+            self.continuous_thread = None
+
+    def _continuous_movement_loop(self, direction: str):
+        """
+        Boucle de mouvement continu exécutée dans un thread.
+
+        En mode simulation: incrémente la position de 1° toutes les 100ms.
+        En mode production: fait des pas moteur réels.
+
+        AMÉLIORATION: Propage stop_requested au moteur pour arrêt réactif.
+        """
+        delta_per_step = 1.0 if direction == 'cw' else -1.0
+        step_interval = 0.1  # 100ms entre chaque incrément (= 10°/sec en simulation)
+
+        logger.debug(f"Thread mouvement continu démarré: {direction}")
+
+        while not self.continuous_stop_flag.is_set():
+            try:
+                # Propager le stop_flag au moteur pour arrêt réactif pendant rotation
+                if self.continuous_stop_flag.is_set():
+                    self.moteur.request_stop()
+                    break
+
+                if self.simulation_mode:
+                    # Mode simulation: incrémenter la position globale
+                    from core.hardware.moteur_simule import get_simulated_position
+                    current = get_simulated_position()
+                    new_pos = (current + delta_per_step) % 360
+                    set_simulated_position(new_pos)
+                    self.current_status['position'] = new_pos
+                else:
+                    # Mode production: faire un petit déplacement réel
+                    # Clear stop avant chaque rotation pour permettre le mouvement
+                    self.moteur.clear_stop_request()
+                    # Utiliser la vitesse FAST_TRACK pour les mouvements manuels rapides
+                    fast_track = self.config.adaptive.modes.get('fast_track')
+                    speed = fast_track.motor_delay if fast_track else 0.00015
+                    self.moteur.rotation(delta_per_step, vitesse=speed)
+
+                    # Vérifier arrêt après rotation
+                    if self.continuous_stop_flag.is_set():
+                        break
+
+                    pos = self.read_encoder_position()
+                    if pos is not None:
+                        self.current_status['position'] = pos
+
+                self.write_status()
+                time.sleep(step_interval)
+
+            except Exception as e:
+                logger.error(f"Erreur dans boucle continue: {e}")
+                break
+
+        # Fin du mouvement - s'assurer que le moteur est arrêté
+        self.moteur.request_stop()
+        self.current_status['status'] = 'idle'
+        self.write_status()
+        logger.debug("Thread mouvement continu terminé")
 
     # =========================================================================
     # SUIVI D'OBJETS
@@ -369,11 +526,13 @@ class MotorService:
         logger.info(f"Démarrage suivi de {object_name}")
 
         try:
-            # Créer les calculateurs
+            # Créer les calculateurs (mêmes paramètres que le GUI de référence)
             calc = AstronomicalCalculations(
                 self.config.site.latitude,
                 self.config.site.longitude,
-                self.config.site.altitude
+                self.config.site.tz_offset,  # CORRIGÉ: tz_offset (1) au lieu de altitude (800)
+                self.config.geometrie.deport_tube_m,
+                self.config.geometrie.rayon_coupole_m
             )
             tracking_logger = TrackingLogger()
 
@@ -399,6 +558,8 @@ class MotorService:
                 self.current_status['tracking_object'] = object_name
                 self.current_status['mode'] = 'normal'
                 logger.info(f"Suivi démarré: {message}")
+                # Correction 3: Log de démarrage pour l'interface web
+                self.add_tracking_log(f"Suivi de {object_name} démarré", 'tracking')
             else:
                 self.current_status['status'] = 'error'
                 self.current_status['error'] = message
@@ -416,6 +577,14 @@ class MotorService:
         logger.info("Arrêt du suivi")
 
         if self.tracking_session:
+            # En mode simulation, synchroniser _simulated_position avec la position finale du tracking
+            if self.simulation_mode:
+                status = self.tracking_session.get_status()
+                final_pos = status.get('position_relative', 0) % 360
+                set_simulated_position(final_pos)
+                self.current_status['position'] = final_pos
+                logger.debug(f"Sync position simulée après tracking: {final_pos:.2f}°")
+
             self.tracking_session.stop()
             self.tracking_session = None
 
@@ -441,6 +610,14 @@ class MotorService:
 
             if correction_applied:
                 logger.info(message)
+                # Correction 3: Ajouter le log pour l'interface web
+                # Utiliser directement le message de check_and_correct() qui contient les vraies valeurs
+                # Format: "[HH:MM:SS] Correction: X.XX° | Az=... | AzCoupole=... | Mode: ..."
+                # On retire le timestamp du début car le frontend l'ajoute
+                log_msg = message
+                if message.startswith('[') and '] ' in message:
+                    log_msg = message.split('] ', 1)[1]  # Retirer "[HH:MM:SS] "
+                self.add_tracking_log(log_msg, 'correction')
 
             # Mettre à jour le status
             status = self.tracking_session.get_status()
@@ -454,7 +631,9 @@ class MotorService:
                     'altitude': status.get('obj_alt', 0),
                     'position_cible': status.get('position_cible', 0),
                     'remaining_seconds': status.get('remaining_seconds', 0),
+                    'interval_sec': status.get('adaptive_interval', 60),  # Intervalle du mode actuel
                     'total_corrections': status.get('total_corrections', 0),
+                    'total_correction_degrees': status.get('total_movement', 0.0),
                     'mode_icon': status.get('mode_icon', '')
                 }
             else:
@@ -497,6 +676,10 @@ class MotorService:
 
         elif cmd_type == 'stop':
             self.handle_stop()
+
+        elif cmd_type == 'continuous':
+            direction = command.get('direction', 'cw')
+            self.handle_continuous(direction)
 
         elif cmd_type == 'tracking_start':
             object_name = command.get('object', command.get('name'))

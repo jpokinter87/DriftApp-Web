@@ -14,6 +14,28 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
+# Python du virtual environment
+PYTHON="$PROJECT_DIR/.venv/bin/python"
+
+# Vérifier que le venv existe
+if [[ ! -f "$PYTHON" ]]; then
+    echo -e "\033[0;31m[ERROR]\033[0m Virtual environment non trouvé!"
+    echo "  → Exécutez d'abord: uv sync"
+    exit 1
+fi
+
+# Utilisateur qui a lancé sudo (pour les permissions des fichiers)
+REAL_USER="${SUDO_USER:-$USER}"
+
+# Créer le dossier logs avec les bonnes permissions
+setup_logs() {
+    if [[ ! -d "$PROJECT_DIR/logs" ]]; then
+        mkdir -p "$PROJECT_DIR/logs"
+    fi
+    # S'assurer que l'utilisateur peut écrire dans logs (pas root)
+    chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/logs" 2>/dev/null || true
+}
+
 # Couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,18 +61,20 @@ check_root() {
     fi
 }
 
-start_encoder_daemon() {
-    if pgrep -f "ems22d_calibrated.py" > /dev/null; then
-        log_info "Daemon encodeur déjà en cours d'exécution"
+check_encoder_daemon() {
+    # Le daemon encodeur est géré par systemd (ems22d.service)
+    # On vérifie juste qu'il tourne, on ne le démarre pas manuellement
+    if systemctl is-active --quiet ems22d 2>/dev/null; then
+        log_info "Daemon encodeur (systemd): EN COURS"
+        return 0
+    elif pgrep -f "ems22d_calibrated.py" > /dev/null; then
+        log_warn "Daemon encodeur: en cours (mode manuel, pas systemd)"
+        return 0
     else
-        log_info "Démarrage du daemon encodeur..."
-        python3 ems22d_calibrated.py &
-        sleep 2
-        if pgrep -f "ems22d_calibrated.py" > /dev/null; then
-            log_info "Daemon encodeur démarré"
-        else
-            log_error "Échec du démarrage du daemon encodeur"
-        fi
+        log_error "Daemon encodeur NON ACTIF!"
+        log_info "  → Démarrer avec: sudo systemctl start ems22d"
+        log_info "  → Ou manuellement: sudo python3 ems22d_calibrated.py &"
+        return 1
     fi
 }
 
@@ -59,7 +83,7 @@ start_motor_service() {
         log_info "Motor Service déjà en cours d'exécution"
     else
         log_info "Démarrage du Motor Service..."
-        python3 services/motor_service.py &
+        "$PYTHON" services/motor_service.py &
         sleep 2
         if pgrep -f "motor_service.py" > /dev/null; then
             log_info "Motor Service démarré"
@@ -74,9 +98,7 @@ start_django() {
         log_info "Django déjà en cours d'exécution"
     else
         log_info "Démarrage de Django..."
-        cd web
-        python3 manage.py runserver 0.0.0.0:8000 &
-        cd ..
+        "$PYTHON" web/manage.py runserver 0.0.0.0:8000 &
         sleep 2
         if pgrep -f "manage.py runserver" > /dev/null; then
             log_info "Django démarré sur http://localhost:8000"
@@ -87,7 +109,7 @@ start_django() {
 }
 
 stop_all() {
-    log_info "Arrêt des services..."
+    log_info "Arrêt des services DriftApp Web..."
 
     if pgrep -f "manage.py runserver" > /dev/null; then
         pkill -f "manage.py runserver"
@@ -99,26 +121,32 @@ stop_all() {
         log_info "Motor Service arrêté"
     fi
 
-    if pgrep -f "ems22d_calibrated.py" > /dev/null; then
-        pkill -f "ems22d_calibrated.py"
-        log_info "Daemon encodeur arrêté"
-    fi
-
-    log_info "Tous les services arrêtés"
+    # NOTE: Le daemon encodeur (ems22d) est géré par systemd
+    # On ne l'arrête PAS ici - il doit continuer à tourner
+    log_info "Services DriftApp Web arrêtés"
+    log_info "(Daemon encodeur ems22d non touché - géré par systemd)"
 }
 
 status() {
     echo "=== État des services DriftApp Web ==="
     echo
 
-    if pgrep -f "ems22d_calibrated.py" > /dev/null; then
-        echo -e "Daemon encodeur:  ${GREEN}EN COURS${NC}"
+    # Daemon encodeur (systemd)
+    if systemctl is-active --quiet ems22d 2>/dev/null; then
+        echo -e "Daemon encodeur:  ${GREEN}EN COURS${NC} (systemd)"
         if [[ -f /dev/shm/ems22_position.json ]]; then
-            angle=$(python3 -c "import json; print(json.load(open('/dev/shm/ems22_position.json'))['angle'])" 2>/dev/null)
+            angle=$(python3 -c "import json; print(f\"{json.load(open('/dev/shm/ems22_position.json'))['angle']:.2f}\")" 2>/dev/null)
+            echo "  Position: ${angle:-???}°"
+        fi
+    elif pgrep -f "ems22d_calibrated.py" > /dev/null; then
+        echo -e "Daemon encodeur:  ${YELLOW}EN COURS${NC} (manuel)"
+        if [[ -f /dev/shm/ems22_position.json ]]; then
+            angle=$(python3 -c "import json; print(f\"{json.load(open('/dev/shm/ems22_position.json'))['angle']:.2f}\")" 2>/dev/null)
             echo "  Position: ${angle:-???}°"
         fi
     else
         echo -e "Daemon encodeur:  ${RED}ARRÊTÉ${NC}"
+        echo "  → sudo systemctl start ems22d"
     fi
 
     if pgrep -f "motor_service.py" > /dev/null; then
@@ -147,11 +175,23 @@ case "${1:-start}" in
         check_root
         log_info "Démarrage de DriftApp Web..."
         echo
-        start_encoder_daemon
+
+        # Préparer le dossier logs avec les bonnes permissions
+        setup_logs
+
+        # Vérifier que le daemon encodeur tourne (géré par systemd)
+        check_encoder_daemon
+        encoder_ok=$?
+
         start_motor_service
         start_django
         echo
-        log_info "Tous les services démarrés!"
+
+        if [[ $encoder_ok -eq 0 ]]; then
+            log_info "Tous les services sont opérationnels!"
+        else
+            log_warn "Services démarrés mais daemon encodeur absent"
+        fi
         log_info "Accédez à l'interface: http://raspberrypi:8000"
         echo
         status
@@ -164,7 +204,24 @@ case "${1:-start}" in
         check_root
         stop_all
         sleep 2
-        $0 start
+
+        # Relancer directement (pas via $0 pour garder le contexte sudo)
+        log_info "Démarrage de DriftApp Web..."
+        echo
+        setup_logs
+        check_encoder_daemon
+        encoder_ok=$?
+        start_motor_service
+        start_django
+        echo
+        if [[ $encoder_ok -eq 0 ]]; then
+            log_info "Tous les services sont opérationnels!"
+        else
+            log_warn "Services démarrés mais daemon encodeur absent"
+        fi
+        log_info "Accédez à l'interface: http://raspberrypi:8000"
+        echo
+        status
         ;;
     status)
         status

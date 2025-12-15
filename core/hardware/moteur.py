@@ -531,9 +531,14 @@ class MoteurCoupole:
             f"Rotation de {angle_deg:.2f}° ({steps} pas, délai={vitesse}s)"
         )
 
-        # Boucle simple comme Dome_v4 et calibration_moteur.py
-        # PAS de vérification stop_requested dans la boucle pour timing optimal
-        for _ in range(steps):
+        # Boucle avec vérification stop_requested périodique (tous les 500 pas)
+        # NOTE: Avec l'architecture multi-processus (daemon + motor_service + Django),
+        # chaque process a son propre GIL, donc cette vérification n'impacte plus
+        # le timing des pulses GPIO comme c'était le cas en mono-processus.
+        for i in range(steps):
+            if i % 500 == 0 and self.stop_requested:
+                self.logger.info(f"Rotation interrompue à {i}/{steps} pas")
+                break
             self.faire_un_pas(vitesse)
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,

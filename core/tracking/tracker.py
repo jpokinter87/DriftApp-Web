@@ -437,11 +437,13 @@ class TrackingSession:
             if self.encoder_available:
                 # Calculer l'angle cible pour l'encodeur (sans offset car GOTO initial)
                 # Pour le GOTO initial, on cible directement position_cible
+                # allow_large_movement=True car le GOTO initial peut être > 180°
                 result = self.moteur.rotation_avec_feedback(
                     angle_cible=position_cible,
                     vitesse=motor_delay,
                     tolerance=0.5,
-                    max_iterations=10
+                    max_iterations=10,
+                    allow_large_movement=True  # IMPORTANT: Autorise grands déplacements
                 )
 
                 if result['success']:
@@ -656,6 +658,12 @@ class TrackingSession:
             return False, "Suivi non actif"
 
         now = datetime.now()
+
+        # Vérifier si c'est le moment de faire une correction
+        # (respecte l'intervalle configuré, même si appelé plus fréquemment)
+        if self.next_correction_time and now < self.next_correction_time:
+            return False, ""  # Pas encore le moment
+
         timestamp = now.strftime("%H:%M:%S")
 
         # Calculer la position actuelle de l'objet (méthode centralisée)

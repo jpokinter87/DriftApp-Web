@@ -100,6 +100,205 @@ body {
     }
 }
 
+/* Écrans 720p et petits (hauteur < 800px) */
+@media (max-height: 800px) {
+    .container {
+        padding: 0.5rem;
+    }
+
+    .header {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1.2rem;
+    }
+
+    .main-content {
+        grid-template-columns: 280px 1fr;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .compass-section {
+        padding: 0.5rem;
+    }
+
+    .compass-section h2 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    #compass {
+        width: 200px !important;
+        height: 200px !important;
+    }
+
+    .compass-container {
+        margin-bottom: 0.5rem;
+    }
+
+    .timer-widget {
+        width: 70px;
+        height: 70px;
+        margin: 0.5rem auto;
+    }
+
+    #timer-seconds {
+        font-size: 1rem;
+    }
+
+    .position-info {
+        gap: 0.3rem;
+    }
+
+    .position-info .info-item {
+        padding: 0.3rem;
+        font-size: 0.8rem;
+    }
+
+    .control-panel {
+        padding: 0.5rem;
+    }
+
+    .control-panel h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .input-group {
+        margin-bottom: 0.5rem;
+    }
+
+    .input-group input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-jog {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .btn-stop {
+        padding: 0.5rem;
+    }
+
+    .btn-continuous {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .tracking-info {
+        padding: 0.5rem;
+    }
+
+    .tracking-info h3 {
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .info-grid, .info-grid-simple {
+        gap: 0.3rem;
+    }
+
+    .info-grid .info-item,
+    .info-grid-simple .info-item {
+        padding: 0.3rem;
+    }
+
+    .info-grid label,
+    .info-grid-simple label {
+        font-size: 0.7rem;
+    }
+
+    .info-grid span,
+    .info-grid-simple span {
+        font-size: 0.85rem;
+    }
+
+    .logs-section {
+        padding: 0.5rem;
+    }
+
+    .logs-section h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .logs-container {
+        height: 100px;
+        font-size: 0.75rem;
+    }
+
+    .control-section {
+        gap: 0.5rem;
+    }
+
+    .jog-buttons {
+        margin-bottom: 0.5rem;
+    }
+
+    .continuous-buttons {
+        margin-bottom: 0.5rem;
+    }
+
+    .goto-group input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .object-info {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Écrans très petits en hauteur (< 650px) - mode ultra-compact */
+@media (max-height: 650px) {
+    .header {
+        padding: 0.3rem 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1rem;
+    }
+
+    .header .subtitle {
+        display: none;
+    }
+
+    .main-content {
+        grid-template-columns: 240px 1fr;
+    }
+
+    #compass {
+        width: 160px !important;
+        height: 160px !important;
+    }
+
+    .timer-widget {
+        width: 50px;
+        height: 50px;
+        margin: 0.3rem auto;
+    }
+
+    #timer-seconds {
+        font-size: 0.85rem;
+    }
+
+    .logs-container {
+        height: 70px;
+    }
+}
+
 /* Compass section */
 .compass-section {
     background-color: var(--bg-panel);
@@ -411,3 +610,244 @@ body {
 .mode-critical { color: var(--accent-orange); }
 .mode-continuous { color: var(--accent-red); }
 .mode-fast_track { color: var(--accent-purple); }
+
+/* Timer widget (Correction 2) */
+.timer-widget {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1rem auto;
+    width: 100px;
+    height: 100px;
+}
+
+.timer-widget.hidden {
+    display: none;
+}
+
+#timer-canvas {
+    background-color: transparent;
+}
+
+#timer-seconds {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--accent-green);
+}
+
+/* Log types pour les corrections */
+.log-entry.correction {
+    color: var(--accent-blue);
+}
+
+.log-entry.tracking {
+    color: var(--accent-green);
+}
+
+/* Cartouches COUPOLE (bleu) et TÉLESCOPE (vert) */
+.coupole-item label {
+    color: var(--accent-blue) !important;
+    font-weight: bold;
+}
+
+.coupole-value {
+    color: var(--accent-blue) !important;
+}
+
+.telescope-item label {
+    color: var(--accent-green) !important;
+    font-weight: bold;
+}
+
+.telescope-value {
+    color: var(--accent-green) !important;
+}
+
+/* Cartouche ENC (encodeur) avec états colorés via bordure */
+.enc-item {
+    border: 3px solid var(--border-color);  /* Bordure par défaut */
+}
+
+.enc-item label {
+    color: var(--text-secondary) !important;
+    font-weight: bold;
+}
+
+#encoder-calibrated {
+    font-weight: bold;
+}
+
+/* États de l'encodeur (bordure épaisse colorée) */
+.enc-item.enc-absent {
+    border-color: #666666 !important;  /* Gris = absent */
+}
+
+.enc-item.enc-absent #encoder-calibrated {
+    color: #666666 !important;
+}
+
+.enc-item.enc-uncalibrated {
+    border-color: #CD853F !important;  /* Marron/Peru = non calibré */
+}
+
+.enc-item.enc-uncalibrated #encoder-calibrated {
+    color: #CD853F !important;
+}
+
+.enc-item.enc-calibrated {
+    border-color: var(--accent-green) !important;  /* Vert = calibré */
+}
+
+.enc-item.enc-calibrated #encoder-calibrated {
+    color: var(--accent-green) !important;
+}
+
+/* Cartouche MODE avec couleur dynamique */
+.mode-item {
+    position: relative;
+}
+
+.mode-item label {
+    font-weight: bold;
+}
+
+.mode-value {
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.mode-value.normal {
+    background-color: var(--accent-green);
+    color: white;
+}
+
+.mode-value.critical {
+    background-color: var(--accent-orange);
+    color: white;
+}
+
+.mode-value.continuous {
+    background-color: var(--accent-red);
+    color: white;
+}
+
+.mode-value.fast_track {
+    background-color: var(--accent-purple);
+    color: white;
+}
+
+/* Cartouche CORRECTIONS - sur une seule ligne */
+.corrections-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.corrections-item label {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+.corrections-left {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.corrections-count {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+.corrections-right {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.corrections-total {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+/* Grille simplifiée pour Suivi Actif */
+.info-grid-simple {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.info-grid-simple .info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    background-color: var(--bg-input);
+    border-radius: 4px;
+}
+
+/* Boutons mouvement continu (toggle) */
+.continuous-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.btn-continuous {
+    flex: 1;
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-continuous:hover {
+    background-color: var(--border-color);
+}
+
+.btn-continuous.active {
+    background-color: var(--accent-orange);
+    color: white;
+    border-color: var(--accent-orange);
+    animation: pulse-continuous 1s infinite;
+}
+
+@keyframes pulse-continuous {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Effet clignotement vert pour recherche réussie */
+.btn.flash-success,
+.btn-primary.flash-success {
+    animation: flash-green-border 0.5s ease-in-out infinite !important;
+    border: 3px solid var(--accent-green) !important;
+}
+
+@keyframes flash-green-border {
+    0%, 100% {
+        box-shadow: 0 0 8px var(--accent-green), 0 0 15px var(--accent-green) !important;
+        border-color: var(--accent-green) !important;
+    }
+    50% {
+        box-shadow: 0 0 20px var(--accent-green), 0 0 35px var(--accent-green), 0 0 50px rgba(0, 210, 106, 0.5) !important;
+        border-color: white !important;
+    }
+}
+
+/* Position info grid adjustments for 5 items */
+.position-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.position-info .info-item:nth-child(5) {
+    grid-column: span 2;
+}
