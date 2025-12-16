@@ -129,24 +129,24 @@ core/
 │   ├── config.py       # Main config with MICROSTEPS, gear_ratio, site location
 │   ├── config_loader.py # JSON config parser
 │   └── logging_config.py
-│
+
 ├── hardware/           # Motor control and encoder feedback
 │   ├── moteur.py      # Stepper motor control (CRITICAL: MICROSTEPS=4)
 │   ├── moteur_feedback.py  # Closed-loop feedback using daemon encoder
 │   └── hardware_detector.py # Auto-detect Pi model and GPIO library
-│
+
 ├── tracking/           # Tracking logic and adaptive algorithms
 │   ├── tracker.py     # Main tracking session manager
 │   ├── adaptive_tracking.py  # 3-mode adaptive system
 │   ├── predictive_anticipation.py  # Future movement prediction
 │   ├── abaque_manager.py  # Interpolation from measurement data
 │   └── tracking_logger.py # Structured logging
-│
+
 ├── observatoire/       # Astronomical calculations
 │   ├── calculations.py # Coordinate conversions, parallax
 │   ├── ephemerides.py # Planetary positions (Astropy)
 │   └── catalogue.py   # Deep sky object catalog
-│
+
 └── ui/                 # Terminal user interface (Textual)
     ├── main_screen.py # Main TUI application
     ├── modals.py      # Configuration dialogs
@@ -435,6 +435,166 @@ sudo python3 ems22d_calibrated.py
 #    See tests_sur_site/GUIDE_LOGS_DAEMON.md for log monitoring details
 ```
 
+---
+
+## 🔴 PROBLÈME EN COURS : Saccades moteur (Décembre 2025)
+
+### Symptôme
+
+Le moteur fonctionne de manière **fluide** avec `calibration_moteur.py` mais présente des **saccades/claquements** réguliers (2-3 Hz) dans l'application DriftApp complète via `motor_service.py`.
+
+- Le mouvement atteint la position cible correctement
+- Mais le son est saccadé/brusque au lieu d'être fluide
+- Paramètres identiques (motor_delay, microsteps) entre les deux contextes
+
+### Analyse effectuée
+
+#### Comparaison script calibration vs application
+
+| Aspect | `calibration_moteur.py` (FLUIDE) | `motor_service.py` (SACCADÉ) |
+|--------|----------------------------------|------------------------------|
+| Boucle moteur | `for` pure sans interruption | Vérifications périodiques |
+| Logging | Aucun pendant mouvement | FileHandler actif |
+| I/O fichiers | Aucun pendant mouvement | Lecture/écriture IPC |
+| Garbage Collector | Non contrôlé | Non contrôlé |
+| Contexte | Script standalone | Service multi-thread |
+
+#### Causes identifiées et corrigées
+
+1. **Vérification `stop_requested` à chaque pas** → Corrigé : tous les 500 pas seulement
+2. **Lecture daemon tous les 500 pas** dans `_verifier_arret_anticipe()` → Supprimé
+3. **Overhead `faire_un_pas()`** avec appels de méthodes → Corrigé : code GPIO inline
+
+#### Code optimisé actuel (`moteur.py`)
+
+```python
+def faire_un_pas(self, delai: float = 0.0015):
+    """VERSION OPTIMISÉE INLINE (alignée sur Dome_v4)"""
+    if self.gpio_handle is None:
+        raise RuntimeError("GPIO non initialisé")
+
+    # Validation inline
+    delai_min = 0.00001  # 10µs
+    if delai < delai_min:
+        delai = delai_min
+
+    # GPIO inline - PAS d'appels de méthodes
+    if self.gpio_lib == "lgpio":
+        import lgpio
+        lgpio.gpio_write(self.gpio_handle, self.STEP, 1)
+        time.sleep(delai / 2)
+        lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+        time.sleep(delai / 2)
+    # ... (RPi.GPIO similaire)
+
+def rotation(self, angle_deg: float, vitesse: float = 0.0015):
+    # Boucle avec vérification stop_requested tous les 500 pas seulement
+    for i in range(steps):
+        if i % 500 == 0 and self.stop_requested:
+            break
+        self.faire_un_pas(vitesse)
+```
+
+#### Causes potentielles restantes (non confirmées)
+
+1. **Garbage Collector Python** : Peut interrompre à tout moment pour libérer mémoire
+2. **FileHandler logging** : Écritures disque synchrones dans `motor_service.py`
+3. **Contexte Motor Service** : Boucle principale avec polling 50ms, threads
+
+### Diagnostic à effectuer
+
+Un script de diagnostic complet a été créé : `diagnostic_moteur_complet.py`
+
+**Exécution** :
+```bash
+sudo python3 diagnostic_moteur_complet.py
+```
+
+**Ce que le diagnostic mesure** :
+- **TEST A** : Timing de chaque impulsion en mode isolé (comme `calibration_moteur.py`)
+- **TEST B** : Comportement via Motor Service (contexte production)
+
+**Métriques clés** :
+- **Outliers** : % de pas avec délai > 2× la moyenne
+- **Max delay** : Délai max observé (si > 5× moyenne = interruption significative)
+- **Overhead** : Temps total vs temps attendu
+
+**Interprétation** :
+
+| Résultat Test A | Résultat Test B | Conclusion |
+|-----------------|-----------------|------------|
+| ✅ Peu d'outliers | ✅ Peu d'outliers | Problème ailleurs (FeedbackController ?) |
+| ✅ Peu d'outliers | ❌ Beaucoup d'outliers | Contexte Motor Service cause les saccades |
+| ❌ Beaucoup d'outliers | ❌ Beaucoup d'outliers | Problème dans `rotation()` ou hardware |
+
+### Pistes de résolution (à tester selon résultats diagnostic)
+
+#### Si problème dans Motor Service (Test A OK, Test B KO)
+
+1. **Désactiver FileHandler logging** (`motor_service.py` lignes 91-101) :
+```python
+logging.basicConfig(
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),
+        # logging.FileHandler(...)  # COMMENTER
+    ]
+)
+```
+
+2. **Désactiver GC pendant mouvement** (`moteur.py`) :
+```python
+import gc
+gc.disable()
+try:
+    for i in range(steps):
+        self.faire_un_pas(vitesse)
+finally:
+    gc.enable()
+```
+
+#### Si problème dans boucle moteur (Test A KO)
+
+1. **Vérifier processus concurrents** sur le Pi
+2. **Vérifier alimentation** du driver DM556T
+3. **Comparer avec `calibration_moteur.py`** directement
+
+#### Si problème dans FeedbackController
+
+Les pauses dans `read_stable()` (`moteur.py`) :
+```python
+def read_stable(self, num_samples=3, delay_ms=10, stabilization_ms=50):
+    time.sleep(stabilization_ms / 1000.0)  # 50ms pause !
+    for _ in range(num_samples):
+        pos = self.read_angle()
+        time.sleep(delay_ms / 1000.0)  # 10ms × 3
+```
+
+**Impact** : ~80ms de pause entre chaque itération de feedback
+
+**Solution potentielle** : Réduire `stabilization_ms` à 20ms et `delay_ms` à 5ms
+
+### Architecture multi-processus (rappel)
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Daemon EMS22A  │     │  Motor Service  │     │  Django Web     │
+│  (processus 1)  │     │  (processus 2)  │     │  (processus 3)  │
+│                 │     │                 │     │                 │
+│  GIL isolé      │────▶│  GIL isolé      │◀────│  GIL isolé      │
+│  SPI @ 50Hz     │ JSON│  GPIO moteur    │ IPC │  Interface      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+**Point clé** : Chaque processus a son propre GIL Python, donc les threads Django n'impactent PAS le Motor Service. Le problème est **interne** au Motor Service.
+
+### Fichiers de diagnostic disponibles
+
+- `diagnostic_moteur_complet.py` : Script de test complet (à placer à la racine)
+- `README_DIAGNOSTIC.md` : Instructions pour l'utilisateur sur site
+
+---
+
 ## Known Issues and Limitations
 
 1. **Very fast objects**: Moon, ISS not supported (significant proper motion)
@@ -458,6 +618,8 @@ sudo python3 ems22d_calibrated.py
    - **FIXED** in `boussole.py` lines 130-147: Moved `FuncAnimation` creation AFTER `FigureCanvasTkAgg` and `.pack()`
    - **CRITICAL ORDER**: Canvas → Pack → Animation → Mainloop (same as working direct compass)
    - See `tests_sur_site/ANALYSE_BUG_BOUSSOLE_DAEMON.md` for complete analysis
+
+7. **EN COURS (Dec 2025)** : Saccades moteur via Motor Service alors que `calibration_moteur.py` fonctionne parfaitement. Voir section "PROBLÈME EN COURS : Saccades moteur" ci-dessus.
 
 ## Hardware Context
 
@@ -502,3 +664,4 @@ For detailed installation and troubleshooting:
 - `README_v4_3.md`: Daemon architecture details
 - `README.md`: Architecture overview
 - `GUIDE_MIGRATION_DAEMON.md`: Daemon migration guide
+- `TRACKING_LOGIC.md`: Complete tracking logic documentation
