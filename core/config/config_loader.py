@@ -42,23 +42,6 @@ class SiteConfig:
 
 
 @dataclass
-class GeometrieConfig:
-    """Configuration géométrique de l'observatoire."""
-    deport_tube_cm: float
-    rayon_coupole_cm: float
-    
-    @property
-    def deport_tube_m(self) -> float:
-        """Déport en mètres."""
-        return self.deport_tube_cm / 100.0
-    
-    @property
-    def rayon_coupole_m(self) -> float:
-        """Rayon en mètres."""
-        return self.rayon_coupole_cm / 100.0
-
-
-@dataclass
 class GPIOPins:
     """Configuration des pins GPIO."""
     dir: int
@@ -211,7 +194,6 @@ class DriftAppConfig:
         tracker = Tracker(config.site, config.tracking, config.adaptive)
     """
     site: SiteConfig
-    geometrie: GeometrieConfig
     motor: MotorConfig
     tracking: TrackingConfig
     adaptive: AdaptiveConfig
@@ -275,7 +257,6 @@ class ConfigLoader:
         """Construit l'objet de configuration."""
         return DriftAppConfig(
             site=self._parse_site(),
-            geometrie=self._parse_geometrie(),
             motor=self._parse_motor(),
             tracking=self._parse_tracking(),
             adaptive=self._parse_adaptive(),
@@ -297,14 +278,6 @@ class ConfigLoader:
             nom=str(c.get("nom", "Observatoire")),
             fuseau=str(c.get("fuseau", "UTC")),
             tz_offset=int(c.get("tz_offset", 0))
-        )
-
-    def _parse_geometrie(self) -> GeometrieConfig:
-        """Parse la section géométrie."""
-        c = self.cfg.get("geometrie", {})
-        return GeometrieConfig(
-            deport_tube_cm=float(c.get("deport_tube_cm", 40.0)),
-            rayon_coupole_cm=float(c.get("rayon_coupole_cm", 120.0))
         )
 
     def _parse_motor(self) -> MotorConfig:
@@ -535,8 +508,6 @@ def load_site_config() -> tuple:
         config.site.longitude,
         config.site.tz_offset,
         config.simulation,
-        config.geometrie.deport_tube_m,
-        config.geometrie.rayon_coupole_m,
         config.tracking.abaque_file,
         motor_dict,
         tracking_dict,

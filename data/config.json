@@ -1,8 +1,8 @@
 {
   "_comment": "Configuration complète DriftApp - Toutes les constantes centralisées",
-  "_version": "2.1",
-  "_date": "2025-11-16",
-  "_changes": "Suppression mode CAUTIOUS - Simplification à 3 modes (NORMAL/CRITICAL/CONTINUOUS)",
+  "_version": "2.2",
+  "_date": "2025-12-17",
+  "_changes": "Suppression FAST_TRACK (redondant avec CONTINUOUS) - CONTINUOUS à 0.00015s (calibré)",
   
   "site": {
     "latitude": 44.15,
@@ -12,12 +12,7 @@
     "fuseau": "Europe/Paris",
     "tz_offset": 1
   },
-  
-  "geometrie": {
-    "deport_tube_cm": 40.0,
-    "rayon_coupole_cm": 120.0
-  },
-  
+
   "suivi": {
     "seuil_correction_deg": 0.5,
     "intervalle_verification_sec": 60,
@@ -78,7 +73,7 @@
   },
   
   "adaptive_tracking": {
-    "_comment": "Système de suivi adaptatif automatique - VERSION SIMPLIFIÉE (3 modes)",
+    "_comment": "Système de suivi adaptatif automatique - VERSION 2.2 (3 modes, FAST_TRACK supprimé)",
     
     "altitudes": {
       "_comment": "Seuils d'altitude pour changement de mode (degrés)",
@@ -96,38 +91,31 @@
     
     
     "modes": {
-      "_comment": "Vitesses ALIGNÉES sur Dome_v4 (version stable) - 13/12/2025",
+      "_comment": "3 modes de vitesse - FAST_TRACK supprimé (remplacé par CONTINUOUS pour GOTO)",
 
       "normal": {
-        "_comment": "Altitude < 68° - Suivi standard (vitesse Dome_v4)",
+        "_comment": "Altitude < 68° - Suivi standard",
         "interval_sec": 60,
         "threshold_deg": 0.5,
         "motor_delay": 0.002,
-        "_speed": "~5°/min - Dome_v4 stable"
+        "_speed": "~5°/min - Tracking standard"
       },
 
       "critical": {
-        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché (vitesse Dome_v4)",
+        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché",
         "interval_sec": 30,
         "threshold_deg": 0.35,
         "motor_delay": 0.001,
-        "_speed": "~9°/min - Dome_v4 stable"
+        "_speed": "~9°/min - Tracking rapproché"
       },
 
       "continuous": {
-        "_comment": "Altitude ≥ 75° ou mouvement extrême (vitesse Dome_v4)",
+        "_comment": "Altitude ≥ 75° ou mouvement extrême - AUSSI UTILISÉ POUR GOTO",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.0001,
-        "_speed": "~45°/min - Dome_v4 stable"
-      },
-
-      "fast_track": {
-        "_comment": "GOTO rapide - Validé par calibration_moteur.py à 0.00013s",
-        "interval_sec": 5,
-        "threshold_deg": 0.5,
         "motor_delay": 0.00015,
-        "_speed": "~36°/min - Pour GOTO manuels et automatiques"
+        "_speed": "~41°/min - Vitesse max fluide (calibrée 17/12/2025)",
+        "_usage": "Tracking continu + GOTO manuels/automatiques"
       }
     },
     

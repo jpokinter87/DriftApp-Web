@@ -15,7 +15,6 @@ Usage:
     sudo python3 services/motor_service.py
 
 Date: Décembre 2025
-Version: 4.4 - Optimisation GOTO/JOG sans feedback pour fluidité
 """
 
 import json
@@ -47,11 +46,6 @@ from core.utils.angle_utils import shortest_angular_distance
 COMMAND_FILE = Path("/dev/shm/motor_command.json")
 STATUS_FILE = Path("/dev/shm/motor_status.json")
 ENCODER_FILE = Path("/dev/shm/ems22_position.json")
-
-# Seuil pour utiliser le feedback (degrés)
-# En dessous de ce seuil, on utilise le feedback pour la précision
-# Au-dessus, rotation directe + correction finale (fluidité)
-SEUIL_FEEDBACK_DEG = 3.0
 
 
 class SimulatedDaemonReader:
@@ -117,11 +111,6 @@ class MotorService:
     - Les rotations relatives (jog)
     - Le suivi automatique d'objets célestes
     - Le feedback encodeur en boucle fermée
-    
-    VERSION 4.4:
-    - GOTO: Rotation directe pour > 3°, puis correction finale feedback
-    - JOG (boutons manuels): Rotation directe sans feedback (fluidité)
-    - Tracking: Feedback conservé pour les petites corrections
     """
 
     def __init__(self):
@@ -275,52 +264,23 @@ class MotorService:
             return None
 
     # =========================================================================
-    # VITESSE OPTIMALE
-    # =========================================================================
-    
-    def _get_goto_speed(self, speed: Optional[float] = None) -> float:
-        """
-        Retourne la vitesse optimale pour les GOTO.
-        
-        Utilise CONTINUOUS (la plus rapide fluide validée par calibration).
-        
-        Args:
-            speed: Vitesse explicite ou None pour utiliser la config
-            
-        Returns:
-            float: Délai moteur en secondes
-        """
-        if speed is not None:
-            return speed
-            
-        # Utiliser CONTINUOUS (plus rapide vitesse fluide)
-        continuous = self.config.adaptive.modes.get('continuous')
-        if continuous:
-            return continuous.motor_delay
-        
-        # Fallback
-        return 0.00015
-
-    # =========================================================================
     # COMMANDES MOTEUR
     # =========================================================================
 
     def handle_goto(self, angle: float, speed: Optional[float] = None):
         """
         Exécute un GOTO vers une position absolue.
-        
-        OPTIMISATION v4.4:
-        - Grands déplacements (> 3°): Rotation directe FLUIDE, puis correction finale
-        - Petits déplacements (≤ 3°): Feedback classique pour précision
 
         Args:
             angle: Angle cible (0-360°)
-            speed: Vitesse moteur (delay en secondes), None = config CONTINUOUS
+            speed: Vitesse moteur (delay en secondes), None = config fast_track
         """
-        # Vitesse = CONTINUOUS (la plus rapide fluide)
-        speed = self._get_goto_speed(speed)
-        
-        logger.info(f"GOTO vers {angle:.1f}° (vitesse={speed*1000:.3f}ms)")
+        logger.info(f"GOTO vers {angle:.1f}°")
+
+        # Vitesse par défaut = fast_track
+        if speed is None:
+            fast_track = self.config.adaptive.modes.get('fast_track')
+            speed = fast_track.motor_delay if fast_track else 0.00015
 
         self.current_status['status'] = 'moving'
         self.current_status['target'] = angle
@@ -334,84 +294,38 @@ class MotorService:
                 set_simulated_position(current_pos)
                 logger.debug(f"Sync position simulée avant goto: {current_pos:.2f}°")
 
-            # Lire position actuelle
+            # Utiliser le feedback si disponible
             if self.daemon_reader.is_available():
-                current_pos = self.daemon_reader.read_angle(timeout_ms=200)
-            else:
-                current_pos = self.current_status.get('position', 0)
-            
-            delta = shortest_angular_distance(current_pos, angle)
-            
-            if abs(delta) > SEUIL_FEEDBACK_DEG:
-                # ============================================================
-                # GRAND DÉPLACEMENT (> 3°): Rotation directe + correction finale
-                # ============================================================
-                logger.info(f"GOTO optimisé: rotation directe de {delta:+.1f}°")
-                
-                # 1. Rotation directe (fluide, sans interruption)
-                self.moteur.clear_stop_request()
-                self.moteur.rotation(delta, vitesse=speed)
-                
-                # 2. Correction finale avec feedback (max 3 itérations)
-                if self.daemon_reader.is_available():
-                    pos_apres_rotation = self.daemon_reader.read_angle(timeout_ms=200)
-                    erreur = shortest_angular_distance(pos_apres_rotation, angle)
-                    
-                    if abs(erreur) > 0.5:
-                        logger.info(f"Correction finale: erreur={erreur:+.2f}°")
-                        result = self.feedback_controller.rotation_avec_feedback(
-                            angle_cible=angle,
-                            vitesse=speed,
-                            tolerance=0.5,
-                            max_iterations=3
-                        )
-                        self.current_status['position'] = result['position_finale']
-                        
-                        if result['success']:
-                            logger.info(f"GOTO terminé avec succès: erreur finale={result['erreur_finale']:.2f}°")
-                        else:
-                            logger.warning(f"GOTO: correction imparfaite, erreur={result['erreur_finale']:.2f}°")
-                    else:
-                        logger.info(f"GOTO précis du premier coup: erreur={erreur:+.2f}°")
-                        self.current_status['position'] = pos_apres_rotation
-                else:
-                    # Sans encodeur, estimer la position
-                    self.current_status['position'] = angle
-                    
-                self.current_status['status'] = 'idle'
+                result = self.feedback_controller.rotation_avec_feedback(
+                    angle_cible=angle,
+                    vitesse=speed,
+                    tolerance=0.5,
+                    max_iterations=10,
+                    max_correction_par_iteration=180.0
+                )
+
+                self.current_status['status'] = 'idle' if result['success'] else 'error'
+                self.current_status['position'] = result['position_finale']
                 self.current_status['progress'] = 100
-                
+
+                if not result['success']:
+                    self.current_status['error'] = f"Erreur finale: {result['erreur_finale']:.2f}°"
+
+                logger.info(
+                    f"GOTO terminé: {result['position_initiale']:.1f}° -> "
+                    f"{result['position_finale']:.1f}° ({result['iterations']} iter)"
+                )
             else:
-                # ============================================================
-                # PETIT DÉPLACEMENT (≤ 3°): Feedback classique
-                # ============================================================
-                if self.daemon_reader.is_available():
-                    result = self.feedback_controller.rotation_avec_feedback(
-                        angle_cible=angle,
-                        vitesse=speed,
-                        tolerance=0.5,
-                        max_iterations=10,
-                        max_correction_par_iteration=180.0
-                    )
+                # Sans feedback - rotation simple
+                current_pos = self.current_status.get('position', 0)
+                delta = shortest_angular_distance(current_pos, angle)
+                self.moteur.rotation(delta, speed)
 
-                    self.current_status['status'] = 'idle' if result['success'] else 'error'
-                    self.current_status['position'] = result['position_finale']
-                    self.current_status['progress'] = 100
+                self.current_status['status'] = 'idle'
+                self.current_status['position'] = angle
+                self.current_status['progress'] = 100
 
-                    if not result['success']:
-                        self.current_status['error'] = f"Erreur finale: {result['erreur_finale']:.2f}°"
-
-                    logger.info(
-                        f"GOTO terminé: {result['position_initiale']:.1f}° -> "
-                        f"{result['position_finale']:.1f}° ({result['iterations']} iter)"
-                    )
-                else:
-                    # Sans feedback - rotation simple
-                    self.moteur.rotation(delta, speed)
-                    self.current_status['status'] = 'idle'
-                    self.current_status['position'] = angle
-                    self.current_status['progress'] = 100
-                    logger.info(f"GOTO (sans feedback) terminé: delta={delta:.1f}°")
+                logger.info(f"GOTO (sans feedback) terminé: delta={delta:.1f}°")
 
         except Exception as e:
             logger.error(f"Erreur GOTO: {e}")
@@ -423,46 +337,43 @@ class MotorService:
 
     def handle_jog(self, delta: float, speed: Optional[float] = None):
         """
-        Exécute une rotation relative (jog) - Boutons manuels.
-        
-        OPTIMISATION v4.4:
-        - Rotation directe SANS feedback (fluidité maximale)
-        - Les boutons manuels ne nécessitent pas de précision absolue
-        - L'utilisateur peut ajuster visuellement
+        Exécute une rotation relative (jog).
 
         Args:
             delta: Déplacement relatif en degrés (+ = horaire)
             speed: Vitesse moteur (delay en secondes)
         """
-        logger.info(f"JOG de {delta:+.1f}° (sans feedback)")
+        logger.info(f"JOG de {delta:+.1f}°")
 
-        # Vitesse = CONTINUOUS (la plus rapide fluide)
-        speed = self._get_goto_speed(speed)
+        if speed is None:
+            fast_track = self.config.adaptive.modes.get('fast_track')
+            speed = fast_track.motor_delay if fast_track else 0.00015
 
         self.current_status['status'] = 'moving'
         self.write_status()
 
         try:
             # En mode simulation, synchroniser _simulated_position avant le jog
+            # pour que le FeedbackController lise la bonne position de départ
             if self.simulation_mode:
                 current_pos = self.current_status.get('position', 0)
                 set_simulated_position(current_pos)
                 logger.debug(f"Sync position simulée avant jog: {current_pos:.2f}°")
 
-            # Rotation directe (fluide, sans feedback)
-            self.moteur.clear_stop_request()
-            self.moteur.rotation(delta, vitesse=speed)
-            
-            # Lire la position réelle après rotation
             if self.daemon_reader.is_available():
-                pos_finale = self.daemon_reader.read_angle(timeout_ms=200)
-                self.current_status['position'] = pos_finale
+                result = self.feedback_controller.rotation_relative_avec_feedback(
+                    delta_deg=delta,
+                    vitesse=speed,
+                    tolerance=0.5,
+                    max_iterations=5
+                )
+                self.current_status['position'] = result['position_finale']
             else:
+                self.moteur.rotation(delta, speed)
                 current = self.current_status.get('position', 0)
                 self.current_status['position'] = (current + delta) % 360
 
             self.current_status['status'] = 'idle'
-            logger.info(f"JOG terminé: position={self.current_status['position']:.1f}°")
 
         except Exception as e:
             logger.error(f"Erreur JOG: {e}")
@@ -491,6 +402,71 @@ class MotorService:
         self.current_status['status'] = 'idle'
         self.current_status['tracking_object'] = None
         self.write_status()
+
+    def handle_test_speed(self, angle: float, motor_delay: float) -> dict:
+        """
+        Teste une vitesse spécifique et retourne les métriques.
+        
+        COMMANDE TEMPORAIRE pour calibration de la vitesse maximale.
+        
+        Args:
+            angle: Angle de rotation en degrés (positif ou négatif)
+            motor_delay: Délai entre les pas en secondes
+            
+        Returns:
+            dict avec duration_sec, vitesse_deg_min, success
+        """
+        import time as time_module
+        
+        logger.info(f"TEST_SPEED: angle={angle}°, delay={motor_delay*1000:.3f}ms")
+        
+        try:
+            # Mettre à jour le statut
+            self.current_status['status'] = 'moving'
+            self.current_status['target'] = None
+            self.write_status()
+            
+            # Clear stop request pour permettre le mouvement
+            self.moteur.clear_stop_request()
+            
+            # Effectuer la rotation avec mesure du temps
+            t_start = time_module.perf_counter()
+            self.moteur.rotation(angle, vitesse=motor_delay)
+            duration = time_module.perf_counter() - t_start
+            
+            # Calculer la vitesse effective
+            vitesse_deg_min = abs(angle) / duration * 60 if duration > 0 else 0
+            
+            # Mettre à jour la position depuis l'encodeur
+            if self.daemon_reader and self.daemon_reader.is_available():
+                pos = self.daemon_reader.read_angle()
+                self.current_status['position'] = pos
+            
+            self.current_status['status'] = 'idle'
+            
+            result = {
+                'success': True,
+                'angle': angle,
+                'motor_delay_ms': motor_delay * 1000,
+                'duration_sec': round(duration, 3),
+                'vitesse_deg_min': round(vitesse_deg_min, 1)
+            }
+            
+            # Stocker le résultat dans le status pour que le client puisse le lire
+            self.current_status['last_test_result'] = result
+            self.write_status()
+            
+            logger.info(f"TEST_SPEED terminé: {duration:.2f}s, {vitesse_deg_min:.1f}°/min")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"TEST_SPEED erreur: {e}")
+            self.current_status['status'] = 'error'
+            self.current_status['error'] = str(e)
+            self.current_status['last_test_result'] = {'success': False, 'error': str(e)}
+            self.write_status()
+            return {'success': False, 'error': str(e)}
 
     def handle_continuous(self, direction: str):
         """
@@ -575,8 +551,9 @@ class MotorService:
                     # Mode production: faire un petit déplacement réel
                     # Clear stop avant chaque rotation pour permettre le mouvement
                     self.moteur.clear_stop_request()
-                    # Utiliser la vitesse CONTINUOUS pour les mouvements manuels rapides
-                    speed = self._get_goto_speed()
+                    # Utiliser la vitesse FAST_TRACK pour les mouvements manuels rapides
+                    fast_track = self.config.adaptive.modes.get('fast_track')
+                    speed = fast_track.motor_delay if fast_track else 0.00015
                     self.moteur.rotation(delta_per_step, vitesse=speed)
 
                     # Vérifier arrêt après rotation
@@ -591,15 +568,17 @@ class MotorService:
                 time.sleep(step_interval)
 
             except Exception as e:
-                logger.error(f"Erreur mouvement continu: {e}")
+                logger.error(f"Erreur dans boucle continue: {e}")
                 break
 
-        logger.debug("Thread mouvement continu terminé")
+        # Fin du mouvement - s'assurer que le moteur est arrêté
+        self.moteur.request_stop()
         self.current_status['status'] = 'idle'
         self.write_status()
+        logger.debug("Thread mouvement continu terminé")
 
     # =========================================================================
-    # GESTION DU SUIVI
+    # SUIVI D'OBJETS
     # =========================================================================
 
     def handle_tracking_start(self, object_name: str):
@@ -607,59 +586,47 @@ class MotorService:
         Démarre le suivi d'un objet céleste.
 
         Args:
-            object_name: Nom de l'objet à suivre
+            object_name: Nom de l'objet (M31, Vega, Jupiter, etc.)
         """
-        logger.info(f"Démarrage suivi de: {object_name}")
-
-        # Arrêter tout suivi en cours
-        if self.tracking_active:
-            self.handle_tracking_stop()
+        logger.info(f"Démarrage suivi de {object_name}")
 
         try:
-            # Créer le calculateur astronomique
+            # Créer les calculateurs (mêmes paramètres que le GUI de référence)
             calc = AstronomicalCalculations(
-                latitude=self.config.site.latitude,
-                longitude=self.config.site.longitude,
-                tz_offset=self.config.site.tz_offset
+                self.config.site.latitude,
+                self.config.site.longitude,
+                self.config.site.tz_offset
             )
-
-            # Créer le logger de suivi
-            tracking_logger = TrackingLogger(
-                log_dir=Path(__file__).parent.parent / 'logs'
-            )
+            tracking_logger = TrackingLogger()
 
             # Créer la session de suivi
             self.tracking_session = TrackingSession(
-                moteur=self.feedback_controller,  # Utilise le feedback pour le tracking
+                moteur=self.moteur,
                 calc=calc,
                 logger=tracking_logger,
                 seuil=self.config.tracking.seuil_correction_deg,
                 intervalle=self.config.tracking.intervalle_verification_sec,
-                abaque_file=str(Path(__file__).parent.parent / self.config.tracking.abaque_file),
+                abaque_file=self.config.tracking.abaque_file,
                 adaptive_config=self.config.adaptive,
                 motor_config=self.config.motor,
                 encoder_config=self.config.encoder
             )
 
             # Démarrer le suivi
-            success = self.tracking_session.start(object_name)
+            success, message = self.tracking_session.start(object_name)
 
             if success:
                 self.tracking_active = True
                 self.current_status['status'] = 'tracking'
                 self.current_status['tracking_object'] = object_name
                 self.current_status['mode'] = 'normal'
-
-                # Lire l'offset encodeur pour synchronisation
-                status = self.tracking_session.get_status()
-                encoder_offset = status.get('encoder_offset', 0)
-                logger.info(f"Suivi démarré - Offset encodeur: {encoder_offset:.2f}°")
-
-                # Log pour l'interface
-                self.add_tracking_log(f"Suivi démarré: {object_name}", 'info')
+                logger.info(f"Suivi démarré: {message}")
+                # Correction 3: Log de démarrage pour l'interface web
+                self.add_tracking_log(f"Suivi de {object_name} démarré", 'tracking')
             else:
-                logger.error(f"Échec démarrage suivi de {object_name}")
-                self.current_status['error'] = "Échec démarrage suivi"
+                self.current_status['status'] = 'error'
+                self.current_status['error'] = message
+                logger.error(f"Échec démarrage suivi: {message}")
 
         except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
@@ -673,7 +640,7 @@ class MotorService:
         logger.info("Arrêt du suivi")
 
         if self.tracking_session:
-            # En mode simulation, synchroniser la position finale
+            # En mode simulation, synchroniser _simulated_position avec la position finale du tracking
             if self.simulation_mode:
                 status = self.tracking_session.get_status()
                 final_pos = status.get('position_relative', 0) % 360
@@ -786,6 +753,12 @@ class MotorService:
 
         elif cmd_type == 'tracking_stop':
             self.handle_tracking_stop()
+
+        elif cmd_type == 'test_speed':
+            # Commande temporaire pour calibration vitesse maximale
+            angle = command.get('angle', 5.0)
+            motor_delay = command.get('motor_delay', 0.001)
+            self.handle_test_speed(angle, motor_delay)
 
         elif cmd_type == 'status':
             # Commande de statut - juste mettre à jour

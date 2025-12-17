@@ -90,9 +90,7 @@ class MainScreen(Screen):
         self.calc = AstronomicalCalculations(
             self.config.site.latitude,
             self.config.site.longitude,
-            self.config.site.tz_offset,
-            self.config.geometrie.deport_tube_m,
-            self.config.geometrie.rayon_coupole_m
+            self.config.site.tz_offset
         )
 
     def _init_state(self):

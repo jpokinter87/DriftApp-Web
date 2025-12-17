@@ -1,9 +1,12 @@
 """
 Module de calculs astronomiques pour l'observatoire.
 
-VERSION 4.1 : Refactorisé pour lisibilité et maintenabilité.
-- Formule de correction de parallaxe géométrique
+VERSION 4.4 : Suppression du calcul de parallaxe géométrique.
+La correction de parallaxe est maintenant gérée par la méthode abaque
+(mesures terrain dans Loi_coupole.xlsx).
 - Conversion J2000 -> JNOW via Astropy
+- Coordonnées horizontales (azimut, altitude)
+- Temps sidéral et angle horaire
 """
 import math
 from datetime import datetime, timedelta, timezone
@@ -17,8 +20,7 @@ import astropy.units as u
 class AstronomicalCalculations:
     """Classe pour les calculs astronomiques."""
 
-    def __init__(self, latitude: float, longitude: float, tz_offset: int,
-                 deport_tube: float = 0.40, rayon_coupole: float = 1.20):
+    def __init__(self, latitude: float, longitude: float, tz_offset: int):
         """
         Initialise les calculs astronomiques.
 
@@ -26,14 +28,14 @@ class AstronomicalCalculations:
             latitude: Latitude de l'observatoire en degrés
             longitude: Longitude de l'observatoire en degrés
             tz_offset: Décalage horaire par rapport à UTC
-            deport_tube: Distance entre l'axe AD et le centre du tube (mètres)
-            rayon_coupole: Rayon de la coupole (mètres)
+
+        Note:
+            Les paramètres deport_tube et rayon_coupole ont été supprimés (v4.4).
+            La méthode abaque (mesures terrain) remplace le calcul géométrique de parallaxe.
         """
         self.latitude = latitude
         self.longitude = longitude
         self.tz_offset = tz_offset
-        self.deport_tube = deport_tube
-        self.rayon_coupole = rayon_coupole
 
     # =========================================================================
     # UTILITAIRES
@@ -91,144 +93,6 @@ class AstronomicalCalculations:
         coord_jnow = coord_j2000.transform_to(CIRS(obstime=temps_obs))
 
         return coord_jnow.ra.degree, coord_jnow.dec.degree
-
-    def calculer_correction_parallaxe(self, azimut: float, altitude: float) -> float:
-        """
-        Calcule la correction d'azimut due à la parallaxe de la monture équatoriale.
-
-        NOUVELLE FORMULE CORRIGÉE - Version simplifiée géométrique
-
-        Cette correction est nécessaire car le tube du télescope est déporté de 40 cm
-        par rapport à l'axe d'ascension droite de la monture équatoriale allemande.
-
-        La nouvelle formule utilise une approximation géométrique simple qui donne
-        des résultats cohérents et symétriques.
-
-        Args:
-            azimut: Azimut de l'objet visé en degrés (0° = Nord, 90° = Est)
-            altitude: Altitude de l'objet visé en degrés
-
-        Returns:
-            Correction en degrés à AJOUTER à l'azimut théorique pour obtenir
-            l'azimut réel où positionner la coupole
-        """
-        # Conversion en radians
-        az_rad = math.radians(azimut)
-        alt_rad = math.radians(altitude)
-
-        # Angle de parallaxe maximal (en radians)
-        # C'est l'angle sous-tendu par le déport vu depuis la distance au point visé
-        parallaxe_max = math.atan(self.deport_tube / self.rayon_coupole)
-
-        # La correction diminue avec l'altitude (nulle au zénith)
-        facteur_altitude = math.cos(alt_rad)
-
-        # La correction dépend de la position relative par rapport à l'axe polaire
-        # Pour une monture allemande, le déport est perpendiculaire à l'axe polaire
-        # La correction est maximale quand on vise Est ou Ouest
-        # Elle est minimale (mais non nulle) quand on vise Nord ou Sud
-
-        # Composante Est-Ouest de la correction
-        correction_rad = parallaxe_max * facteur_altitude * math.sin(az_rad)
-
-        # Conversion en degrés
-        correction_deg = math.degrees(correction_rad)
-
-        return correction_deg
-
-    def calculer_correction_parallaxe_ancienne(self, azimut: float, altitude: float) -> float:
-        """
-        ANCIENNE FORMULE (conservée pour comparaison) - NE PAS UTILISER EN PRODUCTION
-
-        Cette formule produit des résultats incorrects avec des corrections aberrantes.
-        Elle est conservée uniquement pour permettre la comparaison et les tests.
-        """
-        Az = math.radians(azimut)
-        h = math.radians(altitude)
-        phi = math.radians(self.latitude)
-
-        d = self.deport_tube
-        R = self.rayon_coupole
-
-        # Direction de pointage (vecteur unitaire vers l'objet)
-        x_obj = math.cos(h) * math.sin(Az)
-        y_obj = math.cos(h) * math.cos(Az)
-        z_obj = math.sin(h)
-
-        # Direction de l'axe polaire (vers le pôle nord céleste)
-        x_pole = 0
-        y_pole = math.sin(phi)
-        z_pole = math.cos(phi)
-
-        # Produit vectoriel pour obtenir la direction du déport
-        dx = y_pole * z_obj - z_pole * y_obj
-        dy = z_pole * x_obj - x_pole * z_obj
-        dz = x_pole * y_obj - y_pole * x_obj
-
-        # Normalisation du vecteur déport
-        norm = math.sqrt(dx ** 2 + dy ** 2 + dz ** 2)
-        if norm > 0:
-            dx, dy, dz = dx / norm, dy / norm, dz / norm
-        else:
-            return 0.0
-
-        # Position réelle du centre du tube du télescope
-        x_tube = x_obj + d * dx
-        y_tube = y_obj + d * dy
-
-        # Azimut du tube (position réelle)
-        azimut_tube = math.atan2(x_tube, y_tube)
-
-        # Correction = différence entre azimut du tube et azimut de l'objet
-        correction = math.degrees(azimut_tube - Az)
-
-        # Normalisation entre -180 et +180
-        if correction > 180:
-            correction -= 360
-        elif correction < -180:
-            correction += 360
-
-        return correction
-
-    def calculer_coords_horizontales_coupole(self, ascension_droite: float,
-                                             declinaison: float,
-                                             date_heure: datetime) -> Tuple[float, float, float]:
-        """
-        Calcule les coordonnées horizontales CORRIGÉES pour la coupole.
-
-        Cette méthode calcule d'abord l'azimut et l'altitude de l'objet visé,
-        puis applique la correction de parallaxe pour obtenir la position réelle
-        où doit être orientée la coupole.
-
-        Args:
-            ascension_droite: AD de l'objet en degrés
-            declinaison: Déclinaison de l'objet en degrés
-            date_heure: Date et heure de l'observation
-
-        Returns:
-            Tuple (azimut_coupole, altitude_objet, correction_appliquee)
-            - azimut_coupole: Azimut corrigé pour positionner la coupole (degrés)
-            - altitude_objet: Altitude de l'objet (degrés)
-            - correction_appliquee: Correction en degrés qui a été appliquée
-        """
-        # Calcul des coordonnées horizontales de l'objet
-        azimut_objet, altitude_objet = self.calculer_coords_horizontales(
-            ascension_droite, declinaison, date_heure
-        )
-
-        # Calcul de la correction de parallaxe
-        correction = self.calculer_correction_parallaxe(azimut_objet, altitude_objet)
-
-        # Azimut corrigé pour la coupole
-        azimut_coupole = azimut_objet + correction
-
-        # Normalisation 0-360
-        if azimut_coupole < 0:
-            azimut_coupole += 360
-        elif azimut_coupole >= 360:
-            azimut_coupole -= 360
-
-        return azimut_coupole, altitude_objet, correction
 
     def calculer_temps_sideral(self, date_heure: datetime) -> float:
         """Temps sidéral local (degrés) au méridien de l'observatoire."""
@@ -362,22 +226,45 @@ class AstronomicalCalculations:
         passage = minuit.replace(hour=heures, minute=minutes, second=secondes)
         return passage
 
+    def calculer_coords_horizontales_coupole(self, ascension_droite: float,
+                                             declinaison: float,
+                                             date_heure: datetime) -> Tuple[float, float, float]:
+        """
+        Calcule les coordonnées horizontales pour la coupole.
+
+        Note v4.4: La correction de parallaxe géométrique a été supprimée.
+        La méthode abaque (mesures terrain) est utilisée à la place pour le tracking.
+        Cette méthode retourne maintenant les coordonnées horizontales brutes
+        avec une correction de 0.
+
+        Args:
+            ascension_droite: AD de l'objet en degrés
+            declinaison: Déclinaison de l'objet en degrés
+            date_heure: Date et heure de l'observation
+
+        Returns:
+            Tuple (azimut, altitude, correction=0.0)
+        """
+        azimut, altitude = self.calculer_coords_horizontales(
+            ascension_droite, declinaison, date_heure
+        )
+        return azimut, altitude, 0.0
+
     def calculer_vitesse_rotation_coupole(self, ascension_droite: float, declinaison: float,
                                           date_heure: datetime) -> Tuple[float, int, float, float]:
         """
         Calcule la vitesse et le sens de rotation nécessaires pour la coupole.
 
-        IMPORTANT: Cette méthode utilise maintenant les coordonnées CORRIGÉES
-        pour tenir compte de la parallaxe de la monture.
+        Note v4.4: Utilise maintenant les coordonnées horizontales brutes
+        (la correction de parallaxe est gérée par la méthode abaque).
         """
         date_heure1 = date_heure
-        # Utilisation de la méthode corrigée
-        azimut1, altitude1, _ = self.calculer_coords_horizontales_coupole(
+        azimut1, altitude1 = self.calculer_coords_horizontales(
             ascension_droite, declinaison, date_heure1
         )
 
         date_heure2 = date_heure + timedelta(minutes=5)
-        azimut2, altitude2, _ = self.calculer_coords_horizontales_coupole(
+        azimut2, altitude2 = self.calculer_coords_horizontales(
             ascension_droite, declinaison, date_heure2
         )
 
@@ -402,169 +289,3 @@ class AstronomicalCalculations:
         est_proche = abs(temps_avant_passage_secondes) < seuil_minutes * 60
 
         return est_proche, temps_avant_passage_secondes
-
-    def valider_symetrie(self, tolerance: float = 0.1) -> bool:
-        """
-        Valide que les corrections sont symétriques Est-Ouest.
-
-        Args:
-            tolerance: Tolérance en degrés pour la symétrie
-
-        Returns:
-            True si la symétrie est respectée
-        """
-        altitudes_test = [15, 30, 45, 60, 75]
-
-        for alt in altitudes_test:
-            # Correction Est
-            corr_est = self.calculer_correction_parallaxe(90, alt)
-            # Correction Ouest
-            corr_ouest = self.calculer_correction_parallaxe(270, alt)
-
-            # Les corrections doivent être opposées (symétrie)
-            if abs(corr_est + corr_ouest) > tolerance:
-                print(f"❌ Symétrie non respectée à alt={alt}°: Est={corr_est:.2f}°, Ouest={corr_ouest:.2f}°")
-                return False
-
-        print("✅ Symétrie Est-Ouest validée")
-        return True
-
-
-# ============================================================================
-# MODULE DE TEST ET VALIDATION
-# ============================================================================
-
-def generer_tests_validation(calc: AstronomicalCalculations):
-    """
-    Génère des tests de validation pour la correction de parallaxe.
-
-    Args:
-        calc: Instance de AstronomicalCalculations
-    """
-    print(f"\n{'=' * 80}")
-    print(f"TESTS DE VALIDATION - CORRECTION PARALLAXE (NOUVELLE FORMULE)")
-    print(f"{'=' * 80}\n")
-    print(f"Latitude: {calc.latitude}°")
-    print(f"Déport tube: {calc.deport_tube} m")
-    print(f"Rayon coupole: {calc.rayon_coupole} m")
-    print(f"\n{'=' * 80}\n")
-
-    # Définition des tests
-    tests = [
-        ("Zénith", 180, 90),
-        ("Méridien Sud h=45°", 180, 45),
-        ("Est h=30°", 90, 30),
-        ("Ouest h=30°", 270, 30),
-        ("Est h=60°", 90, 60),
-        ("Ouest h=60°", 270, 60),
-        ("Nord-Est h=40°", 45, 40),
-        ("Nord-Ouest h=40°", 315, 40),
-        ("Sud-Est h=40°", 135, 40),
-        ("Sud-Ouest h=40°", 225, 40),
-        ("Horizon Est", 90, 15),
-        ("Horizon Ouest", 270, 15),
-    ]
-
-    print(f"{'Position':<20} | {'Az obj':>7} | {'Alt':>5} | {'Correction':>11} | {'Az coupole':>11}")
-    print(f"{'-' * 20}-+-{'-' * 7}-+-{'-' * 5}-+-{'-' * 11}-+-{'-' * 11}")
-
-    for nom, az, alt in tests:
-        correction = calc.calculer_correction_parallaxe(az, alt)
-        az_corrige = az + correction
-        if az_corrige < 0:
-            az_corrige += 360
-        elif az_corrige >= 360:
-            az_corrige -= 360
-
-        critique = "⚠️" if nom in ["Méridien Sud h=45°", "Est h=30°", "Ouest h=30°",
-                                   "Horizon Est", "Horizon Ouest"] else "  "
-
-        print(f"{nom:<20} | {az:6.1f}° | {alt:4.1f}° | {correction:+10.2f}° | {az_corrige:10.1f}° {critique}")
-
-    print(f"\n{'=' * 80}\n")
-
-
-def test_symetrie(calc: AstronomicalCalculations):
-    """Test de symétrie Est/Ouest."""
-    print(f"TEST DE SYMÉTRIE (validation du modèle)\n")
-    print("Les corrections Est/Ouest doivent être opposées:\n")
-
-    for alt in [30, 45, 60]:
-        corr_est = calc.calculer_correction_parallaxe(90, alt)
-        corr_ouest = calc.calculer_correction_parallaxe(270, alt)
-        diff = abs(corr_est + corr_ouest)
-
-        print(f"Altitude {alt}°:")
-        print(f"  Est:   {corr_est:+7.2f}°")
-        print(f"  Ouest: {corr_ouest:+7.2f}°")
-        print(f"  Symétrie OK: {diff < 0.01} (écart: {diff:.4f}°)\n")
-
-
-def comparer_formules(calc: AstronomicalCalculations):
-    """Compare l'ancienne et la nouvelle formule."""
-    print(f"\n{'=' * 80}")
-    print(f"COMPARAISON ANCIENNE vs NOUVELLE FORMULE")
-    print(f"{'=' * 80}\n")
-
-    tests = [
-        ("Zénith", 180, 90),
-        ("Est h=30°", 90, 30),
-        ("Ouest h=30°", 270, 30),
-        ("Est h=60°", 90, 60),
-        ("Ouest h=60°", 270, 60),
-    ]
-
-    print(f"{'Position':<15} | {'Ancienne':>12} | {'Nouvelle':>12} | {'Différence':>12}")
-    print(f"{'-' * 15}-+-{'-' * 12}-+-{'-' * 12}-+-{'-' * 12}")
-
-    for nom, az, alt in tests:
-        ancienne = calc.calculer_correction_parallaxe_ancienne(az, alt)
-        nouvelle = calc.calculer_correction_parallaxe(az, alt)
-        diff = abs(ancienne - nouvelle)
-
-        print(f"{nom:<15} | {ancienne:+11.2f}° | {nouvelle:+11.2f}° | {diff:11.2f}°")
-
-    print(f"\n{'=' * 80}\n")
-
-
-if __name__ == "__main__":
-    # Exemple d'utilisation avec la latitude du site de test
-    calc = AstronomicalCalculations(
-        latitude=44.25,  # Latitude du site de test
-        longitude=5.0,  # Votre longitude
-        tz_offset=1,  # Décalage horaire
-        deport_tube=0.40,  # 40 cm
-        rayon_coupole=1.20  # 120 cm
-    )
-
-    # Tests de validation
-    generer_tests_validation(calc)
-    test_symetrie(calc)
-    comparer_formules(calc)
-
-    # Exemple d'utilisation dans le code réel
-    print("\nEXEMPLE D'UTILISATION:")
-    print("=" * 80)
-
-    from datetime import datetime
-
-    # Simulation avec les données du problème réel
-    # NGC6826: RA=296.20° DEC=50.53°
-    ad = 296.20  # degrés
-    dec = 50.53  # degrés
-    maintenant = datetime.now()
-
-    # Méthode 1: Obtenir directement les coordonnées corrigées
-    az_coupole, alt, correction = calc.calculer_coords_horizontales_coupole(ad, dec, maintenant)
-
-    print(f"\nObjet NGC6826: AD={ad}°, DEC={dec}°")
-    print(f"Azimut objet calculé: {az_coupole - correction:.2f}°")
-    print(f"Altitude: {alt:.2f}°")
-    print(f"Correction parallaxe (nouvelle): {correction:+.2f}°")
-    print(f"Azimut coupole: {az_coupole:.2f}°")
-
-    # Comparaison avec l'ancienne formule
-    az_objet, alt_objet = calc.calculer_coords_horizontales(ad, dec, maintenant)
-    correction_ancienne = calc.calculer_correction_parallaxe_ancienne(az_objet, alt_objet)
-    print(f"\nCorrection ancienne formule: {correction_ancienne:+.2f}° (INCORRECTE!)")
-    print(f"Différence: {abs(correction - correction_ancienne):.2f}°")

@@ -227,9 +227,7 @@ class DriftApp(App):
         self.calc = AstronomicalCalculations(
             config.site.latitude,
             config.site.longitude,
-            config.site.tz_offset,
-            config.geometrie.deport_tube_m,
-            config.geometrie.rayon_coupole_m
+            config.site.tz_offset
         )
 
         self.tracking_session = None
@@ -304,9 +302,7 @@ class DriftApp(App):
         self.calc = AstronomicalCalculations(
             latitude=self.config.site.latitude,
             longitude=self.config.site.longitude,
-            tz_offset=self.config.site.tz_offset,
-            deport_tube=self.config.geometrie.deport_tube_cm,
-            rayon_coupole=self.config.geometrie.rayon_coupole_cm
+            tz_offset=self.config.site.tz_offset
         )
 
         # Stocker les configs
