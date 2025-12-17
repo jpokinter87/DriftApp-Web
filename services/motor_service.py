@@ -624,9 +624,7 @@ class MotorService:
             )
 
             # Créer le logger de suivi
-            tracking_logger = TrackingLogger(
-                log_dir=Path(__file__).parent.parent / 'logs'
-            )
+            tracking_logger = TrackingLogger()
 
             # Créer la session de suivi
             self.tracking_session = TrackingSession(
