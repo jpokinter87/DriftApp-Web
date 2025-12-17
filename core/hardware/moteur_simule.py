@@ -18,6 +18,17 @@ from typing import Dict, Any, Optional
 _simulated_position = 0.0
 
 
+def set_simulated_position(position: float):
+    """Permet de synchroniser la position simulée depuis l'extérieur."""
+    global _simulated_position
+    _simulated_position = position % 360
+
+
+def get_simulated_position() -> float:
+    """Retourne la position simulée actuelle."""
+    return _simulated_position
+
+
 class MoteurSimule:
     """Moteur simulé pour tests."""
 
@@ -93,7 +104,10 @@ class MoteurSimule:
 
     def rotation(self, angle_deg: float, vitesse: float = 0.0015):
         """Simule une rotation."""
-        self.position_actuelle = (self.position_actuelle + angle_deg) % 360
+        global _simulated_position
+        # Utiliser la position globale synchronisée
+        _simulated_position = (_simulated_position + angle_deg) % 360
+        self.position_actuelle = _simulated_position  # Synchroniser aussi l'attribut local
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
                         vitesse: float = 0.0015):
@@ -161,10 +175,12 @@ class MoteurSimule:
 
         En mode simulation, le mouvement est toujours parfait.
         """
-        position_initiale = self.position_actuelle
+        global _simulated_position
+        # Utiliser la position globale synchronisée, pas self.position_actuelle
+        position_initiale = _simulated_position
 
         # Calculer le delta
-        delta = angle_cible - self.position_actuelle
+        delta = angle_cible - _simulated_position
         while delta > 180:
             delta -= 360
         while delta < -180:
@@ -193,7 +209,9 @@ class MoteurSimule:
         """
         Simule une rotation relative avec feedback.
         """
-        angle_cible = (self.position_actuelle + delta_deg) % 360
+        global _simulated_position
+        # Utiliser la position globale synchronisée
+        angle_cible = (_simulated_position + delta_deg) % 360
         return self.rotation_avec_feedback(angle_cible=angle_cible, **kwargs)
 
     # =========================================================================

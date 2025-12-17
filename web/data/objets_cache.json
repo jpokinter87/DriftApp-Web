@@ -28,5 +28,55 @@
     "type": "Unknown",
     "source": "SIMBAD",
     "date_ajout": "2025-12-14 11:16:39"
+  },
+  "IC1848": {
+    "nom": "IC 1848",
+    "ad": "02h51m19.40s",
+    "dec": "60°25'32.00\"",
+    "ra_deg": 42.83083333333333,
+    "dec_deg": 60.425555555555555,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-14 12:04:25"
+  },
+  "ELTANIN": {
+    "nom": "* gam Dra",
+    "ad": "17h56m36.37s",
+    "dec": "51°29'20.02\"",
+    "ra_deg": 269.1515411786243,
+    "dec_deg": 51.48889561763423,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-14 12:27:30"
+  },
+  "M102": {
+    "nom": "M 102",
+    "ad": "15h06m29.56s",
+    "dec": "55°45'47.91\"",
+    "ra_deg": 226.62317083333332,
+    "dec_deg": 55.76330833333333,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-14 12:33:31"
+  },
+  "NGC6946": {
+    "nom": "NGC  6946",
+    "ad": "20h34m52.33s",
+    "dec": "60°09'13.24\"",
+    "ra_deg": 308.71804999999995,
+    "dec_deg": 60.15367777777777,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-14 14:30:58"
+  },
+  "NGC6496": {
+    "nom": "NGC  6496",
+    "ad": "17h59m03.68s",
+    "dec": "-44°15'57.40\"",
+    "ra_deg": 269.76533333333333,
+    "dec_deg": -44.26594444444444,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-14 15:29:32"
   }
 }

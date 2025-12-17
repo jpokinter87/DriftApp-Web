@@ -6,13 +6,13 @@ Ce module permet d'adapter automatiquement :
 2. La vitesse du moteur (délai entre pas)
 3. La vérification du chemin le plus court
 
-VERSION 1.2 - Système adaptatif intelligent (3 modes)
+VERSION 2.2 - Système adaptatif simplifié (3 modes)
 - NORMAL: Conditions standard
 - CRITICAL: Altitude >= 68° OU mouvement critique
 - CONTINUOUS: Mouvement extrême OU (altitude >= 75° ET mouvement significatif)
+              AUSSI utilisé pour les GOTO (vitesse max fluide)
 
-IMPORTANT: Le mode CONTINUOUS ne se déclenche plus sur l'altitude seule.
-Un objet circumpolaire quasi-stationnaire reste en mode NORMAL ou CRITICAL.
+CHANGEMENT v2.2: FAST_TRACK supprimé (redondant avec CONTINUOUS après calibration)
 """
 
 from dataclasses import dataclass
@@ -25,8 +25,7 @@ class TrackingMode(Enum):
     """Modes de suivi selon la zone du ciel."""
     NORMAL = "normal"           # Zone normale
     CRITICAL = "critical"       # Zone critique
-    CONTINUOUS = "continuous"   # Correction continue
-    FAST_TRACK = "fast_track"   # Basculement méridien / GOTO (~45°/min)
+    CONTINUOUS = "continuous"   # Correction continue + GOTO
 
 
 @dataclass
@@ -148,39 +147,18 @@ class AdaptiveTrackingManager:
                 check_interval=mode.interval_sec,
                 correction_threshold=mode.threshold_deg,
                 motor_delay=mode.motor_delay,
-                description="Mode continu - Corrections permanentes"
+                description="Mode continu - Corrections permanentes / GOTO"
             )
         return TrackingParameters(
             mode=TrackingMode.CONTINUOUS,
             check_interval=5,
             correction_threshold=0.1,
-            motor_delay=0.0001,
-            description="Mode continu - Corrections permanentes"
+            motor_delay=0.00015,
+            description="Mode continu - Corrections permanentes / GOTO"
         )
 
     def _get_continuous_params(self) -> TrackingParameters:
         return self._get_continuous_params_from_config(self.adaptive_config)
-
-    def _get_fast_track_params(self) -> TrackingParameters:
-        """Retourne les paramètres pour le mode FAST_TRACK (~45°/min)."""
-        if self.adaptive_config:
-            mode = self.adaptive_config.modes.get('fast_track')
-            if mode:
-                return TrackingParameters(
-                    mode=TrackingMode.FAST_TRACK,
-                    check_interval=mode.interval_sec,
-                    correction_threshold=mode.threshold_deg,
-                    motor_delay=mode.motor_delay,
-                    description="Mode FAST_TRACK - Basculement méridien / GOTO (~45°/min)"
-                )
-        # Valeurs par défaut pour FAST_TRACK
-        return TrackingParameters(
-            mode=TrackingMode.FAST_TRACK,
-            check_interval=5,
-            correction_threshold=0.5,
-            motor_delay=0.0002,
-            description="Mode FAST_TRACK - Basculement méridien / GOTO (~45°/min)"
-        )
 
     # =========================================================================
     # PRÉDICATS D'ÉVALUATION
@@ -214,90 +192,95 @@ class AdaptiveTrackingManager:
             return "critical"
         return "normal"
 
-    def _has_significant_movement(self, delta: float) -> bool:
-        """Vérifie si le mouvement est significatif pour déclencher CONTINUOUS."""
-        return abs(delta) >= self.MOVEMENT_MIN_FOR_CONTINUOUS
-
     # =========================================================================
     # DÉCISION DU MODE
     # =========================================================================
 
-    def _decide_mode(self, altitude_level: str, movement_level: str,
-                     in_critical_zone: bool, altitude: float,
-                     delta: float) -> tuple:
+    def _decide_mode(
+        self,
+        altitude_level: str,
+        movement_level: str,
+        in_critical_zone: bool,
+        altitude: float,
+        delta_required: float
+    ) -> Tuple[TrackingMode, list]:
         """
-        Décide du mode de tracking basé sur les niveaux.
+        Décide du mode de suivi approprié.
+
+        Priorité (du plus urgent au moins urgent):
+        1. CONTINUOUS: mouvement extrême OU (zénith + mouvement significatif)
+        2. CRITICAL: zone critique OU altitude critique OU mouvement critique
+        3. NORMAL: conditions standard
 
         Returns:
-            tuple (TrackingMode, list[str] raisons)
+            Tuple (mode, liste des raisons)
         """
-        # Priorité 0 : Grand déplacement (>30°) → FAST_TRACK
-        # CORRIGÉ (Dec 2025): Le problème était la lecture daemon pendant rotation
-        # qui causait des contentions GIL. calibration_moteur.py fonctionne car
-        # il ne lit jamais le daemon. Voir main_screen.py _update_manual_display.
-        if delta >= 30.0:
-            return TrackingMode.FAST_TRACK, [f"Grand déplacement ({delta:.1f}°) - GOTO rapide"]
+        reasons = []
 
-        # Priorité 1 : Mouvement extrême → CONTINUOUS
+        # === CONTINUOUS ===
+        # Mouvement extrême (> 50°)
         if movement_level == "extreme":
-            return TrackingMode.CONTINUOUS, [f"Mouvement extrême ({delta:.1f}°)"]
+            reasons.append(f"Mouvement extrême ({abs(delta_required):.1f}°)")
+            return TrackingMode.CONTINUOUS, reasons
 
-        # Priorité 2 : Zénith avec mouvement significatif → CONTINUOUS
-        if altitude_level == "zenith" and self._has_significant_movement(delta):
-            return TrackingMode.CONTINUOUS, [
-                f"Proche zénith ({altitude:.1f}°) + mouvement ({delta:.1f}°)"
-            ]
+        # Proche zénith ET mouvement significatif (> seuil minimum)
+        if altitude_level == "zenith" and abs(delta_required) >= self.MOVEMENT_MIN_FOR_CONTINUOUS:
+            reasons.append(f"Proche zénith ({altitude:.1f}°) + mouvement significatif ({abs(delta_required):.1f}°)")
+            return TrackingMode.CONTINUOUS, reasons
 
-        # Priorité 3 : Zénith sans mouvement → CRITICAL (pas CONTINUOUS)
-        if altitude_level == "zenith":
-            return TrackingMode.CRITICAL, [
-                f"Proche zénith ({altitude:.1f}°) mouvement faible ({delta:.2f}°)"
-            ]
-
-        # Priorité 4 : Zone critique définie → CRITICAL
+        # === CRITICAL ===
+        # Zone critique définie
         if in_critical_zone:
-            return TrackingMode.CRITICAL, [
-                f"Zone critique {self.CRITICAL_ZONE_1['name']}"
-            ]
+            reasons.append(f"Zone critique ({self.CRITICAL_ZONE_1['name']})")
+            return TrackingMode.CRITICAL, reasons
 
-        # Priorité 5 : Altitude critique → CRITICAL
-        if altitude_level == "critical":
-            reason = f"Altitude critique ({altitude:.1f}°)"
-            if movement_level == "critical":
-                reason += " + mouvement"
-            return TrackingMode.CRITICAL, [reason]
+        # Altitude critique OU proche zénith sans mouvement significatif
+        if altitude_level in ["critical", "zenith"]:
+            if altitude_level == "zenith":
+                reasons.append(f"Proche zénith ({altitude:.1f}°) - mouvement faible, pas de CONTINUOUS")
+            else:
+                reasons.append(f"Altitude critique ({altitude:.1f}°)")
+            return TrackingMode.CRITICAL, reasons
 
-        # Priorité 6 : Mouvement critique seul → CRITICAL
+        # Mouvement critique
         if movement_level == "critical":
-            return TrackingMode.CRITICAL, [f"Mouvement critique ({delta:.1f}°)"]
+            reasons.append(f"Mouvement critique ({abs(delta_required):.1f}°)")
+            return TrackingMode.CRITICAL, reasons
 
-        # Par défaut : NORMAL
-        return TrackingMode.NORMAL, ["Conditions normales"]
+        # === NORMAL ===
+        reasons.append("Conditions standard")
+        return TrackingMode.NORMAL, reasons
 
     def _get_params_for_mode(self, mode: TrackingMode) -> TrackingParameters:
         """Retourne les paramètres pour un mode donné."""
-        if mode == TrackingMode.FAST_TRACK:
-            return self._get_fast_track_params()
         if mode == TrackingMode.CONTINUOUS:
             return self._get_continuous_params()
-        if mode == TrackingMode.CRITICAL:
+        elif mode == TrackingMode.CRITICAL:
             return self._get_critical_params()
-        return self._get_normal_params()
+        else:
+            return self._get_normal_params()
 
-    def _log_mode_change(self, old_mode: TrackingMode, new_mode: TrackingMode,
-                         reasons: list, params: TrackingParameters):
-        """Log un changement de mode."""
-        self.logger.info("=" * 60)
-        self.logger.info(f"CHANGEMENT DE MODE: {old_mode.value} -> {new_mode.value}")
-        self.logger.info(f"   Raisons: {', '.join(reasons)}")
-        self.logger.info(f"   Nouveau paramètres:")
-        self.logger.info(f"   - Intervalle: {params.check_interval}s")
-        self.logger.info(f"   - Seuil: {params.correction_threshold:.2f}°")
-        self.logger.info(f"   - Délai moteur: {params.motor_delay}s")
-        self.logger.info("=" * 60)
+    def _log_mode_change(
+        self,
+        old_mode: TrackingMode,
+        new_mode: TrackingMode,
+        reasons: list,
+        params: TrackingParameters
+    ):
+        """Log le changement de mode."""
+        reasons_str = ", ".join(reasons)
+        self.logger.info(
+            f"🔄 Changement de mode: {old_mode.value} → {new_mode.value}"
+        )
+        self.logger.info(f"   Raisons: {reasons_str}")
+        self.logger.info(
+            f"   Paramètres: intervalle={params.check_interval}s, "
+            f"seuil={params.correction_threshold}°, "
+            f"délai={params.motor_delay}s"
+        )
 
     # =========================================================================
-    # ÉVALUATION PRINCIPALE
+    # MÉTHODE PRINCIPALE
     # =========================================================================
 
     def evaluate_tracking_zone(
@@ -425,10 +408,12 @@ class AdaptiveTrackingManager:
         params = self.current_params
         
         # Déterminer les drapeaux d'alerte
-        in_critical_zone = (
-            self.CRITICAL_ZONE_1['alt_min'] <= altitude <= self.CRITICAL_ZONE_1['alt_max'] and
-            self.CRITICAL_ZONE_1['az_min'] <= azimut <= self.CRITICAL_ZONE_1['az_max']
-        )
+        in_critical_zone = False
+        if self.CRITICAL_ZONE_1:
+            in_critical_zone = (
+                self.CRITICAL_ZONE_1['alt_min'] <= altitude <= self.CRITICAL_ZONE_1['alt_max'] and
+                self.CRITICAL_ZONE_1['az_min'] <= azimut <= self.CRITICAL_ZONE_1['az_max']
+            )
         
         is_high_altitude = altitude >= self.ALTITUDE_CRITICAL
         is_large_movement = abs(delta) >= self.MOVEMENT_CRITICAL
@@ -476,7 +461,7 @@ if __name__ == "__main__":
     ]
     
     print("\n" + "=" * 80)
-    print("TEST DU SYSTÈME ADAPTATIF SIMPLIFIÉ (3 MODES)")
+    print("TEST DU SYSTÈME ADAPTATIF v2.2 (3 MODES - FAST_TRACK SUPPRIMÉ)")
     print("=" * 80)
     
     for alt, az, delta, description in test_cases:

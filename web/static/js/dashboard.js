@@ -15,8 +15,21 @@ let state = {
     status: 'unknown',
     trackingObject: null,
     searchedObject: null,
-    lastUpdate: null
+    lastUpdate: null,
+    trackingInfo: {}  // Pour position_cible, etc.
 };
+
+// Countdown timer (Correction 1)
+let countdownValue = null;
+let countdownInterval = null;
+let lastRemainingFromApi = null;
+
+// Logs tracking (Correction 3)
+let displayedLogs = new Set();
+
+// Timer widget (Correction 2)
+let timerCtx = null;
+let timerTotal = 60;  // Valeur par défaut, sera mise à jour selon le mode
 
 // Éléments DOM
 const elements = {
@@ -54,21 +67,36 @@ const elements = {
     btnStop: document.getElementById('btn-stop'),
     btnJogCW1: document.getElementById('btn-jog-cw-1'),
     btnJogCW10: document.getElementById('btn-jog-cw-10'),
+    btnContCCW: document.getElementById('btn-cont-ccw'),
+    btnContCW: document.getElementById('btn-cont-cw'),
     gotoAngle: document.getElementById('goto-angle'),
     btnGoto: document.getElementById('btn-goto'),
+
+    // Nouveaux cartouches
+    trackingModeIndicator: document.getElementById('tracking-mode-indicator'),
+    correctionsCount: document.getElementById('corrections-count'),
+    correctionsTotal: document.getElementById('corrections-total'),
+    encItem: document.getElementById('enc-item'),
 
     // Logs
     logs: document.getElementById('logs'),
     lastUpdate: document.getElementById('last-update')
 };
 
+// État mouvement continu
+let continuousMovement = null;
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
-    initElements();
-    initEventListeners();
-    initCompass();
-    startPolling();
-    log('Interface initialisée');
+    try {
+        initElements();
+        initEventListeners();
+        initCompass();
+        startPolling();
+        log('Interface initialisée');
+    } catch (e) {
+        console.error('Erreur initialisation:', e);
+    }
 });
 
 function initElements() {
@@ -97,6 +125,14 @@ function initEventListeners() {
     elements.gotoAngle.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') gotoPosition();
     });
+
+    // Boutons mouvement continu (toggle)
+    if (elements.btnContCCW) {
+        elements.btnContCCW.addEventListener('click', () => toggleContinuous('ccw'));
+    }
+    if (elements.btnContCW) {
+        elements.btnContCW.addEventListener('click', () => toggleContinuous('cw'));
+    }
 }
 
 // =========================================================================
@@ -160,7 +196,26 @@ async function searchObject() {
         elements.btnStartTracking.disabled = false;
         state.searchedObject = result.nom || name;
         log(`Trouvé: ${state.searchedObject}`, 'success');
+
+        // Effet clignotement vert du bouton pendant 5 secondes
+        flashButtonSuccess(elements.btnStartTracking, 5000);
     }
+}
+
+// Effet de clignotement vert sur un bouton
+function flashButtonSuccess(button, duration = 5000) {
+    if (!button) {
+        console.warn('flashButtonSuccess: bouton non trouvé');
+        return;
+    }
+
+    console.log('flashButtonSuccess: démarrage animation sur', button.id);
+    button.classList.add('flash-success');
+
+    setTimeout(() => {
+        button.classList.remove('flash-success');
+        console.log('flashButtonSuccess: fin animation');
+    }, duration);
 }
 
 async function startTracking() {
@@ -208,6 +263,40 @@ async function jog(delta) {
 async function stopMotor() {
     log('STOP!', 'warning');
     await apiCall('/api/hardware/stop/', 'POST');
+    // Arrêter aussi le mouvement continu
+    stopContinuousMovement();
+}
+
+// Mouvement continu (toggle)
+async function toggleContinuous(direction) {
+    // Si même direction et déjà actif, arrêter
+    if (continuousMovement === direction) {
+        await stopContinuousMovement();
+        return;
+    }
+
+    // Arrêter l'autre direction si active
+    await stopContinuousMovement();
+
+    // Démarrer le mouvement continu
+    continuousMovement = direction;
+    const btn = direction === 'ccw' ? elements.btnContCCW : elements.btnContCW;
+    if (btn) btn.classList.add('active');
+
+    log(`Mouvement continu ${direction.toUpperCase()} démarré`, 'info');
+    await apiCall('/api/hardware/continuous/', 'POST', { direction });
+}
+
+async function stopContinuousMovement() {
+    if (continuousMovement) {
+        log(`Mouvement continu arrêté`, 'info');
+        continuousMovement = null;
+        // Envoyer commande STOP au backend
+        await apiCall('/api/hardware/stop/', 'POST');
+    }
+    // Désactiver les boutons
+    if (elements.btnContCCW) elements.btnContCCW.classList.remove('active');
+    if (elements.btnContCW) elements.btnContCW.classList.remove('active');
 }
 
 async function gotoPosition() {
@@ -273,10 +362,29 @@ function updateServiceStatus(motor, encoder) {
 }
 
 function updatePositionDisplay(encoder) {
-    elements.domePosition.textContent = `${state.position.toFixed(1)}°`;
-    elements.domeTarget.textContent = state.target ? `${state.target.toFixed(1)}°` : '--';
-    elements.encoderCalibrated.textContent = encoder.calibrated ? 'Oui' : 'Non';
-    elements.encoderCalibrated.style.color = encoder.calibrated ? 'var(--accent-green)' : 'var(--accent-orange)';
+    elements.domePosition.textContent = `${state.position.toFixed(2)}°`;
+    elements.domeTarget.textContent = state.target ? `${state.target.toFixed(2)}°` : '--';
+
+    // Cartouche ENC avec angle encodeur et état coloré
+    const encItem = elements.encItem;
+    if (encItem) {
+        // Supprimer les classes d'état précédentes
+        encItem.classList.remove('enc-absent', 'enc-uncalibrated', 'enc-calibrated');
+
+        if (!encoder || encoder.error || encoder.status === 'absent') {
+            // Gris = absent (daemon non disponible)
+            encItem.classList.add('enc-absent');
+            elements.encoderCalibrated.textContent = 'ABSENT';
+        } else if (!encoder.calibrated) {
+            // Marron = non calibré
+            encItem.classList.add('enc-uncalibrated');
+            elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
+        } else {
+            // Vert = calibré
+            encItem.classList.add('enc-calibrated');
+            elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
+        }
+    }
 }
 
 function updateTrackingDisplay(motor) {
@@ -288,21 +396,129 @@ function updateTrackingDisplay(motor) {
         elements.trackingObject.textContent = motor.tracking_object;
 
         const info = motor.tracking_info || {};
-        elements.trackingAz.textContent = info.azimut ? `${info.azimut.toFixed(1)}°` : '--';
-        elements.trackingAlt.textContent = info.altitude ? `${info.altitude.toFixed(1)}°` : '--';
+        state.trackingInfo = info;  // Stocker pour drawCompass
+
+        // Mettre à jour le cartouche TÉLESCOPE avec position_cible pendant le tracking
+        if (info.position_cible !== undefined && info.position_cible !== null) {
+            elements.domeTarget.textContent = `${info.position_cible.toFixed(2)}°`;
+        }
+
+        elements.trackingAz.textContent = info.azimut ? `${info.azimut.toFixed(2)}°` : '--';
+        elements.trackingAlt.textContent = info.altitude ? `${info.altitude.toFixed(2)}°` : '--';
 
         const mode = motor.mode || 'normal';
         const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
         elements.trackingMode.textContent = `${modeEmoji[mode] || ''} ${mode.toUpperCase()}`;
         elements.trackingMode.className = `mode-${mode}`;
 
+        // Cartouche MODE avec couleur (dans la section position)
+        if (elements.trackingModeIndicator) {
+            elements.trackingModeIndicator.textContent = mode.toUpperCase();
+            elements.trackingModeIndicator.className = `mode-value ${mode}`;
+        }
+
         elements.trackingCorrections.textContent = info.total_corrections || '0';
-        elements.trackingRemaining.textContent = info.remaining_seconds ? `${info.remaining_seconds}s` : '--';
+
+        // Cartouche CORRECTIONS avec count après label + total calé à droite
+        if (elements.correctionsCount) {
+            elements.correctionsCount.textContent = info.total_corrections || '0';
+        }
+        if (elements.correctionsTotal) {
+            const totalDeg = info.total_correction_degrees || 0;
+            elements.correctionsTotal.textContent = `${Math.abs(totalDeg).toFixed(2)}°`;
+        }
+
+        // Correction 1: Countdown client-side
+        // Utiliser l'intervalle fourni par le programme principal (via API)
+        const newTimerTotal = info.interval_sec || 60;
+
+        // Si l'intervalle change et countdownValue dépasse, le réduire
+        if (newTimerTotal !== timerTotal && countdownValue !== null && countdownValue > newTimerTotal) {
+            countdownValue = newTimerTotal;
+        }
+        timerTotal = newTimerTotal;
+
+        // Réinitialiser le countdown quand l'API donne une nouvelle valeur
+        const apiRemaining = info.remaining_seconds;
+        if (apiRemaining !== undefined && apiRemaining !== lastRemainingFromApi) {
+            lastRemainingFromApi = apiRemaining;
+            // Clamper la valeur API au maximum de l'intervalle actuel
+            countdownValue = Math.min(apiRemaining, timerTotal);
+            startCountdown();
+        }
+
+        // Afficher la valeur du countdown (pas celle de l'API)
+        if (countdownValue !== null) {
+            elements.trackingRemaining.textContent = `${countdownValue}s`;
+        } else {
+            elements.trackingRemaining.textContent = apiRemaining ? `${apiRemaining}s` : '--';
+        }
+
+        // Correction 2: Mettre à jour le timer circulaire
+        drawTimer();
+
+        // Correction 3: Afficher les logs de suivi du Motor Service
+        if (motor.tracking_logs && Array.isArray(motor.tracking_logs)) {
+            motor.tracking_logs.forEach(logEntry => {
+                if (logEntry.time && !displayedLogs.has(logEntry.time)) {
+                    log(logEntry.message, logEntry.type || 'info');
+                    displayedLogs.add(logEntry.time);
+                }
+            });
+        }
     } else {
         elements.trackingInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
+
+        // Arrêter le countdown quand pas de suivi
+        stopCountdown();
+        state.trackingInfo = {};
+
+        // Cacher le timer widget
+        const timerWidget = document.getElementById('timer-widget');
+        if (timerWidget) timerWidget.classList.add('hidden');
+
+        // Réinitialiser les cartouches MODE et CORRECTIONS
+        if (elements.trackingModeIndicator) {
+            elements.trackingModeIndicator.textContent = '--';
+            elements.trackingModeIndicator.className = 'mode-value';
+        }
+        if (elements.correctionsCount) {
+            elements.correctionsCount.textContent = '0';
+        }
+        if (elements.correctionsTotal) {
+            elements.correctionsTotal.textContent = '0.00°';
+        }
     }
+}
+
+// Correction 1: Démarrer le countdown local
+function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+
+    countdownInterval = setInterval(() => {
+        if (countdownValue !== null && countdownValue > 0) {
+            countdownValue--;
+            elements.trackingRemaining.textContent = `${countdownValue}s`;
+            drawTimer();  // Mettre à jour le timer visuel
+        } else if (countdownValue === 0) {
+            // Correction 2: Réinitialiser pour permettre le redémarrage au prochain cycle
+            lastRemainingFromApi = null;
+            // Garder l'affichage "0s" en attendant la nouvelle valeur de l'API
+            elements.trackingRemaining.textContent = '0s';
+            drawTimer();
+        }
+    }, 1000);
+}
+
+function stopCountdown() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    countdownValue = null;
+    lastRemainingFromApi = null;
 }
 
 // =========================================================================
@@ -341,6 +557,26 @@ function drawCompass() {
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.stroke();
 
+    // =========================================================================
+    // Correction 5: Arc représentant la trappe de la coupole
+    // =========================================================================
+    const OPENING_ANGLE = 40.1;  // degrés (70cm / π×200cm × 360)
+    const domeAngle = state.position;
+
+    // Calculer les limites de l'ouverture
+    const openingStart = domeAngle - OPENING_ANGLE / 2;
+    const openingEnd = domeAngle + OPENING_ANGLE / 2;
+
+    // Arc rouge = portion FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
+    // L'absence d'arc = l'ouverture de la trappe (pas d'arc bleu)
+    ctx.strokeStyle = 'rgba(255, 71, 87, 0.35)';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    const closedStartRad = (openingEnd - 90) * Math.PI / 180;
+    const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
+    ctx.arc(cx, cy, radius - 6, closedStartRad, closedEndRad);
+    ctx.stroke();
+
     // Graduations
     ctx.fillStyle = '#a0a0a0';
     ctx.font = '12px Arial';
@@ -349,8 +585,8 @@ function drawCompass() {
 
     for (let deg = 0; deg < 360; deg += 30) {
         const rad = (deg - 90) * Math.PI / 180;
-        const x1 = cx + (radius - 10) * Math.cos(rad);
-        const y1 = cy + (radius - 10) * Math.sin(rad);
+        const x1 = cx + (radius - 15) * Math.cos(rad);
+        const y1 = cy + (radius - 15) * Math.sin(rad);
         const x2 = cx + radius * Math.cos(rad);
         const y2 = cy + radius * Math.sin(rad);
 
@@ -364,56 +600,212 @@ function drawCompass() {
         // Labels cardinaux
         if (deg % 90 === 0) {
             const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
-            const lx = cx + (radius - 25) * Math.cos(rad);
-            const ly = cy + (radius - 25) * Math.sin(rad);
+            const lx = cx + (radius - 30) * Math.cos(rad);
+            const ly = cy + (radius - 30) * Math.sin(rad);
             ctx.fillStyle = '#4da6ff';
             ctx.fillText(labels[deg], lx, ly);
         }
     }
 
-    // Cible (si définie)
-    if (state.target !== null) {
-        const targetRad = (state.target - 90) * Math.PI / 180;
-        ctx.strokeStyle = '#ffa502';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
+    // =========================================================================
+    // Correction 4: Double indicateur TÉLESCOPE + COUPOLE
+    // =========================================================================
+
+    // Aiguille TÉLESCOPE (verte) - position cible qui évolue en continu
+    const telescopeAngle = state.trackingInfo?.position_cible;
+    if (telescopeAngle !== undefined && telescopeAngle !== null) {
+        const teleRad = (telescopeAngle - 90) * Math.PI / 180;
+
+        // Ligne de l'aiguille TÉLESCOPE
+        ctx.strokeStyle = '#00d26a';
+        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + (radius - 30) * Math.cos(targetRad), cy + (radius - 30) * Math.sin(targetRad));
+        ctx.lineTo(cx + (radius - 45) * Math.cos(teleRad), cy + (radius - 45) * Math.sin(teleRad));
         ctx.stroke();
-        ctx.setLineDash([]);
+
+        // Pointe triangulaire verte
+        drawArrowHead(ctx, cx, cy, teleRad, radius - 45, '#00d26a');
     }
 
-    // Aiguille de position
-    const posRad = (state.position - 90) * Math.PI / 180;
+    // Aiguille COUPOLE (bleue) - position actuelle de la coupole
+    const domeRad = (state.position - 90) * Math.PI / 180;
 
-    // Pointe
-    ctx.fillStyle = '#ff4757';
-    ctx.beginPath();
-    ctx.moveTo(cx + (radius - 30) * Math.cos(posRad), cy + (radius - 30) * Math.sin(posRad));
-    ctx.lineTo(cx + 15 * Math.cos(posRad + 2.8), cy + 15 * Math.sin(posRad + 2.8));
-    ctx.lineTo(cx + 15 * Math.cos(posRad - 2.8), cy + 15 * Math.sin(posRad - 2.8));
-    ctx.closePath();
-    ctx.fill();
-
-    // Ligne de l'aiguille
-    ctx.strokeStyle = '#ff4757';
-    ctx.lineWidth = 3;
+    // Ligne de l'aiguille COUPOLE
+    ctx.strokeStyle = '#4da6ff';
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + (radius - 30) * Math.cos(posRad), cy + (radius - 30) * Math.sin(posRad));
+    ctx.lineTo(cx + (radius - 40) * Math.cos(domeRad), cy + (radius - 40) * Math.sin(domeRad));
     ctx.stroke();
 
-    // Centre
-    ctx.fillStyle = '#ff4757';
+    // Pointe triangulaire bleue
+    drawArrowHead(ctx, cx, cy, domeRad, radius - 40, '#4da6ff');
+
+    // Centre avec représentation du télescope (rectangle comme GUI Kivy)
+    drawTelescope(ctx, cx, cy, telescopeAngle);
+}
+
+// Dessiner le télescope au centre (tube rectangulaire)
+function drawTelescope(ctx, cx, cy, angle) {
+    // Si pas d'angle de tracking, utiliser la position coupole
+    const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
+    // Le tube est dessiné vers le haut en coordonnées locales, donc PAS besoin de -90°
+    // (contrairement aux aiguilles qui sont dessinées vers la droite)
+    const teleRad = teleAngle * Math.PI / 180;
+
+    // Dimensions du tube (agrandi)
+    const tubeLength = 65;
+    const tubeWidth = 24;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(teleRad);
+
+    // Corps du tube (gris foncé)
+    ctx.fillStyle = '#3d3d5c';
+    ctx.fillRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
+
+    // Bordure du tube
+    ctx.strokeStyle = '#5a5a7a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
+
+    // Ouverture du tube (cercle plus clair)
+    ctx.fillStyle = '#4a4a6a';
     ctx.beginPath();
-    ctx.arc(cx, cy, 8, 0, 2 * Math.PI);
+    ctx.ellipse(0, -tubeLength + 6, tubeWidth/2 - 3, 5, 0, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Affichage angle au centre
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText(`${state.position.toFixed(1)}°`, cx, cy + 40);
+    // Monture (cercle au centre)
+    ctx.fillStyle = '#2d4059';
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = '#4da6ff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+// Dessiner une pointe de flèche triangulaire
+function drawArrowHead(ctx, cx, cy, angleRad, length, color) {
+    const tipX = cx + length * Math.cos(angleRad);
+    const tipY = cy + length * Math.sin(angleRad);
+
+    const arrowSize = 10;
+    const arrowAngle = 0.4;
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(
+        tipX - arrowSize * Math.cos(angleRad - arrowAngle),
+        tipY - arrowSize * Math.sin(angleRad - arrowAngle)
+    );
+    ctx.lineTo(
+        tipX - arrowSize * Math.cos(angleRad + arrowAngle),
+        tipY - arrowSize * Math.sin(angleRad + arrowAngle)
+    );
+    ctx.closePath();
+    ctx.fill();
+}
+
+// Légende de la boussole
+function drawCompassLegend(ctx, x, y) {
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+
+    // TÉLESCOPE en vert
+    ctx.fillStyle = '#00d26a';
+    ctx.fillText('● TÉLESCOPE', x - 45, y);
+
+    // COUPOLE en bleu
+    ctx.fillStyle = '#4da6ff';
+    ctx.fillText('● COUPOLE', x + 45, y);
+}
+
+// =========================================================================
+// Correction 2: Timer circulaire widget
+// =========================================================================
+
+function initTimer() {
+    const timerCanvas = document.getElementById('timer-canvas');
+    if (timerCanvas) {
+        timerCtx = timerCanvas.getContext('2d');
+    }
+}
+
+function drawTimer() {
+    const timerCanvas = document.getElementById('timer-canvas');
+    const timerWidget = document.getElementById('timer-widget');
+    const timerSeconds = document.getElementById('timer-seconds');
+
+    if (!timerCanvas || !timerWidget) return;
+
+    // Initialiser le contexte si nécessaire
+    if (!timerCtx) {
+        timerCtx = timerCanvas.getContext('2d');
+    }
+
+    // Afficher le widget
+    timerWidget.classList.remove('hidden');
+
+    const ctx = timerCtx;
+    const cx = timerCanvas.width / 2;
+    const cy = timerCanvas.height / 2;
+    const radius = Math.min(cx, cy) - 10;
+
+    // Clear
+    ctx.clearRect(0, 0, timerCanvas.width, timerCanvas.height);
+
+    // Fond du cercle
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Cercle de fond (gris)
+    ctx.strokeStyle = '#2d4059';
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - 4, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // Calcul de la progression (clampée à 1.0 max pour éviter arc > 100% lors changement de mode)
+    const remaining = countdownValue !== null ? countdownValue : 0;
+    const progress = Math.min(remaining / timerTotal, 1.0);
+
+    // Couleur selon la progression
+    let color;
+    if (progress > 0.5) {
+        color = '#00d26a';  // Vert
+    } else if (progress > 0.25) {
+        color = '#ffa502';  // Orange
+    } else {
+        color = '#ff4757';  // Rouge
+    }
+
+    // Arc de progression (sens anti-horaire depuis le haut)
+    if (progress > 0) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        const startAngle = -Math.PI / 2;
+        const endAngle = startAngle + (2 * Math.PI * progress);
+        ctx.arc(cx, cy, radius - 4, startAngle, endAngle);
+        ctx.stroke();
+    }
+
+    // Texte au centre
+    if (timerSeconds) {
+        timerSeconds.textContent = remaining > 0 ? `${remaining}s` : '--';
+        timerSeconds.style.color = color;
+    }
 }
 
 // =========================================================================

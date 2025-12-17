@@ -21,7 +21,6 @@ import logging
 import socket
 import threading
 import time
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 import lgpio
@@ -57,10 +56,14 @@ ROTATION_SIGN = -1
 MAX_CONSECUTIVE_SPI_ERRORS = 5
 WRITE_TMP = JSON_OUT.with_suffix(".tmp")
 
-# Configuration logging : fichier + console
+# Configuration logging : fichier horodaté par session + console
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "ems22d.log"
+
+# Nom de fichier avec horodatage de la session
+from datetime import datetime as dt_logging
+SESSION_TIMESTAMP = dt_logging.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE = LOG_DIR / f"ems22d_{SESSION_TIMESTAMP}.log"
 
 logger = logging.getLogger("ems22d")
 logger.setLevel(logging.INFO)
@@ -68,13 +71,8 @@ logger.setLevel(logging.INFO)
 # Format commun
 formatter = logging.Formatter("[ems22d] %(asctime)s %(levelname)s %(message)s")
 
-# Handler 1 : Fichier rotatif (10 MB max, 3 backups)
-file_handler = RotatingFileHandler(
-    LOG_FILE,
-    maxBytes=10*1024*1024,  # 10 MB
-    backupCount=3,
-    encoding='utf-8'
-)
+# Handler 1 : Fichier unique pour cette session
+file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
@@ -84,6 +82,19 @@ console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
+# Nettoyage : supprimer les anciens logs (garder les 10 derniers)
+def cleanup_old_logs(keep=10):
+    """Supprime les anciens fichiers logs, garde les N plus récents."""
+    log_files = sorted(LOG_DIR.glob("ems22d_*.log"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for old_file in log_files[keep:]:
+        try:
+            old_file.unlink()
+            logger.debug(f"Ancien log supprimé: {old_file.name}")
+        except Exception:
+            pass
+
+cleanup_old_logs(10)
 
 
 # ----------------------------------------------------

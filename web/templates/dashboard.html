@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DriftApp - Contrôle Coupole</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251214d">
 </head>
 <body>
     <div class="container">
@@ -24,20 +24,33 @@
             <section class="compass-section">
                 <h2>Position Coupole</h2>
                 <div class="compass-container">
-                    <canvas id="compass" width="300" height="300"></canvas>
+                    <canvas id="compass" width="300" height="320"></canvas>
+                </div>
+                <!-- Correction 2: Timer circulaire widget -->
+                <div class="timer-widget hidden" id="timer-widget">
+                    <canvas id="timer-canvas" width="100" height="100"></canvas>
+                    <span id="timer-seconds">--</span>
                 </div>
                 <div class="position-info">
-                    <div class="info-item">
-                        <label>Position:</label>
-                        <span id="dome-position">--°</span>
+                    <div class="info-item coupole-item">
+                        <label>COUPOLE:</label>
+                        <span id="dome-position" class="coupole-value">--°</span>
                     </div>
-                    <div class="info-item">
-                        <label>Cible:</label>
-                        <span id="dome-target">--°</span>
+                    <div class="info-item telescope-item">
+                        <label>TÉLESCOPE:</label>
+                        <span id="dome-target" class="telescope-value">--°</span>
                     </div>
-                    <div class="info-item">
-                        <label>Calibré:</label>
-                        <span id="encoder-calibrated">--</span>
+                    <div class="info-item enc-item" id="enc-item">
+                        <label>ENC:</label>
+                        <span id="encoder-calibrated">--°</span>
+                    </div>
+                    <div class="info-item mode-item">
+                        <label>MODE:</label>
+                        <span id="tracking-mode-indicator" class="mode-value">--</span>
+                    </div>
+                    <div class="info-item corrections-item">
+                        <span class="corrections-left"><label>CORRECTIONS:</label> <span id="corrections-count" class="corrections-count">0</span></span>
+                        <span class="corrections-right">Total: <span id="corrections-total" class="corrections-total">0.00°</span></span>
                     </div>
                 </div>
             </section>
@@ -64,10 +77,10 @@
                     </div>
                 </div>
 
-                <!-- Info suivi actif -->
+                <!-- Info suivi actif (simplifié - MODE/CORRECTIONS/TIMER dans Position Coupole) -->
                 <div id="tracking-info" class="tracking-info hidden">
                     <h3>Suivi Actif</h3>
-                    <div class="info-grid">
+                    <div class="info-grid-simple">
                         <div class="info-item">
                             <label>Objet:</label>
                             <span id="tracking-object">--</span>
@@ -80,20 +93,12 @@
                             <label>Altitude:</label>
                             <span id="tracking-alt">--°</span>
                         </div>
-                        <div class="info-item">
-                            <label>Mode:</label>
-                            <span id="tracking-mode">--</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Corrections:</label>
-                            <span id="tracking-corrections">0</span>
-                        </div>
-                        <div class="info-item">
-                            <label>Prochain check:</label>
-                            <span id="tracking-remaining">--s</span>
-                        </div>
                     </div>
                 </div>
+                <!-- Éléments cachés pour compatibilité JS -->
+                <span id="tracking-mode" style="display:none">--</span>
+                <span id="tracking-corrections" style="display:none">0</span>
+                <span id="tracking-remaining" style="display:none">--s</span>
 
                 <!-- Contrôle manuel -->
                 <div class="control-panel">
@@ -104,6 +109,11 @@
                         <button id="btn-stop" class="btn btn-stop">STOP</button>
                         <button id="btn-jog-cw-1" class="btn btn-jog">+1°</button>
                         <button id="btn-jog-cw-10" class="btn btn-jog">+10°</button>
+                    </div>
+                    <!-- Boutons mouvement continu (toggle) -->
+                    <div class="continuous-buttons">
+                        <button id="btn-cont-ccw" class="btn btn-continuous" data-direction="ccw">&lt; CCW</button>
+                        <button id="btn-cont-cw" class="btn btn-continuous" data-direction="cw">CW &gt;</button>
                     </div>
                     <div class="goto-group">
                         <input type="number" id="goto-angle" min="0" max="360" placeholder="Angle (0-360)">
@@ -128,6 +138,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/dashboard.js?v=20251214d"></script>
 </body>
 </html>

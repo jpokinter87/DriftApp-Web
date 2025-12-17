@@ -171,18 +171,74 @@ class StopView(APIView):
             )
 
 
+class ContinuousView(APIView):
+    """
+    POST /api/hardware/continuous/
+
+    Démarre un mouvement continu dans une direction.
+
+    Body:
+        direction: str ('cw' ou 'ccw')
+    """
+
+    def post(self, request):
+        direction = request.data.get('direction', 'cw')
+
+        if direction not in ('cw', 'ccw'):
+            return Response(
+                {'error': 'Direction invalide (cw ou ccw)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        success = motor_client.send_command('continuous', direction=direction)
+
+        if success:
+            return Response({
+                'message': f'Mouvement continu {direction.upper()} démarré',
+                'direction': direction
+            })
+        else:
+            return Response(
+                {'error': 'Impossible de communiquer avec Motor Service'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+
 class EncoderView(APIView):
     """
     GET /api/hardware/encoder/
 
     Retourne la position de l'encodeur.
+    En mode simulation, utilise la position du Motor Service.
     """
 
     def get(self, request):
         encoder_data = motor_client.get_encoder_status()
 
+        # Si le daemon encodeur n'est pas disponible, essayer d'utiliser
+        # la position du Motor Service (mode simulation)
         if 'error' in encoder_data:
-            return Response(encoder_data, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            motor_status = motor_client.get_motor_status()
+
+            # En mode simulation, utiliser la position du Motor Service
+            if motor_status.get('simulation', False):
+                return Response({
+                    'angle': motor_status.get('position', 0),
+                    'calibrated': True,
+                    'status': 'simulation',
+                    'raw': 0,
+                    'simulation': True
+                })
+
+            # Sinon, retourner l'erreur mais avec status 200 pour éviter
+            # les erreurs console répétitives
+            return Response({
+                'angle': motor_status.get('position', 0),
+                'calibrated': False,
+                'status': 'unavailable',
+                'raw': 0,
+                'error': encoder_data.get('error', 'Daemon encodeur non disponible')
+            })
 
         return Response({
             'angle': encoder_data.get('angle', 0),

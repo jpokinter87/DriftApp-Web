@@ -7,11 +7,14 @@ incluant la recherche locale, la recherche en ligne via SIMBAD
 """
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any
 
 from core.config.config import CACHE_FILE
+
+logger = logging.getLogger(__name__)
 
 # Importer astropy si disponible
 try:
@@ -69,7 +72,7 @@ class GestionnaireCatalogue:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.objets = json.load(f)
             except Exception as e:
-                print(f"Erreur lors du chargement du cache: {e}")
+                logger.warning(f"Erreur lors du chargement du cache: {e}")
                 self.objets = {}
     
     def _sauvegarder_cache(self) -> None:
@@ -86,7 +89,7 @@ class GestionnaireCatalogue:
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.objets, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Erreur lors de la sauvegarde du cache: {e}")
+            logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
 
 
     def rechercher_simbad(self, identifiant: str) -> Optional[Dict[str, Any]]:
@@ -113,7 +116,7 @@ class GestionnaireCatalogue:
         try:
             from astroquery.simbad import Simbad
         except ImportError as e:
-            print(f"Cette fonctionnalité nécessite astropy et astroquery: {e}")
+            logger.warning(f"Cette fonctionnalité nécessite astropy et astroquery: {e}")
             return None
 
         # Vérifier si l'objet est déjà dans le cache
@@ -132,7 +135,7 @@ class GestionnaireCatalogue:
             result_table = simple_simbad.query_object(identifiant)
 
             if result_table is None or len(result_table) == 0:
-                print(f"Objet non trouvé: {identifiant}")
+                logger.debug(f"Objet non trouvé via SIMBAD: {identifiant}")
                 return None
 
             # Récupérer les données de la première ligne
@@ -176,9 +179,7 @@ class GestionnaireCatalogue:
             return objet
 
         except Exception as e:
-            print(f"Erreur lors de la recherche de {identifiant}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.warning(f"Erreur lors de la recherche de {identifiant}: {e}")
             return None
 
     def rechercher_catalogue_local(self, identifiant: str) -> Optional[Dict[str, Any]]:
@@ -237,7 +238,7 @@ class GestionnaireCatalogue:
             correspondances.sort(key=lambda x: len(x[0]))
             return correspondances[0][1]
 
-        print(f"  ❌ Aucune correspondance locale")
+        logger.debug(f"Aucune correspondance locale pour: {identifiant}")
         return None
 
 
@@ -298,16 +299,16 @@ class GestionnaireCatalogue:
         if objet:
             return objet
         else:
-            print(f"❌ Objet non trouvé dans le catalogue local")
+            logger.debug(f"Objet non trouvé dans le catalogue local: {identifiant}")
 
         # 2. Si non trouvé localement et API activée, rechercher en ligne
         if objet is None and utiliser_api:
             objet = self.rechercher_simbad(identifiant)
 
             if not objet:
-                print(f"❌ Objet non trouvé via SIMBAD")
+                logger.debug(f"Objet non trouvé via SIMBAD: {identifiant}")
 
         elif objet is None and not utiliser_api:
-            print(f"❌ API désactivée, arrêt de la recherche")
+            logger.debug(f"API désactivée pour recherche: {identifiant}")
 
         return objet

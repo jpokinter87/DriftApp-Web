@@ -8,6 +8,7 @@ urlpatterns = [
     path('goto/', views.GotoView.as_view(), name='motor-goto'),
     path('jog/', views.JogView.as_view(), name='motor-jog'),
     path('stop/', views.StopView.as_view(), name='motor-stop'),
+    path('continuous/', views.ContinuousView.as_view(), name='motor-continuous'),
     path('encoder/', views.EncoderView.as_view(), name='encoder-status'),
     path('status/', views.MotorStatusView.as_view(), name='motor-status'),
 ]
