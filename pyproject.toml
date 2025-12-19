@@ -1,7 +1,7 @@
 [project]
-name = "driftapp"
+name = "driftapp-web"
 version = "4.4.0"
-description = "Gestion de coupole d'observatoire astronomique avec suivi adaptatif"
+description = "Gestion de coupole d'observatoire astronomique - Interface Web Django"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -18,15 +18,9 @@ dependencies = [
     # Fichiers Excel (abaque)
     "openpyxl>=3.1.0",
 
-    # Visualisation (optionnel, pour boussole)
-    "matplotlib>=3.7.0",
-
     # Interface web Django
     "django>=4.2.0",
     "djangorestframework>=3.14.0",
-
-    # Interface TUI (Textual)
-    "textual>=0.40.0",
 
     # Réseau
     "requests>=2.31.0",
@@ -42,11 +36,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Interface graphique Kivy (ancienne version)
-gui = [
-    "kivy[base]>=2.3.0",
-]
-
 # Développement
 dev = [
     "pytest>=7.0.0",
@@ -56,8 +45,6 @@ dev = [
 ]
 
 [project.scripts]
-driftapp = "main:main"
-driftapp-tui = "main:main"
 driftapp-web = "web.manage:main"
 
 [build-system]

@@ -1,20 +1,21 @@
 # 🤖 CLAUDE.md - Contexte pour Claude AI
 
-> **Dernière mise à jour** : 17 décembre 2025  
-> **Version DriftApp** : 4.4  
-> **Statut** : Production - Correction saccades GOTO
+> **Dernière mise à jour** : 19 décembre 2025
+> **Version DriftApp** : 4.4 (Web-Only)
+> **Interface** : Django uniquement (Textual/Kivy supprimés)
+> **Statut** : Production
 
 ---
 
 ## 📋 Vue d'ensemble du projet
 
-**DriftApp** est une application de contrôle de coupole astronomique pour l'Observatoire Ubik (France). Elle gère le suivi automatique d'objets célestes en synchronisant la rotation de la coupole avec le mouvement apparent du ciel.
+**DriftApp Web** est une application de contrôle de coupole astronomique pour l'Observatoire Ubik (France). Cette version utilise exclusivement une interface Django/Web pour le contrôle à distance.
 
 ### Architecture technique
 
 ```
-DriftApp v4.4/
-├── core/
+DriftApp-Web v4.4/
+├── core/                         # Modules métier (partagés)
 │   ├── config/
 │   │   └── config_loader.py      # Chargement configuration centralisée
 │   ├── hardware/
@@ -33,12 +34,15 @@ DriftApp v4.4/
 │       └── angle_utils.py        # shortest_angular_distance, etc.
 ├── services/
 │   └── motor_service.py          # Service IPC pour Django (v4.4)
-├── web/                          # Interface Django
+├── web/                          # Interface Django (principale)
+│   ├── manage.py
+│   ├── driftapp/                 # Projet Django
+│   └── dome/                     # Application contrôle coupole
 ├── data/
 │   ├── config.json               # Configuration centralisée (v2.2)
 │   └── Loi_coupole.xlsx          # Abaque de correction
 ├── logs/                         # Fichiers de log
-└── tests/                        # Scripts de test et diagnostic
+└── tests/                        # Tests unitaires pytest
 ```
 
 ### Matériel
@@ -168,25 +172,30 @@ def handle_jog(self, delta, speed):
 
 ## 🧪 Tests disponibles
 
-### Scripts de diagnostic (répertoire `tests/`)
+### Tests unitaires pytest (répertoire `tests/`)
 
-| Script | Usage |
-|--------|-------|
-| `diagnostic_moteur_complet.py` | TEST A - Boucle moteur isolée |
-| `test_motor_service_seul.py` | TEST B - Motor Service via IPC |
-| `calibration_vitesse_max.py` | Trouver vitesse max fluide |
+| Fichier | Description |
+|---------|-------------|
+| `test_angle_utils.py` | Tests utilitaires d'angle |
+| `test_config.py` | Tests configuration |
+| `test_calculations.py` | Tests calculs astronomiques (astropy requis) |
+| `test_abaque_manager.py` | Tests interpolation abaque |
+| `test_adaptive_tracking.py` | Tests modes adaptatifs |
+| `test_moteur.py` | Tests contrôle moteur (mocks GPIO) |
+| `test_feedback_controller.py` | Tests boucle feedback |
+| `test_tracker.py` | Tests session tracking |
 
-### Exécution
+### Exécution des tests
 
 ```bash
-# TEST A - Mode isolé (sudo requis)
-sudo python3 tests/diagnostic_moteur_complet.py
+# Tous les tests (avec dépendances complètes)
+uv run pytest -v
 
-# TEST B - Via Motor Service (services actifs)
-python3 tests/test_motor_service_seul.py
+# Tests rapides (sans astropy)
+uv run pytest tests/test_angle_utils.py tests/test_config.py tests/test_moteur.py tests/test_feedback_controller.py -v
 
-# Calibration vitesse
-python3 tests/calibration_vitesse_max.py
+# Test spécifique
+uv run pytest tests/test_moteur.py::TestMoteurCoupoleControl -v
 ```
 
 ---
@@ -207,17 +216,25 @@ python3 tests/calibration_vitesse_max.py
 
 ---
 
-## 🔄 Procédure de mise à jour
+## 🔄 Démarrage et mise à jour
+
+### Démarrage de l'interface web
+
+```bash
+# Démarrage complet (daemon encodeur + motor service + Django)
+sudo ./start_web.sh
+
+# Django seul (développement)
+cd web && python manage.py runserver 0.0.0.0:8000
+```
+
+### Mise à jour
 
 ```bash
 # Sauvegarde
-mkdir -p backups/v4.3
-cp services/motor_service.py backups/v4.3/
-cp data/config.json backups/v4.3/
-cp core/tracking/adaptive_tracking.py backups/v4.3/
-
-# Mise à jour
-cp nouveaux_fichiers/* emplacements_respectifs/
+mkdir -p backups/v4.x
+cp services/motor_service.py backups/v4.x/
+cp data/config.json backups/v4.x/
 
 # Redémarrage
 sudo ./start_web.sh restart
