@@ -38,7 +38,8 @@ class TrackingSession:
             abaque_file: str = None,
             adaptive_config=None,
             motor_config=None,
-            encoder_config=None
+            encoder_config=None,
+            goto_callback=None
     ):
         """
         Initialise une session de suivi.
@@ -50,6 +51,11 @@ class TrackingSession:
             seuil: Seuil de correction en degrés
             intervalle: Intervalle entre corrections en secondes
             abaque_file: Chemin vers le fichier d'abaque (requis)
+            goto_callback: Callback appelé avec les infos du GOTO initial
+                          Signature: callback(goto_info: dict) où goto_info contient:
+                          - current_position: position actuelle
+                          - target_position: position cible
+                          - delta: déplacement à effectuer
         """
         self.moteur = moteur
         self.calc = calc
@@ -57,6 +63,7 @@ class TrackingSession:
         self.seuil = seuil
         self.intervalle = intervalle
         self.python_logger = logging.getLogger(__name__)
+        self.goto_callback = goto_callback
 
         # Initialisation par étapes
         self._init_encoder(encoder_config)
@@ -337,6 +344,14 @@ class TrackingSession:
                     f"🔄 Encodeur calibré - Position réelle: {real_position:.1f}° | "
                     f"Position cible: {position_cible:.1f}° | Delta: {delta:+.1f}°"
                 )
+                # Notifier le callback avec les infos du GOTO avant exécution
+                if self.goto_callback:
+                    goto_info = {
+                        'current_position': real_position,
+                        'target_position': position_cible,
+                        'delta': delta
+                    }
+                    self.goto_callback(goto_info)
                 return True, delta
 
             self.python_logger.info(

@@ -851,3 +851,18 @@ body {
 .position-info .info-item:nth-child(5) {
     grid-column: span 2;
 }
+
+/* GOTO initial details styling */
+.goto-details {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--accent-orange);
+    margin-top: 0.3rem;
+    font-family: monospace;
+    animation: pulse-goto 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-goto {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}

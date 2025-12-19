@@ -368,8 +368,20 @@ class TrackingHandler:
         current_status['status'] = 'initializing'
         current_status['tracking_object'] = object_name
         current_status['tracking_pending'] = True
+        current_status['goto_info'] = None  # Sera rempli par le callback
         self.status_callback(current_status)
         self.log_callback(f"Initialisation du suivi de {object_name}...", 'info')
+
+        # Callback pour recevoir les infos du GOTO initial
+        def on_goto_info(goto_info: Dict[str, Any]):
+            """Callback appelé avec les infos du GOTO initial."""
+            current_status['goto_info'] = goto_info
+            self.status_callback(current_status)
+            self.log_callback(
+                f"GOTO: {goto_info['current_position']:.1f}° → "
+                f"{goto_info['target_position']:.1f}° (delta={goto_info['delta']:+.1f}°)",
+                'info'
+            )
 
         try:
             calc = AstronomicalCalculations(
@@ -389,7 +401,8 @@ class TrackingHandler:
                 abaque_file=str(Path(__file__).parent.parent / self.config.tracking.abaque_file),
                 adaptive_config=self.config.adaptive,
                 motor_config=self.config.motor,
-                encoder_config=self.config.encoder
+                encoder_config=self.config.encoder,
+                goto_callback=on_goto_info
             )
 
             success = self.session.start(object_name)
@@ -399,6 +412,7 @@ class TrackingHandler:
                 current_status['status'] = 'tracking'
                 current_status['tracking_object'] = object_name
                 current_status['tracking_pending'] = False  # GOTO initial terminé
+                current_status['goto_info'] = None  # GOTO terminé
                 current_status['mode'] = 'normal'
 
                 status = self.session.get_status()
@@ -411,6 +425,7 @@ class TrackingHandler:
                 current_status['status'] = 'idle'
                 current_status['tracking_object'] = None
                 current_status['tracking_pending'] = False
+                current_status['goto_info'] = None
                 current_status['error'] = "Échec démarrage suivi"
 
         except Exception as e:
@@ -418,6 +433,7 @@ class TrackingHandler:
             current_status['status'] = 'error'
             current_status['tracking_object'] = None
             current_status['tracking_pending'] = False
+            current_status['goto_info'] = None
             current_status['error'] = str(e)
 
         self.status_callback(current_status)
@@ -440,6 +456,7 @@ class TrackingHandler:
         current_status['status'] = 'idle'
         current_status['tracking_object'] = None
         current_status['tracking_pending'] = False
+        current_status['goto_info'] = None
         current_status['mode'] = 'idle'
         self.status_callback(current_status)
 

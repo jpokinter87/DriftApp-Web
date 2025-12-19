@@ -403,7 +403,19 @@ function updateTrackingDisplay(motor) {
 
         // Afficher le nom de l'objet avec indication si GOTO en cours
         if (isInitializing) {
-            elements.trackingObject.textContent = `${motor.tracking_object} (GOTO initial...)`;
+            // Afficher les détails du GOTO si disponibles
+            const gotoInfo = motor.goto_info;
+            if (gotoInfo) {
+                const current = gotoInfo.current_position.toFixed(1);
+                const target = gotoInfo.target_position.toFixed(1);
+                const delta = gotoInfo.delta >= 0 ? `+${gotoInfo.delta.toFixed(1)}` : gotoInfo.delta.toFixed(1);
+                elements.trackingObject.innerHTML = `
+                    ${motor.tracking_object}<br>
+                    <span class="goto-details">${current}° → ${target}° (${delta}°)</span>
+                `;
+            } else {
+                elements.trackingObject.textContent = `${motor.tracking_object} (GOTO initial...)`;
+            }
         } else {
             elements.trackingObject.textContent = motor.tracking_object;
         }

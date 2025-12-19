@@ -170,16 +170,22 @@ class TestGotoHandler:
         # Rotation directe appelée
         mock_moteur.rotation.assert_called()
 
-    def test_execute_updates_status_moving(self, handler, status_callback):
+    def test_execute_updates_status_moving(self, handler, mock_moteur):
         """Le status est mis à jour en 'moving' pendant l'exécution."""
         status = {'status': 'idle', 'position': 0.0}
+        status_history = []
+
+        def record_status(s):
+            # Capture une copie pour éviter les problèmes de référence
+            status_history.append(dict(s))
+
+        handler.status_callback = record_status
 
         with patch('core.hardware.moteur_simule.set_simulated_position'):
             handler.execute(45.0, status)
 
-        # Le callback a été appelé avec status='moving'
-        calls = status_callback.call_args_list
-        assert any(call[0][0].get('status') == 'moving' for call in calls)
+        # Le callback a été appelé avec status='moving' à un moment
+        assert any(s.get('status') == 'moving' for s in status_history)
 
     def test_execute_clears_target_after(self, handler):
         """La cible est effacée après exécution."""
