@@ -1,0 +1,156 @@
+2025-12-19 14:09:36,669 - config_loader - INFO - Chargement configuration depuis data/config.json
+2025-12-19 14:09:36,669 - config_loader - INFO - Configuration chargée avec succès
+2025-12-19 14:09:36,669 - config_loader - INFO -   Site: Observatoire Ubik
+2025-12-19 14:09:36,669 - config_loader - INFO -   Moteur: 1941866 steps/tour
+2025-12-19 14:09:36,669 - config_loader - INFO -   Modes adaptatifs: 4
+2025-12-19 14:09:36,669 - config_loader - INFO -   Encodeur: ON
+2025-12-19 14:09:36,669 - config_loader - INFO -   Mode: PRODUCTION
+2025-12-19 14:09:36,787 - MotorService - INFO - ╔══════════════════════════════════════════════════════════════════════════════╗
+║                         DÉTECTION MATÉRIELLE                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PLATEFORME:
+  Système:      Linux
+  Architecture: aarch64
+
+RASPBERRY PI:
+  Détecté:      ✓ OUI
+  Modèle:       Raspberry Pi 5 Model B Rev 1.0
+
+GPIO:
+  Disponible:   ✓ OUI
+
+BUS SPI:
+  Disponible:   ✓ OUI
+  Devices:      /dev/spidev0.0, /dev/spidev0.1
+
+DÉMON ENCODEUR EMS22A:
+  Actif:        ✓ OUI
+  Position:     44.86°
+  Processus:    ✓ Trouvé (ems22d_calibrated)
+
+MOTEUR COUPOLE:
+  Disponible:   ✗ NON
+  Info:         Test désactivé (constructeur nécessite config.json)
+
+────────────────────────────────────────────────────────────────────────────────
+→ MODE PRODUCTION ACTIVÉ
+  Le système peut piloter la coupole physiquement.
+────────────────────────────────────────────────────────────────────────────────
+2025-12-19 14:09:36,787 - MotorService - INFO - MODE PRODUCTION - GPIO actif
+2025-12-19 14:09:36,787 - MoteurCoupole - INFO - GPIO initialisé avec lgpio
+2025-12-19 14:09:36,787 - MoteurCoupole - INFO - Moteur initialisé (lgpio) - Steps/tour coupole: 1941866
+2025-12-19 14:09:36,787 - MotorService - INFO - Utilisation configuration parking par défaut
+2025-12-19 14:09:36,787 - MotorService - INFO - Motor Service initialisé en mode PRODUCTION
+2025-12-19 14:09:36,787 - MotorService - INFO - Motor Service démarré - En attente de commandes...
+2025-12-19 14:09:36,788 - MotorService - INFO - Position initiale: 44.9°
+2025-12-19 14:09:36,788 - MotorService - INFO - ✓ Coupole en position parking: 44.9°
+2025-12-19 14:09:36,788 - MotorService - INFO - ☀️ Prochain lever du soleil: 08:07 (parking prévu: 07:52)
+2025-12-19 14:14:35,968 - MotorService - INFO - Signal 15 reçu - Arrêt en cours...
+2025-12-19 14:14:36,000 - MotorService - INFO - Nettoyage des ressources...
+2025-12-19 14:14:36,100 - MoteurCoupole - INFO - GPIO nettoyé (lgpio)
+2025-12-19 14:14:36,101 - MotorService - INFO - Motor Service arrêté proprement
+2025-12-19 14:14:38,577 - config_loader - INFO - Chargement configuration depuis data/config.json
+2025-12-19 14:14:38,577 - config_loader - INFO - Configuration chargée avec succès
+2025-12-19 14:14:38,577 - config_loader - INFO -   Site: Observatoire Ubik
+2025-12-19 14:14:38,577 - config_loader - INFO -   Moteur: 1941866 steps/tour
+2025-12-19 14:14:38,577 - config_loader - INFO -   Modes adaptatifs: 4
+2025-12-19 14:14:38,577 - config_loader - INFO -   Encodeur: ON
+2025-12-19 14:14:38,577 - config_loader - INFO -   Mode: PRODUCTION
+2025-12-19 14:14:38,694 - MotorService - INFO - ╔══════════════════════════════════════════════════════════════════════════════╗
+║                         DÉTECTION MATÉRIELLE                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+PLATEFORME:
+  Système:      Linux
+  Architecture: aarch64
+
+RASPBERRY PI:
+  Détecté:      ✓ OUI
+  Modèle:       Raspberry Pi 5 Model B Rev 1.0
+
+GPIO:
+  Disponible:   ✓ OUI
+
+BUS SPI:
+  Disponible:   ✓ OUI
+  Devices:      /dev/spidev0.0, /dev/spidev0.1
+
+DÉMON ENCODEUR EMS22A:
+  Actif:        ✓ OUI
+  Position:     44.86°
+  Processus:    ✓ Trouvé (ems22d_calibrated)
+
+MOTEUR COUPOLE:
+  Disponible:   ✗ NON
+  Info:         Test désactivé (constructeur nécessite config.json)
+
+────────────────────────────────────────────────────────────────────────────────
+→ MODE PRODUCTION ACTIVÉ
+  Le système peut piloter la coupole physiquement.
+────────────────────────────────────────────────────────────────────────────────
+2025-12-19 14:14:38,694 - MotorService - INFO - MODE PRODUCTION - GPIO actif
+2025-12-19 14:14:38,694 - MoteurCoupole - INFO - GPIO initialisé avec lgpio
+2025-12-19 14:14:38,694 - MoteurCoupole - INFO - Moteur initialisé (lgpio) - Steps/tour coupole: 1941866
+2025-12-19 14:14:38,695 - MotorService - INFO - Utilisation configuration parking par défaut
+2025-12-19 14:14:38,695 - MotorService - INFO - Motor Service initialisé en mode PRODUCTION
+2025-12-19 14:14:38,695 - MotorService - INFO - Motor Service démarré - En attente de commandes...
+2025-12-19 14:14:38,695 - MotorService - INFO - Position initiale: 44.9°
+2025-12-19 14:14:38,695 - MotorService - INFO - ✓ Coupole en position parking: 44.9°
+2025-12-19 14:14:38,695 - MotorService - INFO - ☀️ Prochain lever du soleil: 08:07 (parking prévu: 07:52)
+2025-12-19 14:36:15,903 - MotorService - INFO - Traitement commande: tracking_start
+2025-12-19 14:36:15,903 - MotorService - INFO - Démarrage suivi de: M  13
+2025-12-19 14:36:15,903 - core.tracking.tracker - INFO - Encodeur actif - Position: 44.9°
+2025-12-19 14:36:16,539 - core.tracking.abaque_manager - INFO - Chargement de l'abaque depuis /home/slenk/Dome_v4_6/data/Loi_coupole.xlsx
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO - Grille créée 11x25 (interpolation manuelle)
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO - ==================================================
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO - ABAQUE CHARGÉE AVEC SUCCÈS
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO -   Altitudes: 11 points (30° - 85°)
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO -   Azimuts: 25 points par altitude
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO -   Points totaux: 275
+2025-12-19 14:36:16,599 - core.tracking.abaque_manager - INFO - ==================================================
+2025-12-19 14:36:16,600 - core.tracking.tracker - INFO - Mode abaque activé
+2025-12-19 14:36:16,600 - core.tracking.tracker - INFO - Facteur de correction pas: 1.0885
+2025-12-19 14:36:17,548 - core.tracking.adaptive_tracking - INFO - 🔍 Vérification chemin:
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Position actuelle: 44.9°
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Position coupole: 258.6°
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Chemin 1: horaire 213.8°
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Chemin 2: anti-horaire 146.2°
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    ✓ Choisi: anti-horaire (146.2°)
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - 🔄 Encodeur calibré - Position réelle: 44.9° | Position cible: 258.6° | Delta: -146.2°
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - Encodeur calibré - Mode absolu disponible
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - SYNC: Coupole=258.6° | Encodeur=44.9° | Offset=213.8°
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO - 🔄 Changement de mode: normal → continuous
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Raisons: Mouvement extrême (146.2°)
+2025-12-19 14:36:17,549 - core.tracking.adaptive_tracking - INFO -    Paramètres: intervalle=30s, seuil=0.3°, délai=0.00015s
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - 🎯 GOTO initial requis: -146.2° en mode continuous
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - GOTO initial: 44.9° → 258.6° (delta=-146.2°, vitesse: 0.00015s/pas)
+2025-12-19 14:36:17,549 - core.tracking.tracker - INFO - GOTO optimisé: rotation directe de -146.2°
+2025-12-19 14:39:50,812 - core.tracking.tracker - INFO - Correction finale: erreur=-146.28°
+2025-12-19 14:39:50,892 - FeedbackController - INFO - Rotation avec feedback: 44.9° -> 258.6°
+2025-12-19 14:39:51,053 - FeedbackController - WARNING -   ⚠️ Erreur anormalement grande (-146.3°) - abandon correction
+2025-12-19 14:39:51,134 - FeedbackController - WARNING - Rotation feedback imprécise: 44.9° -> 44.9° (erreur: -146.28°, 0/3 iter)
+2025-12-19 14:39:51,134 - core.tracking.tracker - WARNING - GOTO: correction imparfaite, erreur=-146.28°
+2025-12-19 14:39:51,134 - core.tracking.tracker - INFO - Offset encodeur recalculé: 213.7°
+2025-12-19 14:39:51,134 - CoupoleUPAN.Tracking - INFO - ============================================================
+2025-12-19 14:39:51,134 - CoupoleUPAN.Tracking - INFO - DÉBUT SUIVI: M  13
+2025-12-19 14:39:51,134 - CoupoleUPAN.Tracking - INFO - Coordonnées: RA=250.42°, DEC=36.46°
+2025-12-19 14:39:51,134 - CoupoleUPAN.Tracking - INFO - Heure début: 14:39:51
+2025-12-19 14:39:51,134 - CoupoleUPAN.Tracking - INFO - ============================================================
+2025-12-19 14:39:51,134 - core.tracking.tracker - INFO - Méthode: ABAQUE | Az=274.5° Alt=53.6° | Position cible=258.6°
+2025-12-19 14:39:51,142 - MotorService - INFO - Suivi démarré - Offset encodeur: 0.00°
+2025-12-19 14:39:51,149 - core.tracking.adaptive_tracking - INFO - 🔄 Changement de mode: continuous → normal
+2025-12-19 14:39:51,149 - core.tracking.adaptive_tracking - INFO -    Raisons: Conditions standard
+2025-12-19 14:39:51,149 - core.tracking.adaptive_tracking - INFO -    Paramètres: intervalle=60s, seuil=0.5°, délai=0.002s
+2025-12-19 14:39:51,230 - FeedbackController - INFO - Rotation avec feedback: 44.9° -> 45.7°
+2025-12-19 14:40:19,852 - FeedbackController - ERROR - Aucune progression détectée après 3 itérations - abandon
+2025-12-19 14:40:19,932 - FeedbackController - WARNING - Rotation feedback imprécise: 44.9° -> 44.9° (erreur: +0.81°, 3/10 iter)
+2025-12-19 14:40:19,932 - core.tracking.tracker - WARNING - Correction feedback imprécise: 44.9° -> 44.9° (erreur: 0.81°, AZCoupole: 45.7°, 3/10 iter, 28.8s) [1/3 échecs]
+2025-12-19 14:40:19,932 - core.tracking.tracker - INFO - [14:39:51] Correction: +0.81° | Az=275.0° Alt=52.9° | AzCoupole=259.4° | Mode: TrackingMode.NORMAL (interval=60s, seuil=0.5°)
+2025-12-19 14:40:19,933 - MotorService - INFO - [14:39:51] Correction: +0.81° | Az=275.0° Alt=52.9° | AzCoupole=259.4° | Mode: TrackingMode.NORMAL (interval=60s, seuil=0.5°)
+2025-12-19 14:41:51,996 - FeedbackController - INFO - Rotation avec feedback: 44.9° -> 46.3°
+2025-12-19 14:42:41,393 - FeedbackController - ERROR - Aucune progression détectée après 3 itérations - abandon
+2025-12-19 14:42:41,473 - FeedbackController - WARNING - Rotation feedback imprécise: 44.9° -> 44.9° (erreur: +1.41°, 3/10 iter)
+2025-12-19 14:42:41,474 - core.tracking.tracker - WARNING - Correction feedback imprécise: 44.9° -> 44.9° (erreur: 1.41°, AZCoupole: 46.3°, 3/10 iter, 49.6s) [2/3 échecs]
+2025-12-19 14:42:41,474 - core.tracking.tracker - INFO - [14:41:51] Correction: +0.60° | Az=275.3° Alt=52.6° | AzCoupole=260.0° | Mode: TrackingMode.NORMAL (interval=60s, seuil=0.5°)
+2025-12-19 14:42:41,474 - MotorService - INFO - [14:41:51] Correction: +0.60° | Az=275.3° Alt=52.6° | AzCoupole=260.0° | Mode: TrackingMode.NORMAL (interval=60s, seuil=0.5°)
