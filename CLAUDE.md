@@ -50,7 +50,7 @@ Encoder Daemon ────► /dev/shm/ems22_position.json ──────�
 - `core/` - Business logic (hardware control, tracking, astronomical calculations)
 - `services/` - Motor Service IPC process (refactored into 4 modules)
 - `web/` - Django web interface
-- `tests/` - Pytest unit tests (256 tests)
+- `tests/` - Pytest unit tests (278+ tests)
 - `scripts/diagnostics/` - Manual hardware test scripts
 
 ### Motor Service Modules (services/)
@@ -75,6 +75,7 @@ Encoder Daemon ────► /dev/shm/ems22_position.json ──────�
 - **Large movements (> 3°)**: Direct rotation (fluid) + final feedback correction
 - **Small movements (≤ 3°)**: Feedback loop for precision
 - **JOG (manual buttons)**: Always direct rotation (maximum fluidity)
+- **UX Feedback**: Initial GOTO during tracking shows position details: `44.9° → 258.6° (+146.2°)`
 
 ## Key Files
 
