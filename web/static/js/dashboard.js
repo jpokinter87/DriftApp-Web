@@ -353,6 +353,10 @@ function updateServiceStatus(motor, encoder) {
     } else if (status === 'moving') {
         elements.statusDot.classList.add('moving');
         elements.statusText.textContent = 'En mouvement';
+    } else if (status === 'initializing') {
+        // Nouveau statut : GOTO initial en cours avant le tracking
+        elements.statusDot.classList.add('moving');
+        elements.statusText.textContent = 'GOTO initial...';
     } else if (status === 'error') {
         elements.statusDot.classList.add('disconnected');
         elements.statusText.textContent = 'Erreur';
@@ -388,12 +392,21 @@ function updatePositionDisplay(encoder) {
 }
 
 function updateTrackingDisplay(motor) {
-    if (motor.status === 'tracking' && motor.tracking_object) {
+    // Afficher le panneau pendant l'initialisation (GOTO initial) OU pendant le tracking actif
+    const isInitializing = motor.status === 'initializing' && motor.tracking_object;
+    const isTracking = motor.status === 'tracking' && motor.tracking_object;
+
+    if (isInitializing || isTracking) {
         elements.trackingInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
 
-        elements.trackingObject.textContent = motor.tracking_object;
+        // Afficher le nom de l'objet avec indication si GOTO en cours
+        if (isInitializing) {
+            elements.trackingObject.textContent = `${motor.tracking_object} (GOTO initial...)`;
+        } else {
+            elements.trackingObject.textContent = motor.tracking_object;
+        }
 
         const info = motor.tracking_info || {};
         state.trackingInfo = info;  // Stocker pour drawCompass

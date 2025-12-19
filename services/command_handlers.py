@@ -363,6 +363,14 @@ class TrackingHandler:
         if self.active:
             self.stop(current_status)
 
+        # IMPORTANT: Signaler immédiatement que le tracking est en cours d'initialisation
+        # Cela permet à l'UI d'afficher un message pendant le GOTO initial
+        current_status['status'] = 'initializing'
+        current_status['tracking_object'] = object_name
+        current_status['tracking_pending'] = True
+        self.status_callback(current_status)
+        self.log_callback(f"Initialisation du suivi de {object_name}...", 'info')
+
         try:
             calc = AstronomicalCalculations(
                 latitude=self.config.site.latitude,
@@ -390,20 +398,26 @@ class TrackingHandler:
                 self.active = True
                 current_status['status'] = 'tracking'
                 current_status['tracking_object'] = object_name
+                current_status['tracking_pending'] = False  # GOTO initial terminé
                 current_status['mode'] = 'normal'
 
                 status = self.session.get_status()
                 encoder_offset = status.get('encoder_offset', 0)
                 logger.info(f"Suivi démarré - Offset encodeur: {encoder_offset:.2f}°")
 
-                self.log_callback(f"Suivi démarré: {object_name}", 'info')
+                self.log_callback(f"Suivi actif: {object_name}", 'success')
             else:
                 logger.error(f"Échec démarrage suivi de {object_name}")
+                current_status['status'] = 'idle'
+                current_status['tracking_object'] = None
+                current_status['tracking_pending'] = False
                 current_status['error'] = "Échec démarrage suivi"
 
         except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
             current_status['status'] = 'error'
+            current_status['tracking_object'] = None
+            current_status['tracking_pending'] = False
             current_status['error'] = str(e)
 
         self.status_callback(current_status)
@@ -425,6 +439,7 @@ class TrackingHandler:
         self.active = False
         current_status['status'] = 'idle'
         current_status['tracking_object'] = None
+        current_status['tracking_pending'] = False
         current_status['mode'] = 'idle'
         self.status_callback(current_status)
 
