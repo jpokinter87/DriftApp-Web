@@ -24,7 +24,7 @@ cd web && python manage.py runserver 0.0.0.0:8000
 uv run pytest -v
 
 # Quick tests (no astropy dependency)
-uv run pytest tests/test_angle_utils.py tests/test_config.py tests/test_moteur.py tests/test_feedback_controller.py tests/test_ipc_manager.py tests/test_simulation.py -v
+uv run pytest tests/test_angle_utils.py tests/test_config.py tests/test_moteur.py tests/test_feedback_controller.py tests/test_ipc_manager.py tests/test_simulation.py tests/test_acceleration_ramp.py -v
 
 # Run single test file or class
 uv run pytest tests/test_moteur.py::TestMoteurCoupoleControl -v
@@ -50,7 +50,7 @@ Encoder Daemon ────► /dev/shm/ems22_position.json ──────�
 - `core/` - Business logic (hardware control, tracking, astronomical calculations)
 - `services/` - Motor Service IPC process (refactored into 4 modules)
 - `web/` - Django web interface
-- `tests/` - Pytest unit tests (278+ tests)
+- `tests/` - Pytest unit tests (315+ tests)
 - `scripts/diagnostics/` - Manual hardware test scripts
 
 ### Motor Service Modules (services/)
@@ -76,6 +76,14 @@ Encoder Daemon ────► /dev/shm/ems22_position.json ──────�
 - **Small movements (≤ 3°)**: Feedback loop for precision
 - **JOG (manual buttons)**: Always direct rotation (maximum fluidity)
 - **UX Feedback**: Initial GOTO during tracking shows position details: `44.9° → 258.6° (+146.2°)`
+
+### Acceleration Ramp (v4.5)
+
+Motor protection via S-curve acceleration/deceleration (`core/hardware/acceleration_ramp.py`):
+- **Start delay**: 3ms (slow start to reduce motor stress)
+- **Ramp steps**: 500 steps for acceleration, 500 for deceleration
+- **S-curve**: Smooth sigmoid transition (not linear)
+- **Automatic**: Enabled by default via `use_ramp=True` in `rotation()`
 
 ## Key Files
 

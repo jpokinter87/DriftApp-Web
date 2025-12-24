@@ -4,7 +4,6 @@ Support Raspberry Pi 1-4 (RPi.GPIO) et Raspberry Pi 5 (lgpio).
 
 VERSION 4.0 :
 - Lecture encodeur via démon externe pour éviter les interférences SPI
-- Rampe d'accélération/décélération pour protéger le moteur
 
 VERSION 4.2 :
 - Extraction de DaemonEncoderReader pour centraliser la lecture du démon
@@ -13,7 +12,12 @@ VERSION 4.3 :
 - Extraction de FeedbackController pour isoler la logique de feedback
 - MoteurCoupole se concentre sur le contrôle moteur pur
 
-Date: 9 décembre 2025
+VERSION 4.5 :
+- Rampe d'accélération/décélération S-curve (acceleration_ramp.py)
+- Protection moteur au démarrage et à l'arrêt
+- Paramètre use_ramp dans rotation() et rotation_absolue()
+
+Date: 24 décembre 2025
 """
 
 import json
@@ -263,17 +267,16 @@ class MoteurCoupole:
 
     def _init_parametres_rampe(self):
         """
-        Paramètres de rampe - NON UTILISÉS.
+        Initialisation des paramètres de rampe.
 
-        La rampe a été désactivée pour s'aligner sur calibration_moteur.py.
-        Ces paramètres sont conservés au cas où on voudrait réactiver la rampe.
-        Voir _calculer_delai_rampe() qui retourne maintenant un délai constant.
+        VERSION 4.5 : La rampe est maintenant gérée par le module
+        acceleration_ramp.py qui fournit une S-curve pour des transitions
+        douces. Voir AccelerationRamp pour les paramètres.
+
+        La rampe est activée par défaut dans rotation() via use_ramp=True.
         """
-        # DÉSACTIVÉ - Paramètres conservés pour référence
-        # self.ramp_start_delay = 0.003  # Délai initial lent (3ms)
-        # self.ramp_steps = 400          # Pas pour atteindre vitesse nominale
-        # self.ramp_enabled = True
-        # self.ramp_disable_threshold = 0.0005  # Seuil désactivation
+        # Les paramètres de rampe sont maintenant dans acceleration_ramp.py
+        # Pas de configuration ici pour ne pas modifier les réglages moteur
         pass
 
     # =========================================================================
@@ -506,17 +509,19 @@ class MoteurCoupole:
         """
         return vitesse_nominale
 
-    def rotation(self, angle_deg: float, vitesse: float = 0.0015):
+    def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
         """
         Fait tourner la coupole d'un angle donné.
 
-        VERSION OPTIMISÉE (alignée sur Dome_v4) :
-        - Boucle simple sans vérification stop_requested à chaque pas
-        - Timing optimal pour flux continu de pulses
+        VERSION 4.5 : Rampe d'accélération/décélération pour protéger le moteur.
+        - Démarre lentement pour éviter le stress mécanique
+        - Accélère progressivement vers la vitesse nominale (S-curve)
+        - Décélère en fin de mouvement pour un arrêt en douceur
 
         Args:
             angle_deg: Angle en degrés (positif = horaire)
             vitesse: Délai nominal entre les pas en secondes
+            use_ramp: Si True, utilise la rampe d'accélération (défaut: True)
         """
         self.clear_stop_request()
         self.definir_direction(1 if angle_deg >= 0 else -1)
@@ -527,22 +532,36 @@ class MoteurCoupole:
         if steps == 0:
             return
 
+        # Créer la rampe d'accélération/décélération
+        if use_ramp:
+            from core.hardware.acceleration_ramp import AccelerationRamp
+            ramp = AccelerationRamp(steps, vitesse)
+            ramp_info = f", rampe={'activée' if ramp.ramp_enabled else 'désactivée'}"
+        else:
+            ramp = None
+            ramp_info = ", rampe=off"
+
         self.logger.debug(
-            f"Rotation de {angle_deg:.2f}° ({steps} pas, délai={vitesse}s)"
+            f"Rotation de {angle_deg:.2f}° ({steps} pas, délai={vitesse}s{ramp_info})"
         )
 
         # Boucle avec vérification stop_requested périodique (tous les 500 pas)
-        # NOTE: Avec l'architecture multi-processus (daemon + motor_service + Django),
-        # chaque process a son propre GIL, donc cette vérification n'impacte plus
-        # le timing des pulses GPIO comme c'était le cas en mono-processus.
+        # et rampe d'accélération/décélération
         for i in range(steps):
             if i % 500 == 0 and self.stop_requested:
                 self.logger.info(f"Rotation interrompue à {i}/{steps} pas")
                 break
-            self.faire_un_pas(vitesse)
+
+            # Calcul du délai avec ou sans rampe
+            if ramp is not None:
+                delay = ramp.get_delay(i)
+            else:
+                delay = vitesse
+
+            self.faire_un_pas(delay)
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
-                        vitesse: float = 0.0015):
+                        vitesse: float = 0.0015, use_ramp: bool = True):
         """
         Rotation vers une position absolue.
 
@@ -550,6 +569,7 @@ class MoteurCoupole:
             position_cible_deg: Position cible en degrés (0-360)
             position_actuelle_deg: Position actuelle en degrés (0-360)
             vitesse: Délai entre les pas
+            use_ramp: Si True, utilise la rampe d'accélération (défaut: True)
         """
         position_cible = position_cible_deg % 360
         position_actuelle = position_actuelle_deg % 360
@@ -562,7 +582,7 @@ class MoteurCoupole:
         elif diff < -180:
             diff += 360
 
-        self.rotation(diff, vitesse)
+        self.rotation(diff, vitesse, use_ramp=use_ramp)
 
     # =========================================================================
     # FEEDBACK CONTROLLER (délégation)

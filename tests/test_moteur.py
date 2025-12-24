@@ -358,7 +358,7 @@ class TestMoteurCoupoleControl:
         assert mock_moteur.faire_un_pas.call_count == expected_steps
 
     def test_rotation_stop_requested(self, mock_moteur):
-        """Arrêt si stop_requested est True."""
+        """Arrêt si stop_requested est True (vérifié tous les 500 pas)."""
         mock_moteur.faire_un_pas = MagicMock()
         mock_moteur.definir_direction = MagicMock()
 
@@ -371,10 +371,13 @@ class TestMoteurCoupoleControl:
 
         mock_moteur.faire_un_pas.side_effect = side_effect
 
-        mock_moteur.rotation(1.0, vitesse=0.001)
+        # Désactiver la rampe pour ce test (sinon import error en mock)
+        mock_moteur.rotation(1.0, vitesse=0.001, use_ramp=False)
 
-        # Devrait s'arrêter bien avant le nombre total de pas
-        assert mock_moteur.faire_un_pas.call_count < 100
+        # La vérification stop_requested se fait tous les 500 pas
+        # Donc le moteur s'arrête au prochain multiple de 500 après que
+        # stop_requested soit True (qui arrive au pas 10)
+        assert mock_moteur.faire_un_pas.call_count == 500
 
     def test_request_stop(self, mock_moteur):
         """request_stop met le flag à True."""

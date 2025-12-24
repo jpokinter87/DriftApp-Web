@@ -8,6 +8,7 @@ VERSION 4.0 : Intègre les méthodes de feedback simulées.
 VERSION 4.3 : Ajout get_feedback_controller, get_daemon_angle, rotation_absolue
               pour compatibilité avec MoteurCoupole refactorisé.
 VERSION 4.4 : Simulation réaliste du déplacement (faire_un_pas, get_daemon_angle)
+VERSION 4.5 : Compatibilité paramètre use_ramp (ignoré en simulation)
 """
 
 import logging
@@ -102,16 +103,31 @@ class MoteurSimule:
         """Calcule le délai pour un pas (retourne toujours la vitesse nominale en simulation)."""
         return vitesse_nominale
 
-    def rotation(self, angle_deg: float, vitesse: float = 0.0015):
-        """Simule une rotation."""
+    def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
+        """
+        Simule une rotation.
+
+        Args:
+            angle_deg: Angle en degrés
+            vitesse: Délai nominal (ignoré en simulation)
+            use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
+        """
         global _simulated_position
         # Utiliser la position globale synchronisée
         _simulated_position = (_simulated_position + angle_deg) % 360
         self.position_actuelle = _simulated_position  # Synchroniser aussi l'attribut local
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
-                        vitesse: float = 0.0015):
-        """Rotation vers une position absolue."""
+                        vitesse: float = 0.0015, use_ramp: bool = True):
+        """
+        Rotation vers une position absolue.
+
+        Args:
+            position_cible_deg: Position cible en degrés
+            position_actuelle_deg: Position actuelle en degrés
+            vitesse: Délai nominal (ignoré en simulation)
+            use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
+        """
         position_cible = position_cible_deg % 360
         position_actuelle = position_actuelle_deg % 360
 
@@ -121,7 +137,7 @@ class MoteurSimule:
         elif diff < -180:
             diff += 360
 
-        self.rotation(diff, vitesse)
+        self.rotation(diff, vitesse, use_ramp=use_ramp)
 
     # =========================================================================
     # MÉTHODES DÉMON (simulées)
