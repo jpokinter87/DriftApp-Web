@@ -283,23 +283,23 @@ class TestIntegrationFlow:
 
 ## 4. PLAN D'IMPLÉMENTATION PRIORISÉ
 
-### Phase 1: Corrections Critiques (Immédiat)
+### Phase 1: Corrections Critiques (Immédiat) ✅ TERMINÉE
 
-| # | Tâche | Fichier | Effort |
+| # | Tâche | Fichier | Statut |
 |---|-------|---------|--------|
-| 1.1 | Ajouter verrou fcntl à IPC | `ipc_manager.py` | 1h |
-| 1.2 | Isoler état MoteurSimule | `moteur_simule.py` | 30min |
-| 1.3 | Unifier DaemonEncoderReader | `moteur.py`, `motor_service.py` | 2h |
-| 1.4 | Spécifier exceptions feedback | `tracker.py` | 30min |
+| 1.1 | Isoler état MoteurSimule | `moteur_simule.py` | ✅ Terminé |
+| 1.2 | Ajouter verrou fcntl à IPC | `ipc_manager.py` | ✅ Terminé |
+| 1.3 | Unifier DaemonEncoderReader | `moteur.py`, `motor_service.py` | ✅ Terminé |
+| 1.4 | Spécifier exceptions feedback | `tracker.py` | ✅ Terminé |
 
-### Phase 2: Consolidation (Court terme)
+### Phase 2: Consolidation (Court terme) ✅ TERMINÉE
 
-| # | Tâche | Fichier | Effort |
+| # | Tâche | Fichier | Statut |
 |---|-------|---------|--------|
-| 2.1 | Extraire MotorConfigParser | nouveau fichier | 1h |
-| 2.2 | Centraliser constantes | `config.json` | 1h |
-| 2.3 | Ajouter timeout global GOTO | `tracker.py`, `feedback_controller.py` | 1h |
-| 2.4 | Recovery automatique erreur | `command_handlers.py` | 30min |
+| 2.1 | Centraliser constantes | `config.json`, `config_loader.py` | ✅ c0285d2 |
+| 2.2 | Extraire MotorConfigParser | `motor_config_parser.py` | ✅ c76a5f9 |
+| 2.3 | Ajouter timeout global GOTO | `feedback_controller.py` | ✅ e2fd4ac |
+| 2.4 | Recovery automatique erreur | `motor_service.py`, `command_handlers.py` | ✅ a9c568a |
 
 ### Phase 3: Tests & Documentation (Moyen terme)
 
