@@ -318,9 +318,88 @@ class TestIntegrationFlow:
 | 4.3 | Tests E2E avec hardware mock | `tests/test_e2e.py` | ✅ Terminé |
 | 4.4 | Documenter API IPC | `docs/IPC_API.md` | ✅ Terminé |
 
+### Phase 5: Qualité Code & Robustesse (Analyse 24/12/2025)
+
+#### 5.1 Corrections Bugs Modérés (Priorité: HAUTE)
+
+| # | Tâche | Fichier | Description | Statut |
+|---|-------|---------|-------------|--------|
+| 5.1.1 | Vérifier `modes` avant `.get()` | `command_handlers.py:56` | AttributeError si `config.adaptive.modes` est None | ⏳ |
+| 5.1.2 | Ajouter verrous fcntl aux vues Django | `web/hardware/views.py:36-44` | Lecture JSON non atomique, race condition possible | ⏳ |
+| 5.1.3 | Logger exceptions silencieuses | `tracking_goto_mixin.py:215` | `except Exception: pass` sans logging | ⏳ |
+| 5.1.4 | Utiliser `deque` pour logs tracking | `motor_service.py:175-187` | Liste non bornée, allocation inefficace | ⏳ |
+
+#### 5.2 Nettoyage Qualité (Priorité: MOYENNE)
+
+| # | Tâche | Fichier(s) | Description | Statut |
+|---|-------|------------|-------------|--------|
+| 5.2.1 | Remplacer `print()` par `logger` | 8+ fichiers | `config_loader.py`, `hardware_detector.py`, `catalogue.py`, etc. | ⏳ |
+| 5.2.2 | Spécifier exceptions capturées | 6 fichiers | `except Exception:` trop large sans logging | ⏳ |
+| 5.2.3 | Corriger TOCTOU `exists()` | `web/hardware/views.py:39,49` | Race condition entre `exists()` et `read_text()` | ⏳ |
+| 5.2.4 | Ajouter lock à `_instance_positions` | `moteur_simule.py:20` | Variable globale sans synchronisation | ⏳ |
+
+#### 5.3 Refactoring Avancé (Priorité: BASSE)
+
+| # | Tâche | Fichier | Description | Statut |
+|---|-------|---------|-------------|--------|
+| 5.3.1 | Créer classe `RotationParams` | `feedback_controller.py` | Réduire 8 paramètres → 1 objet | ⏳ |
+| 5.3.2 | Extraire classe `TrackingState` | `tracker.py` | Centraliser les attributs d'état | ⏳ |
+| 5.3.3 | Centraliser constantes magiques | `tracking_state_mixin.py`, etc. | Seuils 10°, 20° hardcodés | ⏳ |
+| 5.3.4 | Refactorer `moteur.py` (711 lignes) | `core/hardware/moteur.py` | Fichier trop long, difficile à maintenir | ⏳ |
+
+#### Détails des corrections Phase 5.1
+
+**5.1.1 - Vérification `modes` avant accès**
+```python
+# Avant (command_handlers.py:56)
+continuous = self.config.adaptive.modes.get('continuous')
+
+# Après
+if self.config.adaptive and self.config.adaptive.modes:
+    continuous = self.config.adaptive.modes.get('continuous')
+else:
+    continuous = None
+```
+
+**5.1.2 - Verrous fcntl dans vues Django**
+```python
+# Avant (views.py:36)
+return json.loads(self.status_file.read_text())
+
+# Après
+import fcntl
+with open(self.status_file, 'r') as f:
+    fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+    try:
+        return json.load(f)
+    finally:
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+```
+
+**5.1.3 - Logger exception silencieuse**
+```python
+# Avant (tracking_goto_mixin.py:215)
+except Exception:
+    pass
+
+# Après
+except Exception as e:
+    self.python_logger.debug(f"Erreur non critique ignorée: {e}")
+```
+
+**5.1.4 - Utiliser deque pour logs**
+```python
+# Avant (motor_service.py:101)
+self.recent_tracking_logs = []
+
+# Après
+from collections import deque
+self.recent_tracking_logs = deque(maxlen=20)
+```
+
 ---
 
-## 5. RISQUES ET MITIGATIONS
+## 6. RISQUES ET MITIGATIONS
 
 | Risque | Probabilité | Impact | Mitigation |
 |--------|-------------|--------|------------|
@@ -328,10 +407,12 @@ class TestIntegrationFlow:
 | Tests non isolés | Basse | Moyen | Phase 1.2 - État isolé |
 | Erreurs masquées | Moyenne | Haut | Phase 1.4 - Exceptions spécifiques |
 | Régression | Basse | Moyen | Exécuter suite tests après chaque changement |
+| Race condition Django-Motor | Moyenne | Moyen | Phase 5.1.2 - Verrous fcntl vues |
+| Logs mémoire | Basse | Faible | Phase 5.1.4 - Utiliser deque |
 
 ---
 
-## 6. VALIDATION
+## 7. VALIDATION
 
 Après chaque phase:
 1. Exécuter `uv run pytest -v` (tous les tests)
