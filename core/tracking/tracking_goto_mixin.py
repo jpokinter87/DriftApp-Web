@@ -212,8 +212,8 @@ class TrackingGotoMixin:
                     self.logger.info(
                         f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    self.logger.debug(f"Erreur recalcul offset encodeur (non critique): {e}")
 
             else:
                 # Sans feedback, utiliser rotation simple
