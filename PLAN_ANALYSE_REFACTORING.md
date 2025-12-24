@@ -303,11 +303,11 @@ class TestIntegrationFlow:
 
 ### Phase 3: Tests & Documentation (Moyen terme)
 
-| # | Tâche | Fichier | Effort |
+| # | Tâche | Fichier | Statut |
 |---|-------|---------|--------|
-| 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | 4h |
-| 3.2 | Documenter algorithme lissage | `tracker.py` | 30min |
-| 3.3 | Standardiser logging | tous | 2h |
+| 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | ✅ Terminé |
+| 3.2 | Documenter algorithme lissage | `tracker.py` | En attente |
+| 3.3 | Standardiser logging | tous | En attente |
 
 ---
 
