@@ -31,9 +31,9 @@ class SimulatedDaemonReader:
 
     def read_raw(self) -> dict:
         """Retourne un statut simulé."""
-        from core.hardware.moteur_simule import _simulated_position
+        from core.hardware.moteur_simule import get_simulated_position
         return {
-            'angle': _simulated_position,
+            'angle': get_simulated_position(),
             'calibrated': True,
             'status': 'OK (simulation)',
             'raw': 0
@@ -41,8 +41,8 @@ class SimulatedDaemonReader:
 
     def read_angle(self, timeout_ms: int = 200) -> float:
         """Retourne la position simulée."""
-        from core.hardware.moteur_simule import _simulated_position
-        return _simulated_position
+        from core.hardware.moteur_simule import get_simulated_position
+        return get_simulated_position()
 
     def read_status(self) -> dict:
         """Retourne le statut complet simulé."""

@@ -177,6 +177,24 @@ def sample_abaque_data() -> Dict[float, Dict[str, list]]:
 
 
 # =============================================================================
+# FIXTURES SIMULATION (ISOLATION)
+# =============================================================================
+
+@pytest.fixture(autouse=True)
+def reset_simulation_state():
+    """
+    Reset automatique de l'état de simulation avant chaque test.
+
+    Garantit l'isolation des tests en remettant toutes les positions
+    simulées à zéro avant et après chaque test.
+    """
+    from core.hardware.moteur_simule import reset_all_simulated_positions
+    reset_all_simulated_positions()
+    yield
+    reset_all_simulated_positions()
+
+
+# =============================================================================
 # FIXTURES HARDWARE (MOCKS)
 # =============================================================================
 

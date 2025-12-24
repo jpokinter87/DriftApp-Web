@@ -15,19 +15,53 @@ import logging
 from typing import Dict, Any, Optional
 
 
-# Variable globale pour partager la position entre instances (singleton pattern)
-_simulated_position = 0.0
+# Position simulée par instance (isolation des tests)
+# Le module maintient un registre des positions par ID d'instance
+_instance_positions: dict[int, float] = {}
+
+# Position "globale" pour compatibilité avec set_simulated_position/get_simulated_position
+_global_position = 0.0
 
 
 def set_simulated_position(position: float):
-    """Permet de synchroniser la position simulée depuis l'extérieur."""
-    global _simulated_position
-    _simulated_position = position % 360
+    """
+    Définit la position simulée globale.
+
+    Utilisé par les handlers (command_handlers.py) pour synchroniser
+    la position avant une commande en mode simulation.
+    """
+    global _global_position
+    _global_position = position % 360
 
 
 def get_simulated_position() -> float:
-    """Retourne la position simulée actuelle."""
-    return _simulated_position
+    """
+    Retourne la position simulée globale.
+
+    Utilisé par les handlers pour lire la position après une commande.
+    """
+    return _global_position
+
+
+def _get_instance_position(instance_id: int) -> float:
+    """Retourne la position d'une instance spécifique."""
+    return _instance_positions.get(instance_id, 0.0)
+
+
+def _set_instance_position(instance_id: int, position: float):
+    """Définit la position d'une instance spécifique."""
+    _instance_positions[instance_id] = position % 360
+
+
+def reset_all_simulated_positions():
+    """
+    Remet toutes les positions à zéro.
+
+    À appeler dans conftest.py pour garantir l'isolation des tests.
+    """
+    global _global_position
+    _global_position = 0.0
+    _instance_positions.clear()
 
 
 class MoteurSimule:
@@ -35,6 +69,7 @@ class MoteurSimule:
 
     def __init__(self, config_moteur=None):
         self.logger = logging.getLogger("MoteurSimule")
+        self._instance_id = id(self)
 
         if config_moteur:
             if hasattr(config_moteur, 'steps_per_dome_revolution'):
@@ -58,10 +93,10 @@ class MoteurSimule:
         else:
             self.steps_per_dome_revolution = 1941866  # Valeur calculée
 
-        global _simulated_position
-
-        # Position simulée (partagée via variable globale)
-        self.position_actuelle = _simulated_position
+        # Initialiser la position de cette instance à la position globale actuelle
+        # (pour compatibilité avec les handlers qui utilisent set_simulated_position)
+        _set_instance_position(self._instance_id, _global_position)
+        self.position_actuelle = _global_position
 
         # Direction actuelle (1 = horaire, -1 = anti-horaire)
         self.direction = 1
@@ -87,16 +122,21 @@ class MoteurSimule:
         """
         Simule un pas moteur.
 
-        En mode simulation, met à jour la position globale.
+        Met à jour la position de cette instance ET la position globale
+        pour compatibilité avec les handlers.
         """
-        global _simulated_position
+        global _global_position
 
         # Calculer le déplacement en degrés
         delta = self.degrees_per_step * self.direction
 
-        # Mettre à jour la position
-        _simulated_position = (_simulated_position + delta) % 360
-        self.position_actuelle = _simulated_position
+        # Mettre à jour la position de cette instance
+        new_pos = (_get_instance_position(self._instance_id) + delta) % 360
+        _set_instance_position(self._instance_id, new_pos)
+
+        # Synchroniser la position globale pour les handlers
+        _global_position = new_pos
+        self.position_actuelle = new_pos
 
     def _calculer_delai_rampe(self, step_index: int, total_steps: int,
                                vitesse_nominale: float) -> float:
@@ -112,10 +152,15 @@ class MoteurSimule:
             vitesse: Délai nominal (ignoré en simulation)
             use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
         """
-        global _simulated_position
-        # Utiliser la position globale synchronisée
-        _simulated_position = (_simulated_position + angle_deg) % 360
-        self.position_actuelle = _simulated_position  # Synchroniser aussi l'attribut local
+        global _global_position
+
+        # Mettre à jour la position de cette instance
+        new_pos = (_get_instance_position(self._instance_id) + angle_deg) % 360
+        _set_instance_position(self._instance_id, new_pos)
+
+        # Synchroniser la position globale pour les handlers
+        _global_position = new_pos
+        self.position_actuelle = new_pos
 
     def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
                         vitesse: float = 0.0015, use_ramp: bool = True):
@@ -145,16 +190,14 @@ class MoteurSimule:
 
     @staticmethod
     def get_daemon_angle(timeout_ms: int = 200) -> float:
-        """Retourne la position simulée."""
-        global _simulated_position
-        return _simulated_position
+        """Retourne la position simulée globale."""
+        return _global_position
 
     @staticmethod
     def get_daemon_status() -> Optional[dict]:
         """Retourne un statut simulé."""
-        global _simulated_position
         return {
-            'angle': _simulated_position,
+            'angle': _global_position,
             'calibrated': True,
             'status': 'OK (simulation)',
             'timestamp': 0
@@ -184,19 +227,19 @@ class MoteurSimule:
         vitesse: float = 0.001,
         tolerance: float = 0.5,
         max_iterations: int = 10,
-        max_correction_par_iteration: float = 45.0
+        max_correction_par_iteration: float = 45.0,
+        allow_large_movement: bool = False
     ) -> Dict[str, Any]:
         """
         Simule une rotation avec feedback.
 
         En mode simulation, le mouvement est toujours parfait.
         """
-        global _simulated_position
-        # Utiliser la position globale synchronisée, pas self.position_actuelle
-        position_initiale = _simulated_position
+        # Utiliser la position de cette instance
+        position_initiale = _get_instance_position(self._instance_id)
 
         # Calculer le delta
-        delta = angle_cible - _simulated_position
+        delta = angle_cible - position_initiale
         while delta > 180:
             delta -= 360
         while delta < -180:
@@ -225,9 +268,9 @@ class MoteurSimule:
         """
         Simule une rotation relative avec feedback.
         """
-        global _simulated_position
-        # Utiliser la position globale synchronisée
-        angle_cible = (_simulated_position + delta_deg) % 360
+        # Utiliser la position de cette instance
+        current_pos = _get_instance_position(self._instance_id)
+        angle_cible = (current_pos + delta_deg) % 360
         return self.rotation_avec_feedback(angle_cible=angle_cible, **kwargs)
 
     # =========================================================================
