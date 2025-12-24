@@ -1,9 +1,25 @@
 {
   "_comment": "Configuration complète DriftApp - Toutes les constantes centralisées",
-  "_version": "2.2",
-  "_date": "2025-12-17",
-  "_changes": "Suppression FAST_TRACK (redondant avec CONTINUOUS) - CONTINUOUS à 0.00015s (calibré)",
-  
+  "_version": "2.3",
+  "_date": "2025-12-24",
+  "_changes": "Ajout section thresholds pour centraliser les seuils de mouvement",
+
+  "thresholds": {
+    "_comment": "Seuils de mouvement centralisés (degrés)",
+
+    "feedback_min_deg": 3.0,
+    "_feedback_comment": "Delta minimum pour utiliser feedback. En-dessous, rotation directe plus fluide.",
+
+    "large_movement_deg": 30.0,
+    "_large_comment": "Au-delà, utilise mode CONTINUOUS/FAST_TRACK pour les corrections.",
+
+    "feedback_protection_deg": 20.0,
+    "_protection_comment": "Protection contre mouvements anormaux dans boucle feedback. Abandon si erreur > seuil.",
+
+    "default_tolerance_deg": 0.5,
+    "_tolerance_comment": "Tolérance par défaut pour rotation avec feedback (précision cible)."
+  },
+
   "site": {
     "latitude": 44.15,
     "longitude": 5.23,
