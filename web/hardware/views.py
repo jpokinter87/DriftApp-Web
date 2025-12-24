@@ -1,9 +1,11 @@
 """
 Vues API REST pour le contrôle hardware (moteur, encodeur).
 """
+import fcntl
 import json
 import uuid
 from pathlib import Path
+from typing import Optional
 
 from django.conf import settings
 from rest_framework import status
@@ -18,6 +20,26 @@ class MotorServiceClient:
         self.command_file = Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
         self.status_file = Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
         self.encoder_file = Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
+
+    def _read_json_file_safe(self, file_path: Path) -> Optional[dict]:
+        """
+        Lit un fichier JSON de manière atomique avec verrou fcntl.
+
+        Utilise un verrou partagé non-bloquant pour éviter les race conditions
+        avec le Motor Service qui écrit dans ces fichiers.
+
+        Returns:
+            dict si succès, None si erreur ou fichier verrouillé
+        """
+        try:
+            with open(file_path, 'r') as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                try:
+                    return json.load(f)
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except (BlockingIOError, FileNotFoundError, IOError, json.JSONDecodeError):
+            return None
 
     def send_command(self, command_type: str, **params) -> bool:
         """Envoie une commande au Motor Service."""
@@ -35,23 +57,13 @@ class MotorServiceClient:
 
     def get_motor_status(self) -> dict:
         """Lit le statut du Motor Service."""
-        try:
-            if self.status_file.exists():
-                return json.loads(self.status_file.read_text())
-        except (IOError, json.JSONDecodeError):
-            pass
-
-        return {'status': 'unknown', 'error': 'Motor Service non disponible'}
+        result = self._read_json_file_safe(self.status_file)
+        return result if result else {'status': 'unknown', 'error': 'Motor Service non disponible'}
 
     def get_encoder_status(self) -> dict:
         """Lit le statut de l'encodeur depuis le daemon."""
-        try:
-            if self.encoder_file.exists():
-                return json.loads(self.encoder_file.read_text())
-        except (IOError, json.JSONDecodeError):
-            pass
-
-        return {'status': 'unavailable', 'error': 'Daemon encodeur non disponible'}
+        result = self._read_json_file_safe(self.encoder_file)
+        return result if result else {'status': 'unavailable', 'error': 'Daemon encodeur non disponible'}
 
 
 # Instance globale du client
