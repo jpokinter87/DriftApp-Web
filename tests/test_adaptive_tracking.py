@@ -2,35 +2,25 @@
 Tests pour le module core/tracking/adaptive_tracking.py
 
 Ce module teste le système de suivi adaptatif à 3 modes.
+Note: Ces tests fonctionnent SANS astropy car adaptive_tracking
+n'a pas de dépendance directe à astropy.
 """
 
 import pytest
 from unittest.mock import MagicMock
-
-# Vérifier si astropy est disponible (requis pour AdaptiveTrackingManager)
-try:
-    import astropy
-    HAS_ASTROPY = True
-except ImportError:
-    HAS_ASTROPY = False
-
-pytestmark = pytest.mark.skipif(
-    not HAS_ASTROPY,
-    reason="Ces tests nécessitent astropy"
-)
 
 
 class TestTrackingMode:
     """Tests pour l'enum TrackingMode."""
 
     def test_modes_disponibles(self):
-        """Vérifie que les 4 modes existent."""
+        """Vérifie que les 3 modes existent (v2.2: FAST_TRACK supprimé)."""
         from core.tracking.adaptive_tracking import TrackingMode
 
         assert TrackingMode.NORMAL.value == "normal"
         assert TrackingMode.CRITICAL.value == "critical"
         assert TrackingMode.CONTINUOUS.value == "continuous"
-        assert TrackingMode.FAST_TRACK.value == "fast_track"
+        # Note: FAST_TRACK a été supprimé en v2.2 (redondant avec CONTINUOUS)
 
 
 class TestTrackingParameters:
@@ -129,15 +119,7 @@ class TestGetParams:
         assert params.mode == TrackingMode.CONTINUOUS
         assert params.check_interval == 5
         assert params.correction_threshold == 0.1
-
-    def test_get_fast_track_params(self, manager):
-        """Paramètres du mode FAST_TRACK."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        params = manager._get_fast_track_params()
-
-        assert params.mode == TrackingMode.FAST_TRACK
-        assert params.check_interval == 5
+    # Note: test_get_fast_track_params supprimé (mode FAST_TRACK supprimé en v2.2)
 
 
 class TestPredicats:
@@ -182,10 +164,8 @@ class TestPredicats:
         assert manager._get_movement_level(50.0) == "extreme"
         assert manager._get_movement_level(100.0) == "extreme"
 
-    def test_has_significant_movement(self, manager):
-        """Test du mouvement significatif."""
-        assert manager._has_significant_movement(2.0) is True
-        assert manager._has_significant_movement(0.5) is False
+    # Note: test_has_significant_movement supprimé (méthode inline en v2.2)
+    # Le seuil est défini par MOVEMENT_MIN_FOR_CONTINUOUS (1.0 par défaut)
 
     def test_is_in_critical_zone(self, manager):
         """Test de détection de zone critique."""
@@ -197,7 +177,7 @@ class TestPredicats:
 
 
 class TestDecideMode:
-    """Tests pour la décision de mode."""
+    """Tests pour la décision de mode (v2.2 - 3 modes)."""
 
     @pytest.fixture
     def manager(self):
@@ -213,11 +193,11 @@ class TestDecideMode:
             movement_level="normal",
             in_critical_zone=False,
             altitude=45.0,
-            delta=5.0
+            delta_required=5.0
         )
 
         assert mode == TrackingMode.NORMAL
-        assert "Conditions normales" in reasons[0]
+        assert "Conditions standard" in reasons[0]
 
     def test_mode_critical_altitude_critique(self, manager):
         """Mode CRITICAL pour altitude critique."""
@@ -228,7 +208,7 @@ class TestDecideMode:
             movement_level="normal",
             in_critical_zone=False,
             altitude=70.0,
-            delta=5.0
+            delta_required=5.0
         )
 
         assert mode == TrackingMode.CRITICAL
@@ -242,7 +222,7 @@ class TestDecideMode:
             movement_level="critical",
             in_critical_zone=False,
             altitude=45.0,
-            delta=35.0
+            delta_required=35.0
         )
 
         assert mode == TrackingMode.CRITICAL
@@ -256,7 +236,7 @@ class TestDecideMode:
             movement_level="critical",
             in_critical_zone=False,
             altitude=45.0,
-            delta=35.0
+            delta_required=35.0
         )
 
         assert mode == TrackingMode.CRITICAL
@@ -270,7 +250,7 @@ class TestDecideMode:
             movement_level="extreme",
             in_critical_zone=False,
             altitude=45.0,
-            delta=60.0
+            delta_required=60.0
         )
 
         assert mode == TrackingMode.CONTINUOUS
@@ -284,7 +264,7 @@ class TestDecideMode:
             movement_level="normal",
             in_critical_zone=False,
             altitude=78.0,
-            delta=2.0  # > 1.0, mouvement significatif
+            delta_required=2.0  # > 1.0, mouvement significatif
         )
 
         assert mode == TrackingMode.CONTINUOUS
@@ -298,7 +278,7 @@ class TestDecideMode:
             movement_level="normal",
             in_critical_zone=False,
             altitude=78.0,
-            delta=0.5  # < 1.0, mouvement faible
+            delta_required=0.5  # < 1.0, mouvement faible
         )
 
         assert mode == TrackingMode.CRITICAL
