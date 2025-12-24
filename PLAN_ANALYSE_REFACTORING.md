@@ -301,13 +301,22 @@ class TestIntegrationFlow:
 | 2.3 | Ajouter timeout global GOTO | `feedback_controller.py` | ✅ e2fd4ac |
 | 2.4 | Recovery automatique erreur | `motor_service.py`, `command_handlers.py` | ✅ a9c568a |
 
-### Phase 3: Tests & Documentation (Moyen terme)
+### Phase 3: Tests & Documentation (Moyen terme) ✅ TERMINÉE
 
 | # | Tâche | Fichier | Statut |
 |---|-------|---------|--------|
 | 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | ✅ 05a067b |
 | 3.2 | Documenter algorithme lissage | `tracker.py` | ✅ 90cbbf4 |
 | 3.3 | Standardiser logging | tous | ✅ Terminé |
+
+### Phase 4: Refactoring Avancé & Documentation ✅ TERMINÉE
+
+| # | Tâche | Fichier | Statut |
+|---|-------|---------|--------|
+| 4.1 | Refactorer tracker.py en mixins | `tracking_*_mixin.py` | ✅ Terminé |
+| 4.2 | Supprimer dépendances astropy des tests | `test_tracker.py`, `test_adaptive_tracking.py` | ✅ 1c2c4ca |
+| 4.3 | Tests E2E avec hardware mock | `tests/test_e2e.py` | ✅ Terminé |
+| 4.4 | Documenter API IPC | `docs/IPC_API.md` | ✅ Terminé |
 
 ---
 
