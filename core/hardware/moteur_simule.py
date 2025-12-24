@@ -68,7 +68,7 @@ class MoteurSimule:
     """Moteur simulé pour tests."""
 
     def __init__(self, config_moteur=None):
-        self.logger = logging.getLogger("MoteurSimule")
+        self.logger = logging.getLogger(__name__)
         self._instance_id = id(self)
 
         if config_moteur:

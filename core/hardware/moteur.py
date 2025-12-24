@@ -49,7 +49,7 @@ class DaemonEncoderReader:
             daemon_path: Chemin vers le fichier JSON du démon
         """
         self.daemon_path = daemon_path
-        self.logger = logging.getLogger("DaemonEncoderReader")
+        self.logger = logging.getLogger(__name__)
 
     def is_available(self) -> bool:
         """Vérifie si le fichier démon existe."""
@@ -233,7 +233,7 @@ class MoteurCoupole:
         Args:
             config_moteur: Configuration moteur (dict ou dataclass)
         """
-        self.logger = logging.getLogger("MoteurCoupole")
+        self.logger = logging.getLogger(__name__)
         self.gpio_handle = None
         self.direction_actuelle = 1
         self.stop_requested = False

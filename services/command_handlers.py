@@ -25,7 +25,7 @@ from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
 from core.utils.angle_utils import shortest_angular_distance
 
-logger = logging.getLogger("CommandHandlers")
+logger = logging.getLogger(__name__)
 
 
 class GotoHandler:

@@ -59,10 +59,10 @@ class TrackingSession:
         """
         self.moteur = moteur
         self.calc = calc
-        self.logger = logger
+        self.tracking_logger = logger  # TrackingLogger pour logs UI
         self.seuil = seuil
         self.intervalle = intervalle
-        self.python_logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(__name__)  # Logger standard Python
         self.goto_callback = goto_callback
 
         # Initialisation par étapes
@@ -83,25 +83,25 @@ class TrackingSession:
         self.encoder_offset = 0.0
 
         if not encoder_enabled:
-            self.python_logger.info("Encodeur désactivé dans configuration")
+            self.logger.info("Encodeur désactivé dans configuration")
             return
 
         from core.hardware.hardware_detector import HardwareDetector
         encoder_ok, encoder_error, _ = HardwareDetector.check_encoder_daemon()
 
         if not encoder_ok:
-            self.python_logger.warning(f"Encodeur config activé mais: {encoder_error}")
+            self.logger.warning(f"Encodeur config activé mais: {encoder_error}")
             return
 
         try:
             pos = MoteurCoupole.get_daemon_angle(timeout_ms=200)
             self.encoder_available = True
-            self.python_logger.info(f"Encodeur actif - Position: {pos:.1f}°")
+            self.logger.info(f"Encodeur actif - Position: {pos:.1f}°")
         except Exception as e:
-            self.python_logger.warning(f"Encodeur config activé mais démon inaccessible: {e}")
+            self.logger.warning(f"Encodeur config activé mais démon inaccessible: {e}")
 
         if not self.encoder_available:
-            self.python_logger.info("Mode position logicielle (relatif)")
+            self.logger.info("Mode position logicielle (relatif)")
 
     def _init_adaptive_manager(self, intervalle, seuil, adaptive_config):
         """Initialise le gestionnaire adaptatif."""
@@ -122,7 +122,7 @@ class TrackingSession:
         if not self.abaque_manager.load_abaque():
             raise RuntimeError("Échec du chargement de l'abaque")
 
-        self.python_logger.info("Mode abaque activé")
+        self.logger.info("Mode abaque activé")
 
     def _init_tracking_state(self):
         """Initialise l'état du suivi."""
@@ -174,7 +174,7 @@ class TrackingSession:
             'corrections_log': []
         }
 
-        self.python_logger.info(f"Facteur de correction pas: {self.steps_correction_factor:.4f}")
+        self.logger.info(f"Facteur de correction pas: {self.steps_correction_factor:.4f}")
 
     def _calculate_current_coords(self, now: datetime) -> Tuple[float, float]:
         """
@@ -279,7 +279,7 @@ class TrackingSession:
             tracking_params = self.adaptive_manager.evaluate_tracking_zone(
                 altitude, azimut, abs(goto_delta)
             )
-            self.python_logger.info(
+            self.logger.info(
                 f"🎯 GOTO initial requis: {goto_delta:+.1f}° en mode {tracking_params.mode.value}"
             )
             # Exécuter le GOTO initial (méthode dédiée pour éviter bug position_relative)
@@ -320,12 +320,12 @@ class TrackingSession:
             # est une fonctionnalité distincte du feedback boucle fermée
             encoder_status = MoteurCoupole.get_daemon_status()
             if not encoder_status:
-                self.python_logger.debug("Daemon encodeur non disponible")
+                self.logger.debug("Daemon encodeur non disponible")
                 return False, 0.0
 
             is_calibrated = encoder_status.get('calibrated', False)
             if not is_calibrated:
-                self.python_logger.info(
+                self.logger.info(
                     "Encodeur non calibré - Pas de GOTO initial "
                     "(passez par le switch pour activer le mode absolu)"
                 )
@@ -341,7 +341,7 @@ class TrackingSession:
 
             # Si le delta est significatif (> seuil de correction), GOTO nécessaire
             if abs(delta) > self.seuil:
-                self.python_logger.info(
+                self.logger.info(
                     f"🔄 Encodeur calibré - Position réelle: {real_position:.1f}° | "
                     f"Position cible: {position_cible:.1f}° | Delta: {delta:+.1f}°"
                 )
@@ -355,14 +355,14 @@ class TrackingSession:
                     self.goto_callback(goto_info)
                 return True, delta
 
-            self.python_logger.info(
+            self.logger.info(
                 f"Position OK - Réelle: {real_position:.1f}° ≈ Cible: {position_cible:.1f}° "
                 f"(delta={delta:+.2f}° < seuil={self.seuil}°)"
             )
             return False, 0.0
 
         except Exception as e:
-            self.python_logger.debug(f"Daemon non accessible: {e}")
+            self.logger.debug(f"Daemon non accessible: {e}")
             return False, 0.0
 
     def _rechercher_objet(self, objet_name: str) -> Tuple[bool, str]:
@@ -409,21 +409,21 @@ class TrackingSession:
             if encoder_status:
                 is_calibrated = encoder_status.get('calibrated', False)
                 if is_calibrated:
-                    self.python_logger.info("Encodeur calibré - Mode absolu disponible")
+                    self.logger.info("Encodeur calibré - Mode absolu disponible")
                 else:
-                    self.python_logger.warning(
+                    self.logger.warning(
                         "Encodeur non calibré - Mode relatif. "
                         "Passez par le switch (45°) pour le mode absolu."
                     )
 
             real_position = MoteurCoupole.get_daemon_angle()
             self.encoder_offset = position_cible - real_position
-            self.python_logger.info(
+            self.logger.info(
                 f"SYNC: Coupole={position_cible:.1f}° | "
                 f"Encodeur={real_position:.1f}° | Offset={self.encoder_offset:.1f}°"
             )
         except Exception as e:
-            self.python_logger.warning(f"Encodeur: {e}")
+            self.logger.warning(f"Encodeur: {e}")
             self.encoder_available = False
 
     def _execute_initial_goto(self, position_cible: float, motor_delay: float):
@@ -444,7 +444,7 @@ class TrackingSession:
             # Lire la position actuelle de l'encodeur
             position_actuelle = MoteurCoupole.get_daemon_angle()
 
-            self.python_logger.info(
+            self.logger.info(
                 f"GOTO initial: {position_actuelle:.1f}° → {position_cible:.1f}° "
                 f"(vitesse: {motor_delay}s/pas)"
             )
@@ -463,13 +463,13 @@ class TrackingSession:
                 )
 
                 if result['success']:
-                    self.python_logger.info(
+                    self.logger.info(
                         f"GOTO initial réussi: {result['position_initiale']:.1f}° → "
                         f"{result['position_finale']:.1f}° "
                         f"(erreur: {result['erreur_finale']:.2f}°, {result['iterations']} iter)"
                     )
                 else:
-                    self.python_logger.warning(
+                    self.logger.warning(
                         f"GOTO initial imprécis: erreur finale = {result['erreur_finale']:.2f}°"
                     )
 
@@ -477,7 +477,7 @@ class TrackingSession:
                 try:
                     position_finale = MoteurCoupole.get_daemon_angle()
                     self.encoder_offset = position_cible - position_finale
-                    self.python_logger.info(
+                    self.logger.info(
                         f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
                     )
                 except Exception:
@@ -489,13 +489,13 @@ class TrackingSession:
                     position_actuelle, position_cible
                 )
                 self.moteur.rotation(delta, motor_delay)
-                self.python_logger.info(f"GOTO initial (sans feedback): {delta:+.1f}°")
+                self.logger.info(f"GOTO initial (sans feedback): {delta:+.1f}°")
 
             # NE PAS modifier position_relative - elle est déjà correcte !
             # position_relative = position_cible (mise par _setup_initial_position)
 
         except Exception as e:
-            self.python_logger.error(f"Erreur GOTO initial: {e}")
+            self.logger.error(f"Erreur GOTO initial: {e}")
             # En cas d'erreur, position_relative reste à position_cible
             # ce qui est l'hypothèse de départ
 
@@ -506,12 +506,12 @@ class TrackingSession:
         # Utiliser l'intervalle adaptatif si fourni, sinon l'intervalle par défaut
         interval = initial_interval if initial_interval is not None else self.intervalle
         self.next_correction_time = now + timedelta(seconds=interval)
-        self.logger.start_tracking(objet_name, f"{self.ra_deg:.2f}°", f"{self.dec_deg:.2f}°")
+        self.tracking_logger.start_tracking(objet_name, f"{self.ra_deg:.2f}°", f"{self.dec_deg:.2f}°")
 
     def _log_start(self, objet_name: str, azimut: float, altitude: float,
                    position_cible: float):
         """Log le démarrage du suivi."""
-        self.python_logger.info(
+        self.logger.info(
             f"Méthode: ABAQUE | Az={azimut:.1f}° Alt={altitude:.1f}° | "
             f"Position cible={position_cible % 360:.1f}°"
         )
@@ -753,7 +753,7 @@ class TrackingSession:
             f"seuil={tracking_params.correction_threshold}°)"
         )
 
-        self.python_logger.info(log_message)
+        self.logger.info(log_message)
 
         # === Ajouter à l'historique de dérive ===
         self.drift_tracking['corrections_log'].append({
@@ -799,7 +799,7 @@ class TrackingSession:
 
         except (RuntimeError, IOError, OSError) as e:
             # Erreurs de communication avec l'encodeur - fallback légitime
-            self.python_logger.warning(
+            self.logger.warning(
                 f"Encodeur indisponible, fallback sans feedback: {e}"
             )
             self._notify_degraded_mode()
@@ -811,7 +811,7 @@ class TrackingSession:
 
         except Exception as e:
             # Erreur inattendue - logger ET remonter (ne pas masquer)
-            self.python_logger.error(
+            self.logger.error(
                 f"Erreur critique dans correction feedback: {e}",
                 exc_info=True
             )
@@ -868,7 +868,7 @@ class TrackingSession:
     def _log_feedback_succes(self, result: dict, duration: float):
         """Log une correction feedback réussie."""
         self.failed_feedback_count = 0
-        self.python_logger.info(
+        self.logger.info(
             f"Correction feedback réussie: {result['position_initiale']:.1f}° -> "
             f"{result['position_finale']:.1f}° (erreur: {result['erreur_finale']:.2f}°, "
             f"AZCoupole: {result['position_cible']:.1f}°, "
@@ -878,7 +878,7 @@ class TrackingSession:
     def _log_feedback_echec(self, result: dict, duration: float):
         """Log une correction feedback imprécise."""
         self.failed_feedback_count += 1
-        self.python_logger.warning(
+        self.logger.warning(
             f"Correction feedback imprécise: "
             f"{result['position_initiale']:.1f}° -> {result['position_finale']:.1f}° "
             f"(erreur: {result['erreur_finale']:.2f}°, "
@@ -890,11 +890,11 @@ class TrackingSession:
     def _verifier_echecs_consecutifs(self) -> bool:
         """Vérifie si trop d'échecs consécutifs, arrête le suivi si nécessaire."""
         if self.failed_feedback_count >= self.max_failed_feedback:
-            self.python_logger.error(
+            self.logger.error(
                 f"SUIVI ARRÊTÉ : {self.max_failed_feedback} corrections "
                 f"consécutives ont échoué."
             )
-            self.python_logger.error(
+            self.logger.error(
                 "Vérifiez l'encodeur et la calibration. "
                 "Consultez BUG_CRITIQUE_ENCODEUR_NON_CALIBRE.md"
             )
@@ -907,12 +907,12 @@ class TrackingSession:
         if result['iterations'] <= 1:
             return
 
-        self.python_logger.debug("  Détail corrections:")
+        self.logger.debug("  Détail corrections:")
         for corr in result['corrections']:
             correction = corr.get('correction_demandee', corr.get('correction_commandee', 0))
             erreur_avant = corr.get('erreur_avant', corr.get('erreur', 0))
             erreur_apres = corr.get('erreur_apres', 0)
-            self.python_logger.debug(
+            self.logger.debug(
                 f"    Iter {corr['iteration']}: {correction:+.2f}° "
                 f"(erreur avant: {erreur_avant:+.2f}°, après: {erreur_apres:+.2f}°)"
             )
@@ -940,7 +940,7 @@ class TrackingSession:
         self.moteur.definir_direction(direction)
 
         # Log
-        self.python_logger.debug(
+        self.logger.debug(
             f"Déplacement (sans feedback): {steps} pas à {motor_delay}s/pas "
             f"(facteur: {self.steps_correction_factor:.4f}, "
             f"vitesse: {1 / motor_delay:.0f} pas/s)"
@@ -976,25 +976,25 @@ class TrackingSession:
         duration = datetime.now() - self.drift_tracking['start_time']
         duration_hours = duration.total_seconds() / 3600
 
-        self.python_logger.info("=" * 60)
-        self.python_logger.info("BILAN DE LA SESSION")
-        self.python_logger.info("=" * 60)
+        self.logger.info("=" * 60)
+        self.logger.info("BILAN DE LA SESSION")
+        self.logger.info("=" * 60)
 
         self._log_basic_stats(duration_hours, duration)
         self._log_rate_stats(duration_hours)
         self._log_additional_info()
 
-        self.python_logger.info("=" * 60)
+        self.logger.info("=" * 60)
 
     def _log_basic_stats(self, duration_hours: float, duration):
         """Log les statistiques de base."""
-        self.python_logger.info(f"Objet: {self.objet}")
-        self.python_logger.info(f"Méthode: ABAQUE")
-        self.python_logger.info(
+        self.logger.info(f"Objet: {self.objet}")
+        self.logger.info(f"Méthode: ABAQUE")
+        self.logger.info(
             f"Durée: {duration_hours:.2f}h ({duration.total_seconds() / 60:.1f}min)"
         )
-        self.python_logger.info(f"Corrections appliquées: {self.total_corrections}")
-        self.python_logger.info(f"Mouvement total: {self.total_movement:.1f}°")
+        self.logger.info(f"Corrections appliquées: {self.total_corrections}")
+        self.logger.info(f"Mouvement total: {self.total_movement:.1f}°")
 
     def _log_rate_stats(self, duration_hours: float):
         """Log les statistiques de fréquence."""
@@ -1003,32 +1003,32 @@ class TrackingSession:
 
         corrections_per_hour = self.total_corrections / duration_hours
         movement_per_hour = self.total_movement / duration_hours
-        self.python_logger.info(f"Fréquence: {corrections_per_hour:.1f} corrections/h")
-        self.python_logger.info(f"Mouvement moyen: {movement_per_hour:.1f}°/h")
+        self.logger.info(f"Fréquence: {corrections_per_hour:.1f} corrections/h")
+        self.logger.info(f"Mouvement moyen: {movement_per_hour:.1f}°/h")
 
     def _log_additional_info(self):
         """Log les informations additionnelles."""
         if hasattr(self.adaptive_manager, 'current_mode'):
-            self.python_logger.info(f"Mode final: {self.adaptive_manager.current_mode.value}")
+            self.logger.info(f"Mode final: {self.adaptive_manager.current_mode.value}")
 
         if self.steps_correction_factor != 1.0:
-            self.python_logger.info(f"Facteur de correction: {self.steps_correction_factor:.4f}")
+            self.logger.info(f"Facteur de correction: {self.steps_correction_factor:.4f}")
 
         encoder_status = 'Actif' if self.encoder_available else 'Inactif'
-        self.python_logger.info(f"Démon encodeur: {encoder_status}")
+        self.logger.info(f"Démon encodeur: {encoder_status}")
 
     def _finalize_stop(self):
         """Finalise l'arrêt du suivi."""
         self.running = False
-        self.python_logger.info("Suivi arrêté")
+        self.logger.info("Suivi arrêté")
 
         avg_correction = (
             self.total_movement / self.total_corrections
             if self.total_corrections > 0
             else 0.0
         )
-        self.logger.stop_tracking("Manuel")
-        self.python_logger.info(
+        self.tracking_logger.stop_tracking("Manuel")
+        self.logger.info(
             f"Statistiques | Corrections: {self.total_corrections} | "
             f"Mouvement total: {self.total_movement:.1f}° | "
             f"Correction moyenne: {avg_correction:.2f}°"

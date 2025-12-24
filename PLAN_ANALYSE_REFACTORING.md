@@ -307,7 +307,7 @@ class TestIntegrationFlow:
 |---|-------|---------|--------|
 | 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | ✅ 05a067b |
 | 3.2 | Documenter algorithme lissage | `tracker.py` | ✅ 90cbbf4 |
-| 3.3 | Standardiser logging | tous | En attente |
+| 3.3 | Standardiser logging | tous | ✅ Terminé |
 
 ---
 

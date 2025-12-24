@@ -50,7 +50,7 @@ class FeedbackController:
         """
         self.moteur = moteur
         self.daemon_reader = daemon_reader
-        self.logger = logging.getLogger("FeedbackController")
+        self.logger = logging.getLogger(__name__)
         self.stop_requested = False
         self.protection_threshold = (
             protection_threshold if protection_threshold is not None
