@@ -7,9 +7,21 @@ des positions de coupole basées sur les mesures empiriques.
 
 import json
 import pytest
-import numpy as np
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+# Vérifier si numpy est disponible (requis pour tests d'interpolation)
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+    np = None
+
+pytestmark = pytest.mark.skipif(
+    not HAS_NUMPY,
+    reason="Ces tests nécessitent numpy"
+)
 
 
 class TestAbaqueManagerInit:
