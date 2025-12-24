@@ -18,6 +18,7 @@ Date: Décembre 2025
 Version: 4.4 - Refactoring en modules
 """
 
+from collections import deque
 import logging
 import os
 import signal
@@ -97,9 +98,8 @@ class MotorService:
         # État actuel
         self.current_status = self._create_initial_status()
 
-        # Logs de suivi pour l'interface web
-        self.recent_tracking_logs = []
-        self.max_tracking_logs = 20
+        # Logs de suivi pour l'interface web (deque avec taille max automatique)
+        self.recent_tracking_logs = deque(maxlen=20)
 
         mode_str = "SIMULATION" if self.simulation_mode else "PRODUCTION"
         logger.info(f"Motor Service initialisé en mode {mode_str}")
@@ -180,11 +180,8 @@ class MotorService:
             'type': log_type
         }
         self.recent_tracking_logs.append(log_entry)
-
-        if len(self.recent_tracking_logs) > self.max_tracking_logs:
-            self.recent_tracking_logs = self.recent_tracking_logs[-self.max_tracking_logs:]
-
-        self.current_status['tracking_logs'] = self.recent_tracking_logs[-10:]
+        # deque avec maxlen gère automatiquement la taille
+        self.current_status['tracking_logs'] = list(self.recent_tracking_logs)[-10:]
 
     def read_encoder_position(self) -> Optional[float]:
         """Lit la position de l'encodeur."""
