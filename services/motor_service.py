@@ -31,7 +31,7 @@ from typing import Dict, Any, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
-from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
+from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader, get_daemon_reader, set_daemon_reader
 from core.hardware.moteur_simule import MoteurSimule
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
@@ -106,12 +106,15 @@ class MotorService:
         if self.simulation_mode:
             logger.info("MODE SIMULATION ACTIVÉ")
             self.moteur = MoteurSimule(self.config.motor)
+            # Injecter le lecteur simulé comme instance globale
             self.daemon_reader = SimulatedDaemonReader()
+            set_daemon_reader(self.daemon_reader)
             self.feedback_controller = self.moteur
         else:
             logger.info("MODE PRODUCTION - GPIO actif")
             self.moteur = MoteurCoupole(self.config.motor)
-            self.daemon_reader = DaemonEncoderReader()
+            # Réutiliser l'instance globale du lecteur daemon
+            self.daemon_reader = get_daemon_reader()
             self.feedback_controller = FeedbackController(
                 self.moteur, self.daemon_reader
             )
