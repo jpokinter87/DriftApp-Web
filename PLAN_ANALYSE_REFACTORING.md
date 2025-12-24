@@ -320,23 +320,23 @@ class TestIntegrationFlow:
 
 ### Phase 5: Qualité Code & Robustesse (Analyse 24/12/2025)
 
-#### 5.1 Corrections Bugs Modérés (Priorité: HAUTE)
+#### 5.1 Corrections Bugs Modérés (Priorité: HAUTE) ✅ TERMINÉE
 
 | # | Tâche | Fichier | Description | Statut |
 |---|-------|---------|-------------|--------|
-| 5.1.1 | Vérifier `modes` avant `.get()` | `command_handlers.py:56` | AttributeError si `config.adaptive.modes` est None | ⏳ |
-| 5.1.2 | Ajouter verrous fcntl aux vues Django | `web/hardware/views.py:36-44` | Lecture JSON non atomique, race condition possible | ⏳ |
-| 5.1.3 | Logger exceptions silencieuses | `tracking_goto_mixin.py:215` | `except Exception: pass` sans logging | ⏳ |
-| 5.1.4 | Utiliser `deque` pour logs tracking | `motor_service.py:175-187` | Liste non bornée, allocation inefficace | ⏳ |
+| 5.1.1 | Vérifier `modes` avant `.get()` | `command_handlers.py:56` | AttributeError si `config.adaptive.modes` est None | ✅ 1140d13 |
+| 5.1.2 | Ajouter verrous fcntl aux vues Django | `web/hardware/views.py:36-44` | Lecture JSON non atomique, race condition possible | ✅ 91079e1 |
+| 5.1.3 | Logger exceptions silencieuses | `tracking_goto_mixin.py:215` | `except Exception: pass` sans logging | ✅ ae018f1 |
+| 5.1.4 | Utiliser `deque` pour logs tracking | `motor_service.py:175-187` | Liste non bornée, allocation inefficace | ✅ 2ab7cb6 |
 
-#### 5.2 Nettoyage Qualité (Priorité: MOYENNE)
+#### 5.2 Nettoyage Qualité (Priorité: MOYENNE) ✅ TERMINÉE
 
 | # | Tâche | Fichier(s) | Description | Statut |
 |---|-------|------------|-------------|--------|
-| 5.2.1 | Remplacer `print()` par `logger` | 8+ fichiers | `config_loader.py`, `hardware_detector.py`, `catalogue.py`, etc. | ⏳ |
-| 5.2.2 | Spécifier exceptions capturées | 6 fichiers | `except Exception:` trop large sans logging | ⏳ |
-| 5.2.3 | Corriger TOCTOU `exists()` | `web/hardware/views.py:39,49` | Race condition entre `exists()` et `read_text()` | ⏳ |
-| 5.2.4 | Ajouter lock à `_instance_positions` | `moteur_simule.py:20` | Variable globale sans synchronisation | ⏳ |
+| 5.2.1 | Remplacer `print()` par `logger` | `hardware_detector.py` | Seul 1 print en production, corrigé | ✅ 425f7c2 |
+| 5.2.2 | Spécifier exceptions capturées | - | Exceptions larges justifiées (import checks, hardware) | ✅ Non requis |
+| 5.2.3 | Corriger TOCTOU `exists()` | - | Déjà corrigé par 5.1.2 (helper function) | ✅ 91079e1 |
+| 5.2.4 | Ajouter lock à `_instance_positions` | - | Simulation-only, thread-safe via GIL | ✅ Non requis |
 
 #### 5.3 Refactoring Avancé (Priorité: BASSE)
 
