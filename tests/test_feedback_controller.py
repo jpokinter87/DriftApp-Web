@@ -453,8 +453,8 @@ class TestExecuterIteration:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Retourne dict si correction effectuée."""
-        # Position initiale loin de la cible
-        mock_daemon_reader.read_stable.side_effect = [45.0, 90.0]
+        # Position initiale proche de la cible (erreur < 20° pour passer la protection)
+        mock_daemon_reader.read_stable.side_effect = [85.0, 90.0]
 
         result = feedback_controller._executer_iteration(
             angle_cible=90.0,
