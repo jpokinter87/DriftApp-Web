@@ -53,9 +53,10 @@ class GotoHandler:
         """Retourne la vitesse optimale pour les GOTO."""
         if speed is not None:
             return speed
-        continuous = self.config.adaptive.modes.get('continuous')
-        if continuous:
-            return continuous.motor_delay
+        if self.config.adaptive and self.config.adaptive.modes:
+            continuous = self.config.adaptive.modes.get('continuous')
+            if continuous:
+                return continuous.motor_delay
         return 0.00015
 
     def execute(self, angle: float, current_status: Dict[str, Any],
@@ -201,9 +202,10 @@ class JogHandler:
         """Retourne la vitesse optimale pour les JOG."""
         if speed is not None:
             return speed
-        continuous = self.config.adaptive.modes.get('continuous')
-        if continuous:
-            return continuous.motor_delay
+        if self.config.adaptive and self.config.adaptive.modes:
+            continuous = self.config.adaptive.modes.get('continuous')
+            if continuous:
+                return continuous.motor_delay
         return 0.00015
 
     def execute(self, delta: float, current_status: Dict[str, Any],
@@ -264,9 +266,10 @@ class ContinuousHandler:
 
     def _get_continuous_speed(self) -> float:
         """Retourne la vitesse pour les mouvements continus."""
-        continuous = self.config.adaptive.modes.get('continuous')
-        if continuous:
-            return continuous.motor_delay
+        if self.config.adaptive and self.config.adaptive.modes:
+            continuous = self.config.adaptive.modes.get('continuous')
+            if continuous:
+                return continuous.motor_delay
         return 0.00015
 
     def start(self, direction: str, current_status: Dict[str, Any]):
