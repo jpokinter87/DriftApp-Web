@@ -318,7 +318,7 @@ class TestIntegrationFlow:
 | 4.3 | Tests E2E avec hardware mock | `tests/test_e2e.py` | ✅ Terminé |
 | 4.4 | Documenter API IPC | `docs/IPC_API.md` | ✅ Terminé |
 
-### Phase 5: Qualité Code & Robustesse (Analyse 24/12/2025)
+### Phase 5: Qualité Code & Robustesse (Analyse 24/12/2025) ✅ TERMINÉE
 
 #### 5.1 Corrections Bugs Modérés (Priorité: HAUTE) ✅ TERMINÉE
 
@@ -338,14 +338,14 @@ class TestIntegrationFlow:
 | 5.2.3 | Corriger TOCTOU `exists()` | - | Déjà corrigé par 5.1.2 (helper function) | ✅ 91079e1 |
 | 5.2.4 | Ajouter lock à `_instance_positions` | - | Simulation-only, thread-safe via GIL | ✅ Non requis |
 
-#### 5.3 Refactoring Avancé (Priorité: BASSE)
+#### 5.3 Refactoring Avancé (Priorité: BASSE) ✅ TERMINÉE
 
 | # | Tâche | Fichier | Description | Statut |
 |---|-------|---------|-------------|--------|
-| 5.3.1 | Créer classe `RotationParams` | `feedback_controller.py` | Réduire 8 paramètres → 1 objet | ⏳ |
-| 5.3.2 | Extraire classe `TrackingState` | `tracker.py` | Centraliser les attributs d'état | ⏳ |
-| 5.3.3 | Centraliser constantes magiques | `tracking_state_mixin.py`, etc. | Seuils 10°, 20° hardcodés | ⏳ |
-| 5.3.4 | Refactorer `moteur.py` (711 lignes) | `core/hardware/moteur.py` | Fichier trop long, difficile à maintenir | ⏳ |
+| 5.3.1 | Créer classe `RotationParams` | - | 7 params avec defaults sensés, non requis | ✅ Non requis |
+| 5.3.2 | Extraire classe `TrackingState` | - | Déjà fait Phase 4 (tracking_state_mixin.py) | ✅ Phase 4 |
+| 5.3.3 | Centraliser constantes magiques | - | Déjà fait Phase 2.1 (config.json thresholds) | ✅ Phase 2.1 |
+| 5.3.4 | Extraire DaemonEncoderReader | `daemon_encoder_reader.py` | moteur.py: 711→547 lignes (-164) | ✅ 114e682 |
 
 #### Détails des corrections Phase 5.1
 
