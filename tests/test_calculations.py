@@ -9,6 +9,18 @@ import math
 import pytest
 from datetime import datetime, timedelta, timezone
 
+# Vérifier si astropy est disponible (requis pour AstronomicalCalculations)
+try:
+    import astropy
+    HAS_ASTROPY = True
+except ImportError:
+    HAS_ASTROPY = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_ASTROPY,
+    reason="Ces tests nécessitent astropy"
+)
+
 
 class TestAstronomicalCalculationsInit:
     """Tests pour l'initialisation de AstronomicalCalculations."""

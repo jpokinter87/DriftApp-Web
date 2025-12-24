@@ -7,6 +7,18 @@ Ce module teste le système de suivi adaptatif à 3 modes.
 import pytest
 from unittest.mock import MagicMock
 
+# Vérifier si astropy est disponible (requis pour AdaptiveTrackingManager)
+try:
+    import astropy
+    HAS_ASTROPY = True
+except ImportError:
+    HAS_ASTROPY = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_ASTROPY,
+    reason="Ces tests nécessitent astropy"
+)
+
 
 class TestTrackingMode:
     """Tests pour l'enum TrackingMode."""
