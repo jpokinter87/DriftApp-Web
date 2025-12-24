@@ -10,11 +10,13 @@ Fichiers IPC:
 - /dev/shm/ems22_position.json : Position encodeur (daemon externe)
 
 Date: Décembre 2025
-Version: 4.4
+Version: 4.5 - Ajout verrous fcntl pour éviter race conditions
 """
 
+import fcntl
 import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -43,6 +45,9 @@ class IpcManager:
         """
         Lit une commande depuis le fichier IPC.
 
+        Utilise un verrou partagé (LOCK_SH) pour éviter de lire
+        pendant une écriture en cours par Django.
+
         Returns:
             dict: Commande à exécuter ou None si aucune nouvelle commande
         """
@@ -50,7 +55,14 @@ class IpcManager:
             return None
 
         try:
-            text = COMMAND_FILE.read_text()
+            with open(COMMAND_FILE, 'r') as f:
+                # Verrou partagé : plusieurs lecteurs OK, bloque si écriture en cours
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                try:
+                    text = f.read()
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
             if not text.strip():
                 return None
 
@@ -64,7 +76,10 @@ class IpcManager:
             self.last_command_id = cmd_id
             return command
 
-        except (json.JSONDecodeError, IOError) as e:
+        except BlockingIOError:
+            # Fichier verrouillé en écriture, réessayer plus tard
+            return None
+        except (json.JSONDecodeError, IOError, OSError) as e:
             logger.warning(f"Erreur lecture commande: {e}")
             return None
 
@@ -72,30 +87,58 @@ class IpcManager:
         """
         Écrit l'état actuel dans le fichier IPC.
 
+        Utilise un verrou exclusif (LOCK_EX) pour empêcher les lectures
+        pendant l'écriture, puis renomme atomiquement.
+
         Args:
             status: Dictionnaire d'état à écrire
         """
         status['last_update'] = datetime.now().isoformat()
 
         try:
-            # Écriture atomique avec fichier temporaire
             tmp_file = STATUS_FILE.with_suffix('.tmp')
-            tmp_file.write_text(json.dumps(status, indent=2))
+            content = json.dumps(status, indent=2)
+
+            with open(tmp_file, 'w') as f:
+                # Verrou exclusif pendant l'écriture
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    f.write(content)
+                    f.flush()
+                    os.fsync(f.fileno())  # Force l'écriture sur disque
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+            # Renommage atomique (POSIX)
             tmp_file.rename(STATUS_FILE)
-        except IOError as e:
+
+        except (IOError, OSError) as e:
             logger.error(f"Erreur écriture status: {e}")
 
     def clear_command(self):
-        """Efface le fichier de commande après traitement."""
+        """
+        Efface le fichier de commande après traitement.
+
+        Utilise un verrou exclusif pour éviter les conflits.
+        """
         try:
             if COMMAND_FILE.exists():
-                COMMAND_FILE.write_text('')
-        except IOError:
+                with open(COMMAND_FILE, 'w') as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        f.write('')
+                        f.flush()
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        except (IOError, OSError):
             pass
 
     def read_encoder_file(self) -> Optional[Dict[str, Any]]:
         """
         Lit le fichier de position encodeur.
+
+        Utilise un verrou partagé pour éviter de lire pendant
+        une écriture par le daemon encodeur.
 
         Returns:
             dict: Données encodeur ou None si non disponible
@@ -104,10 +147,21 @@ class IpcManager:
             return None
 
         try:
-            text = ENCODER_FILE.read_text()
+            with open(ENCODER_FILE, 'r') as f:
+                # Verrou partagé non-bloquant
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                try:
+                    text = f.read()
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
             if not text.strip():
                 return None
             return json.loads(text)
-        except (json.JSONDecodeError, IOError) as e:
+
+        except BlockingIOError:
+            # Fichier verrouillé, réessayer plus tard
+            return None
+        except (json.JSONDecodeError, IOError, OSError) as e:
             logger.warning(f"Erreur lecture encodeur: {e}")
             return None
