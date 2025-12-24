@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DriftApp - Contrôle Coupole</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251214d">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251223a">
 </head>
 <body>
     <div class="container">
@@ -138,6 +138,47 @@
         </footer>
     </div>
 
-    <script src="/static/js/dashboard.js?v=20251214d"></script>
+    <!-- Modal GOTO Initial -->
+    <div id="goto-modal" class="goto-modal hidden">
+        <div class="goto-modal-content">
+            <div class="goto-modal-header">
+                <span class="goto-icon">🎯</span>
+                <h3>GOTO Initial en cours</h3>
+            </div>
+            <div class="goto-modal-object">
+                <span id="goto-modal-object-name">--</span>
+            </div>
+            <div class="goto-modal-positions">
+                <div class="goto-position goto-start">
+                    <label>Départ</label>
+                    <span id="goto-modal-start">--°</span>
+                </div>
+                <div class="goto-chevrons" id="goto-chevrons">
+                    <span class="chevron">›</span>
+                    <span class="chevron">›</span>
+                    <span class="chevron">›</span>
+                </div>
+                <div class="goto-position goto-end">
+                    <label>Cible</label>
+                    <span id="goto-modal-target">--°</span>
+                </div>
+            </div>
+            <div class="goto-modal-current">
+                <label>Position actuelle</label>
+                <span id="goto-modal-current-pos">--°</span>
+            </div>
+            <div class="goto-modal-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="goto-progress-fill"></div>
+                </div>
+                <span class="progress-text" id="goto-progress-text">0%</span>
+            </div>
+            <div class="goto-modal-delta">
+                Déplacement: <span id="goto-modal-delta">--°</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js?v=20251223a"></script>
 </body>
 </html>

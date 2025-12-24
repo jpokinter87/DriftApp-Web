@@ -852,7 +852,7 @@ body {
     grid-column: span 2;
 }
 
-/* GOTO initial details styling */
+/* GOTO initial details styling (legacy inline display) */
 .goto-details {
     display: block;
     font-size: 0.85rem;
@@ -865,4 +865,312 @@ body {
 @keyframes pulse-goto {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
+}
+
+/* =========================================================================
+   GOTO Modal - Popup avec animation chevrons
+   ========================================================================= */
+
+.goto-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.goto-modal.hidden {
+    display: none;
+}
+
+.goto-modal-content {
+    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+    border: 2px solid var(--accent-orange);
+    border-radius: 16px;
+    padding: 2rem;
+    min-width: 400px;
+    max-width: 90%;
+    box-shadow: 0 0 30px rgba(255, 165, 2, 0.3), 0 0 60px rgba(255, 165, 2, 0.1);
+    animation: modal-appear 0.3s ease-out;
+}
+
+@keyframes modal-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.goto-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.goto-modal-header .goto-icon {
+    font-size: 2rem;
+    animation: icon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes icon-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.goto-modal-header h3 {
+    color: var(--accent-orange);
+    font-size: 1.4rem;
+    margin: 0;
+}
+
+.goto-modal-object {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.goto-modal-object span {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--accent-blue);
+}
+
+/* Positions départ / cible avec chevrons au milieu */
+.goto-modal-positions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+}
+
+.goto-position {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.goto-position label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.goto-position span {
+    font-size: 1.5rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.goto-start span {
+    color: var(--text-secondary);
+}
+
+.goto-end span {
+    color: var(--accent-green);
+}
+
+/* Animation des chevrons */
+.goto-chevrons {
+    display: flex;
+    gap: 0.3rem;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--accent-orange);
+}
+
+.goto-chevrons .chevron {
+    animation: chevron-move-cw 1s ease-in-out infinite;
+    opacity: 0.3;
+}
+
+/* Animation sens horaire (CW) : chevrons vers la droite >>> */
+.goto-chevrons.direction-cw .chevron:nth-child(1) {
+    animation-delay: 0s;
+}
+.goto-chevrons.direction-cw .chevron:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.goto-chevrons.direction-cw .chevron:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes chevron-move-cw {
+    0%, 100% {
+        opacity: 0.3;
+        transform: translateX(0);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(5px);
+    }
+}
+
+/* Animation sens anti-horaire (CCW) : chevrons vers la gauche <<< */
+.goto-chevrons.direction-ccw .chevron {
+    animation: chevron-move-ccw 1s ease-in-out infinite;
+}
+
+.goto-chevrons.direction-ccw .chevron:nth-child(3) {
+    animation-delay: 0s;
+}
+.goto-chevrons.direction-ccw .chevron:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.goto-chevrons.direction-ccw .chevron:nth-child(1) {
+    animation-delay: 0.3s;
+}
+
+@keyframes chevron-move-ccw {
+    0%, 100% {
+        opacity: 0.3;
+        transform: translateX(0);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(-5px);
+    }
+}
+
+/* Position actuelle (grande valeur au centre) */
+.goto-modal-current {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(77, 166, 255, 0.2) 0%, rgba(77, 166, 255, 0.05) 100%);
+    border: 1px solid var(--accent-blue);
+    border-radius: 8px;
+}
+
+.goto-modal-current label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+
+.goto-modal-current span {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--accent-blue);
+    font-family: monospace;
+    text-shadow: 0 0 10px rgba(77, 166, 255, 0.5);
+}
+
+/* Barre de progression */
+.goto-modal-progress {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 12px;
+    background-color: var(--bg-input);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-orange) 0%, var(--accent-green) 100%);
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.3s ease-out;
+}
+
+.progress-text {
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--accent-orange);
+    min-width: 50px;
+    text-align: right;
+}
+
+/* Delta (déplacement total) */
+.goto-modal-delta {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.goto-modal-delta span {
+    color: var(--accent-orange);
+    font-weight: bold;
+    font-family: monospace;
+}
+
+/* Responsive pour petits écrans */
+@media (max-width: 500px) {
+    .goto-modal-content {
+        min-width: 90%;
+        padding: 1.5rem;
+    }
+
+    .goto-modal-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .goto-modal-object span {
+        font-size: 1.3rem;
+    }
+
+    .goto-position span {
+        font-size: 1.2rem;
+    }
+
+    .goto-chevrons {
+        font-size: 1.4rem;
+    }
+
+    .goto-modal-current span {
+        font-size: 2rem;
+    }
+}
+
+@media (max-height: 600px) {
+    .goto-modal-content {
+        padding: 1rem;
+    }
+
+    .goto-modal-header {
+        margin-bottom: 1rem;
+    }
+
+    .goto-modal-object {
+        margin-bottom: 1rem;
+    }
+
+    .goto-modal-positions {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+    }
+
+    .goto-modal-current {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+    }
+
+    .goto-modal-current span {
+        font-size: 2rem;
+    }
 }

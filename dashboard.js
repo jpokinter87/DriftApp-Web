@@ -35,6 +35,10 @@ let timerTotal = 60;  // Valeur par défaut, sera mise à jour selon le mode
 // GOTO Modal state
 let gotoModalVisible = false;
 let gotoStartPosition = null;
+let gotoStartTime = null;  // Timestamp du début du GOTO pour calcul position estimée
+
+// Vitesse CONTINUOUS en degrés/seconde (41°/min selon config.json)
+const CONTINUOUS_SPEED_DEG_PER_SEC = 41.0 / 60;  // ~0.683°/s
 
 // Éléments DOM
 const elements = {
@@ -342,8 +346,9 @@ async function gotoPosition() {
 function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
     if (!elements.gotoModal) return;
 
-    // Mémoriser la position de départ
+    // Mémoriser la position de départ et le timestamp pour le calcul de position estimée
     gotoStartPosition = startPos;
+    gotoStartTime = Date.now();
 
     // Mettre à jour le contenu
     if (elements.gotoModalObjectName) {
@@ -377,6 +382,7 @@ function hideGotoModal() {
     elements.gotoModal.classList.add('hidden');
     gotoModalVisible = false;
     gotoStartPosition = null;
+    gotoStartTime = null;
 }
 
 function updateGotoChevrons(delta) {
@@ -523,39 +529,68 @@ function updatePositionDisplay(encoder) {
 }
 
 // Mise à jour de la modal GOTO
+// IMPORTANT: Utilise une position CALCULÉE à partir de la vitesse CONTINUOUS
+// pour éviter toute lecture d'encodeur qui pourrait causer des micro-coupures moteur
 function updateGotoModal(motor, encoder) {
     const isInitializing = motor.status === 'initializing' && motor.tracking_object;
     const gotoInfo = motor.goto_info;
 
     if (isInitializing && gotoInfo) {
-        // Afficher ou mettre à jour la modal
-        const currentPos = encoder.angle || motor.position || 0;
-
         if (!gotoModalVisible) {
             // Première ouverture de la modal
             showGotoModal(
                 motor.tracking_object,
                 gotoInfo.current_position,  // Position au moment du démarrage
                 gotoInfo.target_position,
-                currentPos,
+                gotoInfo.current_position,  // Position initiale = position de départ
                 gotoInfo.delta
             );
         } else {
-            // Mise à jour en temps réel de la position actuelle
+            // Calculer la position ESTIMÉE à partir du temps écoulé et de la vitesse CONTINUOUS
+            // Cela évite de lire l'encodeur pendant le GOTO (pas de micro-coupures)
+            const estimatedPos = calculateEstimatedPosition(
+                gotoStartPosition || gotoInfo.current_position,
+                gotoInfo.delta,
+                gotoStartTime
+            );
+
+            // Mise à jour en temps réel avec la position calculée
             updateGotoModalPosition(
-                currentPos,
+                estimatedPos,
                 gotoStartPosition || gotoInfo.current_position,
                 gotoInfo.target_position
             );
             // Mettre à jour aussi l'affichage de la position
             if (elements.gotoModalCurrentPos) {
-                elements.gotoModalCurrentPos.textContent = `${currentPos.toFixed(1)}°`;
+                elements.gotoModalCurrentPos.textContent = `${estimatedPos.toFixed(1)}°`;
             }
         }
     } else if (gotoModalVisible) {
         // Le GOTO est terminé, fermer la modal
         hideGotoModal();
     }
+}
+
+// Calcule la position estimée basée sur la vitesse CONTINUOUS (~41°/min)
+// Aucune lecture d'encodeur - calcul purement basé sur le temps écoulé
+function calculateEstimatedPosition(startPos, delta, startTime) {
+    if (!startTime) return startPos;
+
+    const elapsedSeconds = (Date.now() - startTime) / 1000;
+    const distanceTraveled = CONTINUOUS_SPEED_DEG_PER_SEC * elapsedSeconds;
+
+    // Ne pas dépasser la distance totale du GOTO
+    const totalDistance = Math.abs(delta);
+    const clampedDistance = Math.min(distanceTraveled, totalDistance);
+
+    // Calculer la position estimée en tenant compte de la direction
+    const direction = delta >= 0 ? 1 : -1;
+    let estimatedPos = startPos + (direction * clampedDistance);
+
+    // Normaliser entre 0 et 360
+    estimatedPos = ((estimatedPos % 360) + 360) % 360;
+
+    return estimatedPos;
 }
 
 function updateTrackingDisplay(motor) {

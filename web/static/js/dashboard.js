@@ -16,7 +16,8 @@ let state = {
     trackingObject: null,
     searchedObject: null,
     lastUpdate: null,
-    trackingInfo: {}  // Pour position_cible, etc.
+    trackingInfo: {},  // Pour position_cible, etc.
+    gotoInfo: null     // Pour la modal GOTO
 };
 
 // Countdown timer (Correction 1)
@@ -30,6 +31,14 @@ let displayedLogs = new Set();
 // Timer widget (Correction 2)
 let timerCtx = null;
 let timerTotal = 60;  // Valeur par défaut, sera mise à jour selon le mode
+
+// GOTO Modal state
+let gotoModalVisible = false;
+let gotoStartPosition = null;
+let gotoStartTime = null;  // Timestamp du début du GOTO pour calcul position estimée
+
+// Vitesse CONTINUOUS en degrés/seconde (41°/min selon config.json)
+const CONTINUOUS_SPEED_DEG_PER_SEC = 41.0 / 60;  // ~0.683°/s
 
 // Éléments DOM
 const elements = {
@@ -80,7 +89,18 @@ const elements = {
 
     // Logs
     logs: document.getElementById('logs'),
-    lastUpdate: document.getElementById('last-update')
+    lastUpdate: document.getElementById('last-update'),
+
+    // GOTO Modal
+    gotoModal: document.getElementById('goto-modal'),
+    gotoModalObjectName: document.getElementById('goto-modal-object-name'),
+    gotoModalStart: document.getElementById('goto-modal-start'),
+    gotoModalTarget: document.getElementById('goto-modal-target'),
+    gotoModalCurrentPos: document.getElementById('goto-modal-current-pos'),
+    gotoChevrons: document.getElementById('goto-chevrons'),
+    gotoProgressFill: document.getElementById('goto-progress-fill'),
+    gotoProgressText: document.getElementById('goto-progress-text'),
+    gotoModalDelta: document.getElementById('goto-modal-delta')
 };
 
 // État mouvement continu
@@ -248,6 +268,9 @@ async function stopTracking() {
         elements.btnStartTracking.disabled = false;
         elements.btnStopTracking.disabled = true;
         elements.trackingInfo.classList.add('hidden');
+        
+        // Fermer la modal GOTO si ouverte
+        hideGotoModal();
     }
 }
 
@@ -265,6 +288,8 @@ async function stopMotor() {
     await apiCall('/api/hardware/stop/', 'POST');
     // Arrêter aussi le mouvement continu
     stopContinuousMovement();
+    // Fermer la modal GOTO si ouverte
+    hideGotoModal();
 }
 
 // Mouvement continu (toggle)
@@ -315,6 +340,116 @@ async function gotoPosition() {
 }
 
 // =========================================================================
+// GOTO Modal Management
+// =========================================================================
+
+function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
+    if (!elements.gotoModal) return;
+
+    // Mémoriser la position de départ et le timestamp pour le calcul de position estimée
+    gotoStartPosition = startPos;
+    gotoStartTime = Date.now();
+
+    // Mettre à jour le contenu
+    if (elements.gotoModalObjectName) {
+        elements.gotoModalObjectName.textContent = objectName || '--';
+    }
+    if (elements.gotoModalStart) {
+        elements.gotoModalStart.textContent = `${startPos.toFixed(1)}°`;
+    }
+    if (elements.gotoModalTarget) {
+        elements.gotoModalTarget.textContent = `${targetPos.toFixed(1)}°`;
+    }
+    if (elements.gotoModalDelta) {
+        const deltaStr = delta >= 0 ? `+${delta.toFixed(1)}°` : `${delta.toFixed(1)}°`;
+        elements.gotoModalDelta.textContent = deltaStr;
+    }
+
+    // Configurer la direction des chevrons
+    updateGotoChevrons(delta);
+
+    // Mettre à jour la position actuelle
+    updateGotoModalPosition(currentPos, startPos, targetPos);
+
+    // Afficher la modal
+    elements.gotoModal.classList.remove('hidden');
+    gotoModalVisible = true;
+}
+
+function hideGotoModal() {
+    if (!elements.gotoModal) return;
+
+    elements.gotoModal.classList.add('hidden');
+    gotoModalVisible = false;
+    gotoStartPosition = null;
+    gotoStartTime = null;
+}
+
+function updateGotoChevrons(delta) {
+    if (!elements.gotoChevrons) return;
+
+    // Supprimer les classes de direction précédentes
+    elements.gotoChevrons.classList.remove('direction-cw', 'direction-ccw');
+
+    // Mettre à jour le contenu des chevrons selon la direction
+    if (delta >= 0) {
+        // Sens horaire (CW) : ›››
+        elements.gotoChevrons.innerHTML = '<span class="chevron">›</span><span class="chevron">›</span><span class="chevron">›</span>';
+        elements.gotoChevrons.classList.add('direction-cw');
+    } else {
+        // Sens anti-horaire (CCW) : ‹‹‹
+        elements.gotoChevrons.innerHTML = '<span class="chevron">‹</span><span class="chevron">‹</span><span class="chevron">‹</span>';
+        elements.gotoChevrons.classList.add('direction-ccw');
+    }
+}
+
+function updateGotoModalPosition(currentPos, startPos, targetPos) {
+    if (!elements.gotoModalCurrentPos) return;
+
+    // Mettre à jour la position actuelle
+    elements.gotoModalCurrentPos.textContent = `${currentPos.toFixed(1)}°`;
+
+    // Calculer la direction du mouvement (delta signé)
+    let delta = targetPos - startPos;
+    
+    // Gérer le cas où on traverse 0°/360° (prendre le chemin le plus court)
+    if (delta > 180) {
+        delta -= 360;
+    } else if (delta < -180) {
+        delta += 360;
+    }
+    
+    const totalDistance = Math.abs(delta);
+    let traveled;
+    
+    if (delta >= 0) {
+        // Sens horaire : currentPos augmente de startPos vers targetPos
+        traveled = currentPos - startPos;
+        // Gérer le wrap si on traverse 0°
+        if (traveled < 0) traveled += 360;
+        // Ne pas dépasser la distance totale
+        if (traveled > totalDistance) traveled = totalDistance;
+    } else {
+        // Sens anti-horaire : currentPos diminue de startPos vers targetPos
+        traveled = startPos - currentPos;
+        // Gérer le wrap si on traverse 0°
+        if (traveled < 0) traveled += 360;
+        // Ne pas dépasser la distance totale
+        if (traveled > totalDistance) traveled = totalDistance;
+    }
+
+    // Calculer le pourcentage (plafonné à 100%)
+    const progress = Math.min(100, (traveled / totalDistance) * 100);
+
+    if (elements.gotoProgressFill) {
+        elements.gotoProgressFill.style.width = `${progress}%`;
+    }
+    if (elements.gotoProgressText) {
+        elements.gotoProgressText.textContent = `${Math.round(progress)}%`;
+    }
+}
+
+// =========================================================================
 // Polling & Updates
 // =========================================================================
 
@@ -332,11 +467,13 @@ async function updateStatus() {
     state.target = motor.target;
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
+    state.gotoInfo = motor.goto_info || null;
 
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);
     updatePositionDisplay(encoder);
     updateTrackingDisplay(motor);
+    updateGotoModal(motor, encoder);
     drawCompass();
 
     elements.lastUpdate.textContent = `Dernière mise à jour: ${state.lastUpdate.toLocaleTimeString()}`;
@@ -391,6 +528,71 @@ function updatePositionDisplay(encoder) {
     }
 }
 
+// Mise à jour de la modal GOTO
+// IMPORTANT: Utilise une position CALCULÉE à partir de la vitesse CONTINUOUS
+// pour éviter toute lecture d'encodeur qui pourrait causer des micro-coupures moteur
+function updateGotoModal(motor, encoder) {
+    const isInitializing = motor.status === 'initializing' && motor.tracking_object;
+    const gotoInfo = motor.goto_info;
+
+    if (isInitializing && gotoInfo) {
+        if (!gotoModalVisible) {
+            // Première ouverture de la modal
+            showGotoModal(
+                motor.tracking_object,
+                gotoInfo.current_position,  // Position au moment du démarrage
+                gotoInfo.target_position,
+                gotoInfo.current_position,  // Position initiale = position de départ
+                gotoInfo.delta
+            );
+        } else {
+            // Calculer la position ESTIMÉE à partir du temps écoulé et de la vitesse CONTINUOUS
+            // Cela évite de lire l'encodeur pendant le GOTO (pas de micro-coupures)
+            const estimatedPos = calculateEstimatedPosition(
+                gotoStartPosition || gotoInfo.current_position,
+                gotoInfo.delta,
+                gotoStartTime
+            );
+
+            // Mise à jour en temps réel avec la position calculée
+            updateGotoModalPosition(
+                estimatedPos,
+                gotoStartPosition || gotoInfo.current_position,
+                gotoInfo.target_position
+            );
+            // Mettre à jour aussi l'affichage de la position
+            if (elements.gotoModalCurrentPos) {
+                elements.gotoModalCurrentPos.textContent = `${estimatedPos.toFixed(1)}°`;
+            }
+        }
+    } else if (gotoModalVisible) {
+        // Le GOTO est terminé, fermer la modal
+        hideGotoModal();
+    }
+}
+
+// Calcule la position estimée basée sur la vitesse CONTINUOUS (~41°/min)
+// Aucune lecture d'encodeur - calcul purement basé sur le temps écoulé
+function calculateEstimatedPosition(startPos, delta, startTime) {
+    if (!startTime) return startPos;
+
+    const elapsedSeconds = (Date.now() - startTime) / 1000;
+    const distanceTraveled = CONTINUOUS_SPEED_DEG_PER_SEC * elapsedSeconds;
+
+    // Ne pas dépasser la distance totale du GOTO
+    const totalDistance = Math.abs(delta);
+    const clampedDistance = Math.min(distanceTraveled, totalDistance);
+
+    // Calculer la position estimée en tenant compte de la direction
+    const direction = delta >= 0 ? 1 : -1;
+    let estimatedPos = startPos + (direction * clampedDistance);
+
+    // Normaliser entre 0 et 360
+    estimatedPos = ((estimatedPos % 360) + 360) % 360;
+
+    return estimatedPos;
+}
+
 function updateTrackingDisplay(motor) {
     // Afficher le panneau pendant l'initialisation (GOTO initial) OU pendant le tracking actif
     const isInitializing = motor.status === 'initializing' && motor.tracking_object;
@@ -401,21 +603,9 @@ function updateTrackingDisplay(motor) {
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
 
-        // Afficher le nom de l'objet avec indication si GOTO en cours
+        // Afficher le nom de l'objet (simplifié - la modal gère les détails du GOTO)
         if (isInitializing) {
-            // Afficher les détails du GOTO si disponibles
-            const gotoInfo = motor.goto_info;
-            if (gotoInfo) {
-                const current = gotoInfo.current_position.toFixed(1);
-                const target = gotoInfo.target_position.toFixed(1);
-                const delta = gotoInfo.delta >= 0 ? `+${gotoInfo.delta.toFixed(1)}` : gotoInfo.delta.toFixed(1);
-                elements.trackingObject.innerHTML = `
-                    ${motor.tracking_object}<br>
-                    <span class="goto-details">${current}° → ${target}° (${delta}°)</span>
-                `;
-            } else {
-                elements.trackingObject.textContent = `${motor.tracking_object} (GOTO initial...)`;
-            }
+            elements.trackingObject.textContent = `${motor.tracking_object} (GOTO...)`;
         } else {
             elements.trackingObject.textContent = motor.tracking_object;
         }
@@ -553,53 +743,38 @@ function stopCountdown() {
 let compassCtx = null;
 
 function initCompass() {
-    compassCtx = elements.compass.getContext('2d');
-    drawCompass();
+    const canvas = elements.compass;
+    if (canvas) {
+        compassCtx = canvas.getContext('2d');
+        drawCompass();
+    }
 }
 
 function drawCompass() {
-    if (!compassCtx) return;
-
     const canvas = elements.compass;
+    if (!canvas || !compassCtx) return;
+
     const ctx = compassCtx;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const width = canvas.width;
+    const height = canvas.height;
+    const cx = width / 2;
+    const cy = height / 2 - 10;  // Légèrement vers le haut pour laisser place à la légende
     const radius = Math.min(cx, cy) - 20;
 
     // Clear
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, width, height);
 
-    // Fond
+    // Fond de la boussole
     ctx.fillStyle = '#1a1a2e';
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 10, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, radius + 5, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Cercle principal
+    // Cercle extérieur
     ctx.strokeStyle = '#2d4059';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    // =========================================================================
-    // Correction 5: Arc représentant la trappe de la coupole
-    // =========================================================================
-    const OPENING_ANGLE = 40.1;  // degrés (70cm / π×200cm × 360)
-    const domeAngle = state.position;
-
-    // Calculer les limites de l'ouverture
-    const openingStart = domeAngle - OPENING_ANGLE / 2;
-    const openingEnd = domeAngle + OPENING_ANGLE / 2;
-
-    // Arc rouge = portion FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
-    // L'absence d'arc = l'ouverture de la trappe (pas d'arc bleu)
-    ctx.strokeStyle = 'rgba(255, 71, 87, 0.35)';
-    ctx.lineWidth = 12;
-    ctx.beginPath();
-    const closedStartRad = (openingEnd - 90) * Math.PI / 180;
-    const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
-    ctx.arc(cx, cy, radius - 6, closedStartRad, closedEndRad);
     ctx.stroke();
 
     // Graduations
@@ -669,6 +844,9 @@ function drawCompass() {
 
     // Centre avec représentation du télescope (rectangle comme GUI Kivy)
     drawTelescope(ctx, cx, cy, telescopeAngle);
+
+    // Légende en bas
+    drawCompassLegend(ctx, cx, height - 10);
 }
 
 // Dessiner le télescope au centre (tube rectangulaire)
