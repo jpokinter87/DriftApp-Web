@@ -1,0 +1,1176 @@
+/* DriftApp Web - Dashboard Styles */
+
+:root {
+    --bg-dark: #1a1a2e;
+    --bg-panel: #16213e;
+    --bg-input: #0f3460;
+    --text-primary: #e8e8e8;
+    --text-secondary: #a0a0a0;
+    --accent-blue: #4da6ff;
+    --accent-green: #00d26a;
+    --accent-red: #ff4757;
+    --accent-orange: #ffa502;
+    --accent-purple: #a855f7;
+    --border-color: #2d4059;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--bg-panel);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    color: var(--accent-blue);
+}
+
+.header .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.status-indicator {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--text-secondary);
+}
+
+.status-dot.connected {
+    background-color: var(--accent-green);
+}
+
+.status-dot.disconnected {
+    background-color: var(--accent-red);
+}
+
+.status-dot.moving {
+    background-color: var(--accent-orange);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Main content */
+.main-content {
+    display: grid;
+    grid-template-columns: 350px 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Écrans 720p et petits (hauteur < 800px) */
+@media (max-height: 800px) {
+    .container {
+        padding: 0.5rem;
+    }
+
+    .header {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1.2rem;
+    }
+
+    .main-content {
+        grid-template-columns: 280px 1fr;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .compass-section {
+        padding: 0.5rem;
+    }
+
+    .compass-section h2 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    #compass {
+        width: 200px !important;
+        height: 200px !important;
+    }
+
+    .compass-container {
+        margin-bottom: 0.5rem;
+    }
+
+    .timer-widget {
+        width: 70px;
+        height: 70px;
+        margin: 0.5rem auto;
+    }
+
+    #timer-seconds {
+        font-size: 1rem;
+    }
+
+    .position-info {
+        gap: 0.3rem;
+    }
+
+    .position-info .info-item {
+        padding: 0.3rem;
+        font-size: 0.8rem;
+    }
+
+    .control-panel {
+        padding: 0.5rem;
+    }
+
+    .control-panel h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .input-group {
+        margin-bottom: 0.5rem;
+    }
+
+    .input-group input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-jog {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .btn-stop {
+        padding: 0.5rem;
+    }
+
+    .btn-continuous {
+        padding: 0.5rem;
+        font-size: 0.85rem;
+    }
+
+    .tracking-info {
+        padding: 0.5rem;
+    }
+
+    .tracking-info h3 {
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .info-grid, .info-grid-simple {
+        gap: 0.3rem;
+    }
+
+    .info-grid .info-item,
+    .info-grid-simple .info-item {
+        padding: 0.3rem;
+    }
+
+    .info-grid label,
+    .info-grid-simple label {
+        font-size: 0.7rem;
+    }
+
+    .info-grid span,
+    .info-grid-simple span {
+        font-size: 0.85rem;
+    }
+
+    .logs-section {
+        padding: 0.5rem;
+    }
+
+    .logs-section h3 {
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .logs-container {
+        height: 100px;
+        font-size: 0.75rem;
+    }
+
+    .control-section {
+        gap: 0.5rem;
+    }
+
+    .jog-buttons {
+        margin-bottom: 0.5rem;
+    }
+
+    .continuous-buttons {
+        margin-bottom: 0.5rem;
+    }
+
+    .goto-group input {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .object-info {
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.85rem;
+    }
+}
+
+/* Écrans très petits en hauteur (< 650px) - mode ultra-compact */
+@media (max-height: 650px) {
+    .header {
+        padding: 0.3rem 0.5rem;
+    }
+
+    .header h1 {
+        font-size: 1rem;
+    }
+
+    .header .subtitle {
+        display: none;
+    }
+
+    .main-content {
+        grid-template-columns: 240px 1fr;
+    }
+
+    #compass {
+        width: 160px !important;
+        height: 160px !important;
+    }
+
+    .timer-widget {
+        width: 50px;
+        height: 50px;
+        margin: 0.3rem auto;
+    }
+
+    #timer-seconds {
+        font-size: 0.85rem;
+    }
+
+    .logs-container {
+        height: 70px;
+    }
+}
+
+/* Compass section */
+.compass-section {
+    background-color: var(--bg-panel);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.compass-section h2 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--accent-blue);
+}
+
+.compass-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+}
+
+#compass {
+    background-color: var(--bg-dark);
+    border-radius: 50%;
+    border: 2px solid var(--border-color);
+}
+
+.position-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.position-info .info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    background-color: var(--bg-input);
+    border-radius: 4px;
+}
+
+.position-info .info-item:last-child {
+    grid-column: span 2;
+}
+
+.position-info label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.position-info span {
+    font-weight: bold;
+    color: var(--accent-blue);
+}
+
+/* Control section */
+.control-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.control-panel {
+    background-color: var(--bg-panel);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.control-panel h3 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--accent-blue);
+}
+
+/* Input groups */
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+/* Object info */
+.object-info {
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.object-info.hidden {
+    display: none;
+}
+
+/* Buttons */
+.btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: var(--accent-blue);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #3d8fd9;
+}
+
+.btn-secondary {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--border-color);
+}
+
+.btn-danger {
+    background-color: var(--accent-red);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #e8404e;
+}
+
+.button-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.button-group .btn {
+    flex: 1;
+}
+
+/* Tracking info */
+.tracking-info {
+    background-color: var(--bg-panel);
+    border-radius: 8px;
+    padding: 1rem;
+    border: 2px solid var(--accent-green);
+}
+
+.tracking-info.hidden {
+    display: none;
+}
+
+.tracking-info h3 {
+    color: var(--accent-green);
+    margin-bottom: 1rem;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.info-grid .info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    background-color: var(--bg-input);
+    border-radius: 4px;
+}
+
+.info-grid label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.info-grid span {
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+/* Jog buttons */
+.jog-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.btn-jog {
+    flex: 1;
+    padding: 1rem;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-jog:hover {
+    background-color: var(--border-color);
+}
+
+.btn-stop {
+    flex: 1;
+    padding: 1rem;
+    background-color: var(--accent-red);
+    color: white;
+    font-weight: bold;
+}
+
+.btn-stop:hover {
+    background-color: #e8404e;
+}
+
+/* GOTO group */
+.goto-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.goto-group input {
+    flex: 1;
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.goto-group input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+/* Logs section */
+.logs-section {
+    background-color: var(--bg-panel);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.logs-section h3 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--accent-blue);
+}
+
+.logs-container {
+    height: 150px;
+    overflow-y: auto;
+    background-color: var(--bg-dark);
+    border-radius: 4px;
+    padding: 0.5rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.log-entry {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-entry.error {
+    color: var(--accent-red);
+}
+
+.log-entry.success {
+    color: var(--accent-green);
+}
+
+.log-entry.warning {
+    color: var(--accent-orange);
+}
+
+/* Footer */
+.footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* Mode icons */
+.mode-normal { color: var(--accent-green); }
+.mode-critical { color: var(--accent-orange); }
+.mode-continuous { color: var(--accent-red); }
+.mode-fast_track { color: var(--accent-purple); }
+
+/* Timer widget (Correction 2) */
+.timer-widget {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 1rem auto;
+    width: 100px;
+    height: 100px;
+}
+
+.timer-widget.hidden {
+    display: none;
+}
+
+#timer-canvas {
+    background-color: transparent;
+}
+
+#timer-seconds {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--accent-green);
+}
+
+/* Log types pour les corrections */
+.log-entry.correction {
+    color: var(--accent-blue);
+}
+
+.log-entry.tracking {
+    color: var(--accent-green);
+}
+
+/* Cartouches COUPOLE (bleu) et TÉLESCOPE (vert) */
+.coupole-item label {
+    color: var(--accent-blue) !important;
+    font-weight: bold;
+}
+
+.coupole-value {
+    color: var(--accent-blue) !important;
+}
+
+.telescope-item label {
+    color: var(--accent-green) !important;
+    font-weight: bold;
+}
+
+.telescope-value {
+    color: var(--accent-green) !important;
+}
+
+/* Cartouche ENC (encodeur) avec états colorés via bordure */
+.enc-item {
+    border: 3px solid var(--border-color);  /* Bordure par défaut */
+}
+
+.enc-item label {
+    color: var(--text-secondary) !important;
+    font-weight: bold;
+}
+
+#encoder-calibrated {
+    font-weight: bold;
+}
+
+/* États de l'encodeur (bordure épaisse colorée) */
+.enc-item.enc-absent {
+    border-color: #666666 !important;  /* Gris = absent */
+}
+
+.enc-item.enc-absent #encoder-calibrated {
+    color: #666666 !important;
+}
+
+.enc-item.enc-uncalibrated {
+    border-color: #CD853F !important;  /* Marron/Peru = non calibré */
+}
+
+.enc-item.enc-uncalibrated #encoder-calibrated {
+    color: #CD853F !important;
+}
+
+.enc-item.enc-calibrated {
+    border-color: var(--accent-green) !important;  /* Vert = calibré */
+}
+
+.enc-item.enc-calibrated #encoder-calibrated {
+    color: var(--accent-green) !important;
+}
+
+/* Cartouche MODE avec couleur dynamique */
+.mode-item {
+    position: relative;
+}
+
+.mode-item label {
+    font-weight: bold;
+}
+
+.mode-value {
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.mode-value.normal {
+    background-color: var(--accent-green);
+    color: white;
+}
+
+.mode-value.critical {
+    background-color: var(--accent-orange);
+    color: white;
+}
+
+.mode-value.continuous {
+    background-color: var(--accent-red);
+    color: white;
+}
+
+.mode-value.fast_track {
+    background-color: var(--accent-purple);
+    color: white;
+}
+
+/* Cartouche CORRECTIONS - sur une seule ligne */
+.corrections-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.corrections-item label {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+.corrections-left {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.corrections-count {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+.corrections-right {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.corrections-total {
+    color: var(--accent-purple) !important;
+    font-weight: bold;
+}
+
+/* Grille simplifiée pour Suivi Actif */
+.info-grid-simple {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.info-grid-simple .info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 0.5rem;
+    background-color: var(--bg-input);
+    border-radius: 4px;
+}
+
+/* Boutons mouvement continu (toggle) */
+.continuous-buttons {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.btn-continuous {
+    flex: 1;
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.btn-continuous:hover {
+    background-color: var(--border-color);
+}
+
+.btn-continuous.active {
+    background-color: var(--accent-orange);
+    color: white;
+    border-color: var(--accent-orange);
+    animation: pulse-continuous 1s infinite;
+}
+
+@keyframes pulse-continuous {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Effet clignotement vert pour recherche réussie */
+.btn.flash-success,
+.btn-primary.flash-success {
+    animation: flash-green-border 0.5s ease-in-out infinite !important;
+    border: 3px solid var(--accent-green) !important;
+}
+
+@keyframes flash-green-border {
+    0%, 100% {
+        box-shadow: 0 0 8px var(--accent-green), 0 0 15px var(--accent-green) !important;
+        border-color: var(--accent-green) !important;
+    }
+    50% {
+        box-shadow: 0 0 20px var(--accent-green), 0 0 35px var(--accent-green), 0 0 50px rgba(0, 210, 106, 0.5) !important;
+        border-color: white !important;
+    }
+}
+
+/* Position info grid adjustments for 5 items */
+.position-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.position-info .info-item:nth-child(5) {
+    grid-column: span 2;
+}
+
+/* GOTO initial details styling (legacy inline display) */
+.goto-details {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--accent-orange);
+    margin-top: 0.3rem;
+    font-family: monospace;
+    animation: pulse-goto 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-goto {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* =========================================================================
+   GOTO Modal - Popup avec animation chevrons
+   ========================================================================= */
+
+.goto-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+.goto-modal.hidden {
+    display: none;
+}
+
+.goto-modal-content {
+    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+    border: 2px solid var(--accent-orange);
+    border-radius: 16px;
+    padding: 2rem;
+    min-width: 400px;
+    max-width: 90%;
+    box-shadow: 0 0 30px rgba(255, 165, 2, 0.3), 0 0 60px rgba(255, 165, 2, 0.1);
+    animation: modal-appear 0.3s ease-out;
+}
+
+@keyframes modal-appear {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.goto-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.goto-modal-header .goto-icon {
+    font-size: 2rem;
+    animation: icon-pulse 2s ease-in-out infinite;
+}
+
+@keyframes icon-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.goto-modal-header h3 {
+    color: var(--accent-orange);
+    font-size: 1.4rem;
+    margin: 0;
+}
+
+.goto-modal-object {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.goto-modal-object span {
+    font-size: 1.6rem;
+    font-weight: bold;
+    color: var(--accent-blue);
+}
+
+/* Positions départ / cible avec chevrons au milieu */
+.goto-modal-positions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+}
+
+.goto-position {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+}
+
+.goto-position label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.goto-position span {
+    font-size: 1.5rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.goto-start span {
+    color: var(--text-secondary);
+}
+
+.goto-end span {
+    color: var(--accent-green);
+}
+
+/* Animation des chevrons */
+.goto-chevrons {
+    display: flex;
+    gap: 0.3rem;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--accent-orange);
+}
+
+.goto-chevrons .chevron {
+    animation: chevron-move-cw 1s ease-in-out infinite;
+    opacity: 0.3;
+}
+
+/* Animation sens horaire (CW) : chevrons vers la droite >>> */
+.goto-chevrons.direction-cw .chevron:nth-child(1) {
+    animation-delay: 0s;
+}
+.goto-chevrons.direction-cw .chevron:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.goto-chevrons.direction-cw .chevron:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes chevron-move-cw {
+    0%, 100% {
+        opacity: 0.3;
+        transform: translateX(0);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(5px);
+    }
+}
+
+/* Animation sens anti-horaire (CCW) : chevrons vers la gauche <<< */
+.goto-chevrons.direction-ccw .chevron {
+    animation: chevron-move-ccw 1s ease-in-out infinite;
+}
+
+.goto-chevrons.direction-ccw .chevron:nth-child(3) {
+    animation-delay: 0s;
+}
+.goto-chevrons.direction-ccw .chevron:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.goto-chevrons.direction-ccw .chevron:nth-child(1) {
+    animation-delay: 0.3s;
+}
+
+@keyframes chevron-move-ccw {
+    0%, 100% {
+        opacity: 0.3;
+        transform: translateX(0);
+    }
+    50% {
+        opacity: 1;
+        transform: translateX(-5px);
+    }
+}
+
+/* Position actuelle (grande valeur au centre) */
+.goto-modal-current {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(77, 166, 255, 0.2) 0%, rgba(77, 166, 255, 0.05) 100%);
+    border: 1px solid var(--accent-blue);
+    border-radius: 8px;
+}
+
+.goto-modal-current label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+}
+
+.goto-modal-current span {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--accent-blue);
+    font-family: monospace;
+    text-shadow: 0 0 10px rgba(77, 166, 255, 0.5);
+}
+
+/* Barre de progression */
+.goto-modal-progress {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 12px;
+    background-color: var(--bg-input);
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-orange) 0%, var(--accent-green) 100%);
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.3s ease-out;
+}
+
+.progress-text {
+    font-size: 1rem;
+    font-weight: bold;
+    color: var(--accent-orange);
+    min-width: 50px;
+    text-align: right;
+}
+
+/* Delta (déplacement total) */
+.goto-modal-delta {
+    text-align: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.goto-modal-delta span {
+    color: var(--accent-orange);
+    font-weight: bold;
+    font-family: monospace;
+}
+
+/* Responsive pour petits écrans */
+@media (max-width: 500px) {
+    .goto-modal-content {
+        min-width: 90%;
+        padding: 1.5rem;
+    }
+
+    .goto-modal-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .goto-modal-object span {
+        font-size: 1.3rem;
+    }
+
+    .goto-position span {
+        font-size: 1.2rem;
+    }
+
+    .goto-chevrons {
+        font-size: 1.4rem;
+    }
+
+    .goto-modal-current span {
+        font-size: 2rem;
+    }
+}
+
+@media (max-height: 600px) {
+    .goto-modal-content {
+        padding: 1rem;
+    }
+
+    .goto-modal-header {
+        margin-bottom: 1rem;
+    }
+
+    .goto-modal-object {
+        margin-bottom: 1rem;
+    }
+
+    .goto-modal-positions {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+    }
+
+    .goto-modal-current {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+    }
+
+    .goto-modal-current span {
+        font-size: 2rem;
+    }
+}
