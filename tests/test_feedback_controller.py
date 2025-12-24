@@ -272,6 +272,41 @@ class TestRotationAvecFeedback:
         assert result['iterations'] <= 3
         assert result['success'] is False
 
+    def test_rotation_timeout_global(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Le timeout global interrompt la boucle avant max_iterations."""
+        # Position qui ne change jamais (erreur persistante de 5°)
+        mock_daemon_reader.read_stable.return_value = 0.0
+        mock_daemon_reader.read_angle.return_value = 0.0
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=5.0,       # Erreur de 5° (< protection 20°)
+            tolerance=0.1,
+            max_iterations=1000,  # Beaucoup d'itérations
+            max_duration=0.1      # Mais timeout très court (100ms)
+        )
+
+        # Doit s'être arrêté avant les 1000 itérations
+        assert result['iterations'] < 1000
+        assert result['success'] is False
+        assert result['timeout'] is True
+
+    def test_rotation_resultat_contient_timeout_false(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Le résultat contient timeout=False si pas de timeout."""
+        mock_daemon_reader.read_stable.return_value = 45.0
+        mock_daemon_reader.read_angle.return_value = 45.0
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=45.0,
+            tolerance=1.0
+        )
+
+        assert result['success'] is True
+        assert result['timeout'] is False
+
 
 # =============================================================================
 # TESTS ROTATION RELATIVE
