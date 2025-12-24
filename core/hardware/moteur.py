@@ -157,8 +157,49 @@ class DaemonEncoderReader:
         return sum(positions) / len(positions)
 
 
-# Instance globale pour usage statique (compatibilité)
-_daemon_reader = DaemonEncoderReader()
+# Instance globale du lecteur daemon (lazy initialization)
+_daemon_reader: Optional[DaemonEncoderReader] = None
+
+
+def get_daemon_reader() -> DaemonEncoderReader:
+    """
+    Retourne l'instance globale du lecteur daemon.
+
+    Utilise lazy initialization pour créer l'instance à la première utilisation.
+    Permet de partager une seule instance entre tous les composants.
+
+    Returns:
+        DaemonEncoderReader: Instance partagée du lecteur
+    """
+    global _daemon_reader
+    if _daemon_reader is None:
+        _daemon_reader = DaemonEncoderReader()
+    return _daemon_reader
+
+
+def set_daemon_reader(reader: DaemonEncoderReader):
+    """
+    Injecte un lecteur daemon personnalisé.
+
+    Utilisé pour les tests (injection de mock) ou pour
+    remplacer le lecteur par défaut.
+
+    Args:
+        reader: Instance de DaemonEncoderReader à utiliser
+    """
+    global _daemon_reader
+    _daemon_reader = reader
+
+
+def reset_daemon_reader():
+    """
+    Réinitialise le lecteur daemon à None.
+
+    Utilisé dans les tests pour garantir l'isolation.
+    """
+    global _daemon_reader
+    _daemon_reader = None
+
 
 # Tentative d'import des bibliothèques GPIO
 GPIO_LIB = None
@@ -404,7 +445,7 @@ class MoteurCoupole:
         Raises:
             RuntimeError: Si le démon n'est pas accessible
         """
-        return _daemon_reader.read_angle(timeout_ms)
+        return get_daemon_reader().read_angle(timeout_ms)
 
     @staticmethod
     def get_daemon_status() -> Optional[dict]:
@@ -415,7 +456,7 @@ class MoteurCoupole:
             dict: Statut complet du démon (angle, calibrated, status, etc.)
             None si le démon n'est pas accessible
         """
-        return _daemon_reader.read_status()
+        return get_daemon_reader().read_status()
 
     # =========================================================================
     # CONTRÔLE D'ARRÊT
@@ -596,7 +637,7 @@ class MoteurCoupole:
             FeedbackController: Contrôleur de feedback configuré
         """
         from core.hardware.feedback_controller import FeedbackController
-        return FeedbackController(self, _daemon_reader)
+        return FeedbackController(self, get_daemon_reader())
 
     def rotation_avec_feedback(
         self,

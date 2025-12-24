@@ -186,12 +186,15 @@ def reset_simulation_state():
     Reset automatique de l'état de simulation avant chaque test.
 
     Garantit l'isolation des tests en remettant toutes les positions
-    simulées à zéro avant et après chaque test.
+    simulées à zéro et en réinitialisant le lecteur daemon global.
     """
     from core.hardware.moteur_simule import reset_all_simulated_positions
+    from core.hardware.moteur import reset_daemon_reader
     reset_all_simulated_positions()
+    reset_daemon_reader()
     yield
     reset_all_simulated_positions()
+    reset_daemon_reader()
 
 
 # =============================================================================
