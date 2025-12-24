@@ -134,7 +134,8 @@ class FeedbackController:
     def _creer_resultat(self, success: bool, position_initiale: float,
                         position_finale: float, angle_cible: float,
                         erreur_finale: float, iterations: int,
-                        corrections: list, temps_total: float) -> Dict[str, Any]:
+                        corrections: list, temps_total: float,
+                        timeout: bool = False) -> Dict[str, Any]:
         """Crée le résultat final de la rotation."""
         return {
             'success': success,
@@ -145,7 +146,8 @@ class FeedbackController:
             'iterations': iterations,
             'corrections': corrections,
             'temps_total': temps_total,
-            'mode': 'feedback_daemon'
+            'mode': 'feedback_daemon',
+            'timeout': timeout
         }
 
     # =========================================================================
@@ -319,7 +321,8 @@ class FeedbackController:
         tolerance: float = 0.5,
         max_iterations: int = 10,
         max_correction_par_iteration: float = 180.0,
-        allow_large_movement: bool = False
+        allow_large_movement: bool = False,
+        max_duration: float = 60.0
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -333,9 +336,12 @@ class FeedbackController:
                                           180° = mouvement continu sans interruption
             allow_large_movement: Si True, autorise les grands mouvements (> 20°)
                                   Utilisé pour GOTO initial après calibration
+            max_duration: Durée maximale totale en secondes (défaut 60s)
+                         Protection contre encodeur erratique
 
         Returns:
             dict: Statistiques du mouvement (success, positions, erreur, etc.)
+                  Contient 'timeout': True si durée dépassée
         """
         start_time = time.time()
         self.clear_stop_request()
@@ -357,8 +363,19 @@ class FeedbackController:
         # Boucle de correction
         corrections = []
         iteration = 0
+        timeout_reached = False
 
         while iteration < max_iterations:
+            # Vérification timeout global
+            elapsed = time.time() - start_time
+            if elapsed > max_duration:
+                self.logger.warning(
+                    f"⚠️ Timeout global atteint ({elapsed:.1f}s > {max_duration}s) - "
+                    f"abandon après {iteration} itérations"
+                )
+                timeout_reached = True
+                break
+
             if self.stop_requested:
                 self.logger.info("Arrêt demandé, abandon de la correction")
                 break
@@ -386,7 +403,8 @@ class FeedbackController:
 
         erreur_finale = self._calculer_delta_angulaire(position_finale, angle_cible)
         temps_total = time.time() - start_time
-        success = abs(erreur_finale) < tolerance
+        # Success si erreur < tolerance ET pas de timeout
+        success = abs(erreur_finale) < tolerance and not timeout_reached
 
         self._log_resultat_final(
             success, position_initiale, position_finale,
@@ -395,7 +413,8 @@ class FeedbackController:
 
         return self._creer_resultat(
             success, position_initiale, position_finale, angle_cible,
-            erreur_finale, iteration, corrections, temps_total
+            erreur_finale, iteration, corrections, temps_total,
+            timeout=timeout_reached
         )
 
     def rotation_relative_avec_feedback(
