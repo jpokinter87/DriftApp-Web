@@ -233,35 +233,31 @@ class TestMoteurCoupoleConfig:
 
     def test_valider_config_steps_invalide(self, mock_lgpio):
         """Lève une erreur si steps_per_revolution invalide."""
-        with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
-                from core.hardware.moteur import MoteurCoupole
+        from core.hardware.motor_config_parser import MotorParams, validate_motor_params
 
-                moteur = object.__new__(MoteurCoupole)
-                moteur.logger = MagicMock()
-                moteur.STEPS_PER_REV = 0
-                moteur.MICROSTEPS = 4
-                moteur.gear_ratio = 2230.0
-                moteur.steps_correction_factor = 1.0
+        params = MotorParams(
+            steps_per_revolution=0,  # Invalide
+            microsteps=4,
+            gear_ratio=2230.0,
+            steps_correction_factor=1.0
+        )
 
-                with pytest.raises(ValueError, match="steps_per_revolution"):
-                    moteur._valider_config()
+        with pytest.raises(ValueError, match="steps_per_revolution"):
+            validate_motor_params(params)
 
     def test_valider_config_microsteps_invalide(self, mock_lgpio):
         """Lève une erreur si microsteps invalide."""
-        with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
-                from core.hardware.moteur import MoteurCoupole
+        from core.hardware.motor_config_parser import MotorParams, validate_motor_params
 
-                moteur = object.__new__(MoteurCoupole)
-                moteur.logger = MagicMock()
-                moteur.STEPS_PER_REV = 200
-                moteur.MICROSTEPS = 5  # Invalide
-                moteur.gear_ratio = 2230.0
-                moteur.steps_correction_factor = 1.0
+        params = MotorParams(
+            steps_per_revolution=200,
+            microsteps=5,  # Invalide
+            gear_ratio=2230.0,
+            steps_correction_factor=1.0
+        )
 
-                with pytest.raises(ValueError, match="microsteps"):
-                    moteur._valider_config()
+        with pytest.raises(ValueError, match="microsteps"):
+            validate_motor_params(params)
 
     def test_calculer_steps_par_tour(self, mock_lgpio):
         """Calcul correct du nombre de pas par tour."""

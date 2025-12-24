@@ -264,38 +264,22 @@ class MoteurCoupole:
         self.gpio_lib = GPIO_LIB
 
     def _charger_config(self, config_moteur):
-        """Extrait les paramètres depuis dict ou dataclass."""
-        if hasattr(config_moteur, 'gpio_pins'):
-            # Nouvelle dataclass
-            self.DIR = config_moteur.gpio_pins.dir
-            self.STEP = config_moteur.gpio_pins.step
-            self.STEPS_PER_REV = config_moteur.steps_per_revolution
-            self.MICROSTEPS = config_moteur.microsteps
-            self.gear_ratio = config_moteur.gear_ratio
-            self.steps_correction_factor = config_moteur.steps_correction_factor
-        else:
-            # Ancien dict (compatibilité)
-            gpio_pins = config_moteur['gpio_pins']
-            self.DIR = gpio_pins['dir']
-            self.STEP = gpio_pins['step']
-            self.STEPS_PER_REV = config_moteur['steps_per_revolution']
-            self.MICROSTEPS = config_moteur['microsteps']
-            self.gear_ratio = config_moteur['gear_ratio']
-            self.steps_correction_factor = config_moteur['steps_correction_factor']
+        """Extrait les paramètres depuis dict ou dataclass via parser centralisé."""
+        from core.hardware.motor_config_parser import parse_motor_config, validate_motor_params
+
+        params = parse_motor_config(config_moteur)
+        validate_motor_params(params)
+
+        self.DIR = params.dir_pin
+        self.STEP = params.step_pin
+        self.STEPS_PER_REV = params.steps_per_revolution
+        self.MICROSTEPS = params.microsteps
+        self.gear_ratio = params.gear_ratio
+        self.steps_correction_factor = params.steps_correction_factor
 
     def _valider_config(self):
-        """Valide les valeurs de configuration."""
-        if self.STEPS_PER_REV is None or self.STEPS_PER_REV <= 0:
-            raise ValueError(f"steps_per_revolution invalide: {self.STEPS_PER_REV}")
-
-        if self.MICROSTEPS is None or self.MICROSTEPS not in [1, 2, 4, 8, 16, 32]:
-            raise ValueError(f"microsteps invalide: {self.MICROSTEPS}")
-
-        if self.gear_ratio is None or self.gear_ratio <= 0:
-            raise ValueError(f"gear_ratio doit être > 0 (reçu: {self.gear_ratio})")
-
-        if self.steps_correction_factor is None or self.steps_correction_factor <= 0:
-            raise ValueError("steps_correction_factor doit être > 0")
+        """Validation déjà effectuée par motor_config_parser."""
+        pass  # Conservé pour compatibilité API, validation dans _charger_config
 
     def _calculer_steps_par_tour(self):
         """Calcule le nombre de pas par tour de coupole."""

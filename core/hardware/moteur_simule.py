@@ -73,25 +73,15 @@ class MoteurSimule:
 
         if config_moteur:
             if hasattr(config_moteur, 'steps_per_dome_revolution'):
+                # Déjà un MotorParams ou objet avec propriété calculée
                 self.steps_per_dome_revolution = config_moteur.steps_per_dome_revolution
-            elif hasattr(config_moteur, 'steps_per_revolution'):
-                # Dataclass
-                self.steps_per_dome_revolution = int(
-                    config_moteur.steps_per_revolution *
-                    config_moteur.microsteps *
-                    config_moteur.gear_ratio *
-                    config_moteur.steps_correction_factor
-                )
             else:
-                # Dict
-                self.steps_per_dome_revolution = int(
-                    config_moteur['steps_per_revolution'] *
-                    config_moteur['microsteps'] *
-                    config_moteur['gear_ratio'] *
-                    config_moteur['steps_correction_factor']
-                )
+                # Utiliser le parser centralisé (dict ou dataclass)
+                from core.hardware.motor_config_parser import parse_motor_config
+                params = parse_motor_config(config_moteur)
+                self.steps_per_dome_revolution = params.steps_per_dome_revolution
         else:
-            self.steps_per_dome_revolution = 1941866  # Valeur calculée
+            self.steps_per_dome_revolution = 1941866  # Valeur par défaut
 
         # Initialiser la position de cette instance à la position globale actuelle
         # (pour compatibilité avec les handlers qui utilisent set_simulated_position)
