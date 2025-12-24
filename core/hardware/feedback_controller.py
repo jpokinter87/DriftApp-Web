@@ -30,18 +30,32 @@ class FeedbackController:
         result = feedback.rotation_avec_feedback(angle_cible=45.0)
     """
 
-    def __init__(self, moteur: 'MoteurCoupole', daemon_reader: 'DaemonEncoderReader'):
+    # Seuil par défaut pour la protection contre mouvements anormaux
+    DEFAULT_PROTECTION_THRESHOLD = 20.0
+
+    def __init__(
+        self,
+        moteur: 'MoteurCoupole',
+        daemon_reader: 'DaemonEncoderReader',
+        protection_threshold: Optional[float] = None
+    ):
         """
         Initialise le contrôleur de feedback.
 
         Args:
             moteur: Instance de MoteurCoupole pour le contrôle moteur
             daemon_reader: Instance de DaemonEncoderReader pour la lecture position
+            protection_threshold: Seuil de protection contre mouvements anormaux (°)
+                                  Si non fourni, utilise DEFAULT_PROTECTION_THRESHOLD (20.0°)
         """
         self.moteur = moteur
         self.daemon_reader = daemon_reader
         self.logger = logging.getLogger("FeedbackController")
         self.stop_requested = False
+        self.protection_threshold = (
+            protection_threshold if protection_threshold is not None
+            else self.DEFAULT_PROTECTION_THRESHOLD
+        )
 
     # =========================================================================
     # CONTRÔLE D'ARRÊT
@@ -262,9 +276,9 @@ class FeedbackController:
             self.logger.debug(f"  Objectif atteint ! Erreur={erreur:+.2f}°")
             return None
 
-        # PROTECTION: Si l'erreur est trop grande (> 20°), quelque chose ne va pas
+        # PROTECTION: Si l'erreur est trop grande, quelque chose ne va pas
         # Sauf si allow_large_movement=True (GOTO initial)
-        if abs(erreur) > 20.0 and not allow_large_movement:
+        if abs(erreur) > self.protection_threshold and not allow_large_movement:
             self.logger.warning(
                 f"  ⚠️ Erreur anormalement grande ({erreur:+.1f}°) - abandon correction"
             )

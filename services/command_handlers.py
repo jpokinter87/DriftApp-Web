@@ -25,9 +25,6 @@ from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
 from core.utils.angle_utils import shortest_angular_distance
 
-# Seuil pour utiliser le feedback (degrés)
-SEUIL_FEEDBACK_DEG = 3.0
-
 logger = logging.getLogger("CommandHandlers")
 
 
@@ -92,7 +89,10 @@ class GotoHandler:
 
             delta = shortest_angular_distance(current_pos, angle)
 
-            if abs(delta) > SEUIL_FEEDBACK_DEG:
+            # Seuil depuis config centralisée (feedback_min_deg)
+            seuil_feedback = self.config.thresholds.feedback_min_deg
+
+            if abs(delta) > seuil_feedback:
                 # GRAND DÉPLACEMENT: Rotation directe + correction finale
                 current_status = self._execute_large_goto(
                     angle, delta, speed, current_status
@@ -122,16 +122,17 @@ class GotoHandler:
         self.moteur.rotation(delta, vitesse=speed)
 
         # 2. Correction finale avec feedback
+        tolerance = self.config.thresholds.default_tolerance_deg
         if self.daemon_reader.is_available():
             pos_apres_rotation = self.daemon_reader.read_angle(timeout_ms=200)
             erreur = shortest_angular_distance(pos_apres_rotation, angle)
 
-            if abs(erreur) > 0.5:
+            if abs(erreur) > tolerance:
                 logger.info(f"Correction finale: erreur={erreur:+.2f}°")
                 result = self.feedback_controller.rotation_avec_feedback(
                     angle_cible=angle,
                     vitesse=speed,
-                    tolerance=0.5,
+                    tolerance=tolerance,
                     max_iterations=3
                 )
                 status['position'] = result['position_finale']
@@ -152,12 +153,13 @@ class GotoHandler:
 
     def _execute_small_goto(self, angle: float, delta: float, speed: float,
                             status: Dict[str, Any]) -> Dict[str, Any]:
-        """Exécute un petit déplacement (≤ 3°)."""
+        """Exécute un petit déplacement (≤ seuil feedback)."""
+        tolerance = self.config.thresholds.default_tolerance_deg
         if self.daemon_reader.is_available():
             result = self.feedback_controller.rotation_avec_feedback(
                 angle_cible=angle,
                 vitesse=speed,
-                tolerance=0.5,
+                tolerance=tolerance,
                 max_iterations=10,
                 max_correction_par_iteration=180.0
             )

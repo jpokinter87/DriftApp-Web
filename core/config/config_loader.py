@@ -155,6 +155,15 @@ class AdaptiveConfig:
 
 
 @dataclass
+class ThresholdsConfig:
+    """Seuils de mouvement centralisés (remplace les constantes magiques)."""
+    feedback_min_deg: float      # Delta min pour feedback (en-dessous = rotation directe)
+    large_movement_deg: float    # Au-delà = mode CONTINUOUS/FAST_TRACK
+    feedback_protection_deg: float  # Protection contre mouvements anormaux
+    default_tolerance_deg: float    # Tolérance par défaut pour feedback
+
+
+@dataclass
 class EncoderSPIConfig:
     """Configuration SPI de l'encodeur."""
     bus: int
@@ -184,10 +193,10 @@ class EncoderConfig:
 class DriftAppConfig:
     """
     Configuration complète de DriftApp.
-    
+
     Cette classe unique remplace le tuple de 12 valeurs retourné par
     l'ancienne fonction load_site_config().
-    
+
     Usage:
         config = load_config()
         moteur = MoteurCoupole(config.motor)
@@ -198,6 +207,7 @@ class DriftAppConfig:
     tracking: TrackingConfig
     adaptive: AdaptiveConfig
     encoder: EncoderConfig
+    thresholds: ThresholdsConfig
     simulation: bool
 
     def __str__(self) -> str:
@@ -261,6 +271,7 @@ class ConfigLoader:
             tracking=self._parse_tracking(),
             adaptive=self._parse_adaptive(),
             encoder=self._parse_encoder(),
+            thresholds=self._parse_thresholds(),
             simulation=bool(self.cfg.get("simulation", False))
         )
 
@@ -380,6 +391,16 @@ class ConfigLoader:
                 counts_per_rev=int(meca.get("counts_per_rev", 1024))
             ),
             calibration_factor=float(c.get("calibration_factor", 0.031354))
+        )
+
+    def _parse_thresholds(self) -> ThresholdsConfig:
+        """Parse la section thresholds (seuils de mouvement centralisés)."""
+        c = self.cfg.get("thresholds", {})
+        return ThresholdsConfig(
+            feedback_min_deg=float(c.get("feedback_min_deg", 3.0)),
+            large_movement_deg=float(c.get("large_movement_deg", 30.0)),
+            feedback_protection_deg=float(c.get("feedback_protection_deg", 20.0)),
+            default_tolerance_deg=float(c.get("default_tolerance_deg", 0.5))
         )
 
     def _log_summary(self, config: DriftAppConfig):

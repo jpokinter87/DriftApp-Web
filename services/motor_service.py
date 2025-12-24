@@ -116,7 +116,8 @@ class MotorService:
             # Réutiliser l'instance globale du lecteur daemon
             self.daemon_reader = get_daemon_reader()
             self.feedback_controller = FeedbackController(
-                self.moteur, self.daemon_reader
+                self.moteur, self.daemon_reader,
+                protection_threshold=self.config.thresholds.feedback_protection_deg
             )
 
     def _init_managers(self):
