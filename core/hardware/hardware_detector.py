@@ -5,11 +5,14 @@ VERSION DAEMON : Détecte le démon encodeur au lieu du singleton.
 
 import fcntl
 import json
+import logging
 import platform
 import subprocess
 import time
 from pathlib import Path
 from typing import Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class HardwareDetector:
@@ -388,7 +391,7 @@ class HardwareDetector:
 
             return True
         except Exception as e:
-            print(f"Erreur sauvegarde: {e}")
+            logger.error(f"Erreur sauvegarde rapport: {e}")
             return False
 
 
