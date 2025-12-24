@@ -69,6 +69,9 @@ class MotorService:
     - Le feedback encodeur en boucle fermée
     """
 
+    # Durée après laquelle un état 'error' est automatiquement remis à 'idle'
+    ERROR_RECOVERY_TIMEOUT = 10.0  # secondes
+
     def __init__(self):
         """Initialise le service moteur."""
         self.running = False
@@ -190,6 +193,31 @@ class MotorService:
         except RuntimeError:
             return None
 
+    def _check_error_recovery(self):
+        """
+        Vérifie si un état 'error' doit être remis à 'idle'.
+
+        Si le statut est 'error' depuis plus de ERROR_RECOVERY_TIMEOUT secondes,
+        remet automatiquement le statut à 'idle' pour permettre de nouvelles commandes.
+        """
+        if self.current_status.get('status') != 'error':
+            return
+
+        error_timestamp = self.current_status.get('error_timestamp')
+        if error_timestamp is None:
+            return
+
+        elapsed = time.time() - error_timestamp
+        if elapsed > self.ERROR_RECOVERY_TIMEOUT:
+            logger.info(
+                f"Recovery automatique après erreur "
+                f"({elapsed:.1f}s > {self.ERROR_RECOVERY_TIMEOUT}s)"
+            )
+            self.current_status['status'] = 'idle'
+            self.current_status['error'] = None
+            self.current_status['error_timestamp'] = None
+            self._write_status()
+
     # =========================================================================
     # COMMANDES
     # =========================================================================
@@ -282,6 +310,9 @@ class MotorService:
 
         while self.running:
             try:
+                # Vérifier si recovery automatique d'erreur nécessaire
+                self._check_error_recovery()
+
                 # Lire et traiter les commandes
                 command = self.ipc.read_command()
                 if command:

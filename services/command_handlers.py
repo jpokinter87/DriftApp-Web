@@ -107,6 +107,7 @@ class GotoHandler:
             logger.error(f"Erreur GOTO: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
+            current_status['error_timestamp'] = time.time()
 
         current_status['target'] = None
         self.status_callback(current_status)
@@ -242,6 +243,7 @@ class JogHandler:
             logger.error(f"Erreur JOG: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
+            current_status['error_timestamp'] = time.time()
 
         self.status_callback(current_status)
         return current_status
