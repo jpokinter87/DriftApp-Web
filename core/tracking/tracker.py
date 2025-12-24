@@ -157,10 +157,11 @@ class TrackingSession:
         # Indicateur de grand déplacement (basculement méridien ou GOTO)
         self.is_large_movement_in_progress = False
 
-        # Cache position cible pour éviter oscillations UI
-        # La position cible est lissée pour éviter les sauts visuels
+        # Lissage position cible (voir _smooth_position_cible pour algorithme détaillé)
+        # - _cached_position_cible: dernière valeur lissée retournée
+        # - _position_cible_history: fenêtre glissante pour moyenne circulaire
         self._cached_position_cible = None
-        self._position_cible_history = deque(maxlen=5)  # Moyenne glissante sur 5 valeurs
+        self._position_cible_history = deque(maxlen=5)
 
     def _init_statistics(self, motor_config):
         """Initialise les statistiques et paramètres de correction."""
@@ -606,14 +607,49 @@ class TrackingSession:
         """
         Lisse la position cible pour éviter les oscillations visuelles dans l'UI.
 
-        Utilise une moyenne glissante avec gestion de la circularité des angles.
-        Si le saut est trop grand (>10°), réinitialise l'historique.
+        ALGORITHME DE LISSAGE PAR MOYENNE CIRCULAIRE
+        ============================================
+
+        Problème résolu:
+            L'abaque retourne des positions qui peuvent osciller légèrement
+            (±0.5°) entre deux appels consécutifs, causant un "tremblement"
+            visuel de l'affichage dans l'interface web.
+
+        Solution:
+            Moyenne glissante sur les 5 dernières valeurs avec:
+            1. Gestion de la circularité (359° → 1° = +2°, pas -358°)
+            2. Reset automatique si saut > 10° (changement réel, pas du bruit)
+            3. Moyenne circulaire via atan2(Σsin, Σcos)
+
+        Fonctionnement:
+            1. Normaliser l'angle dans [0, 360[
+            2. Si première valeur → initialiser et retourner
+            3. Calculer delta circulaire avec la valeur cachée
+            4. Si |delta| > 10° → reset historique (mouvement réel)
+            5. Sinon → ajouter à l'historique et calculer moyenne circulaire
+
+        Moyenne circulaire (angles):
+            - Convertir chaque angle θ en vecteur unitaire (cos θ, sin θ)
+            - Sommer les composantes: (Σcos θ, Σsin θ)
+            - L'angle moyen = atan2(Σsin, Σcos)
+            Cette méthode évite le problème de la moyenne arithmétique
+            qui donnerait 180° pour [1°, 359°] au lieu de 0°.
+
+        Paramètres:
+            - Fenêtre: 5 valeurs (compromis réactivité/stabilité)
+            - Seuil reset: 10° (au-delà = mouvement volontaire)
 
         Args:
-            new_position: Nouvelle position cible calculée par l'abaque
+            new_position: Nouvelle position cible calculée par l'abaque (degrés)
 
         Returns:
-            Position lissée (0-360°)
+            Position lissée dans l'intervalle [0, 360[
+
+        Example:
+            >>> history = [44.5, 45.0, 44.8, 45.2, 44.9]  # oscillations ±0.5°
+            >>> _smooth_position_cible(45.1)  # → ~44.9° (lissé)
+            >>> # Saut important:
+            >>> _smooth_position_cible(180.0)  # → 180.0° (reset, pas de lissage)
         """
         new_position = new_position % 360
 

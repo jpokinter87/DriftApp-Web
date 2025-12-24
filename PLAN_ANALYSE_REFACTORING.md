@@ -305,8 +305,8 @@ class TestIntegrationFlow:
 
 | # | Tâche | Fichier | Statut |
 |---|-------|---------|--------|
-| 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | ✅ Terminé |
-| 3.2 | Documenter algorithme lissage | `tracker.py` | En attente |
+| 3.1 | Tests d'intégration IPC | `tests/test_integration.py` | ✅ 05a067b |
+| 3.2 | Documenter algorithme lissage | `tracker.py` | ✅ 90cbbf4 |
 | 3.3 | Standardiser logging | tous | En attente |
 
 ---
