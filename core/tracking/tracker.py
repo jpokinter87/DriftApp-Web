@@ -764,10 +764,37 @@ class TrackingSession:
             self._finaliser_correction(delta_deg, position_cible_logique)
             self._traiter_resultat_feedback(result, duration)
 
-        except Exception as e:
-            self.python_logger.error(f"Erreur correction feedback: {e}")
-            self.python_logger.error("Traceback:", exc_info=True)
+        except (RuntimeError, IOError, OSError) as e:
+            # Erreurs de communication avec l'encodeur - fallback légitime
+            self.python_logger.warning(
+                f"Encodeur indisponible, fallback sans feedback: {e}"
+            )
+            self._notify_degraded_mode()
             self._apply_correction_sans_feedback(delta_deg, motor_delay)
+
+        except (KeyboardInterrupt, SystemExit):
+            # Ne pas capturer - laisser remonter pour arrêt propre
+            raise
+
+        except Exception as e:
+            # Erreur inattendue - logger ET remonter (ne pas masquer)
+            self.python_logger.error(
+                f"Erreur critique dans correction feedback: {e}",
+                exc_info=True
+            )
+            raise
+
+    def _notify_degraded_mode(self):
+        """Notifie l'utilisateur que le système fonctionne en mode dégradé."""
+        if not hasattr(self, '_degraded_mode_notified'):
+            self._degraded_mode_notified = False
+
+        if not self._degraded_mode_notified:
+            self.log_to_web(
+                "Mode dégradé: correction sans feedback encodeur",
+                "warning"
+            )
+            self._degraded_mode_notified = True
 
     def _calculer_cibles(self, delta_deg: float) -> tuple:
         """Calcule les positions cibles logique et encodeur."""
