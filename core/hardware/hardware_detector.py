@@ -3,12 +3,13 @@ Module de détection automatique du matériel (Raspberry Pi, démon encodeur, mo
 VERSION DAEMON : Détecte le démon encodeur au lieu du singleton.
 """
 
+import fcntl
+import json
 import platform
 import subprocess
+import time
 from pathlib import Path
 from typing import Tuple, Optional
-import json
-import time
 
 
 class HardwareDetector:
@@ -120,10 +121,14 @@ class HardwareDetector:
             return False, "Démon encodeur non actif (fichier JSON absent)", None
         
         try:
-            # Lire le fichier JSON
+            # Lire le fichier JSON avec verrou fcntl
             with open(daemon_json, "r") as f:
-                data = json.load(f)
-            
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
+                try:
+                    data = json.load(f)
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
             # Vérifier le statut
             status = data.get("status", "UNKNOWN")
             angle = data.get("angle", None)
@@ -142,6 +147,8 @@ class HardwareDetector:
             else:
                 return False, f"Démon encodeur en erreur: {status}", angle if angle else None
                 
+        except BlockingIOError:
+            return False, "Fichier démon verrouillé, réessayer", None
         except json.JSONDecodeError as e:
             return False, f"Erreur lecture JSON démon: {str(e)}", None
         except Exception as e:
