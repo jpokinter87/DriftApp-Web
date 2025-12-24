@@ -9,6 +9,18 @@ from datetime import datetime, timezone
 from collections import deque
 from unittest.mock import MagicMock, patch, PropertyMock
 
+# Vérifier si astropy est disponible (requis pour TrackingSession)
+try:
+    import astropy
+    HAS_ASTROPY = True
+except ImportError:
+    HAS_ASTROPY = False
+
+pytestmark = pytest.mark.skipif(
+    not HAS_ASTROPY,
+    reason="Ces tests nécessitent astropy"
+)
+
 
 # =============================================================================
 # FIXTURES
