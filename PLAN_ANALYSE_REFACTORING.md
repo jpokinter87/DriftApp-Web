@@ -397,6 +397,74 @@ from collections import deque
 self.recent_tracking_logs = deque(maxlen=20)
 ```
 
+### Post-Phase 5: Améliorations Architecturales (24/12/2025) ✅ TERMINÉE
+
+Suite à l'analyse globale du code post-Phase 5, les améliorations suivantes ont été identifiées et réalisées :
+
+| # | Amélioration | Description | Statut |
+|---|-------------|-------------|--------|
+| P5.1 | Extraction MotorServiceClient | Code dupliqué dans `web/hardware/views.py` et `web/tracking/views.py` → module partagé `web/common/ipc_client.py` | ✅ 88998fa |
+| P5.2 | Architecture IPC Unix sockets | Alternative aux fichiers JSON - **Non implémenté** (complexité vs bénéfice insuffisant pour ce projet) | ⏭️ Non requis |
+| P5.3 | Monitoring & Supervision | Health checks, watchdog systemd, métriques - à implémenter | 🔜 Phase 6 |
+
+**Détails P5.1 - Extraction MotorServiceClient**
+```python
+# web/common/ipc_client.py (nouveau module)
+class MotorServiceClient:
+    def _read_json_file_safe(self, file_path) -> Optional[dict]: ...
+    def send_command(self, command_type: str, **params) -> bool: ...
+    def get_motor_status(self) -> dict: ...
+    def get_encoder_status(self) -> dict: ...
+    def get_status(self) -> dict:  # Alias compatibilité
+        return self.get_motor_status()
+
+motor_client = MotorServiceClient()  # Singleton partagé
+```
+
+Les fichiers `web/hardware/views.py` et `web/tracking/views.py` utilisent maintenant ce module commun au lieu de dupliquer le code (~60 lignes économisées par fichier).
+
+---
+
+### Phase 6: Monitoring & Supervision (À FAIRE)
+
+Cette phase est optionnelle mais recommandée pour améliorer la robustesse en production.
+
+| # | Tâche | Fichier | Description | Priorité |
+|---|-------|---------|-------------|----------|
+| 6.1 | Ajouter watchdog systemd | `motor_service.py` | Appels `sd_notify("WATCHDOG=1")` pour supervision systemd | HAUTE |
+| 6.2 | Endpoint health check | `web/health/views.py` | `/api/health/` vérifiant Motor Service, Encoder Daemon | MOYENNE |
+| 6.3 | Métriques Prometheus | `services/metrics.py` | Compteurs: commandes/sec, erreurs, latence IPC | BASSE |
+
+**6.1 - Watchdog systemd (Recommandé)**
+
+Le Motor Service est critique pour l'application. Un watchdog systemd permettrait de :
+- Redémarrer automatiquement le service en cas de freeze
+- Détecter les deadlocks ou blocages
+- Améliorer la fiabilité sans intervention manuelle
+
+Implémentation suggérée :
+```python
+# services/motor_service.py
+import sdnotify  # pip install sdnotify
+
+notifier = sdnotify.SystemdNotifier()
+
+async def run(self):
+    notifier.notify("READY=1")
+    while self._running:
+        notifier.notify("WATCHDOG=1")  # Heartbeat
+        # ... boucle existante ...
+```
+
+Configuration systemd :
+```ini
+[Service]
+Type=notify
+WatchdogSec=30  # Redémarre si pas de heartbeat pendant 30s
+```
+
+**Note**: L'encoder daemon (`ems22d_calibrated.py`) utilise déjà systemd, donc le pattern est cohérent.
+
 ---
 
 ## 6. RISQUES ET MITIGATIONS
@@ -431,3 +499,4 @@ Ce plan est soumis pour validation. Merci de confirmer:
 ---
 
 *Document généré automatiquement par Claude Code le 24/12/2025*
+*Dernière mise à jour: 24/12/2025 - Post-Phase 5 + Phase 6 planifiée*
