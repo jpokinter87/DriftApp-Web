@@ -55,7 +55,7 @@ logging.basicConfig(
         )
     ]
 )
-logger = logging.getLogger("MotorService")
+logger = logging.getLogger(__name__)
 
 
 class MotorService:

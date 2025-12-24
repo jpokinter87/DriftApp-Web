@@ -11,7 +11,7 @@ Version: 4.4
 import logging
 
 
-logger = logging.getLogger("Simulation")
+logger = logging.getLogger(__name__)
 
 
 class SimulatedDaemonReader:
@@ -23,7 +23,7 @@ class SimulatedDaemonReader:
     """
 
     def __init__(self):
-        self.logger = logging.getLogger("SimulatedDaemonReader")
+        self.logger = logging.getLogger(__name__)
 
     def is_available(self) -> bool:
         """Toujours disponible en simulation."""

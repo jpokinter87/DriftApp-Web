@@ -241,7 +241,7 @@ class ConfigLoader:
     """Chargeur de configuration modulaire."""
 
     def __init__(self, config_path: Path = Path("data/config.json")):
-        self.logger = logging.getLogger("config_loader")
+        self.logger = logging.getLogger(__name__)
         self.config_path = config_path
         self.cfg: dict = {}
 

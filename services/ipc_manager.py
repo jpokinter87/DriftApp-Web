@@ -26,7 +26,7 @@ COMMAND_FILE = Path("/dev/shm/motor_command.json")
 STATUS_FILE = Path("/dev/shm/motor_status.json")
 ENCODER_FILE = Path("/dev/shm/ems22_position.json")
 
-logger = logging.getLogger("IpcManager")
+logger = logging.getLogger(__name__)
 
 
 class IpcManager:
