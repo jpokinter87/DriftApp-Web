@@ -1,6 +1,6 @@
 [Unit]
 Description=DriftApp Motor Service - Dome Control
-Documentation=https://github.com/observatoire-ubik/driftapp-web
+Documentation=https://github.com/jpokinter87/DriftApp-Web
 After=network.target ems22d.service
 Requires=ems22d.service
 
