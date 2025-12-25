@@ -67,11 +67,28 @@ class TrackingStateMixin:
         """Initialise les statistiques et paramètres de correction."""
         self.total_corrections = 0
         self.total_movement = 0.0
+        self.clockwise_movement = 0.0
+        self.counterclockwise_movement = 0.0
         self.steps_correction_factor = motor_config.steps_correction_factor if motor_config else 1.0
+
+        # Timer pour le sampling des positions (graphiques)
+        self._last_position_log_time = None
+        self._position_log_interval = 30  # secondes
+
+        # Distribution du temps par mode
+        self._mode_time_tracker = {
+            'normal': 0,
+            'critical': 0,
+            'continuous': 0,
+            'last_mode': None,
+            'last_mode_time': None
+        }
 
         self.drift_tracking = {
             'start_time': datetime.now(),
-            'corrections_log': []
+            'corrections_log': [],
+            'position_log': [],  # Sampling positions pour graphiques
+            'goto_log': [],      # Mouvements GOTO
         }
 
         self.logger.info(f"Facteur de correction pas: {self.steps_correction_factor:.4f}")
@@ -163,6 +180,132 @@ class TrackingStateMixin:
 
         self._cached_position_cible = mean_deg
         return mean_deg
+
+    # =========================================================================
+    # SESSION DATA LOGGING
+    # =========================================================================
+
+    def _log_position_sample(self, azimut: float, altitude: float,
+                             dome_position: float, mode: str):
+        """
+        Enregistre un échantillon de position pour les graphiques.
+
+        Appelé périodiquement (toutes les 30s) pendant le tracking.
+        """
+        now = datetime.now()
+
+        # Vérifier si assez de temps s'est écoulé depuis le dernier log
+        if self._last_position_log_time is not None:
+            elapsed = (now - self._last_position_log_time).total_seconds()
+            if elapsed < self._position_log_interval:
+                return
+
+        self._last_position_log_time = now
+
+        self.drift_tracking['position_log'].append({
+            'timestamp': now.isoformat(),
+            'azimut': round(azimut, 2),
+            'altitude': round(altitude, 2),
+            'dome_position': round(dome_position, 2),
+            'mode': mode
+        })
+
+    def _log_goto(self, start_position: float, target_position: float,
+                  delta: float, reason: str):
+        """
+        Enregistre un mouvement GOTO.
+
+        Args:
+            start_position: Position de départ
+            target_position: Position cible
+            delta: Déplacement en degrés
+            reason: 'initial' ou 'large_correction'
+        """
+        self.drift_tracking['goto_log'].append({
+            'timestamp': datetime.now().isoformat(),
+            'start_position': round(start_position, 2),
+            'target_position': round(target_position, 2),
+            'delta': round(delta, 2),
+            'reason': reason
+        })
+
+    def _update_mode_time(self, current_mode: str):
+        """
+        Met à jour le temps passé dans chaque mode.
+
+        Appelé à chaque changement de mode ou périodiquement.
+        """
+        now = datetime.now()
+        mode_key = current_mode.lower() if current_mode else 'normal'
+
+        # Si c'est le premier appel, initialiser
+        if self._mode_time_tracker['last_mode_time'] is None:
+            self._mode_time_tracker['last_mode'] = mode_key
+            self._mode_time_tracker['last_mode_time'] = now
+            return
+
+        # Calculer le temps écoulé dans le mode précédent
+        elapsed = (now - self._mode_time_tracker['last_mode_time']).total_seconds()
+        prev_mode = self._mode_time_tracker['last_mode']
+
+        if prev_mode and prev_mode in self._mode_time_tracker:
+            self._mode_time_tracker[prev_mode] += elapsed
+
+        # Mettre à jour pour le prochain appel
+        self._mode_time_tracker['last_mode'] = mode_key
+        self._mode_time_tracker['last_mode_time'] = now
+
+    def _track_correction_direction(self, correction_deg: float):
+        """
+        Comptabilise la direction des corrections (CW/CCW).
+
+        Args:
+            correction_deg: Correction en degrés (positif = CW, négatif = CCW)
+        """
+        if correction_deg > 0:
+            self.clockwise_movement += abs(correction_deg)
+        else:
+            self.counterclockwise_movement += abs(correction_deg)
+
+    def get_session_data(self) -> dict:
+        """
+        Retourne les données de session pour l'API.
+
+        Returns:
+            dict avec toutes les données de session pour affichage/sauvegarde
+        """
+        now = datetime.now()
+        start_time = self.drift_tracking.get('start_time', now)
+        duration_seconds = (now - start_time).total_seconds()
+
+        # Finaliser le temps du mode courant
+        self._update_mode_time(
+            self.adaptive_manager.current_mode.value
+            if hasattr(self, 'adaptive_manager') and self.adaptive_manager
+            else 'normal'
+        )
+
+        return {
+            'start_time': start_time.isoformat(),
+            'duration_seconds': int(duration_seconds),
+            'summary': {
+                'total_corrections': self.total_corrections,
+                'total_movement_deg': round(self.total_movement, 2),
+                'clockwise_movement_deg': round(self.clockwise_movement, 2),
+                'counterclockwise_movement_deg': round(self.counterclockwise_movement, 2),
+                'avg_correction_deg': round(
+                    self.total_movement / max(1, self.total_corrections), 2
+                ),
+                'mode_distribution': {
+                    'normal': int(self._mode_time_tracker.get('normal', 0)),
+                    'critical': int(self._mode_time_tracker.get('critical', 0)),
+                    'continuous': int(self._mode_time_tracker.get('continuous', 0)),
+                }
+            },
+            'corrections_log': self.drift_tracking.get('corrections_log', []),
+            'position_log': self.drift_tracking.get('position_log', []),
+            'goto_log': self.drift_tracking.get('goto_log', []),
+        }
 
     # =========================================================================
     # BILAN DE SESSION

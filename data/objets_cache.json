@@ -298,5 +298,15 @@
     "type": "Unknown",
     "source": "SIMBAD",
     "date_ajout": "2025-12-14 15:29:44"
+  },
+  "IC  405": {
+    "nom": "IC  405",
+    "ad": "05h17m24.00s",
+    "dec": "34°23'00.00\"",
+    "ra_deg": 79.35,
+    "dec_deg": 34.38333333333333,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-25 18:19:20"
   }
 }

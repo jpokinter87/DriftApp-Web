@@ -505,8 +505,14 @@ class TrackingHandler:
                     'interval_sec': status.get('adaptive_interval', 60),
                     'total_corrections': status.get('total_corrections', 0),
                     'total_correction_degrees': status.get('total_movement', 0.0),
-                    'mode_icon': status.get('mode_icon', '')
+                    'mode_icon': status.get('mode_icon', ''),
+                    # Données pour la page session
+                    'ra_deg': getattr(self.session, 'ra_deg', None),
+                    'dec_deg': getattr(self.session, 'dec_deg', None),
                 }
+
+                # Données complètes de session pour l'API /api/session/
+                current_status['session_data'] = self.session.get_session_data()
             else:
                 self.active = False
                 current_status['status'] = 'idle'

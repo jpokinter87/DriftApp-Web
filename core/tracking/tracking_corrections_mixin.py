@@ -87,13 +87,25 @@ class TrackingCorrectionsMixin:
         self.logger.info(log_message)
 
         # === Ajouter à l'historique de dérive ===
+        # Note: tracking_params.mode est un enum TrackingMode, on utilise .value pour la string
+        mode_str = tracking_params.mode.value if hasattr(tracking_params.mode, 'value') else str(tracking_params.mode)
         self.drift_tracking['corrections_log'].append({
-            'timestamp': now,
-            'azimut': azimut,
-            'altitude': altitude,
-            'correction': delta,
-            'mode': tracking_params.mode
+            'timestamp': now.isoformat(),
+            'azimut': round(azimut, 2),
+            'altitude': round(altitude, 2),
+            'dome_position': round(position_cible, 2),
+            'correction': round(delta, 2),
+            'mode': mode_str
         })
+
+        # === Tracking direction des corrections (CW/CCW) ===
+        self._track_correction_direction(delta)
+
+        # === Log position pour graphiques (sampling 30s) ===
+        self._log_position_sample(azimut, altitude, position_cible, mode_str)
+
+        # === Mise à jour temps par mode ===
+        self._update_mode_time(mode_str)
 
         # Enregistrer dans l'historique
         self.correction_history.append(delta)

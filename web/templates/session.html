@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriftApp - Rapport de Session</title>
+    <link rel="stylesheet" href="/static/css/session.css?v=20251225b">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- En-tete avec navigation -->
+        <header class="header">
+            <div class="header-left">
+                <h1>DriftApp</h1>
+                <span class="subtitle">Rapport de Session</span>
+            </div>
+            <nav class="nav-tabs">
+                <a href="/" class="nav-tab">Controle</a>
+                <a href="/api/health/system/" class="nav-tab">Systeme</a>
+                <a href="/session/" class="nav-tab active">Session</a>
+            </nav>
+            <div class="header-right">
+                <div class="status-indicator" id="session-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">--</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Contenu principal -->
+        <main class="main-content">
+            <!-- Section Session Active / Sélection -->
+            <section class="section session-selector">
+                <div class="selector-tabs">
+                    <button class="selector-tab active" data-tab="current">Session en cours</button>
+                    <button class="selector-tab" data-tab="history">Historique</button>
+                </div>
+
+                <!-- Info session active -->
+                <div id="current-session-info" class="session-info">
+                    <div class="session-header-info">
+                        <div class="object-name">
+                            <span class="label">Objet:</span>
+                            <span id="session-object" class="value">--</span>
+                        </div>
+                        <div class="session-duration">
+                            <span class="label">Duree:</span>
+                            <span id="session-duration" class="value">--</span>
+                        </div>
+                        <div class="session-coords">
+                            <span class="label">RA/DEC:</span>
+                            <span id="session-coords" class="value">-- / --</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Liste historique (cachée par défaut) -->
+                <div id="history-panel" class="history-panel hidden">
+                    <div class="history-list" id="history-list">
+                        <div class="loading">Chargement...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Graphiques -->
+            <section class="section charts-section">
+                <h2>Evolution Altitude / Azimut</h2>
+                <div class="charts-container">
+                    <div class="chart-wrapper">
+                        <canvas id="altitude-chart"></canvas>
+                    </div>
+                    <div class="chart-wrapper">
+                        <canvas id="azimut-chart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <span class="legend-color normal"></span>
+                        <span>NORMAL</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color critical"></span>
+                        <span>CRITICAL</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color continuous"></span>
+                        <span>CONTINUOUS</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-dot correction"></span>
+                        <span>Correction</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Statistiques -->
+            <section class="section stats-section">
+                <h2>Statistiques</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-corrections">0</div>
+                        <div class="stat-label">Corrections</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-total-movement">0.00</div>
+                        <div class="stat-label">Deplacement total</div>
+                    </div>
+                    <div class="stat-card clockwise">
+                        <div class="stat-value" id="stat-cw">0.00</div>
+                        <div class="stat-label">Horaire (CW)</div>
+                    </div>
+                    <div class="stat-card counterclockwise">
+                        <div class="stat-value" id="stat-ccw">0.00</div>
+                        <div class="stat-label">Anti-horaire (CCW)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="stat-avg-correction">0.00</div>
+                        <div class="stat-label">Correction moyenne</div>
+                    </div>
+                </div>
+
+                <!-- Distribution des modes -->
+                <div class="mode-distribution">
+                    <h3>Distribution des modes</h3>
+                    <div class="mode-bars">
+                        <div class="mode-bar-container">
+                            <div class="mode-bar normal" id="mode-bar-normal" style="width: 0%"></div>
+                            <span class="mode-bar-label">NORMAL</span>
+                            <span class="mode-bar-value" id="mode-time-normal">0s</span>
+                        </div>
+                        <div class="mode-bar-container">
+                            <div class="mode-bar critical" id="mode-bar-critical" style="width: 0%"></div>
+                            <span class="mode-bar-label">CRITICAL</span>
+                            <span class="mode-bar-value" id="mode-time-critical">0s</span>
+                        </div>
+                        <div class="mode-bar-container">
+                            <div class="mode-bar continuous" id="mode-bar-continuous" style="width: 0%"></div>
+                            <span class="mode-bar-label">CONTINUOUS</span>
+                            <span class="mode-bar-value" id="mode-time-continuous">0s</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Journal des corrections -->
+            <section class="section corrections-section">
+                <h2>Journal des corrections</h2>
+                <div class="table-container">
+                    <table class="data-table" id="corrections-table">
+                        <thead>
+                            <tr>
+                                <th>Heure</th>
+                                <th>Azimut</th>
+                                <th>Altitude</th>
+                                <th>Correction</th>
+                                <th>Mode</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corrections-tbody">
+                            <tr><td colspan="5" class="empty">Aucune correction</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Section GOTO -->
+            <section class="section goto-section">
+                <h2>Mouvements GOTO</h2>
+                <div class="table-container">
+                    <table class="data-table" id="goto-table">
+                        <thead>
+                            <tr>
+                                <th>Heure</th>
+                                <th>Depart</th>
+                                <th>Cible</th>
+                                <th>Delta</th>
+                                <th>Raison</th>
+                            </tr>
+                        </thead>
+                        <tbody id="goto-tbody">
+                            <tr><td colspan="5" class="empty">Aucun GOTO</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <!-- Pied de page -->
+        <footer class="footer">
+            <span>DriftApp v4.5 - Rapport de Session</span>
+            <span id="last-update">Derniere mise a jour: --</span>
+            <label class="auto-refresh">
+                <input type="checkbox" id="auto-refresh-toggle" checked>
+                Auto-refresh (5s)
+            </label>
+        </footer>
+    </div>
+
+    <script src="/static/js/session.js?v=20251225b"></script>
+</body>
+</html>

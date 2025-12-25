@@ -669,8 +669,8 @@ function updateTrackingDisplay(motor) {
             elements.trackingRemaining.textContent = apiRemaining ? `${apiRemaining}s` : '--';
         }
 
-        // Correction 2: Mettre à jour le timer circulaire
-        drawTimer();
+        // Timer intégré dans la boussole - redessiner
+        drawCompass();
 
         // Correction 3: Afficher les logs de suivi du Motor Service
         if (motor.tracking_logs && Array.isArray(motor.tracking_logs)) {
@@ -716,13 +716,13 @@ function startCountdown() {
         if (countdownValue !== null && countdownValue > 0) {
             countdownValue--;
             elements.trackingRemaining.textContent = `${countdownValue}s`;
-            drawTimer();  // Mettre à jour le timer visuel
+            drawCompass();  // Timer intégré dans la boussole
         } else if (countdownValue === 0) {
-            // Correction 2: Réinitialiser pour permettre le redémarrage au prochain cycle
+            // Réinitialiser pour permettre le redémarrage au prochain cycle
             lastRemainingFromApi = null;
             // Garder l'affichage "0s" en attendant la nouvelle valeur de l'API
             elements.trackingRemaining.textContent = '0s';
-            drawTimer();
+            drawCompass();
         }
     }, 1000);
 }
@@ -759,26 +759,104 @@ function drawCompass() {
     const height = canvas.height;
     const cx = width / 2;
     const cy = height / 2;
-    const radius = Math.min(cx, cy) - 20;
+
+    // Rayons - couronne extérieure au maximum, coupole agrandie
+    const outerRadius = Math.min(cx, cy) - 4;   // Couronne extérieure (timer) - au max
+    const domeRadius = 95;                       // Couronne de la coupole (agrandie pour marge télescope)
 
     // Clear
     ctx.clearRect(0, 0, width, height);
 
-    // Fond de la boussole
+    // =========================================================================
+    // COUCHE 1: Fond général
+    // =========================================================================
     ctx.fillStyle = '#1a1a2e';
     ctx.beginPath();
-    ctx.arc(cx, cy, radius + 5, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, outerRadius + 2, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Cercle extérieur
-    ctx.strokeStyle = '#2d4059';
-    ctx.lineWidth = 3;
+    // =========================================================================
+    // COUCHE 2: Arc Timer sur couronne extérieure
+    // =========================================================================
+    const isTracking = state.trackingInfo && countdownValue !== null;
+    const timerLineWidth = 6;  // Épaisseur réduite
+
+    // Fond de la couronne timer (cercle discret)
+    ctx.strokeStyle = '#1e2d42';
+    ctx.lineWidth = timerLineWidth;
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, outerRadius - timerLineWidth / 2, 0, 2 * Math.PI);
     ctx.stroke();
 
+    // Arc de progression du timer
+    let timerColor = '#2d8a5e';  // Couleur par défaut
+    if (isTracking && countdownValue !== null && timerTotal > 0) {
+        const progress = Math.min(countdownValue / timerTotal, 1.0);
+
+        // Couleurs atténuées pour observatoire
+        if (progress > 0.5) {
+            timerColor = '#2d8a5e';  // Vert sombre
+        } else if (progress > 0.25) {
+            timerColor = '#b8860b';  // Or sombre
+        } else {
+            timerColor = '#8b3a3a';  // Rouge sombre
+        }
+
+        if (progress > 0) {
+            ctx.strokeStyle = timerColor;
+            ctx.lineWidth = timerLineWidth;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + (2 * Math.PI * progress);
+            ctx.arc(cx, cy, outerRadius - timerLineWidth / 2, startAngle, endAngle);
+            ctx.stroke();
+            ctx.lineCap = 'butt';
+        }
+    }
+
     // =========================================================================
-    // Arc représentant la trappe de la coupole (liseré rouge avec ouverture)
+    // COUCHE 3: Graduations cardinales sur couronne extérieure
+    // =========================================================================
+    ctx.strokeStyle = '#4a6a8a';
+    for (let deg = 0; deg < 360; deg += 90) {
+        const rad = (deg - 90) * Math.PI / 180;
+        const x1 = cx + (outerRadius - timerLineWidth - 2) * Math.cos(rad);
+        const y1 = cy + (outerRadius - timerLineWidth - 2) * Math.sin(rad);
+        const x2 = cx + (outerRadius - timerLineWidth - 10) * Math.cos(rad);
+        const y2 = cy + (outerRadius - timerLineWidth - 10) * Math.sin(rad);
+
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+    }
+
+    // =========================================================================
+    // COUCHE 4: Ciel étoilé (entre couronne extérieure et coupole)
+    // =========================================================================
+    drawStarField(ctx, cx, cy, outerRadius - timerLineWidth - 12, domeRadius + 10);
+
+    // =========================================================================
+    // COUCHE 5: Labels cardinaux (dans le ciel étoilé)
+    // =========================================================================
+    ctx.font = 'bold 13px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#5a8ab8';  // Bleu discret
+
+    const labelRadius = outerRadius - 25;
+    const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
+    for (const [deg, label] of Object.entries(labels)) {
+        const rad = (parseInt(deg) - 90) * Math.PI / 180;
+        const lx = cx + labelRadius * Math.cos(rad);
+        const ly = cy + labelRadius * Math.sin(rad);
+        ctx.fillText(label, lx, ly);
+    }
+
+    // =========================================================================
+    // COUCHE 6: Arc de la coupole (partie fermée en rouge sombre)
     // =========================================================================
     const OPENING_ANGLE = 40.1;  // degrés (70cm / pi x 200cm x 360)
     const domeAngle = state.position;
@@ -787,86 +865,87 @@ function drawCompass() {
     const openingStart = domeAngle - OPENING_ANGLE / 2;
     const openingEnd = domeAngle + OPENING_ANGLE / 2;
 
-    // Arc rouge = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
-    ctx.strokeStyle = 'rgba(196, 60, 60, 0.25)';
-    ctx.lineWidth = 12;
+    // Bordure extérieure de la coupole
+    ctx.strokeStyle = '#3d5068';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    const closedStartRad = (openingEnd - 90) * Math.PI / 180;
-    const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
-    ctx.arc(cx, cy, radius - 6, closedStartRad, closedEndRad);
+    ctx.arc(cx, cy, domeRadius + 7, 0, 2 * Math.PI);
     ctx.stroke();
 
-    // Graduations
-    ctx.fillStyle = '#a0a0a0';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    for (let deg = 0; deg < 360; deg += 30) {
+    // Graduations cardinales sur la coupole
+    ctx.strokeStyle = '#4a6a8a';
+    for (let deg = 0; deg < 360; deg += 90) {
         const rad = (deg - 90) * Math.PI / 180;
-        const x1 = cx + (radius - 15) * Math.cos(rad);
-        const y1 = cy + (radius - 15) * Math.sin(rad);
-        const x2 = cx + radius * Math.cos(rad);
-        const y2 = cy + radius * Math.sin(rad);
+        const x1 = cx + (domeRadius + 7) * Math.cos(rad);
+        const y1 = cy + (domeRadius + 7) * Math.sin(rad);
+        const x2 = cx + (domeRadius + 14) * Math.cos(rad);
+        const y2 = cy + (domeRadius + 14) * Math.sin(rad);
 
-        ctx.strokeStyle = '#4da6ff';
-        ctx.lineWidth = deg % 90 === 0 ? 2 : 1;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
-
-        // Labels cardinaux
-        if (deg % 90 === 0) {
-            const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
-            const lx = cx + (radius - 30) * Math.cos(rad);
-            const ly = cy + (radius - 30) * Math.sin(rad);
-            ctx.fillStyle = '#4da6ff';
-            ctx.fillText(labels[deg], lx, ly);
-        }
     }
 
-    // =========================================================================
-    // Correction 4: Double indicateur TÉLESCOPE + COUPOLE
-    // =========================================================================
-
-    // Aiguille TÉLESCOPE (verte) - position cible qui évolue en continu
-    const telescopeAngle = state.trackingInfo?.position_cible;
-    if (telescopeAngle !== undefined && telescopeAngle !== null) {
-        const teleRad = (telescopeAngle - 90) * Math.PI / 180;
-
-        // Ligne de l'aiguille TÉLESCOPE
-        ctx.strokeStyle = '#00d26a';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + (radius - 45) * Math.cos(teleRad), cy + (radius - 45) * Math.sin(teleRad));
-        ctx.stroke();
-
-        // Pointe triangulaire verte
-        drawArrowHead(ctx, cx, cy, teleRad, radius - 45, '#00d26a');
-    }
-
-    // Aiguille COUPOLE (bleue) - position actuelle de la coupole
-    const domeRad = (state.position - 90) * Math.PI / 180;
-
-    // Ligne de l'aiguille COUPOLE
-    ctx.strokeStyle = '#4da6ff';
-    ctx.lineWidth = 4;
+    // Arc rouge = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
+    ctx.strokeStyle = 'rgba(160, 50, 50, 0.5)';
+    ctx.lineWidth = 12;
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + (radius - 40) * Math.cos(domeRad), cy + (radius - 40) * Math.sin(domeRad));
+    const closedStartRad = (openingEnd - 90) * Math.PI / 180;
+    const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
+    ctx.arc(cx, cy, domeRadius, closedStartRad, closedEndRad);
     ctx.stroke();
 
-    // Pointe triangulaire bleue
-    drawArrowHead(ctx, cx, cy, domeRad, radius - 40, '#4da6ff');
+    // Bordure intérieure de la coupole
+    ctx.strokeStyle = '#2d4059';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, domeRadius - 7, 0, 2 * Math.PI);
+    ctx.stroke();
 
-    // Centre avec représentation du télescope (rectangle comme GUI Kivy)
-    drawTelescope(ctx, cx, cy, telescopeAngle);
+    // =========================================================================
+    // COUCHE 7: Télescope au centre avec timer
+    // =========================================================================
+    const telescopeAngle = state.trackingInfo?.position_cible;
+    drawTelescope(ctx, cx, cy, telescopeAngle, countdownValue, timerColor);
 }
 
-// Dessiner le télescope au centre (tube rectangulaire)
-function drawTelescope(ctx, cx, cy, angle) {
+// Dessiner un champ d'étoiles dans une zone annulaire
+function drawStarField(ctx, cx, cy, outerR, innerR) {
+    // Utiliser une seed basée sur les rayons pour avoir un pattern stable
+    const starCount = 60;
+
+    ctx.fillStyle = '#ffffff';
+
+    for (let i = 0; i < starCount; i++) {
+        // Pseudo-random basé sur l'index (pattern stable)
+        const seed1 = Math.sin(i * 12.9898) * 43758.5453;
+        const seed2 = Math.sin(i * 78.233) * 43758.5453;
+        const seed3 = Math.sin(i * 45.164) * 43758.5453;
+
+        const angle = (seed1 - Math.floor(seed1)) * 2 * Math.PI;
+        const radiusFactor = (seed2 - Math.floor(seed2));
+        const r = innerR + (outerR - innerR) * radiusFactor;
+
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+
+        // Taille et opacité variables
+        const size = 0.5 + (seed3 - Math.floor(seed3)) * 1.5;
+        const opacity = 0.3 + (seed3 - Math.floor(seed3)) * 0.7;
+
+        ctx.globalAlpha = opacity;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1.0;
+}
+
+// Dessiner le télescope au centre (tube rectangulaire) avec timer intégré
+function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     // Si pas d'angle de tracking, utiliser la position coupole
     const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
     // Le tube est dessiné vers le haut en coordonnées locales, donc PAS besoin de -90°
@@ -876,6 +955,9 @@ function drawTelescope(ctx, cx, cy, angle) {
     // Dimensions du tube (agrandi)
     const tubeLength = 65;
     const tubeWidth = 24;
+
+    // Rayon du centre agrandi pour le timer (3 digits max: "270s")
+    const centerRadius = 24;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -896,18 +978,39 @@ function drawTelescope(ctx, cx, cy, angle) {
     ctx.ellipse(0, -tubeLength + 6, tubeWidth/2 - 3, 5, 0, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Monture (cercle au centre)
+    // Monture (cercle au centre - agrandi pour timer)
     ctx.fillStyle = '#2d4059';
     ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
     ctx.fill();
 
-    ctx.fillStyle = '#4da6ff';
+    // Cercle intérieur (accent)
+    ctx.fillStyle = '#1a2a3a';
     ctx.beginPath();
-    ctx.arc(0, 0, 7, 0, 2 * Math.PI);
+    ctx.arc(0, 0, centerRadius - 4, 0, 2 * Math.PI);
     ctx.fill();
 
     ctx.restore();
+
+    // === TIMER AU CENTRE (texte toujours horizontal) ===
+    if (countdownValue !== undefined && countdownValue !== null && countdownValue !== '--') {
+        // Formater le texte du timer
+        let timerText;
+        if (typeof countdownValue === 'number') {
+            timerText = Math.round(countdownValue) + 's';
+        } else {
+            timerText = String(countdownValue);
+        }
+
+        // Dessiner le texte du timer (sans rotation)
+        ctx.save();
+        ctx.fillStyle = timerColor || '#4da6ff';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(timerText, cx, cy);
+        ctx.restore();
+    }
 }
 
 // Dessiner une pointe de flèche triangulaire

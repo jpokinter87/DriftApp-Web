@@ -85,6 +85,10 @@ class TrackingGotoMixin:
                         'delta': delta
                     }
                     self.goto_callback(goto_info)
+
+                # Logger le GOTO pour le rapport de session
+                self._log_goto(real_position, position_cible, delta, 'initial')
+
                 return True, delta
 
             self.logger.info(

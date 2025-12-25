@@ -1,17 +1,30 @@
 /* DriftApp Web - Dashboard Styles */
 
 :root {
-    --bg-dark: #1a1a2e;
-    --bg-panel: #16213e;
-    --bg-input: #0f3460;
-    --text-primary: #e8e8e8;
-    --text-secondary: #a0a0a0;
-    --accent-blue: #4da6ff;
+    /* Palette marron/ambre observatoire */
+    --bg-dark: #1a1612;
+    --bg-panel: #241e18;
+    --bg-input: #2d261e;
+    --text-primary: #e8e4df;
+    --text-secondary: #a09080;
+    --border-color: #4a3d2e;
+
+    /* Couleur d'accent principale: ambre */
+    --accent-amber: #d4a055;
+    --accent-amber-light: #e8c080;
+    --accent-amber-dark: #b08040;
+
+    /* Couleurs d'état (conservées) */
     --accent-green: #00d26a;
     --accent-red: #ff4757;
     --accent-orange: #ffa502;
     --accent-purple: #a855f7;
-    --border-color: #2d4059;
+
+    /* Dégradé feu/ambre pour titres */
+    --gradient-fire: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%);
+
+    /* Alias pour compatibilité (bleu → ambre) */
+    --accent-blue: var(--accent-amber);
 }
 
 * {
@@ -46,7 +59,10 @@ body {
 
 .header h1 {
     font-size: 1.5rem;
-    color: var(--accent-blue);
+    background: var(--gradient-fire);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .header .subtitle {
@@ -114,8 +130,9 @@ body {
 }
 
 .nav-tab.active {
-    background: var(--accent-blue);
-    color: white;
+    background: var(--accent-amber);
+    color: #1a1612;
+    font-weight: 600;
 }
 
 /* Main content */
@@ -169,16 +186,6 @@ body {
 
     .compass-container {
         margin-bottom: 0.5rem;
-    }
-
-    .timer-widget {
-        width: 70px;
-        height: 70px;
-        margin: 0.5rem auto;
-    }
-
-    #timer-seconds {
-        font-size: 1rem;
     }
 
     .position-info {
@@ -316,16 +323,6 @@ body {
         height: 160px !important;
     }
 
-    .timer-widget {
-        width: 50px;
-        height: 50px;
-        margin: 0.3rem auto;
-    }
-
-    #timer-seconds {
-        font-size: 0.85rem;
-    }
-
     .logs-container {
         height: 70px;
     }
@@ -341,7 +338,10 @@ body {
 .compass-section h2 {
     font-size: 1rem;
     margin-bottom: 1rem;
-    color: var(--accent-blue);
+    background: var(--gradient-fire);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .compass-container {
@@ -400,7 +400,10 @@ body {
 .control-panel h3 {
     font-size: 1rem;
     margin-bottom: 1rem;
-    color: var(--accent-blue);
+    background: var(--gradient-fire);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 /* Input groups */
@@ -422,7 +425,7 @@ body {
 
 .input-group input:focus {
     outline: none;
-    border-color: var(--accent-blue);
+    border-color: var(--accent-amber);
 }
 
 /* Object info */
@@ -455,12 +458,13 @@ body {
 }
 
 .btn-primary {
-    background-color: var(--accent-blue);
-    color: white;
+    background-color: var(--accent-amber);
+    color: #1a1612;
+    font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
-    background-color: #3d8fd9;
+    background-color: var(--accent-amber-light);
 }
 
 .btn-secondary {
@@ -581,7 +585,7 @@ body {
 
 .goto-group input:focus {
     outline: none;
-    border-color: var(--accent-blue);
+    border-color: var(--accent-amber);
 }
 
 /* Logs section */
@@ -594,7 +598,10 @@ body {
 .logs-section h3 {
     font-size: 1rem;
     margin-bottom: 0.75rem;
-    color: var(--accent-blue);
+    background: var(--gradient-fire);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .logs-container {
@@ -643,52 +650,28 @@ body {
 .mode-continuous { color: var(--accent-red); }
 .mode-fast_track { color: var(--accent-purple); }
 
-/* Timer widget (Correction 2) */
+/* Timer widget - désormais intégré dans la boussole */
 .timer-widget {
-    position: relative;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 1rem auto;
-    width: 100px;
-    height: 100px;
-}
-
-.timer-widget.hidden {
-    display: none;
-}
-
-#timer-canvas {
-    background-color: transparent;
-}
-
-#timer-seconds {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 1.3rem;
-    font-weight: bold;
-    color: var(--accent-green);
+    display: none !important;
 }
 
 /* Log types pour les corrections */
 .log-entry.correction {
-    color: var(--accent-blue);
+    color: var(--accent-amber);
 }
 
 .log-entry.tracking {
     color: var(--accent-green);
 }
 
-/* Cartouches COUPOLE (bleu) et TÉLESCOPE (vert) */
+/* Cartouches COUPOLE (ambre) et TÉLESCOPE (vert) */
 .coupole-item label {
-    color: var(--accent-blue) !important;
+    color: var(--accent-amber) !important;
     font-weight: bold;
 }
 
 .coupole-value {
-    color: var(--accent-blue) !important;
+    color: var(--accent-amber-light) !important;
 }
 
 .telescope-item label {
@@ -855,21 +838,22 @@ body {
     50% { opacity: 0.7; }
 }
 
-/* Effet clignotement vert pour recherche réussie */
+/* Effet clignotement feu/ambre pour session prête à démarrer */
 .btn.flash-success,
 .btn-primary.flash-success {
-    animation: flash-green-border 0.5s ease-in-out infinite !important;
-    border: 3px solid var(--accent-green) !important;
+    animation: flash-fire-border 0.8s ease-in-out infinite !important;
+    border: 3px solid #ff8c00 !important;
+    background: linear-gradient(135deg, #ff6b00 0%, #ffa500 50%, #d4a055 100%) !important;
 }
 
-@keyframes flash-green-border {
+@keyframes flash-fire-border {
     0%, 100% {
-        box-shadow: 0 0 8px var(--accent-green), 0 0 15px var(--accent-green) !important;
-        border-color: var(--accent-green) !important;
+        box-shadow: 0 0 8px #ff8c00, 0 0 15px #ff6b00 !important;
+        border-color: #ff8c00 !important;
     }
     50% {
-        box-shadow: 0 0 20px var(--accent-green), 0 0 35px var(--accent-green), 0 0 50px rgba(0, 210, 106, 0.5) !important;
-        border-color: white !important;
+        box-shadow: 0 0 20px #ffa500, 0 0 35px #ff8c00, 0 0 50px rgba(255, 140, 0, 0.5) !important;
+        border-color: #ffd700 !important;
     }
 }
 
@@ -975,7 +959,7 @@ body {
 .goto-modal-object span {
     font-size: 1.6rem;
     font-weight: bold;
-    color: var(--accent-blue);
+    color: var(--accent-amber-light);
 }
 
 /* Positions départ / cible avec chevrons au milieu */

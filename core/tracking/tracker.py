@@ -364,9 +364,49 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     # =========================================================================
 
     def stop(self):
-        """Arrête le suivi et affiche un bilan de session."""
+        """Arrête le suivi, sauvegarde la session et affiche un bilan."""
         self._log_session_summary()  # Mixin TrackingStateMixin
+        self._save_session_to_file()  # Sauvegarde automatique
         self._finalize_stop()
+
+    def _save_session_to_file(self):
+        """
+        Sauvegarde la session de tracking dans un fichier JSON.
+
+        Appelée automatiquement à l'arrêt du tracking.
+        """
+        try:
+            from web.session import session_storage
+
+            # Construire les données complètes
+            session_data = self.get_session_data()  # Mixin TrackingStateMixin
+
+            # Ajouter les métadonnées de l'objet
+            session_data['object'] = {
+                'name': self.objet,
+                'ra_deg': self.ra_deg,
+                'dec_deg': self.dec_deg,
+            }
+
+            # Ajouter l'heure de fin
+            session_data['timing'] = {
+                'start_time': session_data.pop('start_time'),
+                'end_time': datetime.now().isoformat(),
+                'duration_seconds': session_data.pop('duration_seconds'),
+            }
+
+            # Sauvegarder
+            session_id = session_storage.save_session(session_data)
+            if session_id:
+                self.logger.info(f"Session sauvegardée: {session_id}")
+            else:
+                self.logger.warning("Échec sauvegarde session")
+
+        except ImportError:
+            # Module session non disponible (ex: tests sans Django)
+            self.logger.debug("Module session non disponible - sauvegarde ignorée")
+        except Exception as e:
+            self.logger.warning(f"Erreur sauvegarde session: {e}")
 
     def _finalize_stop(self):
         """Finalise l'arrêt du suivi."""

@@ -78,5 +78,35 @@
     "type": "Unknown",
     "source": "SIMBAD",
     "date_ajout": "2025-12-14 15:29:32"
+  },
+  "NGC7000": {
+    "nom": "NGC  7000",
+    "ad": "20h58m47.00s",
+    "dec": "44°19'48.00\"",
+    "ra_deg": 314.6958333333333,
+    "dec_deg": 44.330000000000005,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-25 16:24:39"
+  },
+  "IC105": {
+    "nom": "IC  105",
+    "ad": "01h24m46.25s",
+    "dec": "02°04'31.04\"",
+    "ra_deg": 21.192726989230003,
+    "dec_deg": 2.07528914988,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-25 18:19:10"
+  },
+  "IC405": {
+    "nom": "IC  405",
+    "ad": "05h17m24.00s",
+    "dec": "34°23'00.00\"",
+    "ra_deg": 79.35,
+    "dec_deg": 34.38333333333333,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-25 18:19:17"
   }
 }

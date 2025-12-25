@@ -3,19 +3,30 @@
    ============================================ */
 
 :root {
-    --bg-dark: #1a1a2e;
-    --bg-card: #16213e;
-    --bg-card-hover: #1a2747;
-    --text-primary: #eee;
-    --text-secondary: #aaa;
-    --text-muted: #666;
-    --accent-blue: #4a90d9;
+    /* Palette marron/ambre observatoire */
+    --bg-dark: #1a1612;
+    --bg-card: #241e18;
+    --bg-card-hover: #2d261e;
+    --text-primary: #e8e4df;
+    --text-secondary: #a09080;
+    --text-muted: #706050;
+    --border-color: #4a3d2e;
+    --code-bg: #1a1612;
+
+    /* Couleur d'accent principale: ambre */
+    --accent-amber: #d4a055;
+    --accent-amber-light: #e8c080;
+    --accent-amber-dark: #b08040;
+    --accent-blue: var(--accent-amber);
+
+    /* Couleurs d'état (conservées) */
     --accent-green: #4caf50;
     --accent-red: #f44336;
     --accent-orange: #ff9800;
     --accent-yellow: #ffc107;
-    --border-color: #2a3f5f;
-    --code-bg: #0d1117;
+
+    /* Dégradé feu/ambre pour titres */
+    --gradient-fire: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%);
 }
 
 * {
@@ -60,7 +71,10 @@ body {
 
 .header h1 {
     font-size: 1.5rem;
-    color: var(--accent-blue);
+    background: var(--gradient-fire);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .subtitle {
@@ -87,8 +101,9 @@ body {
 }
 
 .nav-tab.active {
-    background: var(--accent-blue);
-    color: white;
+    background: var(--accent-amber);
+    color: #1a1612;
+    font-weight: 600;
 }
 
 .header-right {

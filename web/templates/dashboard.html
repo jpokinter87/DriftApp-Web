@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DriftApp - Contrôle Coupole</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251223a">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251225b">
 </head>
 <body>
     <div class="container">
@@ -15,8 +15,9 @@
                 <span class="subtitle">Contrôle de Coupole - Observatoire Ubik</span>
             </div>
             <nav class="nav-tabs">
-                <a href="/" class="nav-tab active">Contrôle</a>
-                <a href="/api/health/system/" class="nav-tab">Système</a>
+                <a href="/" class="nav-tab active">Controle</a>
+                <a href="/api/health/system/" class="nav-tab">Systeme</a>
+                <a href="/session/" class="nav-tab">Session</a>
             </nav>
             <div class="status-indicator" id="service-status">
                 <span class="status-dot"></span>
@@ -30,7 +31,7 @@
             <section class="compass-section">
                 <h2>Position Coupole</h2>
                 <div class="compass-container">
-                    <canvas id="compass" width="300" height="320"></canvas>
+                    <canvas id="compass" width="320" height="320"></canvas>
                 </div>
                 <!-- Correction 2: Timer circulaire widget -->
                 <div class="timer-widget hidden" id="timer-widget">
@@ -185,6 +186,6 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js?v=20251223a"></script>
+    <script src="/static/js/dashboard.js?v=20251225b"></script>
 </body>
 </html>

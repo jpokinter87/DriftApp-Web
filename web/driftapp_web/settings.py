@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'tracking',
     'hardware',
     'health',
+    'session',
 ]
 
 MIDDLEWARE = [
