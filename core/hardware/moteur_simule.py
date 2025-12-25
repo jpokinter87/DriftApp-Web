@@ -9,9 +9,11 @@ VERSION 4.3 : Ajout get_feedback_controller, get_daemon_angle, rotation_absolue
               pour compatibilité avec MoteurCoupole refactorisé.
 VERSION 4.4 : Simulation réaliste du déplacement (faire_un_pas, get_daemon_angle)
 VERSION 4.5 : Compatibilité paramètre use_ramp (ignoré en simulation)
+VERSION 4.6 : Timing réaliste pour GOTO (délai proportionnel au mouvement)
 """
 
 import logging
+import time
 from typing import Dict, Any, Optional
 
 
@@ -21,6 +23,10 @@ _instance_positions: dict[int, float] = {}
 
 # Position "globale" pour compatibilité avec set_simulated_position/get_simulated_position
 _global_position = 0.0
+
+# Multiplicateur de vitesse pour la simulation (1.0 = temps réel, 10.0 = 10x plus rapide)
+# En mode dev, on accélère pour ne pas attendre des minutes
+SIMULATION_SPEED_MULTIPLIER = 20.0  # 20x plus rapide (un GOTO de 2 min = 6 secondes)
 
 
 def set_simulated_position(position: float):
@@ -133,16 +139,52 @@ class MoteurSimule:
         """Calcule le délai pour un pas (retourne toujours la vitesse nominale en simulation)."""
         return vitesse_nominale
 
+    def _calculate_movement_time(self, angle_deg: float, vitesse: float) -> float:
+        """
+        Calcule le temps de mouvement simulé.
+
+        Args:
+            angle_deg: Angle en degrés (absolu)
+            vitesse: Délai par pas en secondes
+
+        Returns:
+            Temps de mouvement en secondes (divisé par SIMULATION_SPEED_MULTIPLIER)
+        """
+        # Nombre de pas pour ce mouvement
+        steps = abs(angle_deg) / 360.0 * self.steps_per_dome_revolution
+
+        # Temps réel = steps * délai par pas
+        real_time = steps * vitesse
+
+        # Temps simulé (accéléré)
+        simulated_time = real_time / SIMULATION_SPEED_MULTIPLIER
+
+        return simulated_time
+
     def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
         """
-        Simule une rotation.
+        Simule une rotation avec timing réaliste.
 
         Args:
             angle_deg: Angle en degrés
-            vitesse: Délai nominal (ignoré en simulation)
+            vitesse: Délai nominal par pas (utilisé pour calculer le temps simulé)
             use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
         """
         global _global_position
+
+        # Calculer le temps de mouvement simulé
+        movement_time = self._calculate_movement_time(angle_deg, vitesse)
+
+        # Log du mouvement prévu
+        if abs(angle_deg) > 1.0:
+            self.logger.info(
+                f"Rotation simulée: {angle_deg:+.1f}° "
+                f"(~{movement_time:.1f}s simulé, {movement_time * SIMULATION_SPEED_MULTIPLIER:.0f}s réel)"
+            )
+
+        # Simuler le délai (permet au popup GOTO d'apparaître)
+        if movement_time > 0.1:
+            time.sleep(movement_time)
 
         # Mettre à jour la position de cette instance
         new_pos = (_get_instance_position(self._instance_id) + angle_deg) % 360
@@ -221,10 +263,13 @@ class MoteurSimule:
         allow_large_movement: bool = False
     ) -> Dict[str, Any]:
         """
-        Simule une rotation avec feedback.
+        Simule une rotation avec feedback et timing réaliste.
 
-        En mode simulation, le mouvement est toujours parfait.
+        En mode simulation, le mouvement est toujours parfait mais
+        prend un temps proportionnel au déplacement.
         """
+        start_time = time.time()
+
         # Utiliser la position de cette instance
         position_initiale = _get_instance_position(self._instance_id)
 
@@ -235,8 +280,10 @@ class MoteurSimule:
         while delta < -180:
             delta += 360
 
-        # Appliquer le mouvement
+        # Appliquer le mouvement (inclut le délai simulé)
         self.rotation(delta, vitesse)
+
+        temps_total = time.time() - start_time
 
         return {
             'success': True,
@@ -246,7 +293,7 @@ class MoteurSimule:
             'erreur_finale': 0.0,
             'iterations': 1,
             'corrections': [],
-            'temps_total': 0.1,
+            'temps_total': temps_total,
             'mode': 'simulation'
         }
 
