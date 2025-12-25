@@ -432,7 +432,7 @@ Cette phase améliore la robustesse en production avec supervision et monitoring
 | # | Tâche | Fichier | Description | Priorité | Statut |
 |---|-------|---------|-------------|----------|--------|
 | 6.1 | Ajouter watchdog systemd | `motor_service.py`, `motor_service.service` | Appels `sd_notify("WATCHDOG=1")` pour supervision systemd | HAUTE | ✅ Terminé |
-| 6.2 | Endpoint health check | `web/health/views.py` | `/api/health/` vérifiant Motor Service, Encoder Daemon | MOYENNE | 🔜 À faire |
+| 6.2 | Endpoint health check | `web/health/views.py` | `/api/health/` vérifiant Motor Service, Encoder Daemon | MOYENNE | ✅ Terminé |
 | 6.3 | Métriques Prometheus | `services/metrics.py` | Compteurs: commandes/sec, erreurs, latence IPC | BASSE | 🔜 À faire |
 
 **6.1 - Watchdog systemd ✅ IMPLÉMENTÉ**
@@ -462,6 +462,36 @@ sudo systemctl status motor_service.service
 ```
 
 **Note**: L'encoder daemon (`ems22d_calibrated.py`) utilise déjà systemd, donc le pattern est cohérent.
+
+**6.2 - Health Check Endpoint ✅ IMPLÉMENTÉ**
+
+Endpoints REST pour vérifier l'état de tous les composants :
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health/` | État global (Motor Service + Encoder Daemon) |
+| `GET /api/health/motor/` | État détaillé du Motor Service |
+| `GET /api/health/encoder/` | État détaillé de l'Encoder Daemon |
+| `GET /api/health/ipc/` | Statut des fichiers IPC (debug) |
+
+Fichiers créés :
+- `web/health/__init__.py`
+- `web/health/views.py` - Logique de vérification
+- `web/health/urls.py` - Routes
+- Modifié `web/driftapp_web/settings.py` - Ajout app 'health'
+- Modifié `web/driftapp_web/urls.py` - Route `/api/health/`
+
+Réponse type (HTTP 200 si healthy, 503 sinon) :
+```json
+{
+  "healthy": true,
+  "timestamp": "2025-12-25T12:00:00",
+  "components": {
+    "motor_service": {"healthy": true, "status": "idle", ...},
+    "encoder_daemon": {"healthy": true, "status": "ok", ...}
+  }
+}
+```
 
 ---
 
@@ -497,4 +527,4 @@ Ce plan est soumis pour validation. Merci de confirmer:
 ---
 
 *Document généré automatiquement par Claude Code le 24/12/2025*
-*Dernière mise à jour: 25/12/2025 - Phase 6.1 watchdog systemd implémenté*
+*Dernière mise à jour: 25/12/2025 - Phase 6.1 watchdog + 6.2 health check implémentés*
