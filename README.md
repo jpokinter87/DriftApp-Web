@@ -16,6 +16,7 @@
 - [Vue d'ensemble](#vue-densemble)
 - [Architecture](#architecture)
 - [Installation](#installation)
+  - [Installation des Services Systemd](#installation-des-services-systemd-production)
 - [Configuration](#configuration)
 - [Utilisation](#utilisation)
 - [Système Adaptatif](#système-adaptatif)
@@ -178,6 +179,82 @@ uv run python manage.py migrate
 sudo raspi-config
 # → Interface Options → SPI → Enable
 ```
+
+### Installation des Services Systemd (Production)
+
+Pour un fonctionnement automatique au démarrage du Raspberry Pi, installez les deux services systemd.
+
+#### 1. Adapter les fichiers de service
+
+Éditez les chemins dans les fichiers `.service` pour correspondre à votre installation :
+
+```bash
+# Remplacer le chemin par défaut par votre répertoire d'installation
+INSTALL_DIR="/home/votre-user/DriftApp"
+
+# Éditer ems22d.service
+sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" ems22d.service
+
+# Éditer motor_service.service
+sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" motor_service.service
+```
+
+#### 2. Copier les fichiers vers systemd
+
+```bash
+sudo cp ems22d.service /etc/systemd/system/
+sudo cp motor_service.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+#### 3. Activer les services au démarrage
+
+```bash
+# Activer les services
+sudo systemctl enable ems22d.service
+sudo systemctl enable motor_service.service
+
+# Démarrer les services
+sudo systemctl start ems22d.service
+sudo systemctl start motor_service.service
+```
+
+#### 4. Vérifier l'état des services
+
+```bash
+# État des services
+sudo systemctl status ems22d.service
+sudo systemctl status motor_service.service
+
+# Logs en temps réel
+sudo journalctl -u ems22d.service -f
+sudo journalctl -u motor_service.service -f
+```
+
+#### 5. Commandes utiles
+
+```bash
+# Redémarrer un service
+sudo systemctl restart motor_service.service
+
+# Arrêter les services
+sudo systemctl stop motor_service.service
+sudo systemctl stop ems22d.service
+
+# Désactiver un service (ne démarre plus au boot)
+sudo systemctl disable motor_service.service
+```
+
+#### Notes importantes
+
+| Service | Utilisateur | Raison |
+|---------|-------------|--------|
+| `ems22d.service` | Utilisateur normal | Accès SPI (groupe `spi`) |
+| `motor_service.service` | root | Accès GPIO direct |
+
+- **Ordre de démarrage** : `motor_service` dépend de `ems22d` (défini dans le fichier service)
+- **Watchdog** : `motor_service` envoie un heartbeat toutes les 10s ; systemd le redémarre s'il ne répond plus pendant 30s
+- **Redémarrage auto** : Les deux services redémarrent automatiquement en cas d'échec
 
 ---
 
