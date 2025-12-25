@@ -33,6 +33,9 @@ dependencies = [
     # GPIO Raspberry Pi (conditionnel)
     "spidev>=3.5; platform_machine == 'aarch64'",
     "lgpio>=0.2.2.0; platform_machine == 'aarch64'",
+
+    # Systemd watchdog (Raspberry Pi uniquement)
+    "sdnotify>=0.3.2; platform_machine == 'aarch64'",
 ]
 
 [project.optional-dependencies]
