@@ -10,8 +10,14 @@
     <div class="container">
         <!-- En-tête -->
         <header class="header">
-            <h1>DriftApp</h1>
-            <span class="subtitle">Contrôle de Coupole - Observatoire Ubik</span>
+            <div class="header-left">
+                <h1>DriftApp</h1>
+                <span class="subtitle">Contrôle de Coupole - Observatoire Ubik</span>
+            </div>
+            <nav class="nav-tabs">
+                <a href="/" class="nav-tab active">Contrôle</a>
+                <a href="/api/health/system/" class="nav-tab">Système</a>
+            </nav>
             <div class="status-indicator" id="service-status">
                 <span class="status-dot"></span>
                 <span class="status-text">Connexion...</span>

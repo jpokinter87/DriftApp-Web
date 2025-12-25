@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DriftApp - Diagnostic Systeme</title>
+    <link rel="stylesheet" href="/static/css/system.css">
+</head>
+<body>
+    <div class="container">
+        <!-- En-tete avec navigation -->
+        <header class="header">
+            <div class="header-left">
+                <h1>DriftApp</h1>
+                <span class="subtitle">Diagnostic Systeme</span>
+            </div>
+            <nav class="nav-tabs">
+                <a href="/" class="nav-tab">Controle</a>
+                <a href="/api/health/system/" class="nav-tab active">Systeme</a>
+            </nav>
+            <div class="header-right">
+                <div class="status-indicator" id="global-status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Chargement...</span>
+                </div>
+                <button id="btn-refresh" class="btn-refresh" title="Rafraichir">&#x21bb;</button>
+            </div>
+        </header>
+
+        <!-- Contenu principal -->
+        <main class="main-content">
+            <!-- Section Composants -->
+            <section class="section components-section">
+                <h2>Composants</h2>
+                <div class="components-grid">
+                    <!-- Motor Service -->
+                    <div class="component-card" id="motor-card">
+                        <div class="component-header">
+                            <span class="component-icon">&#x2699;</span>
+                            <h3>Motor Service</h3>
+                            <span class="component-status" id="motor-status-badge">--</span>
+                        </div>
+                        <div class="component-details" id="motor-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value" id="motor-status">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Mode:</span>
+                                <span class="detail-value" id="motor-mode">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Position:</span>
+                                <span class="detail-value" id="motor-position">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Simulation:</span>
+                                <span class="detail-value" id="motor-simulation">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Fichier age:</span>
+                                <span class="detail-value" id="motor-file-age">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Encoder Daemon -->
+                    <div class="component-card" id="encoder-card">
+                        <div class="component-header">
+                            <span class="component-icon">&#x25CE;</span>
+                            <h3>Encoder Daemon</h3>
+                            <span class="component-status" id="encoder-status-badge">--</span>
+                        </div>
+                        <div class="component-details" id="encoder-details">
+                            <div class="detail-row">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value" id="encoder-status">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Angle:</span>
+                                <span class="detail-value" id="encoder-angle">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Calibre:</span>
+                                <span class="detail-value" id="encoder-calibrated">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Fichier age:</span>
+                                <span class="detail-value" id="encoder-file-age">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Fichiers IPC -->
+            <section class="section ipc-section">
+                <h2>Fichiers IPC (temps reel)</h2>
+                <div class="ipc-grid">
+                    <!-- motor_status.json -->
+                    <div class="ipc-card">
+                        <div class="ipc-header">
+                            <span class="ipc-filename">motor_status.json</span>
+                            <span class="ipc-freshness" id="ipc-status-fresh">--</span>
+                        </div>
+                        <pre class="ipc-content" id="ipc-status-content">Chargement...</pre>
+                    </div>
+
+                    <!-- ems22_position.json -->
+                    <div class="ipc-card">
+                        <div class="ipc-header">
+                            <span class="ipc-filename">ems22_position.json</span>
+                            <span class="ipc-freshness" id="ipc-encoder-fresh">--</span>
+                        </div>
+                        <pre class="ipc-content" id="ipc-encoder-content">Chargement...</pre>
+                    </div>
+
+                    <!-- motor_command.json -->
+                    <div class="ipc-card">
+                        <div class="ipc-header">
+                            <span class="ipc-filename">motor_command.json</span>
+                            <span class="ipc-freshness" id="ipc-command-fresh">--</span>
+                        </div>
+                        <pre class="ipc-content" id="ipc-command-content">Chargement...</pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section Configuration -->
+            <section class="section config-section">
+                <h2>Configuration Active</h2>
+                <div class="config-grid">
+                    <!-- Site -->
+                    <div class="config-card">
+                        <h3>Site</h3>
+                        <div class="config-content" id="config-site">
+                            <div class="detail-row">
+                                <span class="detail-label">Nom:</span>
+                                <span class="detail-value" id="site-name">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Latitude:</span>
+                                <span class="detail-value" id="site-lat">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Longitude:</span>
+                                <span class="detail-value" id="site-lon">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Altitude:</span>
+                                <span class="detail-value" id="site-alt">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Moteur -->
+                    <div class="config-card">
+                        <h3>Moteur</h3>
+                        <div class="config-content" id="config-motor">
+                            <div class="detail-row">
+                                <span class="detail-label">Steps/rev:</span>
+                                <span class="detail-value" id="motor-steps">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Microsteps:</span>
+                                <span class="detail-value" id="motor-microsteps">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Gear ratio:</span>
+                                <span class="detail-value" id="motor-gear">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Delay base:</span>
+                                <span class="detail-value" id="motor-delay">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seuils -->
+                    <div class="config-card">
+                        <h3>Seuils</h3>
+                        <div class="config-content" id="config-thresholds">
+                            <div class="detail-row">
+                                <span class="detail-label">Feedback min:</span>
+                                <span class="detail-value" id="threshold-feedback">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Large mvt:</span>
+                                <span class="detail-value" id="threshold-large">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Protection:</span>
+                                <span class="detail-value" id="threshold-protection">--</span>
+                            </div>
+                            <div class="detail-row">
+                                <span class="detail-label">Tolerance:</span>
+                                <span class="detail-value" id="threshold-tolerance">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modes adaptatifs -->
+                    <div class="config-card">
+                        <h3>Modes Adaptatifs</h3>
+                        <div class="config-content" id="config-modes">
+                            <table class="modes-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mode</th>
+                                        <th>Interval</th>
+                                        <th>Seuil</th>
+                                        <th>Delay</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="modes-tbody">
+                                    <tr><td colspan="4">Chargement...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Pied de page -->
+        <footer class="footer">
+            <span>DriftApp v4.4 - Diagnostic Systeme</span>
+            <span id="last-update">Derniere mise a jour: --</span>
+            <label class="auto-refresh">
+                <input type="checkbox" id="auto-refresh-toggle" checked>
+                Auto-refresh (2s)
+            </label>
+        </footer>
+    </div>
+
+    <script src="/static/js/system.js"></script>
+</body>
+</html>
