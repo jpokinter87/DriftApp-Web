@@ -28,6 +28,48 @@ from core.utils.angle_utils import shortest_angular_distance
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# FONCTIONS UTILITAIRES COMMUNES (DRY)
+# =============================================================================
+
+def _get_motor_speed(config, speed: Optional[float] = None) -> float:
+    """
+    Retourne la vitesse optimale pour les commandes moteur.
+
+    Utilisé par GOTO, JOG et CONTINUOUS pour éviter la duplication de code.
+
+    Args:
+        config: Configuration chargée
+        speed: Vitesse explicite (optionnelle)
+
+    Returns:
+        Délai moteur en secondes (ex: 0.00015 pour ~41°/min)
+    """
+    if speed is not None:
+        return speed
+    if config.adaptive and config.adaptive.modes:
+        continuous = config.adaptive.modes.get('continuous')
+        if continuous:
+            return continuous.motor_delay
+    return 0.00015
+
+
+def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):
+    """
+    Synchronise la position simulée avec le status actuel.
+
+    Doit être appelé avant toute commande moteur en mode simulation
+    pour que le moteur simulé commence à la bonne position.
+
+    Args:
+        simulation_mode: True si en mode simulation
+        current_status: Status actuel contenant 'position'
+    """
+    if simulation_mode:
+        current_pos = current_status.get('position', 0)
+        set_simulated_position(current_pos)
+
+
 class GotoHandler:
     """Handler pour les commandes GOTO (déplacement absolu)."""
 
@@ -49,16 +91,6 @@ class GotoHandler:
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
 
-    def _get_goto_speed(self, speed: Optional[float] = None) -> float:
-        """Retourne la vitesse optimale pour les GOTO."""
-        if speed is not None:
-            return speed
-        if self.config.adaptive and self.config.adaptive.modes:
-            continuous = self.config.adaptive.modes.get('continuous')
-            if continuous:
-                return continuous.motor_delay
-        return 0.00015
-
     def execute(self, angle: float, current_status: Dict[str, Any],
                 speed: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -68,7 +100,7 @@ class GotoHandler:
         - Grands déplacements (> 3°): Rotation directe FLUIDE, puis correction finale
         - Petits déplacements (≤ 3°): Feedback classique pour précision
         """
-        speed = self._get_goto_speed(speed)
+        speed = _get_motor_speed(self.config, speed)
         logger.info(f"GOTO vers {angle:.1f}° (vitesse={speed*1000:.3f}ms)")
 
         current_status['status'] = 'moving'
@@ -77,10 +109,8 @@ class GotoHandler:
         self.status_callback(current_status)
 
         try:
-            # En mode simulation, synchroniser _simulated_position
-            if self.simulation_mode:
-                current_pos = current_status.get('position', 0)
-                set_simulated_position(current_pos)
+            # Synchroniser la position simulée avant toute commande
+            _sync_simulation_position(self.simulation_mode, current_status)
 
             # Lire position actuelle
             if self.daemon_reader.is_available():
@@ -198,16 +228,6 @@ class JogHandler:
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
 
-    def _get_jog_speed(self, speed: Optional[float] = None) -> float:
-        """Retourne la vitesse optimale pour les JOG."""
-        if speed is not None:
-            return speed
-        if self.config.adaptive and self.config.adaptive.modes:
-            continuous = self.config.adaptive.modes.get('continuous')
-            if continuous:
-                return continuous.motor_delay
-        return 0.00015
-
     def execute(self, delta: float, current_status: Dict[str, Any],
                 speed: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -216,15 +236,14 @@ class JogHandler:
         OPTIMISATION v4.4: Rotation directe SANS feedback (fluidité maximale).
         """
         logger.info(f"JOG de {delta:+.1f}° (sans feedback)")
-        speed = self._get_jog_speed(speed)
+        speed = _get_motor_speed(self.config, speed)
 
         current_status['status'] = 'moving'
         self.status_callback(current_status)
 
         try:
-            if self.simulation_mode:
-                current_pos = current_status.get('position', 0)
-                set_simulated_position(current_pos)
+            # Synchroniser la position simulée avant toute commande
+            _sync_simulation_position(self.simulation_mode, current_status)
 
             # Rotation directe (fluide, sans feedback)
             self.moteur.clear_stop_request()
@@ -264,14 +283,6 @@ class ContinuousHandler:
         self.thread: Optional[threading.Thread] = None
         self.stop_flag = threading.Event()
 
-    def _get_continuous_speed(self) -> float:
-        """Retourne la vitesse pour les mouvements continus."""
-        if self.config.adaptive and self.config.adaptive.modes:
-            continuous = self.config.adaptive.modes.get('continuous')
-            if continuous:
-                return continuous.motor_delay
-        return 0.00015
-
     def start(self, direction: str, current_status: Dict[str, Any]):
         """Démarre un mouvement continu dans une direction."""
         logger.info(f"Mouvement continu {direction.upper()}")
@@ -282,9 +293,8 @@ class ContinuousHandler:
         current_status['target'] = None
         self.status_callback(current_status)
 
-        if self.simulation_mode:
-            current_pos = current_status.get('position', 0)
-            set_simulated_position(current_pos)
+        # Synchroniser la position simulée avant toute commande
+        _sync_simulation_position(self.simulation_mode, current_status)
 
         self.stop_flag.clear()
         self.thread = threading.Thread(
@@ -311,7 +321,7 @@ class ContinuousHandler:
         """Boucle de mouvement continu."""
         delta_per_step = 1.0 if direction == 'cw' else -1.0
         step_interval = 0.1
-        speed = self._get_continuous_speed()
+        speed = _get_motor_speed(self.config)
 
         logger.debug(f"Thread mouvement continu démarré: {direction}")
 

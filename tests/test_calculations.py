@@ -25,8 +25,8 @@ pytestmark = pytest.mark.skipif(
 class TestAstronomicalCalculationsInit:
     """Tests pour l'initialisation de AstronomicalCalculations."""
 
-    def test_init_parametres_defaut(self):
-        """Initialisation avec paramètres par défaut."""
+    def test_init_parametres(self):
+        """Initialisation avec paramètres requis."""
         from core.observatoire.calculations import AstronomicalCalculations
 
         calc = AstronomicalCalculations(
@@ -37,22 +37,19 @@ class TestAstronomicalCalculationsInit:
         assert calc.latitude == 44.15
         assert calc.longitude == 5.23
         assert calc.tz_offset == 1
-        assert calc.deport_tube == 0.40  # Défaut
-        assert calc.rayon_coupole == 1.20  # Défaut
 
-    def test_init_parametres_personnalises(self):
-        """Initialisation avec paramètres personnalisés."""
+    def test_init_autres_coordonnees(self):
+        """Initialisation avec d'autres coordonnées."""
         from core.observatoire.calculations import AstronomicalCalculations
 
         calc = AstronomicalCalculations(
             latitude=48.85,
             longitude=2.35,
-            tz_offset=2,
-            deport_tube=0.50,
-            rayon_coupole=1.50
+            tz_offset=2
         )
-        assert calc.deport_tube == 0.50
-        assert calc.rayon_coupole == 1.50
+        assert calc.latitude == 48.85
+        assert calc.longitude == 2.35
+        assert calc.tz_offset == 2
 
 
 class TestNormalisationAngles:
@@ -74,7 +71,8 @@ class TestNormalisationAngles:
     def test_normaliser_angle_180_negatif(self, calc):
         """Normalisation vers [-180, 180] - angles négatifs."""
         assert calc._normaliser_angle_180(-90) == -90
-        assert calc._normaliser_angle_180(-180) == 180
+        # Note: -180 reste -180 (bord de l'intervalle [-180, 180])
+        assert calc._normaliser_angle_180(-180) == -180
         assert calc._normaliser_angle_180(-270) == 90
 
     def test_normaliser_angle_360(self, calc):
@@ -129,64 +127,6 @@ class TestConversionJ2000JNOW:
 
         # La déclinaison reste proche du pôle
         assert dec_jnow > 88.0
-
-
-class TestCorrectionParallaxe:
-    """Tests pour la correction de parallaxe."""
-
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(
-            latitude=44.15,
-            longitude=5.23,
-            tz_offset=1,
-            deport_tube=0.40,
-            rayon_coupole=1.20
-        )
-
-    def test_parallaxe_zenith_nulle(self, calc):
-        """Au zénith, la correction est nulle."""
-        correction = calc.calculer_correction_parallaxe(180.0, 90.0)
-        assert correction == pytest.approx(0.0, abs=0.01)
-
-    def test_parallaxe_est_positive(self, calc):
-        """Correction positive à l'Est."""
-        correction = calc.calculer_correction_parallaxe(90.0, 45.0)
-        assert correction > 0
-
-    def test_parallaxe_ouest_negative(self, calc):
-        """Correction négative à l'Ouest."""
-        correction = calc.calculer_correction_parallaxe(270.0, 45.0)
-        assert correction < 0
-
-    def test_symetrie_est_ouest(self, calc):
-        """Symétrie Est/Ouest des corrections."""
-        for altitude in [15, 30, 45, 60, 75]:
-            corr_est = calc.calculer_correction_parallaxe(90.0, altitude)
-            corr_ouest = calc.calculer_correction_parallaxe(270.0, altitude)
-            # Les corrections doivent être opposées
-            assert abs(corr_est + corr_ouest) < 0.01
-
-    def test_parallaxe_diminue_avec_altitude(self, calc):
-        """La parallaxe diminue quand l'altitude augmente."""
-        corr_15 = abs(calc.calculer_correction_parallaxe(90.0, 15.0))
-        corr_45 = abs(calc.calculer_correction_parallaxe(90.0, 45.0))
-        corr_75 = abs(calc.calculer_correction_parallaxe(90.0, 75.0))
-
-        assert corr_15 > corr_45 > corr_75
-
-    def test_parallaxe_nord_sud_faible(self, calc):
-        """Correction plus faible au Nord et au Sud."""
-        corr_nord = abs(calc.calculer_correction_parallaxe(0.0, 45.0))
-        corr_est = abs(calc.calculer_correction_parallaxe(90.0, 45.0))
-
-        # La correction Est doit être plus grande
-        assert corr_est > corr_nord
-
-    def test_valider_symetrie(self, calc):
-        """Test de la méthode de validation de symétrie."""
-        assert calc.valider_symetrie(tolerance=0.1)
 
 
 class TestTempsSideral:

@@ -70,6 +70,9 @@ class IpcManager:
 
             # Vérifier si c'est une nouvelle commande
             cmd_id = command.get('id')
+            if cmd_id is None:
+                logger.warning(f"Commande reçue sans ID, ignorée: {command.get('type', 'unknown')}")
+                return None
             if cmd_id == self.last_command_id:
                 return None
 
