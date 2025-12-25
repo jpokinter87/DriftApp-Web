@@ -246,20 +246,26 @@ def _read_ipc_file_content(file_path: Path) -> dict:
     Lit le contenu brut d'un fichier IPC.
 
     Returns:
-        dict avec 'exists', 'content', 'error'
+        dict avec 'exists', 'content', 'error', 'empty'
     """
     if not file_path.exists():
-        return {'exists': False, 'content': None, 'error': 'Fichier non trouvé'}
+        return {'exists': False, 'content': None, 'error': 'Fichier non trouvé', 'empty': False}
 
     try:
         import json
         with open(file_path, 'r') as f:
-            content = json.load(f)
-        return {'exists': True, 'content': content, 'error': None}
+            text = f.read().strip()
+
+        # Fichier vide = état normal pour motor_command.json (après traitement)
+        if not text:
+            return {'exists': True, 'content': None, 'error': None, 'empty': True}
+
+        content = json.loads(text)
+        return {'exists': True, 'content': content, 'error': None, 'empty': False}
     except json.JSONDecodeError as e:
-        return {'exists': True, 'content': None, 'error': f'JSON invalide: {e}'}
+        return {'exists': True, 'content': None, 'error': f'JSON invalide: {e}', 'empty': False}
     except Exception as e:
-        return {'exists': True, 'content': None, 'error': str(e)}
+        return {'exists': True, 'content': None, 'error': str(e), 'empty': False}
 
 
 def _load_config() -> dict:

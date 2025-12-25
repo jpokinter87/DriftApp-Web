@@ -258,13 +258,17 @@ function updateIpcCard(freshEl, contentEl, content, freshness) {
         freshEl.textContent = formatAge(freshness.age_sec);
         contentEl.textContent = content.content
             ? JSON.stringify(content.content, null, 2)
-            : content.error || '(erreur lecture)';
+            : content.empty
+                ? '(aucune commande en attente)'
+                : content.error || '(erreur lecture)';
     } else {
         freshEl.className = 'ipc-freshness fresh';
         freshEl.textContent = formatAge(freshness.age_sec);
         contentEl.textContent = content.content
             ? JSON.stringify(content.content, null, 2)
-            : content.error || '(vide)';
+            : content.empty
+                ? '(aucune commande en attente)'
+                : content.error || '(vide)';
     }
 }
 
