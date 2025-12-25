@@ -425,42 +425,40 @@ Les fichiers `web/hardware/views.py` et `web/tracking/views.py` utilisent mainte
 
 ---
 
-### Phase 6: Monitoring & Supervision (À FAIRE)
+### Phase 6: Monitoring & Supervision (EN COURS)
 
-Cette phase est optionnelle mais recommandée pour améliorer la robustesse en production.
+Cette phase améliore la robustesse en production avec supervision et monitoring.
 
-| # | Tâche | Fichier | Description | Priorité |
-|---|-------|---------|-------------|----------|
-| 6.1 | Ajouter watchdog systemd | `motor_service.py` | Appels `sd_notify("WATCHDOG=1")` pour supervision systemd | HAUTE |
-| 6.2 | Endpoint health check | `web/health/views.py` | `/api/health/` vérifiant Motor Service, Encoder Daemon | MOYENNE |
-| 6.3 | Métriques Prometheus | `services/metrics.py` | Compteurs: commandes/sec, erreurs, latence IPC | BASSE |
+| # | Tâche | Fichier | Description | Priorité | Statut |
+|---|-------|---------|-------------|----------|--------|
+| 6.1 | Ajouter watchdog systemd | `motor_service.py`, `motor_service.service` | Appels `sd_notify("WATCHDOG=1")` pour supervision systemd | HAUTE | ✅ Terminé |
+| 6.2 | Endpoint health check | `web/health/views.py` | `/api/health/` vérifiant Motor Service, Encoder Daemon | MOYENNE | 🔜 À faire |
+| 6.3 | Métriques Prometheus | `services/metrics.py` | Compteurs: commandes/sec, erreurs, latence IPC | BASSE | 🔜 À faire |
 
-**6.1 - Watchdog systemd (Recommandé)**
+**6.1 - Watchdog systemd ✅ IMPLÉMENTÉ**
 
-Le Motor Service est critique pour l'application. Un watchdog systemd permettrait de :
+Le Motor Service est critique pour l'application. Le watchdog systemd permet de :
 - Redémarrer automatiquement le service en cas de freeze
 - Détecter les deadlocks ou blocages
 - Améliorer la fiabilité sans intervention manuelle
 
-Implémentation suggérée :
-```python
-# services/motor_service.py
-import sdnotify  # pip install sdnotify
+Fichiers modifiés :
+- `pyproject.toml` : Ajout dépendance `sdnotify>=0.3.2` (conditionnelle aarch64)
+- `services/motor_service.py` : Intégration watchdog (READY=1, WATCHDOG=1 toutes les 10s, STOPPING=1)
+- `motor_service.service` : Configuration systemd avec `Type=notify` et `WatchdogSec=30`
 
-notifier = sdnotify.SystemdNotifier()
+Installation sur Raspberry Pi :
+```bash
+# Copier le fichier service
+sudo cp motor_service.service /etc/systemd/system/
 
-async def run(self):
-    notifier.notify("READY=1")
-    while self._running:
-        notifier.notify("WATCHDOG=1")  # Heartbeat
-        # ... boucle existante ...
-```
+# Recharger systemd et activer le service
+sudo systemctl daemon-reload
+sudo systemctl enable motor_service.service
+sudo systemctl start motor_service.service
 
-Configuration systemd :
-```ini
-[Service]
-Type=notify
-WatchdogSec=30  # Redémarre si pas de heartbeat pendant 30s
+# Vérifier le statut
+sudo systemctl status motor_service.service
 ```
 
 **Note**: L'encoder daemon (`ems22d_calibrated.py`) utilise déjà systemd, donc le pattern est cohérent.
@@ -499,4 +497,4 @@ Ce plan est soumis pour validation. Merci de confirmer:
 ---
 
 *Document généré automatiquement par Claude Code le 24/12/2025*
-*Dernière mise à jour: 24/12/2025 - Post-Phase 5 + Phase 6 planifiée*
+*Dernière mise à jour: 25/12/2025 - Phase 6.1 watchdog systemd implémenté*

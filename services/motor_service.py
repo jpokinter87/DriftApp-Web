@@ -28,6 +28,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+# Import conditionnel pour sdnotify (Raspberry Pi uniquement)
+try:
+    import sdnotify
+    SDNOTIFY_AVAILABLE = True
+except ImportError:
+    SDNOTIFY_AVAILABLE = False
+
 # Ajouter le répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -73,9 +80,15 @@ class MotorService:
     # Durée après laquelle un état 'error' est automatiquement remis à 'idle'
     ERROR_RECOVERY_TIMEOUT = 10.0  # secondes
 
+    # Intervalle watchdog (en secondes) - doit être < WatchdogSec/2 dans systemd
+    WATCHDOG_INTERVAL = 10.0
+
     def __init__(self):
         """Initialise le service moteur."""
         self.running = False
+
+        # Initialiser le notifier systemd (si disponible)
+        self._init_systemd_notifier()
 
         # Charger la configuration
         self.config = ConfigLoader().load()
@@ -150,6 +163,39 @@ class MotorService:
             self.feedback_controller, self.config,
             self.simulation_mode, self._write_status, self._add_tracking_log
         )
+
+    def _init_systemd_notifier(self):
+        """
+        Initialise le notifier systemd pour le watchdog.
+
+        Le watchdog permet à systemd de redémarrer automatiquement le service
+        en cas de freeze ou deadlock. Le service doit envoyer un heartbeat
+        régulier (WATCHDOG=1) sinon systemd le redémarre.
+        """
+        if SDNOTIFY_AVAILABLE:
+            self._systemd_notifier = sdnotify.SystemdNotifier()
+            self._watchdog_enabled = True
+            logger.info("Watchdog systemd initialisé")
+        else:
+            self._systemd_notifier = None
+            self._watchdog_enabled = False
+            logger.debug("sdnotify non disponible - watchdog désactivé")
+
+    def _notify_systemd(self, message: str):
+        """
+        Envoie une notification à systemd (si disponible).
+
+        Messages courants:
+        - READY=1: Service prêt à recevoir des commandes
+        - WATCHDOG=1: Heartbeat, prouve que le service est vivant
+        - STOPPING=1: Service en cours d'arrêt
+        - STATUS=<text>: Statut lisible par l'humain
+        """
+        if self._systemd_notifier:
+            try:
+                self._systemd_notifier.notify(message)
+            except Exception as e:
+                logger.debug(f"Erreur notification systemd: {e}")
 
     def _create_initial_status(self) -> Dict[str, Any]:
         """Crée l'état initial."""
@@ -302,7 +348,12 @@ class MotorService:
 
         self._write_status()
 
+        # Notifier systemd que le service est prêt
+        self._notify_systemd("READY=1")
+        self._notify_systemd("STATUS=Motor Service prêt")
+
         last_tracking_update = time.time()
+        last_watchdog_ping = time.time()
         tracking_interval = 1.0
 
         while self.running:
@@ -327,6 +378,11 @@ class MotorService:
                 if pos is not None and not self.tracking_handler.is_active:
                     self.current_status['position'] = pos
 
+                # Envoyer heartbeat watchdog périodiquement
+                if now - last_watchdog_ping >= self.WATCHDOG_INTERVAL:
+                    self._notify_systemd("WATCHDOG=1")
+                    last_watchdog_ping = now
+
                 time.sleep(0.05)  # 20Hz de polling
 
             except KeyboardInterrupt:
@@ -341,6 +397,10 @@ class MotorService:
     def cleanup(self):
         """Nettoie les ressources à l'arrêt."""
         logger.info("Nettoyage des ressources...")
+
+        # Notifier systemd que le service s'arrête
+        self._notify_systemd("STOPPING=1")
+        self._notify_systemd("STATUS=Arrêt en cours")
 
         if self.tracking_handler.session:
             self.tracking_handler.session.stop()

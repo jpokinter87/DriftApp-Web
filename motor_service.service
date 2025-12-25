@@ -1,0 +1,33 @@
+[Unit]
+Description=DriftApp Motor Service - Dome Control
+Documentation=https://github.com/observatoire-ubik/driftapp-web
+After=network.target ems22d.service
+Requires=ems22d.service
+
+[Service]
+Type=notify
+WorkingDirectory=/home/slenk/Dome_v4_5
+ExecStart=/usr/bin/python3 /home/slenk/Dome_v4_5/services/motor_service.py
+
+# Watchdog: redémarre si pas de heartbeat pendant 30s
+# Le service envoie WATCHDOG=1 toutes les 10s
+WatchdogSec=30
+
+# Politique de redémarrage
+Restart=on-failure
+RestartSec=5
+
+# Utilisateur root requis pour GPIO
+User=root
+
+# Variables d'environnement
+Environment=PYTHONUNBUFFERED=1
+
+# Timeout de démarrage (READY=1 doit arriver avant)
+TimeoutStartSec=30
+
+# Limites de ressources
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target
