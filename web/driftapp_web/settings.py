@@ -19,7 +19,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 SECRET_KEY = 'django-insecure-driftapp-dev-key-change-in-production'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Utiliser DJANGO_DEBUG=0 ou DJANGO_DEBUG=false en production
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('true', '1', 'yes')
 
 # Permettre les connexions depuis le réseau local
 ALLOWED_HOSTS = ['*']

@@ -39,7 +39,13 @@ class GotoView(APIView):
         speed = request.data.get('speed')
         params = {'angle': angle}
         if speed is not None:
-            params['speed'] = float(speed)
+            try:
+                params['speed'] = float(speed)
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'Vitesse invalide'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         success = motor_client.send_command('goto', **params)
 
@@ -86,7 +92,13 @@ class JogView(APIView):
         speed = request.data.get('speed')
         params = {'delta': delta}
         if speed is not None:
-            params['speed'] = float(speed)
+            try:
+                params['speed'] = float(speed)
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'Vitesse invalide'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         success = motor_client.send_command('jog', **params)
 

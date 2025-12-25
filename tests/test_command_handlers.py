@@ -78,6 +78,12 @@ def mock_config():
         intervalle_verification_sec = 60
         abaque_file = 'data/Loi_coupole.xlsx'
 
+    class MockThresholds:
+        feedback_min_deg = 3.0
+        large_movement_deg = 30.0
+        feedback_protection_deg = 20.0
+        default_tolerance_deg = 0.5
+
     class MockSite:
         latitude = 44.15
         longitude = 5.23
@@ -92,6 +98,7 @@ def mock_config():
     class MockConfig:
         adaptive = MockAdaptive()
         tracking = MockTracking()
+        thresholds = MockThresholds()
         site = MockSite()
         motor = MockMotor()
         encoder = MockEncoder()
@@ -132,14 +139,16 @@ class TestGotoHandler:
             status_callback=status_callback
         )
 
-    def test_get_goto_speed_default(self, handler):
-        """Utilise la vitesse CONTINUOUS par défaut."""
-        speed = handler._get_goto_speed()
+    def test_get_motor_speed_default(self, handler, mock_config):
+        """Utilise la vitesse CONTINUOUS par défaut via fonction partagée."""
+        from services.command_handlers import _get_motor_speed
+        speed = _get_motor_speed(mock_config)
         assert speed == 0.00015
 
-    def test_get_goto_speed_explicit(self, handler):
+    def test_get_motor_speed_explicit(self, mock_config):
         """Utilise la vitesse explicite si fournie."""
-        speed = handler._get_goto_speed(0.002)
+        from services.command_handlers import _get_motor_speed
+        speed = _get_motor_speed(mock_config, 0.002)
         assert speed == 0.002
 
     def test_execute_small_goto_uses_feedback(self, handler, mock_feedback_controller):
@@ -384,20 +393,19 @@ class TestTrackingHandler:
 
 
 # =============================================================================
-# TESTS SEUIL FEEDBACK
+# TESTS SEUIL FEEDBACK (via config.thresholds.feedback_min_deg)
 # =============================================================================
 
 class TestSeuilFeedback:
-    """Tests pour le seuil de feedback (3°)."""
+    """Tests pour le seuil de feedback configuré dans config.thresholds.feedback_min_deg."""
 
-    def test_seuil_value(self):
-        """Le seuil de feedback est de 3°."""
-        from services.command_handlers import SEUIL_FEEDBACK_DEG
-        assert SEUIL_FEEDBACK_DEG == 3.0
+    def test_threshold_from_config(self, mock_config):
+        """Le seuil de feedback vient de config.thresholds.feedback_min_deg."""
+        assert mock_config.thresholds.feedback_min_deg == 3.0
 
-    def test_small_goto_threshold(self, mock_moteur, mock_daemon_reader,
-                                   mock_feedback_controller, mock_config, status_callback):
-        """Les déplacements ≤ 3° utilisent le feedback."""
+    def test_small_goto_uses_feedback(self, mock_moteur, mock_daemon_reader,
+                                       mock_feedback_controller, mock_config, status_callback):
+        """Les déplacements ≤ seuil utilisent le feedback."""
         from services.command_handlers import GotoHandler
 
         handler = GotoHandler(
@@ -422,14 +430,14 @@ class TestSeuilFeedback:
         status = {'status': 'idle', 'position': 0.0}
 
         with patch('core.hardware.moteur_simule.set_simulated_position'):
-            handler.execute(3.0, status)  # Exactement 3°
+            handler.execute(3.0, status)  # Exactement au seuil (3°)
 
-        # Feedback utilisé car delta <= 3°
+        # Feedback utilisé car delta <= feedback_min_deg
         mock_feedback_controller.rotation_avec_feedback.assert_called()
 
-    def test_large_goto_threshold(self, mock_moteur, mock_daemon_reader,
-                                   mock_feedback_controller, mock_config, status_callback):
-        """Les déplacements > 3° utilisent la rotation directe."""
+    def test_large_goto_uses_direct_rotation(self, mock_moteur, mock_daemon_reader,
+                                              mock_feedback_controller, mock_config, status_callback):
+        """Les déplacements > seuil utilisent la rotation directe."""
         from services.command_handlers import GotoHandler
 
         handler = GotoHandler(
@@ -447,7 +455,7 @@ class TestSeuilFeedback:
         status = {'status': 'idle', 'position': 0.0}
 
         with patch('core.hardware.moteur_simule.set_simulated_position'):
-            handler.execute(3.1, status)  # Juste au-dessus de 3°
+            handler.execute(3.1, status)  # Juste au-dessus du seuil
 
         # Rotation directe utilisée
         mock_moteur.rotation.assert_called()
