@@ -7,6 +7,46 @@ Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)
 
 ---
 
+## [4.6] - 2025-12-25
+
+### 📦 Ajouté
+- **Page Diagnostic Système** : Nouvelle page `/api/health/system/` accessible via onglet "Système"
+  - Affichage temps réel des fichiers IPC (motor_status, encoder, command)
+  - État des composants (Motor Service, Encoder Daemon) avec indicateurs couleur
+  - Configuration complète du système (site, moteur, seuils, modes adaptatifs)
+  - Rafraîchissement automatique toutes les 2 secondes
+- **API Health Check** : Endpoints REST pour monitoring
+  - `GET /api/health/` : État global (healthy/unhealthy)
+  - `GET /api/health/diagnostic/` : Diagnostic complet en JSON
+- **Watchdog Systemd** : Supervision du Motor Service
+  - Notifications READY/WATCHDOG/STOPPING via sdnotify
+  - Fichier `motor_service.service` pour déploiement systemd
+  - Redémarrage automatique si le service ne répond plus (30s timeout)
+- **Navigation onglets** : Tabs "Contrôle" / "Système" dans le header
+
+### ✏️ Modifié
+- `dashboard.html` : Ajout navigation par onglets
+- `dashboard.css` : Styles pour les onglets de navigation
+- Architecture Motor Service refactorisée en 4 modules (Phase 5)
+
+---
+
+## [4.5] - 2025-12-20
+
+### 📦 Ajouté
+- **Rampe d'accélération** : Protection moteur via courbe S
+  - Démarrage progressif (délai 3ms → délai cible)
+  - 500 pas d'accélération, 500 pas de décélération
+  - Transition sigmoïde (non linéaire) pour fluidité
+  - `core/hardware/acceleration_ramp.py` : Module dédié
+- **Paramètre `use_ramp`** : Activé par défaut dans `rotation()`
+
+### ✏️ Modifié
+- `moteur.py` : Intégration de la rampe d'accélération
+- Réduction du stress mécanique sur démarrages/arrêts
+
+---
+
 ## [4.4] - 2025-12-17
 
 ### 🔧 Corrigé
