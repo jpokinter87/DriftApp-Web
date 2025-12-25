@@ -73,37 +73,7 @@ Pour une position (Alt, Az) donnée :
 ### Architecture Trois Processus
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        NAVIGATEUR                                │
-│                    (Interface Web)                               │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ HTTP/WebSocket
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     PROCESSUS 1: Django                          │
-│                   (Interface Web + API)                          │
-│  - Dashboard temps réel                                          │
-│  - Catalogue objets célestes                                     │
-│  - Configuration                                                 │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ IPC (JSON /dev/shm/)
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  PROCESSUS 2: Motor Service                      │
-│                 (Contrôle moteur GPIO)                           │
-│  - Commandes GOTO, JOG, CONTINUOUS                               │
-│  - Tracking adaptatif                                            │
-│  - Feedback boucle fermée                                        │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ Lecture JSON
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 PROCESSUS 3: Encoder Daemon                      │
-│                  (Lecture encodeur SPI)                          │
-│  - Lecture EMS22A à 50 Hz                                        │
-│  - Méthode incrémentale                                          │
-│  - Calibration switch 45°                                        │
-└─────────────────────────────────────────────────────────────────┘
+
 ```
 
 ### Structure des Répertoires
@@ -162,20 +132,25 @@ DriftApp/
 
 ```bash
 # 1. Cloner le repository
-git clone https://github.com/votre-username/DriftApp.git
-cd DriftApp
+git clone https://github.com/jpokinter87/DriftApp-Web.git
+cd DriftApp-Web
+
+# ou bien en choisissant le répertoire par exemple /home/slenk/Dome_Web
+git clone https://github.com/jpokinter87/DriftApp-Web.git /home/slenk/Dome_Web
+cd /home/slenk/Dome_Web
+ 
 
 # 2. Installation des dépendances
 uv sync
 
-# 3. Configuration
+# 3. Configuration (déjà fait, tu peux sauter cette étape)
 cp data/config.example.json data/config.json
 nano data/config.json
 
-# 4. Migrations Django
+# 4. Migrations Django (uniquement la première fois pour l'installation)
 uv run python manage.py migrate
 
-# 5. (Production) Activer SPI
+# 5. (Production) Activer SPI (pas obligatoire, tu peux aussi sauté cette étape)
 sudo raspi-config
 # → Interface Options → SPI → Enable
 ```
@@ -190,7 +165,7 @@ Pour un fonctionnement automatique au démarrage du Raspberry Pi, installez les 
 
 ```bash
 # Remplacer le chemin par défaut par votre répertoire d'installation
-INSTALL_DIR="/home/votre-user/DriftApp"
+INSTALL_DIR="/home/slenk/Dome_Web"
 
 # Éditer ems22d.service
 sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" ems22d.service
