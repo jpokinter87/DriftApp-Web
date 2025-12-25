@@ -86,6 +86,38 @@ body {
     50% { opacity: 0.5; }
 }
 
+/* Header layout avec navigation */
+.header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+}
+
+.nav-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: 2rem;
+}
+
+.nav-tab {
+    padding: 0.5rem 1rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.2s;
+    font-size: 0.9rem;
+}
+
+.nav-tab:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.nav-tab.active {
+    background: var(--accent-blue);
+    color: white;
+}
+
 /* Main content */
 .main-content {
     display: grid;

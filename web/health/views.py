@@ -239,3 +239,111 @@ def ipc_status(request):
         'timestamp': datetime.now().isoformat(),
         'files': _check_ipc_files()
     })
+
+
+def _read_ipc_file_content(file_path: Path) -> dict:
+    """
+    Lit le contenu brut d'un fichier IPC.
+
+    Returns:
+        dict avec 'exists', 'content', 'error'
+    """
+    if not file_path.exists():
+        return {'exists': False, 'content': None, 'error': 'Fichier non trouvé'}
+
+    try:
+        import json
+        with open(file_path, 'r') as f:
+            content = json.load(f)
+        return {'exists': True, 'content': content, 'error': None}
+    except json.JSONDecodeError as e:
+        return {'exists': True, 'content': None, 'error': f'JSON invalide: {e}'}
+    except Exception as e:
+        return {'exists': True, 'content': None, 'error': str(e)}
+
+
+def _load_config() -> dict:
+    """
+    Charge la configuration depuis config.json.
+    """
+    try:
+        import json
+        config_path = settings.DRIFTAPP_CONFIG
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+
+        # Extraire les infos essentielles (sans les commentaires)
+        return {
+            'site': config.get('site', {}),
+            'thresholds': config.get('thresholds', {}),
+            'suivi': config.get('suivi', {}),
+            'moteur': {
+                'steps_per_revolution': config.get('moteur', {}).get('steps_per_revolution'),
+                'microsteps': config.get('moteur', {}).get('microsteps'),
+                'gear_ratio': config.get('moteur', {}).get('gear_ratio'),
+                'motor_delay_base': config.get('moteur', {}).get('motor_delay_base'),
+            },
+            'encodeur': {
+                'enabled': config.get('encodeur', {}).get('enabled'),
+                'calibration_factor': config.get('encodeur', {}).get('calibration_factor'),
+            },
+            'adaptive_modes': {
+                name: {
+                    'interval_sec': mode.get('interval_sec'),
+                    'threshold_deg': mode.get('threshold_deg'),
+                    'motor_delay': mode.get('motor_delay'),
+                }
+                for name, mode in config.get('adaptive_tracking', {}).get('modes', {}).items()
+                if isinstance(mode, dict) and 'interval_sec' in mode
+            },
+            'simulation': config.get('simulation', False),
+        }
+    except Exception as e:
+        return {'error': str(e)}
+
+
+@api_view(['GET'])
+def diagnostic(request):
+    """
+    Endpoint de diagnostic complet pour la page système.
+
+    Retourne toutes les informations nécessaires à l'affichage :
+    - État des composants
+    - Contenu brut des fichiers IPC
+    - Configuration active
+    """
+    motor = _check_motor_service()
+    encoder = _check_encoder_daemon()
+
+    # Contenu brut des fichiers IPC
+    ipc_contents = {
+        'motor_status': _read_ipc_file_content(
+            Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
+        ),
+        'encoder_position': _read_ipc_file_content(
+            Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
+        ),
+        'motor_command': _read_ipc_file_content(
+            Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
+        ),
+    }
+
+    # Fraîcheur des fichiers
+    ipc_freshness = _check_ipc_files()
+
+    # Configuration
+    config = _load_config()
+
+    return Response({
+        'timestamp': datetime.now().isoformat(),
+        'overall_healthy': motor['healthy'] and encoder['healthy'],
+        'components': {
+            'motor_service': motor,
+            'encoder_daemon': encoder
+        },
+        'ipc': {
+            'contents': ipc_contents,
+            'freshness': ipc_freshness
+        },
+        'config': config
+    })
