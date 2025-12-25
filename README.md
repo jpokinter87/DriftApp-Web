@@ -7,7 +7,7 @@
 
 **Système intelligent de suivi de coupole d'observatoire** avec modes adaptatifs automatiques et feedback temps réel. Interface web responsive pour contrôle local et distant.
 
-> **Version actuelle** : 4.5 Web - Architecture trois processus (Décembre 2025)
+> **Version actuelle** : 4.6 Web - Architecture trois processus + Monitoring (Décembre 2025)
 
 ---
 
@@ -221,7 +221,21 @@ Fichier : `data/config.json`
 
 ## Utilisation
 
-### Mode Développement (Simulation)
+### Scripts de Démarrage (Recommandé)
+
+```bash
+# Mode Production (Raspberry Pi) - nécessite sudo
+sudo ./start_web.sh          # Démarre tous les services
+sudo ./start_web.sh stop     # Arrête tous les services
+./start_web.sh status        # Vérifie l'état
+
+# Mode Développement (PC) - simulation automatique
+./start_dev.sh               # Démarre Motor Service + Django
+./start_dev.sh stop          # Arrête les services
+./start_dev.sh status        # Vérifie l'état
+```
+
+### Mode Développement Manuel (Simulation)
 
 ```bash
 # Terminal 1: Lancer Django
@@ -239,7 +253,7 @@ En mode développement (sans Raspberry Pi), le système détecte automatiquement
 - Simulation du switch de calibration à 45°
 - Position interpolée en temps réel
 
-### Mode Production (Raspberry Pi)
+### Mode Production Manuel (Raspberry Pi)
 
 ```bash
 # Terminal 1: Démon encodeur (sudo requis)
@@ -303,6 +317,30 @@ Lors du démarrage d'un tracking, un popup affiche :
 - Delta avec direction (CW/CCW)
 - Barre de progression
 - Temps restant estimé
+
+### Page Diagnostic Système
+
+Accessible via l'onglet **"Système"** dans le header (ou `/api/health/system/`), cette page affiche en temps réel :
+
+- **État des composants** : Motor Service et Encoder Daemon avec indicateurs couleur (vert/orange/rouge)
+- **Fichiers IPC** : Contenu JSON de `/dev/shm/motor_status.json`, `ems22_position.json`, `motor_command.json`
+- **Configuration** : Site, paramètres moteur, seuils, modes adaptatifs
+- **Rafraîchissement** : Automatique toutes les 2 secondes (désactivable)
+
+### API Health Check
+
+Endpoints pour monitoring externe (scripts, Nagios, etc.) :
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health/` | État global (healthy/unhealthy) |
+| `GET /api/health/diagnostic/` | Diagnostic complet en JSON |
+| `GET /api/health/system/` | Page web diagnostic |
+
+```bash
+# Exemple: vérifier l'état du système
+curl -s http://localhost:8000/api/health/ | python3 -m json.tool
+```
 
 ---
 
@@ -422,6 +460,6 @@ uv run pytest tests/test_simulation.py -v
 
 ---
 
-**Version** : 4.5 Web
+**Version** : 4.6 Web
 **Date** : Décembre 2025
 **Licence** : MIT
