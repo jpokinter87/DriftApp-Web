@@ -758,7 +758,7 @@ function drawCompass() {
     const width = canvas.width;
     const height = canvas.height;
     const cx = width / 2;
-    const cy = height / 2 - 10;  // Légèrement vers le haut pour laisser place à la légende
+    const cy = height / 2;
     const radius = Math.min(cx, cy) - 20;
 
     // Clear
@@ -775,6 +775,25 @@ function drawCompass() {
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // =========================================================================
+    // Arc représentant la trappe de la coupole (liseré rouge avec ouverture)
+    // =========================================================================
+    const OPENING_ANGLE = 40.1;  // degrés (70cm / pi x 200cm x 360)
+    const domeAngle = state.position;
+
+    // Calculer les limites de l'ouverture
+    const openingStart = domeAngle - OPENING_ANGLE / 2;
+    const openingEnd = domeAngle + OPENING_ANGLE / 2;
+
+    // Arc rouge = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
+    ctx.strokeStyle = 'rgba(196, 60, 60, 0.25)';
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    const closedStartRad = (openingEnd - 90) * Math.PI / 180;
+    const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
+    ctx.arc(cx, cy, radius - 6, closedStartRad, closedEndRad);
     ctx.stroke();
 
     // Graduations
@@ -844,9 +863,6 @@ function drawCompass() {
 
     // Centre avec représentation du télescope (rectangle comme GUI Kivy)
     drawTelescope(ctx, cx, cy, telescopeAngle);
-
-    // Légende en bas
-    drawCompassLegend(ctx, cx, height - 10);
 }
 
 // Dessiner le télescope au centre (tube rectangulaire)
