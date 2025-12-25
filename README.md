@@ -164,13 +164,14 @@ Pour un fonctionnement automatique au démarrage du Raspberry Pi, installez les 
 Éditez les chemins dans les fichiers `.service` pour correspondre à votre installation :
 
 ```bash
-# Remplacer le chemin par défaut par votre répertoire d'installation
-INSTALL_DIR="/home/votre-user/DriftApp-Web"
+# Lance ces différentes commandes dans un terminal
+# Remplace le chemin par défaut par votre répertoire d'installation
+INSTALL_DIR="/home/slenk/DriftApp-Web"
 
-# Éditer ems22d.service
+# Édite ems22d.service
 sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" ems22d.service
 
-# Éditer motor_service.service
+# Édite motor_service.service
 sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" motor_service.service
 ```
 
