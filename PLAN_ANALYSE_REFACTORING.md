@@ -463,9 +463,9 @@ sudo systemctl status motor_service.service
 
 **Note**: L'encoder daemon (`ems22d_calibrated.py`) utilise déjà systemd, donc le pattern est cohérent.
 
-**6.2 - Health Check Endpoint ✅ IMPLÉMENTÉ**
+**6.2 - Health Check Endpoint + Page Diagnostic ✅ IMPLÉMENTÉ**
 
-Endpoints REST pour vérifier l'état de tous les composants :
+Endpoints REST et page de diagnostic temps réel :
 
 | Endpoint | Description |
 |----------|-------------|
@@ -473,25 +473,22 @@ Endpoints REST pour vérifier l'état de tous les composants :
 | `GET /api/health/motor/` | État détaillé du Motor Service |
 | `GET /api/health/encoder/` | État détaillé de l'Encoder Daemon |
 | `GET /api/health/ipc/` | Statut des fichiers IPC (debug) |
+| `GET /api/health/diagnostic/` | Données complètes pour page diagnostic |
+| `GET /api/health/system/` | **Page HTML de diagnostic temps réel** |
+
+**Page Diagnostic Système** (`/api/health/system/`) :
+- Accessible via onglet "Système" depuis le dashboard principal
+- Rafraîchissement automatique toutes les 2 secondes
+- Affichage en temps réel des fichiers IPC (motor_status.json, ems22_position.json, motor_command.json)
+- État des composants avec indicateurs visuels (vert/orange/rouge)
+- Configuration active (site, moteur, seuils, modes adaptatifs)
 
 Fichiers créés :
-- `web/health/__init__.py`
-- `web/health/views.py` - Logique de vérification
-- `web/health/urls.py` - Routes
-- Modifié `web/driftapp_web/settings.py` - Ajout app 'health'
-- Modifié `web/driftapp_web/urls.py` - Route `/api/health/`
-
-Réponse type (HTTP 200 si healthy, 503 sinon) :
-```json
-{
-  "healthy": true,
-  "timestamp": "2025-12-25T12:00:00",
-  "components": {
-    "motor_service": {"healthy": true, "status": "idle", ...},
-    "encoder_daemon": {"healthy": true, "status": "ok", ...}
-  }
-}
-```
+- `web/health/views.py` - Endpoint diagnostic complet
+- `web/templates/system.html` - Page diagnostic
+- `web/static/css/system.css` - Styles (charte graphique cohérente)
+- `web/static/js/system.js` - Rafraîchissement temps réel
+- Modifié `web/templates/dashboard.html` - Onglet navigation
 
 ---
 
@@ -527,4 +524,4 @@ Ce plan est soumis pour validation. Merci de confirmer:
 ---
 
 *Document généré automatiquement par Claude Code le 24/12/2025*
-*Dernière mise à jour: 25/12/2025 - Phase 6.1 watchdog + 6.2 health check implémentés*
+*Dernière mise à jour: 25/12/2025 - Phase 6.1 watchdog + 6.2 health check + page diagnostic implémentés*
