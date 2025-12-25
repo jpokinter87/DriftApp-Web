@@ -7,7 +7,7 @@
 
 **Système intelligent de suivi de coupole d'observatoire** avec modes adaptatifs automatiques et feedback temps réel. Interface web responsive pour contrôle local et distant.
 
-> **Version actuelle** : 4.5 Web - Architecture trois processus (Décembre 2025)
+> **Version actuelle** : 4.6 Web - Architecture trois processus + Monitoring (Décembre 2025)
 
 ---
 
@@ -16,6 +16,7 @@
 - [Vue d'ensemble](#vue-densemble)
 - [Architecture](#architecture)
 - [Installation](#installation)
+  - [Installation des Services Systemd](#installation-des-services-systemd-production)
 - [Configuration](#configuration)
 - [Utilisation](#utilisation)
 - [Système Adaptatif](#système-adaptatif)
@@ -72,37 +73,7 @@ Pour une position (Alt, Az) donnée :
 ### Architecture Trois Processus
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        NAVIGATEUR                                │
-│                    (Interface Web)                               │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ HTTP/WebSocket
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     PROCESSUS 1: Django                          │
-│                   (Interface Web + API)                          │
-│  - Dashboard temps réel                                          │
-│  - Catalogue objets célestes                                     │
-│  - Configuration                                                 │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ IPC (JSON /dev/shm/)
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  PROCESSUS 2: Motor Service                      │
-│                 (Contrôle moteur GPIO)                           │
-│  - Commandes GOTO, JOG, CONTINUOUS                               │
-│  - Tracking adaptatif                                            │
-│  - Feedback boucle fermée                                        │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ Lecture JSON
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 PROCESSUS 3: Encoder Daemon                      │
-│                  (Lecture encodeur SPI)                          │
-│  - Lecture EMS22A à 50 Hz                                        │
-│  - Méthode incrémentale                                          │
-│  - Calibration switch 45°                                        │
-└─────────────────────────────────────────────────────────────────┘
+
 ```
 
 ### Structure des Répertoires
@@ -161,23 +132,104 @@ DriftApp/
 
 ```bash
 # 1. Cloner le repository
-git clone https://github.com/votre-username/DriftApp.git
-cd DriftApp
+git clone https://github.com/jpokinter87/DriftApp-Web.git
+cd DriftApp-Web
+
+# ou bien en choisissant le répertoire par exemple /home/slenk/Dome_Web
+git clone https://github.com/jpokinter87/DriftApp-Web.git /home/slenk/Dome_Web
+cd /home/slenk/Dome_Web
+ 
 
 # 2. Installation des dépendances
 uv sync
 
-# 3. Configuration
+# 3. Configuration (déjà fait, tu peux sauter cette étape)
 cp data/config.example.json data/config.json
 nano data/config.json
 
-# 4. Migrations Django
+# 4. Migrations Django (uniquement la première fois pour l'installation)
 uv run python manage.py migrate
 
-# 5. (Production) Activer SPI
+# 5. (Production) Activer SPI (pas obligatoire, tu peux aussi sauté cette étape)
 sudo raspi-config
 # → Interface Options → SPI → Enable
 ```
+
+### Installation des Services Systemd (Production)
+
+Pour un fonctionnement automatique au démarrage du Raspberry Pi, installez les deux services systemd.
+
+#### 1. Adapter les fichiers de service
+
+Éditez les chemins dans les fichiers `.service` pour correspondre à votre installation :
+
+```bash
+# Remplacer le chemin par défaut par votre répertoire d'installation
+INSTALL_DIR="/home/slenk/Dome_Web"
+
+# Éditer ems22d.service
+sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" ems22d.service
+
+# Éditer motor_service.service
+sed -i "s|/home/slenk/Dome_v4_5|$INSTALL_DIR|g" motor_service.service
+```
+
+#### 2. Copier les fichiers vers systemd
+
+```bash
+sudo cp ems22d.service /etc/systemd/system/
+sudo cp motor_service.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+#### 3. Activer les services au démarrage
+
+```bash
+# Activer les services
+sudo systemctl enable ems22d.service
+sudo systemctl enable motor_service.service
+
+# Démarrer les services
+sudo systemctl start ems22d.service
+sudo systemctl start motor_service.service
+```
+
+#### 4. Vérifier l'état des services
+
+```bash
+# État des services
+sudo systemctl status ems22d.service
+sudo systemctl status motor_service.service
+
+# Logs en temps réel
+sudo journalctl -u ems22d.service -f
+sudo journalctl -u motor_service.service -f
+```
+
+#### 5. Commandes utiles
+
+```bash
+# Redémarrer un service
+sudo systemctl restart motor_service.service
+
+# Arrêter les services
+sudo systemctl stop motor_service.service
+sudo systemctl stop ems22d.service
+
+# Désactiver un service (ne démarre plus au boot)
+sudo systemctl disable motor_service.service
+```
+
+#### Notes importantes
+
+| Service | Utilisateur | Raison |
+|---------|-------------|--------|
+| `ems22d.service` | Utilisateur normal | Accès SPI (groupe `spi`) |
+| `motor_service.service` | root | Accès GPIO direct |
+
+- **Ordre de démarrage** : `motor_service` dépend de `ems22d` (défini dans le fichier service)
+- **Watchdog** : `motor_service` envoie un heartbeat toutes les 10s ; systemd le redémarre s'il ne répond plus pendant 30s
+- **Redémarrage auto** : Les deux services redémarrent automatiquement en cas d'échec
 
 ---
 
@@ -221,7 +273,21 @@ Fichier : `data/config.json`
 
 ## Utilisation
 
-### Mode Développement (Simulation)
+### Scripts de Démarrage (Recommandé)
+
+```bash
+# Mode Production (Raspberry Pi) - nécessite sudo
+sudo ./start_web.sh          # Démarre tous les services
+sudo ./start_web.sh stop     # Arrête tous les services
+./start_web.sh status        # Vérifie l'état
+
+# Mode Développement (PC) - simulation automatique
+./start_dev.sh               # Démarre Motor Service + Django
+./start_dev.sh stop          # Arrête les services
+./start_dev.sh status        # Vérifie l'état
+```
+
+### Mode Développement Manuel (Simulation)
 
 ```bash
 # Terminal 1: Lancer Django
@@ -239,7 +305,7 @@ En mode développement (sans Raspberry Pi), le système détecte automatiquement
 - Simulation du switch de calibration à 45°
 - Position interpolée en temps réel
 
-### Mode Production (Raspberry Pi)
+### Mode Production Manuel (Raspberry Pi)
 
 ```bash
 # Terminal 1: Démon encodeur (sudo requis)
@@ -303,6 +369,30 @@ Lors du démarrage d'un tracking, un popup affiche :
 - Delta avec direction (CW/CCW)
 - Barre de progression
 - Temps restant estimé
+
+### Page Diagnostic Système
+
+Accessible via l'onglet **"Système"** dans le header (ou `/api/health/system/`), cette page affiche en temps réel :
+
+- **État des composants** : Motor Service et Encoder Daemon avec indicateurs couleur (vert/orange/rouge)
+- **Fichiers IPC** : Contenu JSON de `/dev/shm/motor_status.json`, `ems22_position.json`, `motor_command.json`
+- **Configuration** : Site, paramètres moteur, seuils, modes adaptatifs
+- **Rafraîchissement** : Automatique toutes les 2 secondes (désactivable)
+
+### API Health Check
+
+Endpoints pour monitoring externe (scripts, Nagios, etc.) :
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health/` | État global (healthy/unhealthy) |
+| `GET /api/health/diagnostic/` | Diagnostic complet en JSON |
+| `GET /api/health/system/` | Page web diagnostic |
+
+```bash
+# Exemple: vérifier l'état du système
+curl -s http://localhost:8000/api/health/ | python3 -m json.tool
+```
 
 ---
 
@@ -422,6 +512,6 @@ uv run pytest tests/test_simulation.py -v
 
 ---
 
-**Version** : 4.5 Web
+**Version** : 4.6 Web
 **Date** : Décembre 2025
 **Licence** : MIT
