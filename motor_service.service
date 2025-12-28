@@ -6,8 +6,8 @@ Requires=ems22d.service
 
 [Service]
 Type=notify
-WorkingDirectory=/home/slenk/Dome_v4_5
-ExecStart=/usr/bin/python3 /home/slenk/Dome_v4_5/services/motor_service.py
+WorkingDirectory=/home/slenk/DriftApp
+ExecStart=/home/slenk/DriftApp/.venv/bin/python /home/slenk/DriftApp/services/motor_service.py
 
 # Watchdog: redémarre si pas de heartbeat pendant 30s
 # Le service envoie WATCHDOG=1 toutes les 10s
