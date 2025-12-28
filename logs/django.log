@@ -30,3 +30,4 @@ INFO 2025-12-25 17:42:35,310 session_storage Session supprimée: 20251225_163101
 WARNING 2025-12-25 17:42:39,772 log Not Found: /api/session/current/
 WARNING 2025-12-25 17:42:42,023 log Not Found: /api/session/current/
 INFO 2025-12-25 18:59:17,665 session_storage Session supprimée: 20251225_174256_NGC__7000
+INFO 2025-12-25 20:37:39,588 autoreload Watching for file changes with StatReloader

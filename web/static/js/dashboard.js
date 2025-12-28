@@ -132,7 +132,10 @@ function initEventListeners() {
     });
 
     // Suivi
-    elements.btnStartTracking.addEventListener('click', startTracking);
+    // Shift+clic = démarrer sans GOTO (position actuelle conservée)
+    elements.btnStartTracking.addEventListener('click', (e) => {
+        startTracking(e.shiftKey);
+    });
     elements.btnStopTracking.addEventListener('click', stopTracking);
 
     // Contrôle manuel
@@ -238,15 +241,23 @@ function flashButtonSuccess(button, duration = 5000) {
     }, duration);
 }
 
-async function startTracking() {
+async function startTracking(skipGoto = false) {
     const name = state.searchedObject || elements.objectName.value.trim();
     if (!name) {
         log('Aucun objet sélectionné', 'warning');
         return;
     }
 
-    log(`Démarrage du suivi de ${name}...`);
-    const result = await apiCall('/api/tracking/start/', 'POST', { object: name });
+    if (skipGoto) {
+        log(`Démarrage du suivi de ${name} (position actuelle conservée)...`);
+    } else {
+        log(`Démarrage du suivi de ${name}...`);
+    }
+
+    const result = await apiCall('/api/tracking/start/', 'POST', {
+        object: name,
+        skip_goto: skipGoto
+    });
 
     if (result.error) {
         log(`Erreur: ${result.error}`, 'error');

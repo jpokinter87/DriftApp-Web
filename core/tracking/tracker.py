@@ -199,7 +199,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     # DÉMARRAGE DU SUIVI
     # =========================================================================
 
-    def start(self, objet_name: str) -> Tuple[bool, str]:
+    def start(self, objet_name: str, skip_goto: bool = False) -> Tuple[bool, str]:
         """
         Démarre le suivi d'un objet.
 
@@ -214,6 +214,8 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         Args:
             objet_name: Nom de l'objet à suivre
+            skip_goto: Si True, ne pas faire de GOTO initial (position actuelle conservée).
+                       Utile quand l'utilisateur a ajusté manuellement la coupole.
 
         Returns:
             Tuple (success, message)
@@ -236,23 +238,42 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         position_cible_init, _ = self._calculate_target_position(azimut, altitude)
 
         # Vérifier si on doit faire un GOTO initial (Mixin TrackingGotoMixin)
-        goto_needed, goto_delta = self._check_initial_goto(position_cible_init)
+        # Si skip_goto=True, on saute le GOTO (l'utilisateur a ajusté manuellement)
+        if skip_goto:
+            goto_needed = False
+            goto_delta = 0.0
+            self.logger.info("⏭️ GOTO initial ignoré (skip_goto=True, position actuelle conservée)")
+        else:
+            goto_needed, goto_delta = self._check_initial_goto(position_cible_init)
 
         # Initialiser le suivi (Mixin TrackingGotoMixin)
-        self._setup_initial_position(azimut, altitude, position_cible_init)
-        self._sync_encoder(position_cible_init)
+        # Si skip_goto, on utilise la position actuelle de l'encodeur comme position_relative
+        if skip_goto:
+            # Utiliser la position réelle comme point de départ
+            try:
+                real_position = MoteurCoupole.get_daemon_angle()
+                self._setup_initial_position(azimut, altitude, real_position)
+                self._sync_encoder(real_position)
+                self.logger.info(f"Position initiale depuis encodeur: {real_position:.1f}°")
+            except Exception:
+                # Fallback: utiliser la position cible calculée
+                self._setup_initial_position(azimut, altitude, position_cible_init)
+                self._sync_encoder(position_cible_init)
+        else:
+            self._setup_initial_position(azimut, altitude, position_cible_init)
+            self._sync_encoder(position_cible_init)
 
-        # Si GOTO nécessaire, évaluer le mode adaptatif et faire la correction
+        # Si GOTO nécessaire, toujours utiliser la vitesse CONTINUOUS (la plus rapide)
         if goto_needed:
-            tracking_params = self.adaptive_manager.evaluate_tracking_zone(
-                altitude, azimut, abs(goto_delta)
-            )
+            # Vitesse CONTINUOUS pour le GOTO initial (0.00015s = ~41°/min)
+            continuous_speed = self.adaptive_manager.get_continuous_motor_delay()
             self.logger.info(
-                f"🎯 GOTO initial requis: {goto_delta:+.1f}° en mode {tracking_params.mode.value}"
+                f"🎯 GOTO initial requis: {goto_delta:+.1f}° en mode CONTINUOUS (vitesse max)"
             )
             # Exécuter le GOTO initial (Mixin TrackingGotoMixin)
-            self._execute_initial_goto(position_cible_init, tracking_params.motor_delay)
-            # Démarrer le suivi avec l'intervalle approprié au mode
+            self._execute_initial_goto(position_cible_init, continuous_speed)
+            # Démarrer le suivi avec l'intervalle approprié au mode adaptatif (basé sur altitude)
+            tracking_params = self.adaptive_manager.evaluate_tracking_zone(altitude, azimut, 0)
             self._start_tracking(objet_name, now, initial_interval=tracking_params.check_interval)
         else:
             self._start_tracking(objet_name, now)

@@ -373,9 +373,16 @@ class TrackingHandler:
         self.session: Optional[TrackingSession] = None
         self.active = False
 
-    def start(self, object_name: str, current_status: Dict[str, Any]):
-        """Démarre le suivi d'un objet céleste."""
-        logger.info(f"Démarrage suivi de: {object_name}")
+    def start(self, object_name: str, current_status: Dict[str, Any], skip_goto: bool = False):
+        """
+        Démarre le suivi d'un objet céleste.
+
+        Args:
+            object_name: Nom de l'objet à suivre
+            current_status: Statut actuel du moteur
+            skip_goto: Si True, ne pas faire de GOTO initial (conserver position actuelle)
+        """
+        logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
 
         if self.active:
             self.stop(current_status)
@@ -422,7 +429,7 @@ class TrackingHandler:
                 goto_callback=on_goto_info
             )
 
-            success = self.session.start(object_name)
+            success = self.session.start(object_name, skip_goto=skip_goto)
 
             if success:
                 self.active = True

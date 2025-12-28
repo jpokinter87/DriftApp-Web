@@ -15,7 +15,8 @@
       "Bash(git status:*)",
       "Bash(curl:*)",
       "Bash(done)",
-      "Bash(uv run pytest:*)"
+      "Bash(uv run pytest:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []

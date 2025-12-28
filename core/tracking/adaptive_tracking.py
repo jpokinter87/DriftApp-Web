@@ -160,6 +160,18 @@ class AdaptiveTrackingManager:
     def _get_continuous_params(self) -> TrackingParameters:
         return self._get_continuous_params_from_config(self.adaptive_config)
 
+    def get_continuous_motor_delay(self) -> float:
+        """
+        Retourne le délai moteur pour le mode CONTINUOUS (vitesse max).
+
+        Utilisé pour les GOTO initiaux et manuels pour garantir
+        une vitesse rapide et fluide (~41°/min).
+
+        Returns:
+            Délai entre pas en secondes (ex: 0.00015)
+        """
+        return self._get_continuous_params().motor_delay
+
     # =========================================================================
     # PRÉDICATS D'ÉVALUATION
     # =========================================================================

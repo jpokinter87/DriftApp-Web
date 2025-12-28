@@ -19,6 +19,7 @@ class TrackingStartView(APIView):
 
     def post(self, request):
         object_name = request.data.get('object') or request.data.get('name')
+        skip_goto = request.data.get('skip_goto', False)
 
         if not object_name:
             return Response(
@@ -37,7 +38,12 @@ class TrackingStartView(APIView):
             )
 
         # Envoyer la commande au Motor Service
-        success = motor_client.send_command('tracking_start', object=object_name)
+        # skip_goto=True : ne pas faire de GOTO initial (position actuelle conservée)
+        success = motor_client.send_command(
+            'tracking_start',
+            object=object_name,
+            skip_goto=skip_goto
+        )
 
         if success:
             return Response({

@@ -315,8 +315,9 @@ class MotorService:
 
         elif cmd_type == 'tracking_start':
             object_name = command.get('object', command.get('name'))
+            skip_goto = command.get('skip_goto', False)
             if object_name:
-                self.tracking_handler.start(object_name, self.current_status)
+                self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
             else:
                 logger.warning("tracking_start sans nom d'objet")
 
