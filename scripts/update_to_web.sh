@@ -152,6 +152,12 @@ else
     exit 1
 fi
 
+# Restaurer les permissions .git (évite "permission denied" pour l'utilisateur)
+OWNER=$(stat -c '%U:%G' "$DRIFTAPP_DIR")
+print_step "Restauration des permissions .git ($OWNER)..."
+chown -R "$OWNER" "$DRIFTAPP_DIR/.git"
+print_success "Permissions .git restaurées"
+
 # =============================================================================
 # ÉTAPE 3: Sauvegarde de l'ancien service ems22d
 # =============================================================================
