@@ -145,9 +145,10 @@ class TestDaemonEncoderReader:
         """Lecture de l'angle avec succès."""
         with patch.dict('sys.modules', {'lgpio': MagicMock(), 'RPi': MagicMock(), 'RPi.GPIO': MagicMock()}):
             from core.hardware.moteur import DaemonEncoderReader
+            import time
 
             json_file = tmp_path / "test.json"
-            data = {"angle": 123.45, "status": "OK"}
+            data = {"angle": 123.45, "status": "OK", "ts": time.time()}
             json_file.write_text(json.dumps(data))
 
             reader = DaemonEncoderReader(json_file)
@@ -159,9 +160,10 @@ class TestDaemonEncoderReader:
         """L'angle est normalisé dans [0, 360)."""
         with patch.dict('sys.modules', {'lgpio': MagicMock(), 'RPi': MagicMock(), 'RPi.GPIO': MagicMock()}):
             from core.hardware.moteur import DaemonEncoderReader
+            import time
 
             json_file = tmp_path / "test.json"
-            data = {"angle": 370.0, "status": "OK"}
+            data = {"angle": 370.0, "status": "OK", "ts": time.time()}
             json_file.write_text(json.dumps(data))
 
             reader = DaemonEncoderReader(json_file)

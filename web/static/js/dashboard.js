@@ -17,7 +17,8 @@ let state = {
     searchedObject: null,
     lastUpdate: null,
     trackingInfo: {},  // Pour position_cible, etc.
-    gotoInfo: null     // Pour la modal GOTO
+    gotoInfo: null,    // Pour la modal GOTO
+    encoderFrozenLogged: false  // Pour éviter de logger l'alerte plusieurs fois
 };
 
 // Countdown timer (Correction 1)
@@ -521,20 +522,32 @@ function updatePositionDisplay(encoder) {
     const encItem = elements.encItem;
     if (encItem) {
         // Supprimer les classes d'état précédentes
-        encItem.classList.remove('enc-absent', 'enc-uncalibrated', 'enc-calibrated');
+        encItem.classList.remove('enc-absent', 'enc-uncalibrated', 'enc-calibrated', 'enc-frozen');
 
         if (!encoder || encoder.error || encoder.status === 'absent') {
             // Gris = absent (daemon non disponible)
             encItem.classList.add('enc-absent');
             elements.encoderCalibrated.textContent = 'ABSENT';
+        } else if (encoder.frozen === true || encoder.status === 'FROZEN') {
+            // ROUGE CLIGNOTANT = encodeur figé (dysfonctionnement détecté)
+            encItem.classList.add('enc-frozen');
+            const duration = encoder.frozen_duration ? encoder.frozen_duration.toFixed(1) : '?';
+            elements.encoderCalibrated.textContent = `FIGÉ ${duration}s`;
+            // Log l'alerte (une seule fois)
+            if (!state.encoderFrozenLogged) {
+                addLog(`⚠️ ALERTE: Encodeur figé depuis ${duration}s - vérifier connexion SPI!`, 'error');
+                state.encoderFrozenLogged = true;
+            }
         } else if (!encoder.calibrated) {
             // Marron = non calibré
             encItem.classList.add('enc-uncalibrated');
             elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
+            state.encoderFrozenLogged = false;  // Reset pour prochaine alerte
         } else {
             // Vert = calibré
             encItem.classList.add('enc-calibrated');
             elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
+            state.encoderFrozenLogged = false;  // Reset pour prochaine alerte
         }
     }
 }

@@ -16,6 +16,25 @@ from typing import Optional
 DAEMON_JSON = Path("/dev/shm/ems22_position.json")
 
 
+class StaleDataError(RuntimeError):
+    """Exception levée quand les données de l'encodeur sont périmées.
+
+    Indique que le démon encodeur n'a pas mis à jour les données
+    depuis trop longtemps, suggérant un problème de communication SPI
+    ou un blocage du démon.
+    """
+    pass
+
+
+class FrozenEncoderError(RuntimeError):
+    """Exception levée quand l'encodeur est détecté comme figé.
+
+    Indique que la valeur SPI de l'encodeur n'a pas changé depuis
+    trop longtemps alors que la coupole devrait bouger.
+    """
+    pass
+
+
 class DaemonEncoderReader:
     """
     Lecteur centralisé pour le démon encodeur EMS22A.
@@ -51,19 +70,29 @@ class DaemonEncoderReader:
         except (FileNotFoundError, json.JSONDecodeError):
             return None
 
-    def read_angle(self, timeout_ms: int = 200) -> float:
+    # Seuil par défaut pour détecter données périmées (ms)
+    DEFAULT_MAX_AGE_MS = 500.0
+
+    def read_angle(self, timeout_ms: int = 200, max_age_ms: float = None) -> float:
         """
-        Lit l'angle calibré avec retry et timeout.
+        Lit l'angle calibré avec retry, timeout et vérification fraîcheur.
 
         Args:
             timeout_ms: Timeout en millisecondes
+            max_age_ms: Âge maximum acceptable des données (ms).
+                        Si None, utilise DEFAULT_MAX_AGE_MS (500ms).
+                        Si 0, désactive la vérification d'âge.
 
         Returns:
             float: Angle en degrés (0-360)
 
         Raises:
             RuntimeError: Si le démon n'est pas accessible dans le timeout
+            StaleDataError: Si les données sont trop anciennes
         """
+        if max_age_ms is None:
+            max_age_ms = self.DEFAULT_MAX_AGE_MS
+
         t0 = time.time()
 
         while True:
@@ -79,11 +108,31 @@ class DaemonEncoderReader:
                     time.sleep(0.01)
                     continue
 
+                # Vérification de la fraîcheur des données
+                if max_age_ms > 0:
+                    ts = data.get("ts", 0)
+                    age_ms = (time.time() - ts) * 1000.0
+                    if age_ms > max_age_ms:
+                        self.logger.warning(
+                            f"⚠️ Données encodeur périmées: {age_ms:.0f}ms > {max_age_ms:.0f}ms"
+                        )
+                        raise StaleDataError(
+                            f"Données encodeur périmées ({age_ms:.0f}ms > {max_age_ms:.0f}ms)"
+                        )
+
                 angle = float(data.get("angle", 0.0)) % 360.0
                 status = data.get("status", "OK")
 
                 if status.startswith("OK"):
                     return angle
+                elif status == "FROZEN":
+                    frozen_duration = data.get("frozen_duration", 0)
+                    self.logger.warning(
+                        f"⚠️ Encodeur figé depuis {frozen_duration:.1f}s"
+                    )
+                    raise FrozenEncoderError(
+                        f"Encodeur figé depuis {frozen_duration:.1f}s"
+                    )
                 elif status.startswith("SPI"):
                     self.logger.warning(f"Démon encodeur: {status}")
                     return angle

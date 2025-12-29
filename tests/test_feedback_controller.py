@@ -8,6 +8,11 @@ import pytest
 import time
 from unittest.mock import MagicMock, patch, PropertyMock
 
+from core.hardware.daemon_encoder_reader import (
+    StaleDataError,
+    FrozenEncoderError
+)
+
 
 # =============================================================================
 # FIXTURES
@@ -518,3 +523,113 @@ class TestExecuterIteration:
         )
 
         assert result is None
+
+
+# =============================================================================
+# TESTS DÉTECTION ENCODEUR FIGÉ
+# =============================================================================
+
+class TestEncoderFrozenDetection:
+    """Tests pour la détection d'encodeur figé."""
+
+    def test_detection_stagnant_apres_3_corrections(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Détecte un encodeur stagnant après 3 corrections sans mouvement."""
+        # Position qui ne change jamais malgré les corrections
+        # (erreur de 5° < seuil protection 20°)
+        mock_daemon_reader.read_stable.return_value = 0.0
+        mock_daemon_reader.read_angle.return_value = 0.0
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=5.0,
+            tolerance=0.1,
+            max_iterations=10,
+            max_duration=30.0  # Assez de temps pour les 3 corrections
+        )
+
+        # Doit s'être arrêté à cause de l'encodeur figé, pas du timeout
+        assert result['encoder_frozen'] is True
+        assert result['success'] is False
+        # Doit avoir fait au moins 3 corrections avant de détecter
+        assert result['iterations'] >= 3
+
+    def test_pas_de_detection_si_mouvement(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Pas de détection de blocage si l'encodeur bouge."""
+        # Positions qui changent à chaque lecture (assez pour position initiale + corrections + finale)
+        positions = [0.0, 2.0, 4.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
+        mock_daemon_reader.read_stable.side_effect = positions
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=5.0,
+            tolerance=1.0,
+            max_iterations=10
+        )
+
+        # Pas de détection de blocage
+        assert result['encoder_frozen'] is False
+
+    def test_frozen_encoder_error_interrompt_boucle(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """FrozenEncoderError du daemon interrompt la boucle."""
+        # Position initiale OK, puis erreur dans la boucle, puis position finale
+        # L'exception dans la boucle est attrapée et encoder_frozen est mis à True
+        # La mesure finale échouera aussi (même exception), donc on catch
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return 0.0  # Position initiale
+            else:
+                raise FrozenEncoderError("Encodeur figé depuis 5.0s")
+
+        mock_daemon_reader.read_stable.side_effect = side_effect
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=90.0,
+            tolerance=0.5,
+            max_iterations=10
+        )
+
+        assert result['encoder_frozen'] is True
+        assert result['success'] is False
+
+    def test_stale_data_error_interrompt_boucle(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """StaleDataError du daemon interrompt la boucle."""
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return 0.0  # Position initiale
+            else:
+                raise StaleDataError("Données périmées (1000ms > 500ms)")
+
+        mock_daemon_reader.read_stable.side_effect = side_effect
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=90.0,
+            tolerance=0.5,
+            max_iterations=10
+        )
+
+        assert result['encoder_frozen'] is True
+        assert result['success'] is False
+
+    def test_resultat_contient_encoder_frozen_false(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Le résultat contient encoder_frozen=False si pas de problème."""
+        mock_daemon_reader.read_stable.return_value = 45.0
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=45.0,
+            tolerance=1.0
+        )
+
+        assert result['success'] is True
+        assert result['encoder_frozen'] is False

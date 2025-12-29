@@ -56,6 +56,11 @@ ROTATION_SIGN = -1
 MAX_CONSECUTIVE_SPI_ERRORS = 5
 WRITE_TMP = JSON_OUT.with_suffix(".tmp")
 
+# Détection de valeur SPI figée (encodeur bloqué)
+# À 50Hz, 250 lectures = 5 secondes sans changement
+MAX_IDENTICAL_READS = 250
+FROZEN_WARNING_INTERVAL = 50  # Log toutes les 50 lectures figées (1 sec)
+
 # Configuration logging : fichier horodaté par session + console
 LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -114,6 +119,10 @@ class EMS22Daemon:
         self.prev_raw = None
         self.total_counts = 0
 
+        # Détection de valeur SPI figée
+        self.identical_reads_count = 0
+        self.frozen_detected = False
+
         # Gestion du switch
         self.hchip = lgpio.gpiochip_open(0)
         lgpio.gpio_claim_input(self.hchip, SWITCH_GPIO, lgpio.SET_PULL_UP)
@@ -163,6 +172,8 @@ class EMS22Daemon:
         """
         Méthode INCRÉMENTALE - Accumule les changements.
         Permet de suivre les mouvements de la coupole.
+
+        Détecte également si la valeur SPI est figée (encodeur bloqué).
         """
         if self.prev_raw is None:
             # Première lecture : initialiser
@@ -175,6 +186,33 @@ class EMS22Daemon:
             diff -= 1024
         elif diff < -512:
             diff += 1024
+
+        # ✅ Détection de valeur SPI figée
+        if diff == 0:
+            self.identical_reads_count += 1
+
+            # Log périodique si figé depuis longtemps
+            if self.identical_reads_count == MAX_IDENTICAL_READS:
+                logger.warning(
+                    f"⚠️ ALERTE: Valeur SPI figée à {raw} depuis "
+                    f"{MAX_IDENTICAL_READS / POLL_HZ:.1f}s - encodeur potentiellement bloqué!"
+                )
+                self.frozen_detected = True
+
+            elif self.identical_reads_count > MAX_IDENTICAL_READS:
+                # Log toutes les secondes
+                if self.identical_reads_count % FROZEN_WARNING_INTERVAL == 0:
+                    duration = self.identical_reads_count / POLL_HZ
+                    logger.warning(f"⚠️ SPI toujours figé (raw={raw}) depuis {duration:.1f}s")
+        else:
+            # Valeur a changé - réinitialiser le compteur
+            if self.frozen_detected:
+                logger.info(
+                    f"✓ SPI débloqué après {self.identical_reads_count / POLL_HZ:.1f}s "
+                    f"(nouvelle valeur: {raw})"
+                )
+            self.identical_reads_count = 0
+            self.frozen_detected = False
 
         # Accumulation des changements
         self.total_counts += diff
@@ -252,13 +290,19 @@ class EMS22Daemon:
     # JSON
     # ------------------------------------------------
     def publish(self, angle, raw, status="OK"):
-        """Publie la position encodeur avec flag de calibration."""
+        """Publie la position encodeur avec flag de calibration et statut figé."""
+        # Ajuster le statut si encodeur figé
+        if self.frozen_detected and status == "OK":
+            status = "FROZEN"
+
         payload = {
             "ts": time.time(),
             "angle": float(angle),
             "raw": int(raw),
             "status": status,
-            "calibrated": self.calibrated
+            "calibrated": self.calibrated,
+            "frozen": self.frozen_detected,
+            "frozen_duration": self.identical_reads_count / POLL_HZ if self.frozen_detected else 0
         }
         try:
             WRITE_TMP.write_text(json.dumps(payload))

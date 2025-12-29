@@ -12,6 +12,7 @@ import time
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
 from core.utils.angle_utils import shortest_angular_distance
+from core.hardware.daemon_encoder_reader import StaleDataError, FrozenEncoderError
 
 if TYPE_CHECKING:
     from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
@@ -32,6 +33,12 @@ class FeedbackController:
 
     # Seuil par défaut pour la protection contre mouvements anormaux
     DEFAULT_PROTECTION_THRESHOLD = 20.0
+
+    # Nombre max de corrections consécutives sans mouvement détecté
+    # Si l'encodeur ne bouge pas après N corrections, il est probablement figé
+    MAX_STAGNANT_CORRECTIONS = 3
+    # Seuil minimum de mouvement entre corrections (degrés)
+    MIN_MOVEMENT_THRESHOLD = 0.1
 
     def __init__(
         self,
@@ -257,6 +264,9 @@ class FeedbackController:
         # Lecture position et calcul erreur
         try:
             position_actuelle = self._lire_position_stable()
+        except (FrozenEncoderError, StaleDataError):
+            # Propager ces exceptions spécifiques pour que la boucle les traite
+            raise
         except RuntimeError:
             self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
             return None
@@ -364,6 +374,8 @@ class FeedbackController:
         corrections = []
         iteration = 0
         timeout_reached = False
+        encoder_frozen = False
+        stagnant_count = 0  # Compteur de corrections sans mouvement
 
         while iteration < max_iterations:
             # Vérification timeout global
@@ -380,42 +392,75 @@ class FeedbackController:
                 self.logger.info("Arrêt demandé, abandon de la correction")
                 break
 
-            correction = self._executer_iteration(
-                angle_cible, vitesse, tolerance,
-                max_correction_par_iteration, iteration,
-                position_initiale=position_initiale,  # Pour détecter recalibration switch
-                allow_large_movement=allow_large_movement  # Pour GOTO initial
-            )
+            try:
+                correction = self._executer_iteration(
+                    angle_cible, vitesse, tolerance,
+                    max_correction_par_iteration, iteration,
+                    position_initiale=position_initiale,  # Pour détecter recalibration switch
+                    allow_large_movement=allow_large_movement  # Pour GOTO initial
+                )
+            except (FrozenEncoderError, StaleDataError) as e:
+                self.logger.error(f"⚠️ Problème encodeur détecté: {e}")
+                encoder_frozen = True
+                break
 
             if correction is None:
                 break
 
             corrections.append(correction)
+
+            # Détection de non-mouvement: l'encodeur ne bouge pas malgré les corrections
+            if len(corrections) >= 2:
+                last_pos = corrections[-1]['position_avant']
+                prev_pos = corrections[-2]['position_avant']
+                movement = abs(last_pos - prev_pos)
+                # Gérer le wraparound 0-360
+                movement = min(movement, 360 - movement)
+
+                if movement < self.MIN_MOVEMENT_THRESHOLD:
+                    stagnant_count += 1
+                    self.logger.warning(
+                        f"⚠️ Encodeur stagnant: mouvement={movement:.2f}° < {self.MIN_MOVEMENT_THRESHOLD}° "
+                        f"[{stagnant_count}/{self.MAX_STAGNANT_CORRECTIONS}]"
+                    )
+                    if stagnant_count >= self.MAX_STAGNANT_CORRECTIONS:
+                        self.logger.error(
+                            f"⚠️ ARRÊT: Encodeur figé détecté - "
+                            f"{stagnant_count} corrections sans mouvement"
+                        )
+                        encoder_frozen = True
+                        break
+                else:
+                    stagnant_count = 0  # Réinitialiser si mouvement détecté
+
             iteration += 1
             time.sleep(0.05)  # Pause stabilisation
 
         # Mesure finale
         try:
             position_finale = self._lire_position_stable()
-        except RuntimeError:
+        except (RuntimeError, FrozenEncoderError, StaleDataError):
             position_finale = angle_cible
             self.logger.warning("Impossible de lire position finale")
 
         erreur_finale = self._calculer_delta_angulaire(position_finale, angle_cible)
         temps_total = time.time() - start_time
-        # Success si erreur < tolerance ET pas de timeout
-        success = abs(erreur_finale) < tolerance and not timeout_reached
+        # Success si erreur < tolerance ET pas de timeout ET encodeur non figé
+        success = abs(erreur_finale) < tolerance and not timeout_reached and not encoder_frozen
 
         self._log_resultat_final(
             success, position_initiale, position_finale,
             erreur_finale, iteration, max_iterations, temps_total
         )
 
-        return self._creer_resultat(
+        result = self._creer_resultat(
             success, position_initiale, position_finale, angle_cible,
             erreur_finale, iteration, corrections, temps_total,
             timeout=timeout_reached
         )
+        # Ajouter info encodeur figé
+        result['encoder_frozen'] = encoder_frozen
+        return result
 
     def rotation_relative_avec_feedback(
         self,

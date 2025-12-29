@@ -722,6 +722,52 @@ body {
     color: var(--accent-green) !important;
 }
 
+/* État FROZEN (encodeur figé) - ALERTE ROUGE NÉON CLIGNOTANT */
+.enc-item.enc-frozen {
+    border-color: #ff0040 !important;  /* Rouge vif */
+    animation: neon-pulse-red 0.8s ease-in-out infinite !important;
+    background: rgba(255, 0, 64, 0.15) !important;
+}
+
+.enc-item.enc-frozen label {
+    color: #ff0040 !important;
+    animation: text-blink 0.8s ease-in-out infinite;
+}
+
+.enc-item.enc-frozen #encoder-calibrated {
+    color: #ff4060 !important;
+    font-weight: bold;
+    animation: text-blink 0.8s ease-in-out infinite;
+}
+
+/* Animation néon pulsant rouge */
+@keyframes neon-pulse-red {
+    0%, 100% {
+        border-color: #ff0040;
+        box-shadow:
+            0 0 5px #ff0040,
+            0 0 10px #ff0040,
+            0 0 20px #ff0040,
+            0 0 30px rgba(255, 0, 64, 0.5),
+            inset 0 0 10px rgba(255, 0, 64, 0.1);
+    }
+    50% {
+        border-color: #ff4060;
+        box-shadow:
+            0 0 10px #ff4060,
+            0 0 25px #ff0040,
+            0 0 40px #ff0040,
+            0 0 60px rgba(255, 0, 64, 0.8),
+            inset 0 0 20px rgba(255, 0, 64, 0.2);
+    }
+}
+
+/* Animation clignotement texte */
+@keyframes text-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* Cartouche MODE avec couleur dynamique */
 .mode-item {
     position: relative;
