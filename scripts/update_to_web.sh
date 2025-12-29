@@ -80,24 +80,51 @@ mkdir -p "$BACKUP_DIR"
 # =============================================================================
 print_header "ÉTAPE 1: Arrêt des services"
 
-print_step "Arrêt de motor_service.service (si actif)..."
-if systemctl is-active --quiet motor_service.service 2>/dev/null; then
-    systemctl stop motor_service.service
-    print_success "motor_service.service arrêté"
-else
-    print_warning "motor_service.service n'était pas actif"
+# Fonction pour arrêter un service de manière robuste
+stop_service_robust() {
+    local service=$1
+    print_step "Arrêt de $service..."
+
+    # Toujours tenter l'arrêt, même si le service semble inactif
+    systemctl stop "$service" 2>/dev/null || true
+
+    # Attendre que le service soit vraiment arrêté
+    local attempts=0
+    while systemctl is-active --quiet "$service" 2>/dev/null && [ $attempts -lt 10 ]; do
+        sleep 1
+        attempts=$((attempts + 1))
+        print_step "  Attente arrêt $service... ($attempts/10)"
+    done
+
+    # Si toujours actif, forcer l'arrêt
+    if systemctl is-active --quiet "$service" 2>/dev/null; then
+        print_warning "Forçage de l'arrêt de $service..."
+        systemctl kill "$service" 2>/dev/null || true
+        sleep 2
+    fi
+
+    if systemctl is-active --quiet "$service" 2>/dev/null; then
+        print_error "$service n'a pas pu être arrêté!"
+        return 1
+    else
+        print_success "$service arrêté"
+    fi
+}
+
+# Tuer aussi les processus Python orphelins qui pourraient bloquer le GPIO
+print_step "Recherche de processus motor_service orphelins..."
+if pgrep -f "motor_service.py" > /dev/null 2>&1; then
+    print_warning "Processus motor_service.py trouvé, arrêt..."
+    pkill -f "motor_service.py" 2>/dev/null || true
+    sleep 2
 fi
 
-print_step "Arrêt de ems22d.service (si actif)..."
-if systemctl is-active --quiet ems22d.service 2>/dev/null; then
-    systemctl stop ems22d.service
-    print_success "ems22d.service arrêté"
-else
-    print_warning "ems22d.service n'était pas actif"
-fi
+stop_service_robust "motor_service.service"
+stop_service_robust "ems22d.service"
 
-# Petite pause pour libérer les GPIO
-sleep 2
+# Pause pour libérer les GPIO (lgpio a besoin de temps)
+print_step "Attente libération GPIO..."
+sleep 3
 
 # =============================================================================
 # ÉTAPE 2: Mise à jour du code
