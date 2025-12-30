@@ -24,6 +24,10 @@ class TrackingCorrectionsMixin:
     et d'application des corrections de dérive.
     """
 
+    # Seuil au-delà duquel on autorise les grands mouvements dans le FeedbackController
+    # Correspond au seuil CONTINUOUS (30°) - évite que la protection 20° bloque les corrections post-méridien
+    LARGE_MOVEMENT_THRESHOLD = 30.0
+
     def check_and_correct(self) -> Tuple[bool, str]:
         """
         Vérifie si une correction est nécessaire et l'applique.
@@ -134,8 +138,10 @@ class TrackingCorrectionsMixin:
         """Applique une correction avec feedback encodeur."""
         try:
             position_cible_logique, angle_cible_encodeur = self._calculer_cibles(delta_deg)
+            # Autoriser les grands mouvements si delta > seuil (ex: traversée méridien près du zénith)
+            allow_large = abs(delta_deg) > self.LARGE_MOVEMENT_THRESHOLD
             result, duration = self._executer_rotation_feedback(
-                angle_cible_encodeur, motor_delay
+                angle_cible_encodeur, motor_delay, allow_large_movement=allow_large
             )
             self._finaliser_correction(delta_deg, position_cible_logique)
             self._traiter_resultat_feedback(result, duration)
@@ -179,14 +185,24 @@ class TrackingCorrectionsMixin:
         return position_cible_logique, angle_cible_encodeur
 
     def _executer_rotation_feedback(self, angle_cible: float,
-                                     motor_delay: float) -> tuple:
-        """Exécute la rotation avec feedback et mesure la durée."""
+                                     motor_delay: float,
+                                     allow_large_movement: bool = False) -> tuple:
+        """
+        Exécute la rotation avec feedback et mesure la durée.
+
+        Args:
+            angle_cible: Angle cible absolu (0-360°)
+            motor_delay: Délai moteur (secondes/pas)
+            allow_large_movement: Si True, désactive la protection 20° du FeedbackController.
+                                  Nécessaire pour les grands déplacements (traversée méridien).
+        """
         start_time = time.time()
         result = self.moteur.rotation_avec_feedback(
             angle_cible=angle_cible,
             vitesse=motor_delay,
             tolerance=0.5,
-            max_iterations=10
+            max_iterations=10,
+            allow_large_movement=allow_large_movement
         )
         duration = time.time() - start_time
         return result, duration
