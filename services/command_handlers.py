@@ -27,6 +27,17 @@ from core.utils.angle_utils import shortest_angular_distance
 
 logger = logging.getLogger(__name__)
 
+# Import différé pour éviter import circulaire
+_rotate_log_func = None
+
+def _get_rotate_log_func():
+    """Importe la fonction de rotation de log de manière différée."""
+    global _rotate_log_func
+    if _rotate_log_func is None:
+        from services.motor_service import rotate_log_for_tracking
+        _rotate_log_func = rotate_log_for_tracking
+    return _rotate_log_func
+
 
 # =============================================================================
 # FONCTIONS UTILITAIRES COMMUNES (DRY)
@@ -382,6 +393,13 @@ class TrackingHandler:
             current_status: Statut actuel du moteur
             skip_goto: Si True, ne pas faire de GOTO initial (conserver position actuelle)
         """
+        # Rotation du fichier de log pour cette session de suivi
+        try:
+            rotate_log = _get_rotate_log_func()
+            rotate_log(object_name)
+        except Exception as e:
+            logger.warning(f"Impossible de créer le fichier de log dédié: {e}")
+
         logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
 
         if self.active:

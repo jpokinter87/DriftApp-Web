@@ -51,19 +51,75 @@ from services.command_handlers import (
     GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
 )
 
-# Configuration logging
+# Configuration logging - fichier initial (sera rotaté au démarrage du suivi)
+LOGS_DIR = Path(__file__).parent.parent / 'logs'
+LOGS_DIR.mkdir(exist_ok=True)
+
+# Handler de fichier initial (sera remplacé lors du suivi)
+_current_file_handler = logging.FileHandler(
+    LOGS_DIR / 'motor_service.log',
+    mode='a'
+)
+_current_file_handler.setFormatter(
+    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(
-            Path(__file__).parent.parent / 'logs' / 'motor_service.log',
-            mode='a'
-        )
+        _current_file_handler
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def rotate_log_for_tracking(object_name: str) -> str:
+    """
+    Crée un nouveau fichier de log pour la session de suivi.
+
+    Args:
+        object_name: Nom de l'objet suivi (ex: "M31", "NGC 3079")
+
+    Returns:
+        str: Chemin du nouveau fichier de log créé
+    """
+    global _current_file_handler
+
+    # Nettoyer le nom de l'objet pour le nom de fichier
+    safe_name = object_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+
+    # Générer le nouveau nom de fichier avec horodatage
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    new_log_filename = f"motor_service_{timestamp}_{safe_name}.log"
+    new_log_path = LOGS_DIR / new_log_filename
+
+    # Récupérer le root logger
+    root_logger = logging.getLogger()
+
+    # Fermer et retirer l'ancien handler de fichier
+    if _current_file_handler:
+        logger.info(f"=== Rotation log vers: {new_log_filename} ===")
+        _current_file_handler.close()
+        root_logger.removeHandler(_current_file_handler)
+
+    # Créer le nouveau handler
+    _current_file_handler = logging.FileHandler(new_log_path, mode='w')
+    _current_file_handler.setFormatter(
+        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    )
+    _current_file_handler.setLevel(logging.INFO)
+    root_logger.addHandler(_current_file_handler)
+
+    # Premier message dans le nouveau fichier
+    logger.info("=" * 60)
+    logger.info(f"NOUVELLE SESSION DE SUIVI: {object_name}")
+    logger.info(f"Fichier: {new_log_filename}")
+    logger.info(f"Démarrage: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("=" * 60)
+
+    return str(new_log_path)
 
 
 class MotorService:
