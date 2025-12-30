@@ -410,26 +410,47 @@ class FeedbackController:
             corrections.append(correction)
 
             # Détection de non-mouvement: l'encodeur ne bouge pas malgré les corrections
+            # IMPORTANT: Vérifier le mouvement TOTAL depuis le début, pas seulement entre échantillons
+            # Cela évite les faux positifs lors de grands déplacements (ex: passage méridien)
             if len(corrections) >= 2:
                 last_pos = corrections[-1]['position_avant']
                 prev_pos = corrections[-2]['position_avant']
-                movement = abs(last_pos - prev_pos)
+                inter_sample_movement = abs(last_pos - prev_pos)
                 # Gérer le wraparound 0-360
-                movement = min(movement, 360 - movement)
+                inter_sample_movement = min(inter_sample_movement, 360 - inter_sample_movement)
 
-                if movement < self.MIN_MOVEMENT_THRESHOLD:
-                    stagnant_count += 1
-                    self.logger.warning(
-                        f"⚠️ Encodeur stagnant: mouvement={movement:.2f}° < {self.MIN_MOVEMENT_THRESHOLD}° "
-                        f"[{stagnant_count}/{self.MAX_STAGNANT_CORRECTIONS}]"
-                    )
-                    if stagnant_count >= self.MAX_STAGNANT_CORRECTIONS:
-                        self.logger.error(
-                            f"⚠️ ARRÊT: Encodeur figé détecté - "
-                            f"{stagnant_count} corrections sans mouvement"
+                # Calculer le mouvement total depuis le début
+                total_movement = abs(last_pos - position_initiale)
+                total_movement = min(total_movement, 360 - total_movement)
+
+                # L'encodeur est considéré figé SEULEMENT si:
+                # 1. Le mouvement inter-échantillon est faible ET
+                # 2. Le mouvement total depuis le début est aussi faible (< 1°)
+                # Cela évite les faux positifs lors de grands déplacements où
+                # l'encodeur peut être lu plusieurs fois à la même position
+                if inter_sample_movement < self.MIN_MOVEMENT_THRESHOLD:
+                    if total_movement < 1.0:
+                        # Vraiment figé: pas de mouvement depuis le début
+                        stagnant_count += 1
+                        self.logger.warning(
+                            f"⚠️ Encodeur stagnant: inter-sample={inter_sample_movement:.2f}°, "
+                            f"total={total_movement:.2f}° [{stagnant_count}/{self.MAX_STAGNANT_CORRECTIONS}]"
                         )
-                        encoder_frozen = True
-                        break
+                        if stagnant_count >= self.MAX_STAGNANT_CORRECTIONS:
+                            self.logger.error(
+                                f"⚠️ ARRÊT: Encodeur figé détecté - "
+                                f"{stagnant_count} corrections sans mouvement"
+                            )
+                            encoder_frozen = True
+                            break
+                    else:
+                        # Mouvement total significatif: l'encodeur fonctionne
+                        # Juste un échantillonnage temporaire au même point
+                        self.logger.debug(
+                            f"Inter-sample faible ({inter_sample_movement:.2f}°) mais "
+                            f"mouvement total OK ({total_movement:.1f}°) - encodeur fonctionnel"
+                        )
+                        stagnant_count = 0
                 else:
                     stagnant_count = 0  # Réinitialiser si mouvement détecté
 

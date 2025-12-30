@@ -88,7 +88,14 @@ def rotate_log_for_tracking(object_name: str) -> str:
     global _current_file_handler
 
     # Nettoyer le nom de l'objet pour le nom de fichier
-    safe_name = object_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+    # Remplacer tous les caractères problématiques pour les systèmes de fichiers
+    safe_name = object_name
+    for char in ' /\\*?:"<>|':
+        safe_name = safe_name.replace(char, '_')
+    # Supprimer les underscores multiples et en début/fin
+    while '__' in safe_name:
+        safe_name = safe_name.replace('__', '_')
+    safe_name = safe_name.strip('_')
 
     # Générer le nouveau nom de fichier avec horodatage
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
