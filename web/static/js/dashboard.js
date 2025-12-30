@@ -637,7 +637,7 @@ function updateTrackingDisplay(motor) {
         const info = motor.tracking_info || {};
         state.trackingInfo = info;  // Stocker pour drawCompass
 
-        // Mettre à jour le cartouche TÉLESCOPE avec position_cible pendant le tracking
+        // Mettre à jour le cartouche CIBLE avec position_cible pendant le tracking
         if (info.position_cible !== undefined && info.position_cible !== null) {
             elements.domeTarget.textContent = `${info.position_cible.toFixed(2)}°`;
         }
@@ -968,53 +968,68 @@ function drawStarField(ctx, cx, cy, outerR, innerR) {
     ctx.globalAlpha = 1.0;
 }
 
-// Dessiner le télescope au centre (tube rectangulaire) avec timer intégré
+// Dessiner la flèche de direction calculée (√x²) avec timer intégré
 function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     // Si pas d'angle de tracking, utiliser la position coupole
     const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
-    // Le tube est dessiné vers le haut en coordonnées locales, donc PAS besoin de -90°
-    // (contrairement aux aiguilles qui sont dessinées vers la droite)
     const teleRad = teleAngle * Math.PI / 180;
 
-    // Dimensions du tube (agrandi)
-    const tubeLength = 65;
-    const tubeWidth = 24;
+    // Dimensions de la flèche
+    const arrowLength = 65;
+    const arrowHeadSize = 12;
+    const arrowWidth = 3;
 
-    // Rayon du centre agrandi pour le timer (3 digits max: "270s")
-    const centerRadius = 24;
+    // Rayon du centre pour le symbole √x² et timer
+    const centerRadius = 22;
 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(teleRad);
 
-    // Corps du tube (gris foncé)
-    ctx.fillStyle = '#3d3d5c';
-    ctx.fillRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
-
-    // Bordure du tube
-    ctx.strokeStyle = '#5a5a7a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
-
-    // Ouverture du tube (cercle plus clair)
-    ctx.fillStyle = '#4a4a6a';
+    // === FLÈCHE ===
+    // Tige de la flèche (du cercle central vers l'extérieur)
+    ctx.strokeStyle = '#4ade80';  // Vert clair
+    ctx.lineWidth = arrowWidth;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.ellipse(0, -tubeLength + 6, tubeWidth/2 - 3, 5, 0, 0, 2 * Math.PI);
+    ctx.moveTo(0, -centerRadius - 2);
+    ctx.lineTo(0, -arrowLength);
+    ctx.stroke();
+
+    // Pointe de la flèche (triangle)
+    ctx.fillStyle = '#4ade80';
+    ctx.beginPath();
+    ctx.moveTo(0, -arrowLength - arrowHeadSize);  // Pointe
+    ctx.lineTo(-arrowHeadSize/2, -arrowLength + 2);  // Coin gauche
+    ctx.lineTo(arrowHeadSize/2, -arrowLength + 2);   // Coin droit
+    ctx.closePath();
     ctx.fill();
 
-    // Monture (cercle au centre - agrandi pour timer)
-    ctx.fillStyle = '#2d4059';
+    // === CERCLE CENTRAL avec symbole √x² ===
+    // Cercle extérieur
+    ctx.fillStyle = '#1e3a5f';
     ctx.beginPath();
     ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Cercle intérieur (accent)
-    ctx.fillStyle = '#1a2a3a';
-    ctx.beginPath();
-    ctx.arc(0, 0, centerRadius - 4, 0, 2 * Math.PI);
-    ctx.fill();
+    // Bordure du cercle
+    ctx.strokeStyle = '#4ade80';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     ctx.restore();
+
+    // === SYMBOLE √x² AU CENTRE (toujours horizontal) ===
+    // Dessiner uniquement si pas de timer actif
+    if (countdownValue === undefined || countdownValue === null || countdownValue === '--') {
+        ctx.save();
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 13px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('√x²', cx, cy);
+        ctx.restore();
+    }
 
     // === TIMER AU CENTRE (texte toujours horizontal) ===
     if (countdownValue !== undefined && countdownValue !== null && countdownValue !== '--') {
@@ -1065,13 +1080,13 @@ function drawCompassLegend(ctx, x, y) {
     ctx.font = '10px Arial';
     ctx.textAlign = 'center';
 
-    // TÉLESCOPE en vert
-    ctx.fillStyle = '#00d26a';
-    ctx.fillText('● TÉLESCOPE', x - 45, y);
+    // CIBLE (direction calculée) en vert
+    ctx.fillStyle = '#4ade80';
+    ctx.fillText('● CIBLE (√x²)', x - 45, y);
 
-    // COUPOLE en bleu
+    // CIMIER en bleu
     ctx.fillStyle = '#4da6ff';
-    ctx.fillText('● COUPOLE', x + 45, y);
+    ctx.fillText('● CIMIER', x + 45, y);
 }
 
 // =========================================================================
