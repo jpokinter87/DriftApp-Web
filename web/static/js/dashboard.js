@@ -38,8 +38,8 @@ let gotoModalVisible = false;
 let gotoStartPosition = null;
 let gotoStartTime = null;  // Timestamp du début du GOTO pour calcul position estimée
 
-// Vitesse CONTINUOUS en degrés/seconde (41°/min selon config.json)
-const CONTINUOUS_SPEED_DEG_PER_SEC = 41.0 / 60;  // ~0.683°/s
+// Vitesse CONTINUOUS en degrés/seconde (51°/min selon config.json ajusté 30/12/2025)
+const CONTINUOUS_SPEED_DEG_PER_SEC = 51.0 / 60;  // ~0.85°/s
 
 // Éléments DOM
 const elements = {
@@ -922,8 +922,9 @@ function drawCompass() {
         ctx.stroke();
     }
 
-    // Arc rouge = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
-    ctx.strokeStyle = 'rgba(160, 50, 50, 0.5)';
+    // Arc ambre = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
+    // Couleur alignée avec cartouche CIMIER (--accent-amber: #d4a055)
+    ctx.strokeStyle = 'rgba(212, 160, 85, 0.75)';
     ctx.lineWidth = 12;
     ctx.beginPath();
     const closedStartRad = (openingEnd - 90) * Math.PI / 180;
@@ -990,7 +991,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     const arrowWidth = 3;
 
     // Rayon du centre pour le symbole √x² et timer
-    const centerRadius = 22;
+    const centerRadius = 28;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -1029,20 +1030,11 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
 
     ctx.restore();
 
-    // === SYMBOLE √x² AU CENTRE (toujours horizontal) ===
-    // Dessiner uniquement si pas de timer actif
-    if (countdownValue === undefined || countdownValue === null || countdownValue === '--') {
-        ctx.save();
-        ctx.fillStyle = '#4ade80';
-        ctx.font = 'bold 13px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('√x²', cx, cy);
-        ctx.restore();
-    }
+    // === CONTENU DU CERCLE CENTRAL ===
+    const hasTimer = countdownValue !== undefined && countdownValue !== null && countdownValue !== '--';
 
-    // === TIMER AU CENTRE (texte toujours horizontal) ===
-    if (countdownValue !== undefined && countdownValue !== null && countdownValue !== '--') {
+    if (hasTimer) {
+        // Mode avec timer: afficher timer + symbole √x² en dessous
         // Formater le texte du timer
         let timerText;
         if (typeof countdownValue === 'number') {
@@ -1051,13 +1043,31 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
             timerText = String(countdownValue);
         }
 
-        // Dessiner le texte du timer (sans rotation)
+        // Timer (légèrement au-dessus du centre)
         ctx.save();
         ctx.fillStyle = timerColor || '#4da6ff';
-        ctx.font = 'bold 14px monospace';
+        ctx.font = 'bold 12px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(timerText, cx, cy);
+        ctx.fillText(timerText, cx, cy - 7);
+        ctx.restore();
+
+        // Symbole √x² en dessous du timer
+        ctx.save();
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 14px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('√x²', cx, cy + 10);
+        ctx.restore();
+    } else {
+        // Mode sans timer: symbole √x² seul, centré
+        ctx.save();
+        ctx.fillStyle = '#4ade80';
+        ctx.font = 'bold 20px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('√x²', cx, cy);
         ctx.restore();
     }
 }
@@ -1094,8 +1104,8 @@ function drawCompassLegend(ctx, x, y) {
     ctx.fillStyle = '#4ade80';
     ctx.fillText('● CIBLE (√x²)', x - 45, y);
 
-    // CIMIER en bleu
-    ctx.fillStyle = '#4da6ff';
+    // CIMIER en ambre (aligné avec cartouche CSS --accent-amber)
+    ctx.fillStyle = '#d4a055';
     ctx.fillText('● CIMIER', x + 45, y);
 }
 

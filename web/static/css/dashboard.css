@@ -480,6 +480,7 @@ body {
 .btn-danger {
     background-color: var(--accent-red);
     color: white;
+    font-weight: 600;
 }
 
 .btn-danger:hover:not(:disabled) {

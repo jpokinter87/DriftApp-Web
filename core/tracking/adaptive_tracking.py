@@ -153,7 +153,7 @@ class AdaptiveTrackingManager:
             mode=TrackingMode.CONTINUOUS,
             check_interval=5,
             correction_threshold=0.1,
-            motor_delay=0.00015,
+            motor_delay=0.00012,  # Ajusté 30/12/2025 sur retour terrain
             description="Mode continu - Corrections permanentes / GOTO"
         )
 

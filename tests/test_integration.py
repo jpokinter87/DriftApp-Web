@@ -325,7 +325,7 @@ class TestGotoCommandFlow:
         mock_config = MagicMock()
         mock_config.thresholds.feedback_min_deg = 3.0
         mock_config.thresholds.default_tolerance_deg = 0.5
-        mock_config.adaptive.modes = {'continuous': MagicMock(motor_delay=0.00015)}
+        mock_config.adaptive.modes = {'continuous': MagicMock(motor_delay=0.00012)}
 
         statuses = []
 

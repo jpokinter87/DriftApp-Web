@@ -164,8 +164,10 @@ class MotorService:
         # Initialiser les handlers de commandes
         self._init_handlers()
 
-        # État actuel
+        # État actuel - créer et écrire IMMÉDIATEMENT pour éviter
+        # que le frontend ne lise un état "tracking" d'une session précédente
         self.current_status = self._create_initial_status()
+        self._cleanup_on_startup()
 
         # Logs de suivi pour l'interface web (deque avec taille max automatique)
         self.recent_tracking_logs = deque(maxlen=20)
@@ -219,6 +221,19 @@ class MotorService:
             self.feedback_controller, self.config,
             self.simulation_mode, self._write_status, self._add_tracking_log
         )
+
+    def _cleanup_on_startup(self):
+        """
+        Nettoie l'état IPC au démarrage pour éviter les états "fantômes".
+
+        Problème résolu: Si le service est redémarré alors qu'un suivi était actif,
+        le fichier /dev/shm/motor_status.json peut contenir un ancien état 'tracking'.
+        Le frontend verrait alors "suivi actif" et désactiverait le bouton Démarrer.
+
+        Solution: Écrire immédiatement un état 'idle' propre au démarrage.
+        """
+        self.ipc.write_status(self.current_status)
+        logger.info("État IPC initialisé (cleanup au démarrage)")
 
     def _init_systemd_notifier(self):
         """

@@ -64,7 +64,7 @@ def mock_config():
     """Mock de la configuration."""
     class MockModeConfig:
         def __init__(self):
-            self.motor_delay = 0.00015
+            self.motor_delay = 0.00012  # Vitesse CONTINUOUS ajustée 30/12/2025
 
     class MockModes:
         def get(self, mode_name):
@@ -143,7 +143,7 @@ class TestGotoHandler:
         """Utilise la vitesse CONTINUOUS par défaut via fonction partagée."""
         from services.command_handlers import _get_motor_speed
         speed = _get_motor_speed(mock_config)
-        assert speed == 0.00015
+        assert speed == 0.00012  # Vitesse CONTINUOUS ajustée 30/12/2025
 
     def test_get_motor_speed_explicit(self, mock_config):
         """Utilise la vitesse explicite si fournie."""

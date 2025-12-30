@@ -54,7 +54,7 @@ def _get_motor_speed(config, speed: Optional[float] = None) -> float:
         speed: Vitesse explicite (optionnelle)
 
     Returns:
-        Délai moteur en secondes (ex: 0.00015 pour ~41°/min)
+        Délai moteur en secondes (ex: 0.00012 pour ~51°/min)
     """
     if speed is not None:
         return speed
@@ -62,7 +62,7 @@ def _get_motor_speed(config, speed: Optional[float] = None) -> float:
         continuous = config.adaptive.modes.get('continuous')
         if continuous:
             return continuous.motor_delay
-    return 0.00015
+    return 0.00012  # Ajusté 30/12/2025 sur retour terrain
 
 
 def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):
