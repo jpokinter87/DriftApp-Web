@@ -28,6 +28,11 @@ class TrackingCorrectionsMixin:
     # Correspond au seuil CONTINUOUS (30°) - évite que la protection 20° bloque les corrections post-méridien
     LARGE_MOVEMENT_THRESHOLD = 30.0
 
+    # Seuil d'erreur acceptable même avec timeout (en degrés)
+    # Si erreur < ce seuil, ne pas compter comme échec même si timeout atteint
+    # Évite l'arrêt automatique lors de grands déplacements post-méridien
+    ACCEPTABLE_ERROR_THRESHOLD = 2.0
+
     def check_and_correct(self) -> Tuple[bool, str]:
         """
         Vérifie si une correction est nécessaire et l'applique.
@@ -214,13 +219,30 @@ class TrackingCorrectionsMixin:
         self.total_movement += abs(delta_deg)
 
     def _traiter_resultat_feedback(self, result: dict, duration: float):
-        """Traite le résultat de la correction feedback."""
+        """
+        Traite le résultat de la correction feedback.
+
+        LOGIQUE AMÉLIORÉE (v4.6):
+        - Succès complet → réinitialise le compteur d'échecs
+        - Timeout MAIS erreur acceptable (< 2°) → avertissement, PAS un échec
+          (évite l'arrêt automatique lors de grands déplacements post-méridien)
+        - Échec réel (erreur > seuil) → incrémente le compteur
+        """
         if result['success']:
             self._log_feedback_succes(result, duration)
         else:
-            self._log_feedback_echec(result, duration)
-            if self._verifier_echecs_consecutifs():
-                return
+            erreur_finale = abs(result.get('erreur_finale', 999))
+            timeout_occurred = result.get('timeout', False)
+
+            # Cas spécial: timeout mais erreur acceptable
+            # La coupole a bien bougé, juste plus lentement que prévu
+            if timeout_occurred and erreur_finale < self.ACCEPTABLE_ERROR_THRESHOLD:
+                self._log_feedback_timeout_acceptable(result, duration)
+                # NE PAS incrémenter failed_feedback_count
+            else:
+                self._log_feedback_echec(result, duration)
+                if self._verifier_echecs_consecutifs():
+                    return
 
         self._log_detail_iterations(result)
 
@@ -232,6 +254,22 @@ class TrackingCorrectionsMixin:
             f"{result['position_finale']:.1f}° (erreur: {result['erreur_finale']:.2f}°, "
             f"AZCoupole: {result['position_cible']:.1f}°, "
             f"{result['iterations']}/10 iter, {duration:.1f}s)"
+        )
+
+    def _log_feedback_timeout_acceptable(self, result: dict, duration: float):
+        """
+        Log une correction avec timeout mais erreur acceptable.
+
+        Ce cas se produit lors de grands déplacements (post-méridien)
+        qui dépassent le timeout mais atteignent la cible.
+        On NE réinitialise PAS le compteur d'échecs mais on NE l'incrémente PAS non plus.
+        """
+        self.logger.warning(
+            f"Correction longue mais acceptable: "
+            f"{result['position_initiale']:.1f}° -> {result['position_finale']:.1f}° "
+            f"(erreur: {result['erreur_finale']:.2f}° < {self.ACCEPTABLE_ERROR_THRESHOLD}°, "
+            f"AZCoupole: {result['position_cible']:.1f}°, "
+            f"{result['iterations']}/10 iter, {duration:.1f}s, timeout OK)"
         )
 
     def _log_feedback_echec(self, result: dict, duration: float):

@@ -475,7 +475,17 @@ async function updateStatus() {
 
     // Mettre à jour l'état
     state.status = motor.status || 'unknown';
-    state.position = encoder.angle || motor.position || 0;
+
+    // Position de la coupole:
+    // - En suivi actif: utiliser motor.position (position LOGIQUE du tracker, compensée par l'offset encodeur)
+    // - Sinon: utiliser encoder.angle (lecture brute pour manoeuvres manuelles)
+    // Cela garantit que CIMIER ≈ CIBLE pendant le suivi
+    if (motor.status === 'tracking' && motor.position !== undefined) {
+        state.position = motor.position;
+    } else {
+        state.position = encoder.angle || motor.position || 0;
+    }
+
     state.target = motor.target;
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
