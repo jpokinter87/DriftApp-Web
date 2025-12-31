@@ -8,6 +8,7 @@
     --text-primary: #e8e4df;
     --text-secondary: #a09080;
     --border-color: #4a3d2e;
+    --pattern-stroke: #3a3028;
 
     /* Couleur d'accent principale: ambre */
     --accent-amber: #d4a055;
@@ -25,6 +26,9 @@
 
     /* Alias pour compatibilité (bleu → ambre) */
     --accent-blue: var(--accent-amber);
+
+    /* Pattern astronomique SVG dense pour fond des sections */
+    --astro-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none' stroke='%233a3028' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 12 L15 6 M15 18 L15 24 M9 15 L3 15 M21 15 L27 15'/%3E%3Ccircle cx='15' cy='15' r='2'/%3E%3Ccircle cx='55' cy='18' r='6'/%3E%3Cellipse cx='55' cy='18' rx='12' ry='4' transform='rotate(-15 55 18)'/%3E%3Cpath d='M95 15 Q102 8 106 15 Q110 22 102 26 Q94 30 90 22 Q86 14 95 10'/%3E%3Cpath d='M135 8 A10 10 0 1 1 135 28 A7 7 0 1 0 135 8'/%3E%3Ccircle cx='168' cy='15' r='3'/%3E%3Cpath d='M165 18 L155 28 M166 20 L158 26'/%3E%3Ccircle cx='25' cy='50' r='5'/%3E%3Cpath d='M22 54 L10 66 M24 56 L14 64'/%3E%3Cpath d='M60 45 L60 35 M60 55 L60 65 M50 50 L40 50 M70 50 L80 50 M54 44 L50 40 M66 44 L70 40'/%3E%3Ccircle cx='105' cy='48' r='8'/%3E%3Cellipse cx='105' cy='48' rx='16' ry='5'/%3E%3Ccircle cx='145' cy='42' r='1.5'/%3E%3Ccircle cx='152' cy='50' r='2'/%3E%3Ccircle cx='148' cy='58' r='1.5'/%3E%3Ccircle cx='158' cy='45' r='1'/%3E%3Ccircle cx='162' cy='55' r='1.5'/%3E%3Cpath d='M20 95 L28 80 L36 95 M23 95 L23 108 L33 108 L33 95 M21 108 L18 118 M35 108 L38 118'/%3E%3Ccircle cx='65' cy='90' r='6'/%3E%3Ccircle cx='65' cy='90' r='12' stroke-dasharray='2 3'/%3E%3Ccircle cx='77' cy='90' r='2'/%3E%3Cpath d='M110 82 Q120 75 125 85 Q130 95 120 100 Q110 105 105 95 Q100 85 110 80 Q125 72 135 88'/%3E%3Cpath d='M155 80 L170 95 M152 83 L167 98'/%3E%3Crect x='170' y='95' width='8' height='12' rx='1'/%3E%3Ccircle cx='25' cy='135' r='2'/%3E%3Ccircle cx='38' cy='128' r='1.5'/%3E%3Ccircle cx='42' cy='140' r='2'/%3E%3Ccircle cx='30' cy='145' r='1.5'/%3E%3Cpath d='M27 135 L36 129 M40 130 L41 138 M40 142 L32 144' stroke-dasharray='2 2'/%3E%3Cpath d='M70 125 L70 115 M70 135 L70 145 M60 130 L50 130 M80 130 L90 130 M63 123 L58 118 M77 123 L82 118 M63 137 L58 142 M77 137 L82 142'/%3E%3Ccircle cx='70' cy='130' r='3'/%3E%3Ccircle cx='115' cy='130' r='4'/%3E%3Cpath d='M111 134 L100 145 M113 136 L104 143'/%3E%3Ccircle cx='155' cy='125' r='7'/%3E%3Cellipse cx='155' cy='125' rx='14' ry='4' transform='rotate(20 155 125)'/%3E%3Cpath d='M18 168 L18 160 M18 176 L18 184 M10 172 L2 172 M26 172 L34 172'/%3E%3Ccircle cx='55' cy='170' r='5'/%3E%3Ccircle cx='55' cy='170' r='10' stroke-dasharray='2 3'/%3E%3Ccircle cx='65' cy='170' r='2'/%3E%3Cpath d='M100 165 A8 8 0 1 1 100 181 A5 5 0 1 0 100 165'/%3E%3Ccircle cx='140' cy='168' r='2'/%3E%3Ccircle cx='150' cy='162' r='1.5'/%3E%3Ccircle cx='155' cy='172' r='2'/%3E%3Ccircle cx='145' cy='178' r='1.5'/%3E%3Cpath d='M142 168 L148 163 M152 164 L154 170 M153 174 L147 177' stroke-dasharray='2 2'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 * {
@@ -53,6 +57,8 @@ body {
     gap: 1rem;
     padding: 1rem;
     background-color: var(--bg-panel);
+    background-image: var(--astro-pattern);
+    background-size: 180px 180px;
     border-radius: 8px;
     margin-bottom: 1rem;
 }
@@ -331,6 +337,8 @@ body {
 /* Compass section */
 .compass-section {
     background-color: var(--bg-panel);
+    background-image: var(--astro-pattern);
+    background-size: 180px 180px;
     border-radius: 8px;
     padding: 1rem;
 }
@@ -393,6 +401,8 @@ body {
 
 .control-panel {
     background-color: var(--bg-panel);
+    background-image: var(--astro-pattern);
+    background-size: 180px 180px;
     border-radius: 8px;
     padding: 1rem;
 }
@@ -499,6 +509,8 @@ body {
 /* Tracking info */
 .tracking-info {
     background-color: var(--bg-panel);
+    background-image: var(--astro-pattern);
+    background-size: 180px 180px;
     border-radius: 8px;
     padding: 1rem;
     border: 2px solid var(--accent-green);
@@ -592,6 +604,8 @@ body {
 /* Logs section */
 .logs-section {
     background-color: var(--bg-panel);
+    background-image: var(--astro-pattern);
+    background-size: 180px 180px;
     border-radius: 8px;
     padding: 1rem;
 }
