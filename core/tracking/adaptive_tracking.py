@@ -246,12 +246,12 @@ class AdaptiveTrackingManager:
             reasons.append(f"Zone critique ({self.CRITICAL_ZONE_1['name']})")
             return TrackingMode.CRITICAL, reasons
 
-        # Altitude critique OU proche zénith sans mouvement significatif
-        if altitude_level in ["critical", "zenith"]:
-            if altitude_level == "zenith":
-                reasons.append(f"Proche zénith ({altitude:.1f}°) - mouvement faible, pas de CONTINUOUS")
-            else:
-                reasons.append(f"Altitude critique ({altitude:.1f}°)")
+        # Altitude critique (68-75°) - PAS le zénith (>= 75°)
+        # Note v4.6: La règle "zénith → CRITICAL" a été supprimée car obsolète
+        # avec le système d'abaque. Les grands mouvements au zénith déclenchent
+        # CONTINUOUS via la règle ci-dessus (ligne 238-241).
+        if altitude_level == "critical":
+            reasons.append(f"Altitude critique ({altitude:.1f}°)")
             return TrackingMode.CRITICAL, reasons
 
         # Mouvement critique
@@ -342,15 +342,18 @@ class AdaptiveTrackingManager:
     def verify_shortest_path(
         self,
         current_position: float,
-        target_position: float
+        target_position: float,
+        log_large_movements: bool = True
     ) -> Tuple[float, str]:
         """
         Vérifie et retourne le chemin le plus court.
-        
+
         Args:
             current_position: Position actuelle (degrés)
             target_position: Position coupole (degrés)
-        
+            log_large_movements: Si True, log les grands mouvements (> 30°).
+                                 Mettre à False pour les appels fréquents (get_status).
+
         Returns:
             Tuple (delta, direction_description)
             - delta: Déplacement à effectuer (+ = horaire, - = anti-horaire)
@@ -389,8 +392,8 @@ class AdaptiveTrackingManager:
             chosen_description = f"{path2_direction} ({path2_angle:.1f}°)"
             verification = f"Chemin le plus court: {chosen_description}"
         
-        # Logger la vérification pour les grands mouvements
-        if abs(chosen_angle) > 30:
+        # Logger la vérification pour les grands mouvements (sauf si désactivé)
+        if log_large_movements and abs(chosen_angle) > 30:
             self.logger.info(f"🔍 Vérification chemin:")
             self.logger.info(f"   Position actuelle: {current:.1f}°")
             self.logger.info(f"   Position coupole: {target:.1f}°")

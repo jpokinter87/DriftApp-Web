@@ -331,8 +331,9 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         azimut, altitude = self._calculate_current_coords(now)
         position_cible, infos = self._calculate_target_position(azimut, altitude)
 
+        # log_large_movements=False car get_status() est appelé très fréquemment par le frontend
         delta, _ = self.adaptive_manager.verify_shortest_path(
-            self.position_relative, position_cible
+            self.position_relative, position_cible, log_large_movements=False
         )
         diag_info = self.adaptive_manager.get_diagnostic_info(altitude, azimut, delta)
         remaining = self._calculate_remaining_time(now)

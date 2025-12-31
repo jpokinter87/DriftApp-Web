@@ -269,8 +269,12 @@ class TestDecideMode:
 
         assert mode == TrackingMode.CONTINUOUS
 
-    def test_mode_critical_zenith_sans_mouvement(self, manager):
-        """Mode CRITICAL au zénith SANS mouvement significatif."""
+    def test_mode_normal_zenith_sans_mouvement(self, manager):
+        """Mode NORMAL au zénith avec mouvement faible (règle CRITICAL supprimée v4.6).
+
+        Note: Avant v4.6, zénith + mouvement faible → CRITICAL.
+        Cette règle a été supprimée car obsolète avec le système d'abaque.
+        """
         from core.tracking.adaptive_tracking import TrackingMode
 
         mode, reasons = manager._decide_mode(
@@ -281,7 +285,8 @@ class TestDecideMode:
             delta_required=0.5  # < 1.0, mouvement faible
         )
 
-        assert mode == TrackingMode.CRITICAL
+        # v4.6: Zénith sans mouvement significatif → NORMAL (pas de traitement spécial)
+        assert mode == TrackingMode.NORMAL
 
 
 class TestEvaluateTrackingZone:
