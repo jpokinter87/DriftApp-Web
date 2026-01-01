@@ -237,6 +237,38 @@ else
 fi
 
 # =============================================================================
+# ÉTAPE 6: Démarrage de Django
+# =============================================================================
+print_header "ÉTAPE 6: Démarrage de Django"
+
+# Utilisateur qui a lancé sudo (pour les permissions des fichiers)
+REAL_USER="${SUDO_USER:-$USER}"
+PYTHON="$DRIFTAPP_DIR/.venv/bin/python"
+
+# Arrêter Django s'il tourne déjà
+if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
+    print_step "Arrêt de Django existant..."
+    pkill -f "manage.py runserver" 2>/dev/null || true
+    sleep 2
+fi
+
+# Ajuster les permissions des dossiers pour l'utilisateur
+print_step "Ajustement des permissions pour $REAL_USER..."
+chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/logs" 2>/dev/null || true
+chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/data" 2>/dev/null || true
+
+# Lancer Django en tant qu'utilisateur normal
+print_step "Démarrage de Django (en tant que $REAL_USER)..."
+sudo -u "$REAL_USER" "$PYTHON" "$DRIFTAPP_DIR/web/manage.py" runserver 0.0.0.0:8000 &
+sleep 3
+
+if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
+    print_success "Django actif sur http://localhost:8000"
+else
+    print_error "Django n'a pas démarré!"
+fi
+
+# =============================================================================
 # RÉSUMÉ FINAL
 # =============================================================================
 print_header "MISE À JOUR TERMINÉE"
@@ -246,6 +278,11 @@ echo -e "  ${GREEN}✓${NC} Code mis à jour depuis GitHub"
 echo -e "  ${GREEN}✓${NC} Services systemd installés"
 echo -e "  ${GREEN}✓${NC} ems22d.service: $(systemctl is-active ems22d.service)"
 echo -e "  ${GREEN}✓${NC} motor_service.service: $(systemctl is-active motor_service.service)"
+if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Django: actif"
+else
+    echo -e "  ${YELLOW}⚠${NC} Django: inactif"
+fi
 echo ""
 echo -e "  ${CYAN}Sauvegarde:${NC} $BACKUP_DIR/ems22d.service.last_backup"
 echo ""
