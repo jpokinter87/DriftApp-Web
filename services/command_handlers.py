@@ -43,7 +43,7 @@ def _get_rotate_log_func():
 # FONCTIONS UTILITAIRES COMMUNES (DRY)
 # =============================================================================
 
-def _get_motor_speed(config, speed: Optional[float] = None) -> float:
+def _get_motor_speed(config, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
     """
     Retourne la vitesse optimale pour les commandes moteur.
 
@@ -52,17 +52,33 @@ def _get_motor_speed(config, speed: Optional[float] = None) -> float:
     Args:
         config: Configuration chargée
         speed: Vitesse explicite (optionnelle)
+        delta: Déplacement en degrés (optionnel, pour ajuster la vitesse)
 
     Returns:
-        Délai moteur en secondes (ex: 0.00012 pour ~51°/min)
+        Délai moteur en secondes
+
+    Note v2.3: Pour les petits déplacements (≤ 3°), utilise CRITICAL (1ms) au lieu
+    de CONTINUOUS pour réduire le stress mécanique. Les grands déplacements (> 3°)
+    utilisent CONTINUOUS pour la rapidité.
     """
     if speed is not None:
         return speed
+
+    # Seuil pour choisir entre CRITICAL et CONTINUOUS
+    SMALL_MOVEMENT_THRESHOLD = 3.0  # degrés
+
     if config.adaptive and config.adaptive.modes:
+        # Pour les petits déplacements, utiliser CRITICAL (plus doux)
+        if delta is not None and abs(delta) <= SMALL_MOVEMENT_THRESHOLD:
+            critical = config.adaptive.modes.get('critical')
+            if critical:
+                return critical.motor_delay
+        # Pour les grands déplacements, utiliser CONTINUOUS (rapide)
         continuous = config.adaptive.modes.get('continuous')
         if continuous:
             return continuous.motor_delay
-    return 0.00012  # Ajusté 30/12/2025 sur retour terrain
+
+    return 0.00014  # Fallback CONTINUOUS ajusté 01/01/2026
 
 
 def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):
@@ -245,9 +261,10 @@ class JogHandler:
         Exécute une rotation relative (jog).
 
         OPTIMISATION v4.4: Rotation directe SANS feedback (fluidité maximale).
+        Note v2.3: Petits JOG (≤ 3°) utilisent CRITICAL, grands JOG utilisent CONTINUOUS.
         """
         logger.info(f"JOG de {delta:+.1f}° (sans feedback)")
-        speed = _get_motor_speed(self.config, speed)
+        speed = _get_motor_speed(self.config, speed, delta=delta)
 
         current_status['status'] = 'moving'
         self.status_callback(current_status)

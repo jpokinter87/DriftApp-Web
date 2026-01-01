@@ -6,13 +6,14 @@ Ce module permet d'adapter automatiquement :
 2. La vitesse du moteur (délai entre pas)
 3. La vérification du chemin le plus court
 
-VERSION 2.2 - Système adaptatif simplifié (3 modes)
-- NORMAL: Conditions standard
-- CRITICAL: Altitude >= 68° OU mouvement critique
-- CONTINUOUS: Mouvement extrême OU (altitude >= 75° ET mouvement significatif)
-              AUSSI utilisé pour les GOTO (vitesse max fluide)
+VERSION 2.3 - Système adaptatif simplifié (3 modes)
+- NORMAL: Conditions standard (altitude < 68°)
+- CRITICAL: Altitude >= 68° OU mouvement critique (utilisé pour TOUT le suivi)
+- CONTINUOUS: Réservé aux GOTO et mouvements extrêmes (> 30°, flip méridien)
 
-CHANGEMENT v2.2: FAST_TRACK supprimé (redondant avec CONTINUOUS après calibration)
+CHANGEMENT v2.3: CONTINUOUS n'est plus déclenché par "zenith + mouvement significatif".
+Le suivi utilise exclusivement NORMAL et CRITICAL pour réduire le stress mécanique.
+CONTINUOUS est réservé aux GOTO initiaux, GOTO manuels 10°, et flip méridien.
 """
 
 from dataclasses import dataclass
@@ -220,9 +221,13 @@ class AdaptiveTrackingManager:
         Décide du mode de suivi approprié.
 
         Priorité (du plus urgent au moins urgent):
-        1. CONTINUOUS: mouvement extrême OU (zénith + mouvement significatif)
-        2. CRITICAL: zone critique OU altitude critique OU mouvement critique
+        1. CONTINUOUS: mouvement extrême UNIQUEMENT (> 30°, flip méridien)
+        2. CRITICAL: zone critique OU altitude critique/zénith OU mouvement critique
         3. NORMAL: conditions standard
+
+        Note v2.3: La règle "zénith + mouvement significatif → CONTINUOUS" a été
+        supprimée pour réduire le stress mécanique. Le suivi utilise exclusivement
+        NORMAL et CRITICAL. CONTINUOUS est réservé aux GOTO et flip méridien.
 
         Returns:
             Tuple (mode, liste des raisons)
@@ -230,14 +235,10 @@ class AdaptiveTrackingManager:
         reasons = []
 
         # === CONTINUOUS ===
-        # Mouvement extrême (> 50°)
+        # Mouvement extrême UNIQUEMENT (> 30°, typiquement flip méridien)
+        # Note v2.3: C'est le SEUL cas où CONTINUOUS est déclenché pendant le suivi
         if movement_level == "extreme":
             reasons.append(f"Mouvement extrême ({abs(delta_required):.1f}°)")
-            return TrackingMode.CONTINUOUS, reasons
-
-        # Proche zénith ET mouvement significatif (> seuil minimum)
-        if altitude_level == "zenith" and abs(delta_required) >= self.MOVEMENT_MIN_FOR_CONTINUOUS:
-            reasons.append(f"Proche zénith ({altitude:.1f}°) + mouvement significatif ({abs(delta_required):.1f}°)")
             return TrackingMode.CONTINUOUS, reasons
 
         # === CRITICAL ===
@@ -246,15 +247,19 @@ class AdaptiveTrackingManager:
             reasons.append(f"Zone critique ({self.CRITICAL_ZONE_1['name']})")
             return TrackingMode.CRITICAL, reasons
 
-        # Altitude critique (68-75°) - PAS le zénith (>= 75°)
-        # Note v4.6: La règle "zénith → CRITICAL" a été supprimée car obsolète
-        # avec le système d'abaque. Les grands mouvements au zénith déclenchent
-        # CONTINUOUS via la règle ci-dessus (ligne 238-241).
+        # Altitude zénith (>= 75°) - utilise CRITICAL, pas CONTINUOUS
+        # Note v2.3: Le zénith utilise maintenant CRITICAL pour réduire le stress mécanique
+        # CRITICAL (délai 1ms, ~9°/min) est suffisant pour les corrections normales
+        if altitude_level == "zenith":
+            reasons.append(f"Proche zénith ({altitude:.1f}°)")
+            return TrackingMode.CRITICAL, reasons
+
+        # Altitude critique (68-75°)
         if altitude_level == "critical":
             reasons.append(f"Altitude critique ({altitude:.1f}°)")
             return TrackingMode.CRITICAL, reasons
 
-        # Mouvement critique
+        # Mouvement critique (mais pas extrême)
         if movement_level == "critical":
             reasons.append(f"Mouvement critique ({abs(delta_required):.1f}°)")
             return TrackingMode.CRITICAL, reasons

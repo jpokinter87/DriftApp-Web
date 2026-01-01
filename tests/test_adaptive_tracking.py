@@ -255,8 +255,12 @@ class TestDecideMode:
 
         assert mode == TrackingMode.CONTINUOUS
 
-    def test_mode_continuous_zenith_avec_mouvement(self, manager):
-        """Mode CONTINUOUS au zénith avec mouvement significatif."""
+    def test_mode_critical_zenith_avec_mouvement(self, manager):
+        """Mode CRITICAL au zénith avec mouvement significatif (v2.3).
+
+        Note: Avant v2.3, zénith + mouvement → CONTINUOUS.
+        Cette règle a été supprimée pour réduire le stress mécanique.
+        """
         from core.tracking.adaptive_tracking import TrackingMode
 
         mode, reasons = manager._decide_mode(
@@ -267,13 +271,14 @@ class TestDecideMode:
             delta_required=2.0  # > 1.0, mouvement significatif
         )
 
-        assert mode == TrackingMode.CONTINUOUS
+        # v2.3: Zénith utilise toujours CRITICAL (pas CONTINUOUS)
+        assert mode == TrackingMode.CRITICAL
 
-    def test_mode_normal_zenith_sans_mouvement(self, manager):
-        """Mode NORMAL au zénith avec mouvement faible (règle CRITICAL supprimée v4.6).
+    def test_mode_critical_zenith_sans_mouvement(self, manager):
+        """Mode CRITICAL au zénith même avec mouvement faible (v2.3).
 
-        Note: Avant v4.6, zénith + mouvement faible → CRITICAL.
-        Cette règle a été supprimée car obsolète avec le système d'abaque.
+        Note: v2.3 utilise CRITICAL pour TOUT le zénith pour réduire le stress
+        mécanique causé par le mode CONTINUOUS.
         """
         from core.tracking.adaptive_tracking import TrackingMode
 
@@ -285,8 +290,8 @@ class TestDecideMode:
             delta_required=0.5  # < 1.0, mouvement faible
         )
 
-        # v4.6: Zénith sans mouvement significatif → NORMAL (pas de traitement spécial)
-        assert mode == TrackingMode.NORMAL
+        # v2.3: Zénith utilise toujours CRITICAL
+        assert mode == TrackingMode.CRITICAL
 
 
 class TestEvaluateTrackingZone:
@@ -326,15 +331,15 @@ class TestEvaluateTrackingZone:
         assert manager.current_mode == TrackingMode.CRITICAL
 
     def test_evaluate_scenarios_complets(self, manager):
-        """Test de scénarios complets."""
+        """Test de scénarios complets (v2.3 - CONTINUOUS réservé aux mouvements extrêmes)."""
         from core.tracking.adaptive_tracking import TrackingMode
 
         scenarios = [
             # (altitude, azimut, delta, mode_attendu)
             (45.0, 120.0, 0.3, TrackingMode.NORMAL),
             (69.0, 60.0, 2.0, TrackingMode.CRITICAL),
-            (76.0, 180.0, 5.0, TrackingMode.CONTINUOUS),
-            (50.0, 100.0, 55.0, TrackingMode.CONTINUOUS),  # Mouvement extrême
+            (76.0, 180.0, 5.0, TrackingMode.CRITICAL),  # v2.3: Zénith → CRITICAL (pas CONTINUOUS)
+            (50.0, 100.0, 55.0, TrackingMode.CONTINUOUS),  # Mouvement extrême (> 30°)
         ]
 
         for alt, az, delta, expected_mode in scenarios:
