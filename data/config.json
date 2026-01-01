@@ -129,8 +129,8 @@
         "_comment": "Altitude ≥ 75° ou mouvement extrême - AUSSI UTILISÉ POUR GOTO",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.00012,
-        "_speed": "~51°/min - Vitesse max fluide (ajustée 30/12/2025 sur retour terrain)",
+        "motor_delay": 0.00014,
+        "_speed": "~44°/min - Vitesse ajustée 01/01/2026 (0.12ms causait encodeur stagnant)",
         "_usage": "Tracking continu + GOTO manuels/automatiques"
       }
     },

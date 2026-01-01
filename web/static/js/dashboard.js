@@ -493,7 +493,7 @@ async function updateStatus() {
 
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);
-    updatePositionDisplay(encoder);
+    updatePositionDisplay(encoder, motor);
     updateTrackingDisplay(motor);
     updateGotoModal(motor, encoder);
     drawCompass();
@@ -524,9 +524,15 @@ function updateServiceStatus(motor, encoder) {
     }
 }
 
-function updatePositionDisplay(encoder) {
+function updatePositionDisplay(encoder, motor) {
     elements.domePosition.textContent = `${state.position.toFixed(2)}°`;
     elements.domeTarget.textContent = state.target ? `${state.target.toFixed(2)}°` : '--';
+
+    // Récupérer l'offset encodeur depuis tracking_info (si suivi actif)
+    let encoderOffset = 0;
+    if (motor && motor.tracking_info && motor.tracking_info.encoder_offset !== undefined) {
+        encoderOffset = motor.tracking_info.encoder_offset;
+    }
 
     // Cartouche ENC avec angle encodeur et état coloré
     const encItem = elements.encItem;
@@ -556,7 +562,14 @@ function updatePositionDisplay(encoder) {
         } else {
             // Vert = calibré
             encItem.classList.add('enc-calibrated');
-            elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
+            const angle = (encoder.angle || 0).toFixed(2);
+            // Afficher l'offset si significatif (> 1°) pendant le suivi
+            if (Math.abs(encoderOffset) > 1.0 && motor && motor.status === 'tracking') {
+                const sign = encoderOffset >= 0 ? '+' : '';
+                elements.encoderCalibrated.textContent = `${angle}° (${sign}${encoderOffset.toFixed(1)}°)`;
+            } else {
+                elements.encoderCalibrated.textContent = `${angle}°`;
+            }
             state.encoderFrozenLogged = false;  // Reset pour prochaine alerte
         }
     }

@@ -370,6 +370,21 @@ class FeedbackController:
             f"Rotation avec feedback: {position_initiale:.1f}° -> {angle_cible:.1f}°"
         )
 
+        # Calcul timeout dynamique basé sur la distance à parcourir
+        # Pour les grands déplacements (flip méridien > 30°), le timeout fixe de 60s est insuffisant
+        distance = abs(self._calculer_delta_angulaire(position_initiale, angle_cible))
+        if distance > 30.0 and hasattr(self.moteur, 'steps_per_dome_revolution'):
+            steps_per_degree = self.moteur.steps_per_dome_revolution / 360.0
+            temps_estime = distance * steps_per_degree * vitesse
+            # Facteur de marge x2 pour les itérations de correction
+            timeout_calcule = temps_estime * 2.0 + 30.0  # +30s de marge fixe
+            if timeout_calcule > max_duration:
+                self.logger.debug(
+                    f"Timeout ajusté: {max_duration}s -> {timeout_calcule:.0f}s "
+                    f"(distance={distance:.1f}°, temps_estimé={temps_estime:.0f}s)"
+                )
+                max_duration = timeout_calcule
+
         # Boucle de correction
         corrections = []
         iteration = 0

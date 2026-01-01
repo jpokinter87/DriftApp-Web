@@ -531,6 +531,8 @@ class TrackingHandler:
                     'total_corrections': status.get('total_corrections', 0),
                     'total_correction_degrees': status.get('total_movement', 0.0),
                     'mode_icon': status.get('mode_icon', ''),
+                    # Offset encodeur (écart entre position logique et encodeur)
+                    'encoder_offset': status.get('encoder_offset', 0.0),
                     # Données pour la page session
                     'ra_deg': getattr(self.session, 'ra_deg', None),
                     'dec_deg': getattr(self.session, 'dec_deg', None),

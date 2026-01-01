@@ -27,13 +27,21 @@ fi
 # Utilisateur qui a lancé sudo (pour les permissions des fichiers)
 REAL_USER="${SUDO_USER:-$USER}"
 
-# Créer le dossier logs avec les bonnes permissions
-setup_logs() {
+# Créer les dossiers et ajuster les permissions pour l'utilisateur
+setup_permissions() {
+    # Dossier logs
     if [[ ! -d "$PROJECT_DIR/logs" ]]; then
         mkdir -p "$PROJECT_DIR/logs"
     fi
-    # S'assurer que l'utilisateur peut écrire dans logs (pas root)
     chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/logs" 2>/dev/null || true
+
+    # Dossier data et sessions (pour que l'utilisateur puisse modifier config.json)
+    if [[ ! -d "$PROJECT_DIR/data/sessions" ]]; then
+        mkdir -p "$PROJECT_DIR/data/sessions"
+    fi
+    chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/data" 2>/dev/null || true
+
+    log_info "Permissions ajustées pour l'utilisateur $REAL_USER"
 }
 
 # Couleurs
@@ -82,8 +90,9 @@ start_motor_service() {
     if pgrep -f "motor_service.py" > /dev/null; then
         log_info "Motor Service déjà en cours d'exécution"
     else
-        log_info "Démarrage du Motor Service..."
-        "$PYTHON" services/motor_service.py &
+        log_info "Démarrage du Motor Service (en tant que $REAL_USER)..."
+        # Lancer en tant qu'utilisateur normal pour que les fichiers créés lui appartiennent
+        sudo -u "$REAL_USER" "$PYTHON" services/motor_service.py &
         sleep 2
         if pgrep -f "motor_service.py" > /dev/null; then
             log_info "Motor Service démarré"
@@ -97,8 +106,9 @@ start_django() {
     if pgrep -f "manage.py runserver" > /dev/null; then
         log_info "Django déjà en cours d'exécution"
     else
-        log_info "Démarrage de Django..."
-        "$PYTHON" web/manage.py runserver 0.0.0.0:8000 &
+        log_info "Démarrage de Django (en tant que $REAL_USER)..."
+        # Lancer en tant qu'utilisateur normal pour que les fichiers créés lui appartiennent
+        sudo -u "$REAL_USER" "$PYTHON" web/manage.py runserver 0.0.0.0:8000 &
         sleep 2
         if pgrep -f "manage.py runserver" > /dev/null; then
             log_info "Django démarré sur http://localhost:8000"
@@ -176,8 +186,8 @@ case "${1:-start}" in
         log_info "Démarrage de DriftApp Web..."
         echo
 
-        # Préparer le dossier logs avec les bonnes permissions
-        setup_logs
+        # Préparer les dossiers avec les bonnes permissions
+        setup_permissions
 
         # Vérifier que le daemon encodeur tourne (géré par systemd)
         check_encoder_daemon
@@ -208,7 +218,7 @@ case "${1:-start}" in
         # Relancer directement (pas via $0 pour garder le contexte sudo)
         log_info "Démarrage de DriftApp Web..."
         echo
-        setup_logs
+        setup_permissions
         check_encoder_daemon
         encoder_ok=$?
         start_motor_service

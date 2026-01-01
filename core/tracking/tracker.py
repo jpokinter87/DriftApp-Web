@@ -379,6 +379,8 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             'encoder_daemon': self.encoder_available,
             'abaque_method': infos.get('method', 'interpolation'),
             'in_bounds': infos.get('in_bounds', True),
+            # Offset encodeur (différence entre position logique et encodeur)
+            'encoder_offset': self.encoder_offset,
         }
 
     # =========================================================================
