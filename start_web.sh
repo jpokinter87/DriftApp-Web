@@ -90,9 +90,10 @@ start_motor_service() {
     if pgrep -f "motor_service.py" > /dev/null; then
         log_info "Motor Service déjà en cours d'exécution"
     else
-        log_info "Démarrage du Motor Service (en tant que $REAL_USER)..."
-        # Lancer en tant qu'utilisateur normal pour que les fichiers créés lui appartiennent
-        sudo -u "$REAL_USER" "$PYTHON" services/motor_service.py &
+        log_info "Démarrage du Motor Service (root requis pour GPIO)..."
+        # Motor Service DOIT tourner en root pour l'accès GPIO sur Raspberry Pi
+        # Les fichiers logs/data sont pré-configurés avec les bonnes permissions dans setup_permissions()
+        "$PYTHON" services/motor_service.py &
         sleep 2
         if pgrep -f "motor_service.py" > /dev/null; then
             log_info "Motor Service démarré"
