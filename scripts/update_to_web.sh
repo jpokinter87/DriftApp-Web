@@ -284,9 +284,10 @@ print_step "Ajustement des permissions pour $REAL_USER..."
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/logs" 2>/dev/null || true
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/data" 2>/dev/null || true
 
-# Lancer Django en tant qu'utilisateur normal
+# Lancer Django en tant qu'utilisateur normal avec nohup pour survivre à la fermeture du terminal
 print_step "Démarrage de Django (en tant que $REAL_USER)..."
-sudo -u "$REAL_USER" "$PYTHON" "$DRIFTAPP_DIR/web/manage.py" runserver 0.0.0.0:8000 &
+sudo -u "$REAL_USER" nohup "$PYTHON" "$DRIFTAPP_DIR/web/manage.py" runserver 0.0.0.0:8000 >> "$DRIFTAPP_DIR/logs/django.log" 2>&1 &
+disown
 sleep 3
 
 if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
