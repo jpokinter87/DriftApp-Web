@@ -138,6 +138,16 @@ print_step "Répertoire: $(pwd)"
 CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 print_step "Commit actuel: $CURRENT_COMMIT"
 
+# Vérifier s'il y a des modifications locales (notamment config.json)
+LOCAL_CHANGES=false
+if ! git diff --quiet data/config.json 2>/dev/null; then
+    LOCAL_CHANGES=true
+    print_warning "Modifications locales détectées dans config.json"
+    print_step "Sauvegarde temporaire des modifications locales (git stash)..."
+    git stash push -m "update_to_web: sauvegarde avant pull $(date '+%Y%m%d_%H%M%S')" -- data/config.json
+    print_success "Modifications locales sauvegardées"
+fi
+
 # Git pull
 print_step "Téléchargement des mises à jour..."
 if git pull origin main; then
@@ -149,7 +159,24 @@ if git pull origin main; then
     fi
 else
     print_error "Échec du git pull"
+    # Restaurer les modifications locales si on a stash
+    if [ "$LOCAL_CHANGES" = true ]; then
+        print_step "Restauration des modifications locales..."
+        git stash pop 2>/dev/null || true
+    fi
     exit 1
+fi
+
+# Restaurer les modifications locales de config.json si elles existaient
+if [ "$LOCAL_CHANGES" = true ]; then
+    print_step "Restauration des modifications locales de config.json..."
+    if git stash pop 2>/dev/null; then
+        print_success "Modifications locales restaurées"
+    else
+        print_warning "Conflit lors de la restauration - vérifiez config.json manuellement"
+        print_step "  → git stash list  (pour voir les sauvegardes)"
+        print_step "  → git stash pop   (pour restaurer)"
+    fi
 fi
 
 # Restaurer les permissions .git (évite "permission denied" pour l'utilisateur)
