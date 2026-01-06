@@ -1,0 +1,29 @@
+2026-01-06 15:11:54,986 - services.motor_service - INFO - ============================================================
+2026-01-06 15:11:54,987 - services.motor_service - INFO - NOUVELLE SESSION DE SUIVI: ACO   370
+2026-01-06 15:11:54,987 - services.motor_service - INFO - Fichier: motor_service_20260106_151154_ACO_370.log
+2026-01-06 15:11:54,987 - services.motor_service - INFO - Démarrage: 2026-01-06 15:11:54
+2026-01-06 15:11:54,987 - services.motor_service - INFO - ============================================================
+2026-01-06 15:11:54,987 - services.command_handlers - INFO - Démarrage suivi de: ACO   370 (skip_goto=False)
+2026-01-06 15:11:54,987 - core.tracking.tracker - INFO - Encodeur actif - Position: 44.2°
+2026-01-06 15:11:55,188 - core.tracking.abaque_manager - INFO - Chargement de l'abaque depuis /home/slenk/DriftApp/data/Loi_coupole.xlsx
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO - Grille créée 12x25 (interpolation manuelle)
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO - ==================================================
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO - ABAQUE CHARGÉE AVEC SUCCÈS
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO -   Altitudes: 12 points (30° - 85°)
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO -   Azimuts: 25 points par altitude
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO -   Points totaux: 300
+2026-01-06 15:11:55,237 - core.tracking.abaque_manager - INFO - ==================================================
+2026-01-06 15:11:55,237 - core.tracking.tracker - INFO - Mode abaque activé
+2026-01-06 15:11:55,237 - core.tracking.tracker - INFO - Facteur de correction pas: 1.0885
+2026-01-06 15:11:56,657 - core.tracking.adaptive_tracking - INFO - 🔍 Vérification chemin:
+2026-01-06 15:11:56,657 - core.tracking.adaptive_tracking - INFO -    Position actuelle: 44.2°
+2026-01-06 15:11:56,657 - core.tracking.adaptive_tracking - INFO -    Position coupole: 104.4°
+2026-01-06 15:11:56,657 - core.tracking.adaptive_tracking - INFO -    Chemin 1: horaire 60.3°
+2026-01-06 15:11:56,658 - core.tracking.adaptive_tracking - INFO -    Chemin 2: anti-horaire 299.7°
+2026-01-06 15:11:56,658 - core.tracking.adaptive_tracking - INFO -    ✓ Choisi: horaire (60.3°)
+2026-01-06 15:11:56,658 - core.tracking.tracker - INFO - 🔄 Encodeur calibré - Position réelle: 44.2° | Position cible: 104.4° | Delta: +60.3°
+2026-01-06 15:11:56,658 - core.tracking.tracker - INFO - Encodeur calibré - Mode absolu disponible
+2026-01-06 15:11:56,659 - core.tracking.tracker - INFO - SYNC: Coupole=104.4° | Encodeur=44.2° | Offset=60.3°
+2026-01-06 15:11:56,659 - core.tracking.tracker - INFO - 🎯 GOTO initial requis: +60.3° en mode CONTINUOUS (vitesse max)
+2026-01-06 15:11:56,659 - core.tracking.tracker - INFO - GOTO initial: 44.2° → 104.4° (vitesse: 0.00014s/pas)
+2026-01-06 15:11:56,740 - core.hardware.feedback_controller - INFO - Rotation avec feedback: 44.2° -> 104.4°
