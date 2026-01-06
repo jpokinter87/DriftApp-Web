@@ -51,15 +51,37 @@ from services.command_handlers import (
     GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
 )
 
-# Configuration logging - fichier initial (sera rotaté au démarrage du suivi)
+# Configuration logging - fichier horodaté par session (cycle démarrage du service)
 LOGS_DIR = Path(__file__).parent.parent / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
 
-# Handler de fichier initial (sera remplacé lors du suivi)
-_current_file_handler = logging.FileHandler(
-    LOGS_DIR / 'motor_service.log',
-    mode='a'
-)
+# Nombre max de fichiers de log à conserver
+MAX_LOG_FILES = 20
+
+
+def cleanup_old_logs(prefix: str = "motor_service_", keep: int = MAX_LOG_FILES):
+    """Supprime les vieux fichiers de log, garde les N plus récents."""
+    log_files = sorted(
+        LOGS_DIR.glob(f"{prefix}*.log"),
+        key=lambda f: f.stat().st_mtime,
+        reverse=True
+    )
+    for old_file in log_files[keep:]:
+        try:
+            old_file.unlink()
+        except OSError:
+            pass
+
+
+# Nettoyage des vieux logs au démarrage
+cleanup_old_logs()
+
+# Créer un fichier de log horodaté pour cette session
+_startup_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+_startup_log_path = LOGS_DIR / f"motor_service_{_startup_timestamp}.log"
+
+# Handler de fichier pour cette session
+_current_file_handler = logging.FileHandler(_startup_log_path, mode='w')
 _current_file_handler.setFormatter(
     logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 )
