@@ -220,6 +220,11 @@ if [ ! -f "$DRIFTAPP_DIR/motor_service.service" ]; then
     exit 1
 fi
 
+if [ ! -f "$DRIFTAPP_DIR/driftapp_web.service" ]; then
+    print_error "Fichier $DRIFTAPP_DIR/driftapp_web.service non trouvé!"
+    exit 1
+fi
+
 print_step "Copie de ems22d.service..."
 cp "$DRIFTAPP_DIR/ems22d.service" "$SERVICE_DIR/"
 print_success "ems22d.service installé"
@@ -227,6 +232,10 @@ print_success "ems22d.service installé"
 print_step "Copie de motor_service.service..."
 cp "$DRIFTAPP_DIR/motor_service.service" "$SERVICE_DIR/"
 print_success "motor_service.service installé"
+
+print_step "Copie de driftapp_web.service..."
+cp "$DRIFTAPP_DIR/driftapp_web.service" "$SERVICE_DIR/"
+print_success "driftapp_web.service installé"
 
 print_step "Rechargement de systemd..."
 systemctl daemon-reload
@@ -264,17 +273,16 @@ else
 fi
 
 # =============================================================================
-# ÉTAPE 6: Démarrage de Django
+# ÉTAPE 6: Démarrage de Django (via systemd)
 # =============================================================================
 print_header "ÉTAPE 6: Démarrage de Django"
 
 # Utilisateur qui a lancé sudo (pour les permissions des fichiers)
 REAL_USER="${SUDO_USER:-$USER}"
-PYTHON="$DRIFTAPP_DIR/.venv/bin/python"
 
-# Arrêter Django s'il tourne déjà
+# Arrêter Django manuel s'il tourne (processus orphelins)
 if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
-    print_step "Arrêt de Django existant..."
+    print_step "Arrêt de Django manuel existant..."
     pkill -f "manage.py runserver" 2>/dev/null || true
     sleep 2
 fi
@@ -283,17 +291,19 @@ fi
 print_step "Ajustement des permissions pour $REAL_USER..."
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/logs" 2>/dev/null || true
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/data" 2>/dev/null || true
+chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/db.sqlite3" 2>/dev/null || true
 
-# Lancer Django en tant qu'utilisateur normal avec nohup pour survivre à la fermeture du terminal
-print_step "Démarrage de Django (en tant que $REAL_USER)..."
-sudo -u "$REAL_USER" nohup "$PYTHON" "$DRIFTAPP_DIR/web/manage.py" runserver 0.0.0.0:8000 >> "$DRIFTAPP_DIR/logs/django.log" 2>&1 &
-disown
+# Démarrage via systemd
+print_step "Activation et démarrage de driftapp_web.service..."
+systemctl enable driftapp_web.service
+systemctl start driftapp_web.service
 sleep 3
 
-if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
-    print_success "Django actif sur http://localhost:8000"
+if systemctl is-active --quiet driftapp_web.service; then
+    print_success "Django actif sur http://localhost:8000 (systemd)"
 else
     print_error "Django n'a pas démarré!"
+    journalctl -u driftapp_web.service -n 10 --no-pager
 fi
 
 # =============================================================================
@@ -306,11 +316,7 @@ echo -e "  ${GREEN}✓${NC} Code mis à jour depuis GitHub"
 echo -e "  ${GREEN}✓${NC} Services systemd installés"
 echo -e "  ${GREEN}✓${NC} ems22d.service: $(systemctl is-active ems22d.service)"
 echo -e "  ${GREEN}✓${NC} motor_service.service: $(systemctl is-active motor_service.service)"
-if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} Django: actif"
-else
-    echo -e "  ${YELLOW}⚠${NC} Django: inactif"
-fi
+echo -e "  ${GREEN}✓${NC} driftapp_web.service: $(systemctl is-active driftapp_web.service)"
 echo ""
 echo -e "  ${CYAN}Sauvegarde:${NC} $BACKUP_DIR/ems22d.service.last_backup"
 echo ""

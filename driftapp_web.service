@@ -1,0 +1,34 @@
+[Unit]
+Description=DriftApp Web Interface - Django Server
+Documentation=https://github.com/jpokinter87/DriftApp-Web
+After=network.target motor_service.service
+Wants=motor_service.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/slenk/DriftApp/web
+ExecStart=/home/slenk/DriftApp/.venv/bin/python /home/slenk/DriftApp/web/manage.py runserver 0.0.0.0:8000
+
+# Politique de redemarrage - toujours redemarrer en cas d'echec
+Restart=on-failure
+RestartSec=5
+
+# Utilisateur normal (pas besoin de root pour Django)
+User=slenk
+Group=slenk
+
+# Variables d'environnement
+Environment=PYTHONUNBUFFERED=1
+Environment=DJANGO_DEBUG=false
+
+# Timeout
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+# Logs vers journal systemd
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=driftapp_web
+
+[Install]
+WantedBy=multi-user.target
