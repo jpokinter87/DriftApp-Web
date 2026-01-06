@@ -107,6 +107,9 @@ const elements = {
 // État mouvement continu
 let continuousMovement = null;
 
+// Flag pour la synchronisation initiale (reconnexion à une session en cours)
+let initialSyncDone = false;
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -646,6 +649,23 @@ function updateTrackingDisplay(motor) {
     const isTracking = motor.status === 'tracking' && motor.tracking_object;
 
     if (isInitializing || isTracking) {
+        // === SYNCHRONISATION MULTI-APPAREILS ===
+        // Si un suivi est en cours et qu'on vient de se connecter, synchroniser l'état
+        if (!initialSyncDone && motor.tracking_object) {
+            state.searchedObject = motor.tracking_object;
+            elements.objectName.value = motor.tracking_object;
+
+            // Log informatif pour l'utilisateur
+            const info = motor.tracking_info || {};
+            const corrections = info.total_corrections || 0;
+            log(`Reconnexion à la session en cours: ${motor.tracking_object}`, 'success');
+            if (corrections > 0) {
+                log(`Session active: ${corrections} corrections effectuées`, 'info');
+            }
+
+            initialSyncDone = true;
+        }
+
         elements.trackingInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
@@ -752,6 +772,10 @@ function updateTrackingDisplay(motor) {
         if (elements.correctionsTotal) {
             elements.correctionsTotal.textContent = '0.00°';
         }
+
+        // Reset du flag de sync pour permettre la reconnexion à une future session
+        // (permet de sync si un suivi démarre depuis un autre appareil)
+        initialSyncDone = false;
     }
 }
 
