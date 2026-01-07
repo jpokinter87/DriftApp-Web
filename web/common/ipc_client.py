@@ -64,6 +64,9 @@ class MotorServiceClient:
         """
         Envoie une commande au Motor Service.
 
+        Utilise un verrou exclusif (LOCK_EX) pour éviter les race conditions
+        avec le Motor Service qui lit ce fichier.
+
         Args:
             command_type: Type de commande (goto, jog, stop, tracking_start, etc.)
             **params: Paramètres de la commande
@@ -78,9 +81,20 @@ class MotorServiceClient:
         }
 
         try:
-            self.command_file.write_text(json.dumps(command))
+            # Créer le fichier s'il n'existe pas (mode 666 pour accès Motor Service)
+            if not self.command_file.exists():
+                self.command_file.touch(mode=0o666)
+
+            # Écriture avec verrou exclusif pour éviter race condition
+            with open(self.command_file, 'w') as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    f.write(json.dumps(command))
+                    f.flush()
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             return True
-        except IOError:
+        except (IOError, OSError):
             return False
 
     def get_motor_status(self) -> dict:

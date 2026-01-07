@@ -40,6 +40,21 @@ class IpcManager:
     def __init__(self):
         """Initialise le gestionnaire IPC."""
         self.last_command_id: Optional[str] = None
+        self._ensure_command_file_exists()
+
+    def _ensure_command_file_exists(self):
+        """
+        Crée le fichier de commande s'il n'existe pas.
+
+        Ce fichier doit exister pour que Django puisse y écrire des commandes.
+        Sans ce fichier, aucune commande ne peut être envoyée au Motor Service.
+        """
+        if not COMMAND_FILE.exists():
+            try:
+                COMMAND_FILE.touch(mode=0o666)
+                logger.info(f"Fichier de commande IPC créé: {COMMAND_FILE}")
+            except (IOError, OSError) as e:
+                logger.error(f"Impossible de créer {COMMAND_FILE}: {e}")
 
     def read_command(self) -> Optional[Dict[str, Any]]:
         """
