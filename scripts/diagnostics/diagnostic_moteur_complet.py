@@ -36,9 +36,12 @@ DRIFTAPP_DIR = Path(__file__).parent
 if not (DRIFTAPP_DIR / "core").exists():
     DRIFTAPP_DIR = DRIFTAPP_DIR.parent
     if not (DRIFTAPP_DIR / "core").exists():
-        print("❌ Erreur: Impossible de trouver le répertoire DriftApp")
-        print("   Placez ce script dans le répertoire racine de DriftApp")
-        sys.exit(1)
+        # Remonter encore d'un niveau (scripts/diagnostics -> scripts -> DriftApp)
+        DRIFTAPP_DIR = DRIFTAPP_DIR.parent
+        if not (DRIFTAPP_DIR / "core").exists():
+            print("❌ Erreur: Impossible de trouver le répertoire DriftApp")
+            print("   Placez ce script dans le répertoire racine de DriftApp")
+            sys.exit(1)
 
 sys.path.insert(0, str(DRIFTAPP_DIR))
 
