@@ -19,7 +19,7 @@ Group=slenk
 
 # Variables d'environnement
 Environment=PYTHONUNBUFFERED=1
-Environment=DJANGO_DEBUG=false
+# DEBUG=true par défaut (settings.py) - OK pour application locale
 
 # Timeout
 TimeoutStartSec=30
