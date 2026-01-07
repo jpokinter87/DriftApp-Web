@@ -380,12 +380,36 @@ function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
     if (elements.gotoModalObjectName) {
         elements.gotoModalObjectName.textContent = objectName || '--';
     }
-    if (elements.gotoModalStart) {
-        elements.gotoModalStart.textContent = `${startPos.toFixed(1)}°`;
+
+    // Affichage des positions : toujours dans l'ordre de lecture naturel
+    // - Horaire (CW) : Départ >>> Cible (gauche vers droite)
+    // - Anti-horaire (CCW) : Cible <<< Départ (les chevrons pointent vers la cible à gauche)
+    const labelLeft = document.getElementById('goto-label-left');
+    const labelRight = document.getElementById('goto-label-right');
+
+    if (delta >= 0) {
+        // Sens horaire : départ à gauche, cible à droite
+        if (elements.gotoModalStart) {
+            elements.gotoModalStart.textContent = `${startPos.toFixed(1)}°`;
+        }
+        if (elements.gotoModalTarget) {
+            elements.gotoModalTarget.textContent = `${targetPos.toFixed(1)}°`;
+        }
+        if (labelLeft) labelLeft.textContent = 'Départ';
+        if (labelRight) labelRight.textContent = 'Cible';
+    } else {
+        // Sens anti-horaire : cible à gauche, départ à droite
+        // Pour que l'affichage soit "45° <<< 175°" au lieu de "175° <<< 45°"
+        if (elements.gotoModalStart) {
+            elements.gotoModalStart.textContent = `${targetPos.toFixed(1)}°`;
+        }
+        if (elements.gotoModalTarget) {
+            elements.gotoModalTarget.textContent = `${startPos.toFixed(1)}°`;
+        }
+        if (labelLeft) labelLeft.textContent = 'Cible';
+        if (labelRight) labelRight.textContent = 'Départ';
     }
-    if (elements.gotoModalTarget) {
-        elements.gotoModalTarget.textContent = `${targetPos.toFixed(1)}°`;
-    }
+
     if (elements.gotoModalDelta) {
         const deltaStr = delta >= 0 ? `+${delta.toFixed(1)}°` : `${delta.toFixed(1)}°`;
         elements.gotoModalDelta.textContent = deltaStr;
