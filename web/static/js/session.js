@@ -239,8 +239,18 @@ function updateSessionDisplay(data) {
 
     const ra = objectInfo.ra_deg;
     const dec = objectInfo.dec_deg;
-    document.getElementById('session-coords').textContent =
-        (ra !== null && dec !== null) ? `${ra?.toFixed(2)}° / ${dec?.toFixed(2)}°` : '-- / --';
+
+    // Affichage avec format décimal + sexagésimal (HMS pour RA, DMS pour DEC)
+    if (ra !== null && ra !== undefined && dec !== null && dec !== undefined) {
+        const raDecimal = ra.toFixed(2) + '°';
+        const decDecimal = dec.toFixed(2) + '°';
+        const raHMS = formatHMS(ra);
+        const decDMS = formatDMS(dec);
+        document.getElementById('session-coords').innerHTML =
+            `${raDecimal} (${raHMS}) / ${decDecimal} (${decDMS})`;
+    } else {
+        document.getElementById('session-coords').textContent = '-- / --';
+    }
 
     // Statistiques
     updateStats(data.summary || {});
@@ -686,6 +696,57 @@ async function deleteSession(sessionId) {
 // =============================================================================
 // UTILITAIRES
 // =============================================================================
+
+/**
+ * Convertit une valeur décimale en format DMS (Degrés, Minutes, Secondes)
+ * Ex: -1.59 → "-1°35'24''"
+ * @param {number} decimal - Valeur en degrés décimaux
+ * @param {number} precision - Nombre de décimales pour les secondes (défaut: 0)
+ * @returns {string} Format DMS
+ */
+function formatDMS(decimal, precision = 0) {
+    if (decimal === null || decimal === undefined || isNaN(decimal)) {
+        return '--';
+    }
+
+    const sign = decimal < 0 ? '-' : '';
+    const absVal = Math.abs(decimal);
+
+    const degrees = Math.floor(absVal);
+    const minFloat = (absVal - degrees) * 60;
+    const minutes = Math.floor(minFloat);
+    const seconds = (minFloat - minutes) * 60;
+
+    const secStr = precision > 0 ? seconds.toFixed(precision) : Math.round(seconds).toString();
+
+    return `${sign}${degrees}°${minutes}'${secStr}''`;
+}
+
+/**
+ * Convertit une valeur en degrés vers le format horaire HMS (Heures, Minutes, Secondes)
+ * Utilisé pour l'Ascension Droite (RA) : 1h = 15°
+ * Ex: 45.0° → "3h00m00s"
+ * @param {number} degrees - Valeur en degrés
+ * @param {number} precision - Nombre de décimales pour les secondes (défaut: 0)
+ * @returns {string} Format HMS
+ */
+function formatHMS(degrees, precision = 0) {
+    if (degrees === null || degrees === undefined || isNaN(degrees)) {
+        return '--';
+    }
+
+    const hours = degrees / 15;
+    const absHours = Math.abs(hours);
+
+    const h = Math.floor(absHours);
+    const minFloat = (absHours - h) * 60;
+    const m = Math.floor(minFloat);
+    const s = (minFloat - m) * 60;
+
+    const secStr = precision > 0 ? s.toFixed(precision) : Math.round(s).toString();
+
+    return `${h}h${m.toString().padStart(2, '0')}m${secStr.padStart(2, '0')}s`;
+}
 
 function formatDuration(seconds) {
     if (seconds < 60) {
