@@ -44,17 +44,27 @@ class IpcManager:
 
     def _ensure_command_file_exists(self):
         """
-        Crée le fichier de commande s'il n'existe pas.
+        Crée le fichier de commande s'il n'existe pas et assure les permissions.
 
         Ce fichier doit exister pour que Django puisse y écrire des commandes.
         Sans ce fichier, aucune commande ne peut être envoyée au Motor Service.
+
+        IMPORTANT: Le Motor Service tourne en root, Django en utilisateur normal.
+        Le fichier doit être accessible en écriture par tous (mode 666).
         """
-        if not COMMAND_FILE.exists():
-            try:
-                COMMAND_FILE.touch(mode=0o666)
+        try:
+            if not COMMAND_FILE.exists():
+                COMMAND_FILE.touch()
                 logger.info(f"Fichier de commande IPC créé: {COMMAND_FILE}")
-            except (IOError, OSError) as e:
-                logger.error(f"Impossible de créer {COMMAND_FILE}: {e}")
+
+            # Toujours s'assurer que les permissions sont correctes (666)
+            # car le fichier peut avoir été créé avec des permissions restrictives
+            current_mode = COMMAND_FILE.stat().st_mode & 0o777
+            if current_mode != 0o666:
+                os.chmod(COMMAND_FILE, 0o666)
+                logger.info(f"Permissions IPC corrigées: {oct(current_mode)} -> 0o666")
+        except (IOError, OSError) as e:
+            logger.error(f"Erreur fichier commande IPC: {e}")
 
     def read_command(self) -> Optional[Dict[str, Any]]:
         """
