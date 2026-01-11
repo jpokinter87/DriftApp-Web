@@ -7,7 +7,7 @@
 
 **Système intelligent de suivi de coupole d'observatoire** avec modes adaptatifs automatiques et feedback temps réel. Interface web responsive pour contrôle local et distant.
 
-> **Version actuelle** : 4.6 Web - Architecture trois processus + Monitoring (Décembre 2025)
+> **Version actuelle** : 4.6 Web - Architecture trois processus + Monitoring (Janvier 2026)
 
 ---
 
@@ -125,6 +125,8 @@ DriftApp/
 ### Prérequis
 
 - **Raspberry Pi** 4 ou 5 (Ubuntu 24.04 ou Raspberry Pi OS)
+  - Pi 5 : utilise lgpio (détection automatique)
+  - Pi 4 et antérieurs : utilise RPi.GPIO
 - **Python** 3.11+
 - **SPI activé** pour encodeur (production)
 
@@ -371,6 +373,14 @@ Lors du démarrage d'un tracking, un popup affiche :
 - Barre de progression
 - Temps restant estimé
 
+### Page Session
+
+Accessible via l'onglet **"Session"** (ou `/session/`), cette page affiche :
+- **Graphiques temps réel** : Évolution altitude/azimut avec zones de modes
+- **Statistiques** : Corrections effectuées, mouvements CW/CCW, moyenne
+- **Distribution modes** : Temps passé en NORMAL/CRITICAL/CONTINUOUS
+- **Historique** : Liste des sessions passées avec détails
+
 ### Page Diagnostic Système
 
 Accessible via l'onglet **"Système"** dans le header (ou `/api/health/system/`), cette page affiche en temps réel :
@@ -499,6 +509,20 @@ uv run pytest tests/test_simulation.py -v
 - **CLAUDE.md** : Guide développeur, instructions Claude Code
 - **data/config.json** : Configuration complète avec commentaires
 - **tests_sur_site/** : Outils de diagnostic terrain
+
+---
+
+## Protection Moteur (v4.5+)
+
+### Rampe d'Accélération S-Curve
+
+Le moteur est protégé par une rampe d'accélération/décélération automatique :
+- **Warm-up** : 10 pas à 10ms pour l'alignement rotor à froid
+- **Accélération** : 500 pas avec courbe sigmoïde (départ 3ms)
+- **Croisière** : Vitesse nominale constante
+- **Décélération** : 500 pas avec courbe sigmoïde (arrêt progressif)
+
+Cette protection est activée par défaut et réduit considérablement le stress mécanique.
 
 ---
 
