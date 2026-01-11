@@ -8,6 +8,7 @@ IMPORTANT: Ce module n'affecte PAS la configuration moteur existante.
 Il modifie uniquement le timing des pas pendant les phases de transition.
 
 VERSION 4.5 : Implémentation initiale
+VERSION 4.6 : Ajout phase de warm-up pour démarrage à froid
 Date: 24 décembre 2025
 """
 
@@ -33,6 +34,21 @@ MIN_STEPS_FOR_RAMP = 200
 # Si total_steps < 2 * RAMP_STEPS, on utilise total_steps / 4 pour chaque rampe
 SHORT_MOVEMENT_RAMP_RATIO = 4
 
+# =============================================================================
+# PARAMÈTRES DE WARM-UP (démarrage à froid)
+# =============================================================================
+# Le warm-up permet au rotor de s'aligner avec le champ magnétique avant
+# d'accélérer. Cela évite le "hurlement" du moteur au premier démarrage.
+
+# Activer le warm-up par défaut
+WARMUP_ENABLED = True
+
+# Nombre de pas de warm-up (très lents)
+WARMUP_STEPS = 10
+
+# Délai pendant le warm-up (10ms = très lent pour alignement rotor)
+WARMUP_DELAY = 0.010
+
 
 @dataclass
 class RampConfig:
@@ -41,6 +57,10 @@ class RampConfig:
     ramp_steps: int = RAMP_STEPS
     min_steps: int = MIN_STEPS_FOR_RAMP
     use_s_curve: bool = True  # True = S-curve, False = linéaire
+    # Paramètres de warm-up (démarrage à froid)
+    warmup_enabled: bool = WARMUP_ENABLED
+    warmup_steps: int = WARMUP_STEPS
+    warmup_delay: float = WARMUP_DELAY
 
 
 class AccelerationRamp:
@@ -81,9 +101,16 @@ class AccelerationRamp:
 
     def _calculate_ramp_phases(self):
         """Calcule les limites des phases d'accélération et décélération."""
-        # Pas assez de pas pour la rampe → pas de rampe
+        # Déterminer si le warm-up est actif
+        self.warmup_enabled = (
+            self.config.warmup_enabled and
+            self.total_steps >= self.config.warmup_steps
+        )
+        self.warmup_end = self.config.warmup_steps if self.warmup_enabled else 0
+
+        # Pas assez de pas pour la rampe → pas de rampe (mais warm-up possible)
         if self.total_steps < self.config.min_steps:
-            self.accel_end = 0
+            self.accel_end = self.warmup_end  # Après le warmup
             self.decel_start = self.total_steps
             self.ramp_enabled = False
             return
@@ -93,11 +120,11 @@ class AccelerationRamp:
         # Mouvement court: rampe proportionnelle
         if self.total_steps < 2 * self.config.ramp_steps:
             ramp_length = max(1, self.total_steps // SHORT_MOVEMENT_RAMP_RATIO)
-            self.accel_end = ramp_length
+            self.accel_end = self.warmup_end + ramp_length
             self.decel_start = self.total_steps - ramp_length
         else:
             # Mouvement normal: rampe complète
-            self.accel_end = self.config.ramp_steps
+            self.accel_end = self.warmup_end + self.config.ramp_steps
             self.decel_start = self.total_steps - self.config.ramp_steps
 
         # Sécurité: s'assurer que decel_start >= accel_end
@@ -155,26 +182,40 @@ class AccelerationRamp:
         """
         Calcule le délai pour un pas donné.
 
+        Phases (si toutes activées):
+        1. Warm-up (0 à warmup_end-1): délai très lent pour alignement rotor
+        2. Accélération (warmup_end à accel_end-1): de start_delay vers target_delay
+        3. Croisière (accel_end à decel_start-1): target_delay constant
+        4. Décélération (decel_start à fin): de target_delay vers start_delay
+
         Args:
             step_index: Index du pas actuel (0 à total_steps-1)
 
         Returns:
             Délai en secondes pour ce pas
         """
-        # Rampe désactivée ou hors limites
-        if not self.ramp_enabled:
-            return self.target_delay
-
+        # Borner l'index
         if step_index < 0:
             step_index = 0
         elif step_index >= self.total_steps:
             step_index = self.total_steps - 1
 
+        # Phase de warm-up (très lent pour alignement rotor)
+        if self.warmup_enabled and step_index < self.warmup_end:
+            return self.config.warmup_delay
+
+        # Rampe désactivée → vitesse nominale directe (après warm-up)
+        if not self.ramp_enabled:
+            return self.target_delay
+
         start_delay = self.config.start_delay
 
         # Phase d'accélération (départ lent → vitesse nominale)
         if step_index < self.accel_end:
-            t = step_index / self.accel_end
+            # Progression relative au début de l'accélération (après warm-up)
+            accel_step = step_index - self.warmup_end
+            accel_length = self.accel_end - self.warmup_end
+            t = accel_step / accel_length if accel_length > 0 else 1
             progress = self._interpolate(t)
             # Interpoler de start_delay vers target_delay
             return start_delay + (self.target_delay - start_delay) * progress
@@ -199,8 +240,11 @@ class AccelerationRamp:
             step_index: Index du pas actuel
 
         Returns:
-            'acceleration', 'cruise', ou 'deceleration'
+            'warmup', 'acceleration', 'cruise', ou 'deceleration'
         """
+        if self.warmup_enabled and step_index < self.warmup_end:
+            return 'warmup'
+
         if not self.ramp_enabled:
             return 'cruise'
 
@@ -218,13 +262,17 @@ class AccelerationRamp:
         Returns:
             dict avec les paramètres calculés
         """
+        accel_steps = (self.accel_end - self.warmup_end) if self.ramp_enabled else 0
         return {
             'total_steps': self.total_steps,
             'target_delay': self.target_delay,
             'start_delay': self.config.start_delay,
             'ramp_enabled': self.ramp_enabled,
-            'accel_steps': self.accel_end if self.ramp_enabled else 0,
-            'cruise_steps': (self.decel_start - self.accel_end) if self.ramp_enabled else self.total_steps,
+            'warmup_enabled': self.warmup_enabled,
+            'warmup_steps': self.warmup_end,
+            'warmup_delay': self.config.warmup_delay,
+            'accel_steps': accel_steps,
+            'cruise_steps': (self.decel_start - self.accel_end) if self.ramp_enabled else self.total_steps - self.warmup_end,
             'decel_steps': (self.total_steps - self.decel_start) if self.ramp_enabled else 0,
             'use_s_curve': self.config.use_s_curve
         }
