@@ -161,7 +161,7 @@ class GotoHandler:
                     angle, delta, speed, current_status
                 )
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"Erreur GOTO: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
@@ -288,7 +288,7 @@ class JogHandler:
             current_status['status'] = 'idle'
             logger.info(f"JOG terminé: position={current_status['position']:.1f}°")
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             logger.error(f"Erreur JOG: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
@@ -378,7 +378,7 @@ class ContinuousHandler:
                 self.status_callback(current_status)
                 time.sleep(step_interval)
 
-            except Exception as e:
+            except (RuntimeError, OSError) as e:
                 logger.error(f"Erreur mouvement continu: {e}")
                 break
 
@@ -414,7 +414,7 @@ class TrackingHandler:
         try:
             rotate_log = _get_rotate_log_func()
             rotate_log(object_name)
-        except Exception as e:
+        except (OSError, IOError) as e:
             logger.warning(f"Impossible de créer le fichier de log dédié: {e}")
 
         logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
@@ -487,7 +487,7 @@ class TrackingHandler:
                 current_status['goto_info'] = None
                 current_status['error'] = "Échec démarrage suivi"
 
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError, FileNotFoundError) as e:
             logger.error(f"Erreur démarrage suivi: {e}")
             current_status['status'] = 'error'
             current_status['tracking_object'] = None
@@ -562,7 +562,7 @@ class TrackingHandler:
                 current_status['status'] = 'idle'
                 current_status['tracking_object'] = None
 
-        except Exception as e:
+        except (RuntimeError, ValueError) as e:
             logger.error(f"Erreur mise à jour suivi: {e}")
 
     @property

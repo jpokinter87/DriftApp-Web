@@ -406,8 +406,8 @@ class TestGotoCommandFlow:
         """Une erreur GOTO définit error_timestamp."""
         setup = goto_handler_setup
 
-        # Forcer une erreur
-        setup['mock_reader'].read_angle.side_effect = Exception("Encoder error")
+        # Forcer une erreur (RuntimeError comme les vraies erreurs encodeur)
+        setup['mock_reader'].read_angle.side_effect = RuntimeError("Encoder error")
 
         initial_status = {'status': 'idle', 'position': 0}
         result = setup['handler'].execute(90.0, initial_status)

@@ -294,7 +294,7 @@ class MotorService:
         if self._systemd_notifier:
             try:
                 self._systemd_notifier.notify(message)
-            except Exception as e:
+            except OSError as e:
                 logger.debug(f"Erreur notification systemd: {e}")
 
     def _create_initial_status(self) -> Dict[str, Any]:
@@ -489,7 +489,8 @@ class MotorService:
             except KeyboardInterrupt:
                 logger.info("Interruption clavier - Arrêt du service")
                 break
-            except Exception as e:
+            except (RuntimeError, OSError, IOError, ValueError) as e:
+                # Fault-tolerance: log et continue pour garder le service actif
                 logger.error(f"Erreur boucle principale: {e}")
                 time.sleep(1)
 
