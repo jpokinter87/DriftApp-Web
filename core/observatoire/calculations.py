@@ -16,7 +16,11 @@ from astropy.coordinates import SkyCoord, CIRS
 from astropy.time import Time
 import astropy.units as u
 
-from core.utils.angle_utils import calculate_julian_day
+from core.utils.angle_utils import (
+    calculate_julian_day,
+    normalize_angle_180,
+    normalize_angle_360,
+)
 
 
 class AstronomicalCalculations:
@@ -40,25 +44,18 @@ class AstronomicalCalculations:
         self.tz_offset = tz_offset
 
     # =========================================================================
-    # UTILITAIRES
+    # UTILITAIRES (délégation vers angle_utils pour compatibilité)
     # =========================================================================
 
     @staticmethod
     def _normaliser_angle_180(angle: float) -> float:
         """Normalise un angle entre -180° et +180°."""
-        while angle > 180:
-            angle -= 360
-        while angle < -180:
-            angle += 360
-        return angle
+        return normalize_angle_180(angle)
 
     @staticmethod
     def _normaliser_angle_360(angle: float) -> float:
         """Normalise un angle entre 0° et 360°."""
-        angle = angle % 360
-        if angle < 0:
-            angle += 360
-        return angle
+        return normalize_angle_360(angle)
 
     # =========================================================================
     # CONVERSION DE COORDONNÉES
@@ -147,12 +144,7 @@ class AstronomicalCalculations:
         lst = self.calculer_temps_sideral(date_heure)
         ha = lst - ad_jnow
 
-        while ha > 180:
-            ha -= 360
-        while ha < -180:
-            ha += 360
-
-        return ha
+        return normalize_angle_180(ha)
 
     def calculer_coords_horizontales(self, ascension_droite: float, declinaison: float,
                                      date_heure: datetime) -> Tuple[float, float]:
@@ -257,12 +249,7 @@ class AstronomicalCalculations:
             ascension_droite, declinaison, date_heure2
         )
 
-        delta_azimut = azimut2 - azimut1
-
-        if delta_azimut > 180:
-            delta_azimut -= 360
-        elif delta_azimut < -180:
-            delta_azimut += 360
+        delta_azimut = normalize_angle_180(azimut2 - azimut1)
 
         vitesse_horaire = delta_azimut / (5 / 60)
         vitesse_relative = abs(vitesse_horaire) / 360

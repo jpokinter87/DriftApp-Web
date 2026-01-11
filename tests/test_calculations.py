@@ -71,8 +71,8 @@ class TestNormalisationAngles:
     def test_normaliser_angle_180_negatif(self, calc):
         """Normalisation vers [-180, 180] - angles négatifs."""
         assert calc._normaliser_angle_180(-90) == -90
-        # Note: -180 reste -180 (bord de l'intervalle [-180, 180])
-        assert calc._normaliser_angle_180(-180) == -180
+        # Note: -180° et 180° sont le même point sur le cercle, retourne 180
+        assert calc._normaliser_angle_180(-180) == 180
         assert calc._normaliser_angle_180(-270) == 90
 
     def test_normaliser_angle_360(self, calc):

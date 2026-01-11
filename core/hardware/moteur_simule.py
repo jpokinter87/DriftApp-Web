@@ -16,6 +16,8 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
+from core.utils.angle_utils import shortest_angular_distance
+
 
 # Position simulée par instance (isolation des tests)
 # Le module maintient un registre des positions par ID d'instance
@@ -273,12 +275,8 @@ class MoteurSimule:
         # Utiliser la position de cette instance
         position_initiale = _get_instance_position(self._instance_id)
 
-        # Calculer le delta
-        delta = angle_cible - position_initiale
-        while delta > 180:
-            delta -= 360
-        while delta < -180:
-            delta += 360
+        # Calculer le delta (chemin le plus court)
+        delta = shortest_angular_distance(position_initiale, angle_cible)
 
         # Appliquer le mouvement (inclut le délai simulé)
         self.rotation(delta, vitesse)
