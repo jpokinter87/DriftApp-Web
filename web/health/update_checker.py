@@ -34,7 +34,7 @@ def get_local_version() -> str:
         content = pyproject_path.read_text()
         match = re.search(r'version\s*=\s*"([^"]+)"', content)
         return match.group(1) if match else "unknown"
-    except Exception as e:
+    except (OSError, AttributeError) as e:
         logger.warning(f"Impossible de lire la version: {e}")
         return "unknown"
 
@@ -58,7 +58,7 @@ def get_local_commit() -> str:
     except subprocess.TimeoutExpired:
         logger.warning("Timeout lors de git rev-parse HEAD")
         return "unknown"
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git rev-parse: {e}")
         return "unknown"
 
@@ -84,7 +84,7 @@ def fetch_remote() -> bool:
     except subprocess.TimeoutExpired:
         logger.warning("Timeout lors de git fetch (30s)")
         return False
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git fetch: {e}")
         return False
 
@@ -108,7 +108,7 @@ def get_remote_commit() -> str:
     except subprocess.TimeoutExpired:
         logger.warning("Timeout lors de git rev-parse origin/main")
         return "unknown"
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git rev-parse origin/main: {e}")
         return "unknown"
 
@@ -134,7 +134,7 @@ def count_commits_behind() -> int:
     except (subprocess.TimeoutExpired, ValueError) as e:
         logger.warning(f"Erreur count commits: {e}")
         return 0
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git rev-list: {e}")
         return 0
 
@@ -160,7 +160,7 @@ def get_commit_messages(count: int = 5) -> list[str]:
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip().split('\n')
         return []
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git log: {e}")
         return []
 

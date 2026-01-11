@@ -66,7 +66,7 @@ class TestGetLocalCommit:
     @patch('subprocess.run')
     def test_erreur_subprocess_retourne_unknown(self, mock_run):
         """Une erreur subprocess retourne 'unknown'."""
-        mock_run.side_effect = Exception("Git error")
+        mock_run.side_effect = subprocess.SubprocessError("Git error")
         from web.health.update_checker import get_local_commit
         result = get_local_commit()
         assert result == "unknown"

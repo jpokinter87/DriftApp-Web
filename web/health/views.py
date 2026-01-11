@@ -16,6 +16,7 @@ Usage:
     GET /api/health/encoder/ -> État détaillé de l'Encoder Daemon
 """
 
+import json
 import logging
 import subprocess
 import time
@@ -260,7 +261,6 @@ def _read_ipc_file_content(file_path: Path) -> dict:
         return {'exists': False, 'content': None, 'error': 'Fichier non trouvé', 'empty': False}
 
     try:
-        import json
         with open(file_path, 'r') as f:
             text = f.read().strip()
 
@@ -272,7 +272,7 @@ def _read_ipc_file_content(file_path: Path) -> dict:
         return {'exists': True, 'content': content, 'error': None, 'empty': False}
     except json.JSONDecodeError as e:
         return {'exists': True, 'content': None, 'error': f'JSON invalide: {e}', 'empty': False}
-    except Exception as e:
+    except (OSError, IOError) as e:
         return {'exists': True, 'content': None, 'error': str(e), 'empty': False}
 
 
@@ -281,7 +281,6 @@ def _load_config() -> dict:
     Charge la configuration depuis config.json.
     """
     try:
-        import json
         config_path = settings.DRIFTAPP_CONFIG
         with open(config_path, 'r') as f:
             config = json.load(f)
@@ -312,7 +311,7 @@ def _load_config() -> dict:
             },
             'simulation': config.get('simulation', False),
         }
-    except Exception as e:
+    except (OSError, IOError, json.JSONDecodeError, KeyError) as e:
         return {'error': str(e)}
 
 
@@ -388,7 +387,7 @@ def check_update(request):
         result = check_for_updates()
         result['timestamp'] = datetime.now().isoformat()
         return Response(result)
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError, RuntimeError) as e:
         logger.exception("Erreur lors de la vérification des mises à jour")
         return Response({
             'error': str(e),
@@ -473,7 +472,7 @@ def apply_update(request):
             'error': 'Permission refusée. Vérifiez la configuration sudoers.',
             'old_commit': old_commit
         }, status=403)
-    except Exception as e:
+    except (subprocess.SubprocessError, OSError) as e:
         logger.exception("Erreur inattendue lors de la mise à jour")
         return Response({
             'success': False,

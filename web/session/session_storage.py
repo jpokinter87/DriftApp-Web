@@ -80,7 +80,7 @@ def save_session(session_data: dict) -> Optional[str]:
 
         return session_id
 
-    except Exception as e:
+    except (OSError, IOError, ValueError, TypeError) as e:
         logger.error(f"Erreur sauvegarde session: {e}")
         return None
 
@@ -115,11 +115,11 @@ def list_sessions(limit: int = 50) -> list:
                     'total_corrections': data.get('summary', {}).get('total_corrections', 0),
                     'total_movement_deg': data.get('summary', {}).get('total_movement_deg', 0),
                 })
-            except Exception as e:
+            except (OSError, IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Erreur lecture session {file_path}: {e}")
                 continue
 
-    except Exception as e:
+    except OSError as e:
         logger.error(f"Erreur listage sessions: {e}")
 
     return sessions
@@ -143,7 +143,7 @@ def load_session(session_id: str) -> Optional[dict]:
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except Exception as e:
+    except (OSError, IOError, json.JSONDecodeError) as e:
         logger.error(f"Erreur chargement session {session_id}: {e}")
         return None
 
@@ -163,7 +163,7 @@ def delete_session(session_id: str) -> bool:
             logger.info(f"Session supprimée: {session_id}")
             return True
         return False
-    except Exception as e:
+    except OSError as e:
         logger.error(f"Erreur suppression session {session_id}: {e}")
         return False
 
@@ -179,8 +179,8 @@ def _cleanup_old_sessions():
                 try:
                     file_path.unlink()
                     logger.debug(f"Session ancienne supprimée: {file_path.stem}")
-                except Exception:
+                except OSError:
                     pass
 
-    except Exception as e:
+    except OSError as e:
         logger.warning(f"Erreur nettoyage sessions: {e}")
