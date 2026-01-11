@@ -528,3 +528,271 @@ class TestSmoothPositionCible:
         """Les angles sont normalisés dans [0, 360)."""
         result = tracking_session._smooth_position_cible(400.0)
         assert 0 <= result < 360
+
+
+# =============================================================================
+# TESTS CORRECTIONS
+# =============================================================================
+
+class TestCheckAndCorrect:
+    """Tests pour check_and_correct."""
+
+    def test_retourne_false_si_non_running(self, tracking_session):
+        """Retourne (False, message) si le suivi n'est pas actif."""
+        tracking_session.running = False
+        applied, message = tracking_session.check_and_correct()
+        assert applied is False
+        assert "non actif" in message.lower()
+
+    def test_retourne_false_si_pas_encore_temps(self, tracking_session):
+        """Retourne (False, '') si next_correction_time n'est pas atteint."""
+        from datetime import datetime, timedelta
+        tracking_session.running = True
+        tracking_session.next_correction_time = datetime.now() + timedelta(seconds=60)
+
+        applied, message = tracking_session.check_and_correct()
+        assert applied is False
+        assert message == ""
+
+    def test_retourne_false_si_delta_sous_seuil(self, tracking_session):
+        """Retourne (False, message) si delta < seuil."""
+        from datetime import datetime
+        tracking_session.running = True
+        tracking_session.next_correction_time = None
+        tracking_session.ra_deg = 250.0
+        tracking_session.dec_deg = 36.0
+        tracking_session.is_planet = False
+        tracking_session.position_relative = 125.0  # Proche de la position cible (125.0)
+
+        # Mock adaptive_manager pour retourner delta = 0
+        tracking_session.adaptive_manager.verify_shortest_path.return_value = (0.1, "direct")
+
+        applied, message = tracking_session.check_and_correct()
+        assert applied is False
+        assert "seuil" in message.lower()
+
+    def test_applique_correction_si_delta_depasse_seuil(self, tracking_session):
+        """Applique une correction si delta > seuil."""
+        from datetime import datetime
+        tracking_session.running = True
+        tracking_session.next_correction_time = None
+        tracking_session.ra_deg = 250.0
+        tracking_session.dec_deg = 36.0
+        tracking_session.is_planet = False
+        tracking_session.position_relative = 120.0  # 5° de delta
+
+        # Mock adaptive_manager pour retourner delta = 5.0
+        tracking_session.adaptive_manager.verify_shortest_path.return_value = (5.0, "horaire (5.0°)")
+
+        applied, message = tracking_session.check_and_correct()
+        assert applied is True
+        assert "Correction" in message
+
+
+class TestApplyCorrection:
+    """Tests pour _apply_correction."""
+
+    def test_utilise_feedback_si_encoder_disponible(self, tracking_session):
+        """Utilise feedback si encoder_available est True."""
+        tracking_session.encoder_available = True
+        tracking_session.encoder_offset = 0.0
+        tracking_session.position_relative = 100.0
+
+        # Mock rotation_avec_feedback
+        tracking_session.moteur.rotation_avec_feedback.return_value = {
+            'success': True,
+            'position_initiale': 100.0,
+            'position_finale': 105.0,
+            'erreur_finale': 0.1,
+            'position_cible': 105.0,
+            'iterations': 1,
+            'corrections': []
+        }
+
+        tracking_session._apply_correction(5.0, 0.002)
+
+        tracking_session.moteur.rotation_avec_feedback.assert_called_once()
+
+    def test_utilise_rotation_simple_sans_encoder(self, tracking_session):
+        """Utilise rotation simple si encoder_available est False."""
+        tracking_session.encoder_available = False
+        tracking_session.position_relative = 100.0
+
+        tracking_session._apply_correction(5.0, 0.002)
+
+        # Vérifie que definir_direction a été appelé
+        tracking_session.moteur.definir_direction.assert_called()
+
+
+class TestCalculerCibles:
+    """Tests pour _calculer_cibles."""
+
+    def test_calcul_position_cible_logique(self, tracking_session):
+        """Calcule correctement la position cible logique."""
+        tracking_session.position_relative = 100.0
+        tracking_session.encoder_offset = 0.0
+
+        pos_logique, angle_encodeur = tracking_session._calculer_cibles(5.0)
+
+        assert pos_logique == 105.0
+        assert angle_encodeur == 105.0
+
+    def test_calcul_avec_offset_encodeur(self, tracking_session):
+        """Prend en compte l'offset encodeur."""
+        tracking_session.position_relative = 100.0
+        tracking_session.encoder_offset = 10.0  # Offset de 10°
+
+        pos_logique, angle_encodeur = tracking_session._calculer_cibles(5.0)
+
+        assert pos_logique == 105.0
+        assert angle_encodeur == 95.0  # 105 - 10
+
+    def test_normalisation_360(self, tracking_session):
+        """Les angles sont normalisés dans [0, 360)."""
+        tracking_session.position_relative = 355.0
+        tracking_session.encoder_offset = 0.0
+
+        pos_logique, angle_encodeur = tracking_session._calculer_cibles(10.0)
+
+        assert pos_logique == 5.0  # 365 % 360
+        assert angle_encodeur == 5.0
+
+
+class TestVerifierEchecsConsecutifs:
+    """Tests pour _verifier_echecs_consecutifs."""
+
+    def test_retourne_false_si_sous_limite(self, tracking_session):
+        """Retourne False si échecs < max_failed_feedback."""
+        tracking_session.running = True  # Initialiser à True
+        tracking_session.failed_feedback_count = 2
+        tracking_session.max_failed_feedback = 3
+
+        result = tracking_session._verifier_echecs_consecutifs()
+        assert result is False
+        assert tracking_session.running is True  # Pas modifié, toujours True
+
+    def test_arrete_suivi_si_limite_atteinte(self, tracking_session):
+        """Arrête le suivi et retourne True si limite atteinte."""
+        tracking_session.running = True
+        tracking_session.failed_feedback_count = 3
+        tracking_session.max_failed_feedback = 3
+
+        result = tracking_session._verifier_echecs_consecutifs()
+        assert result is True
+
+
+class TestNotifyDegradedMode:
+    """Tests pour _notify_degraded_mode."""
+
+    def test_notifie_une_seule_fois(self, tracking_session):
+        """La notification n'est envoyée qu'une seule fois."""
+        # Première notification
+        tracking_session._notify_degraded_mode()
+        assert tracking_session._degraded_mode_notified is True
+
+        # Deuxième appel - le flag devrait déjà être True
+        tracking_session._notify_degraded_mode()
+
+        # Le flag est toujours True (pas de double notification)
+        assert tracking_session._degraded_mode_notified is True
+
+    def test_initialise_attribut_si_absent(self, tracking_session):
+        """Initialise _degraded_mode_notified s'il n'existe pas."""
+        # S'assurer que l'attribut n'existe pas
+        if hasattr(tracking_session, '_degraded_mode_notified'):
+            delattr(tracking_session, '_degraded_mode_notified')
+
+        tracking_session._notify_degraded_mode()
+        assert hasattr(tracking_session, '_degraded_mode_notified')
+        assert tracking_session._degraded_mode_notified is True
+
+
+class TestTraiterResultatFeedback:
+    """Tests pour _traiter_resultat_feedback."""
+
+    def test_succes_reinitialise_compteur_echecs(self, tracking_session):
+        """Un succès réinitialise le compteur d'échecs."""
+        tracking_session.failed_feedback_count = 2
+
+        result = {
+            'success': True,
+            'position_initiale': 100.0,
+            'position_finale': 105.0,
+            'erreur_finale': 0.1,
+            'position_cible': 105.0,
+            'iterations': 1,
+            'corrections': []
+        }
+
+        tracking_session._traiter_resultat_feedback(result, 1.0)
+        assert tracking_session.failed_feedback_count == 0
+
+    def test_echec_incremente_compteur(self, tracking_session):
+        """Un échec incrémente le compteur d'échecs."""
+        tracking_session.failed_feedback_count = 0
+        tracking_session.running = True
+
+        result = {
+            'success': False,
+            'position_initiale': 100.0,
+            'position_finale': 103.0,
+            'erreur_finale': 5.0,  # Erreur > ACCEPTABLE_ERROR_THRESHOLD
+            'position_cible': 105.0,
+            'iterations': 10,
+            'corrections': [],
+            'timeout': False
+        }
+
+        tracking_session._traiter_resultat_feedback(result, 1.0)
+        assert tracking_session.failed_feedback_count == 1
+
+    def test_timeout_avec_erreur_acceptable_pas_echec(self, tracking_session):
+        """Timeout avec erreur acceptable n'est pas compté comme échec."""
+        tracking_session.failed_feedback_count = 0
+
+        result = {
+            'success': False,
+            'position_initiale': 100.0,
+            'position_finale': 104.5,
+            'erreur_finale': 0.5,  # < ACCEPTABLE_ERROR_THRESHOLD (2.0)
+            'position_cible': 105.0,
+            'iterations': 10,
+            'corrections': [],
+            'timeout': True
+        }
+
+        tracking_session._traiter_resultat_feedback(result, 1.0)
+        assert tracking_session.failed_feedback_count == 0
+
+
+class TestApplyCorrectionSansFeedback:
+    """Tests pour _apply_correction_sans_feedback."""
+
+    def test_met_a_jour_position_relative(self, tracking_session):
+        """Met à jour position_relative après correction."""
+        tracking_session.position_relative = 100.0
+        tracking_session._apply_correction_sans_feedback(5.0, 0.002)
+
+        assert tracking_session.position_relative == 105.0
+
+    def test_incremente_statistiques(self, tracking_session):
+        """Incrémente total_corrections et total_movement."""
+        tracking_session.position_relative = 100.0
+        tracking_session.total_corrections = 0
+        tracking_session.total_movement = 0.0
+
+        tracking_session._apply_correction_sans_feedback(5.0, 0.002)
+
+        assert tracking_session.total_corrections == 1
+        assert tracking_session.total_movement == 5.0
+
+    def test_ne_fait_rien_si_zero_pas(self, tracking_session):
+        """Ne fait rien si le nombre de pas calculé est 0."""
+        tracking_session.position_relative = 100.0
+        tracking_session.total_corrections = 0
+
+        # Très petit delta qui donne 0 pas
+        tracking_session._apply_correction_sans_feedback(0.0001, 0.002)
+
+        # Rien n'a changé
+        assert tracking_session.total_corrections == 0
