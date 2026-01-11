@@ -208,7 +208,7 @@ class MoteurCoupole:
                 # Ouvrir le chip GPIO (chip 4 sur Pi 5, chip 0 sur Pi 1-4)
                 try:
                     self.gpio_handle = lgpio.gpiochip_open(4)  # Pi 5
-                except:
+                except lgpio.error:
                     self.gpio_handle = lgpio.gpiochip_open(0)  # Fallback Pi 1-4
 
                 gpio_handle = self.gpio_handle
@@ -528,13 +528,13 @@ class MoteurCoupole:
                 try:
                     lgpio.gpio_free(self.gpio_handle, self.DIR)
                     lgpio.gpio_free(self.gpio_handle, self.STEP)
-                except:
-                    pass
+                except lgpio.error:
+                    pass  # GPIO déjà libéré ou handle invalide
 
                 try:
                     lgpio.gpiochip_close(self.gpio_handle)
-                except:
-                    pass
+                except lgpio.error:
+                    pass  # Chip déjà fermé
 
                 self.logger.info("GPIO nettoyé (lgpio)")
 

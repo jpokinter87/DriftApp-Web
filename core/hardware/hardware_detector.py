@@ -184,7 +184,7 @@ class HardwareDetector:
                 spi_info["spi_module"] = "loaded"
             else:
                 spi_info["spi_module"] = "not loaded"
-        except:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
             spi_info["spi_module"] = "unknown"
 
         return spi_info
@@ -199,13 +199,13 @@ class HardwareDetector:
         """
         try:
             result = subprocess.run(
-                ["ps", "aux"], 
-                capture_output=True, 
-                text=True, 
+                ["ps", "aux"],
+                capture_output=True,
+                text=True,
                 timeout=2
             )
             return "ems22d_calibrated" in result.stdout
-        except:
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
             return False
 
     @staticmethod
