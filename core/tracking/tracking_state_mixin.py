@@ -181,6 +181,20 @@ class TrackingStateMixin:
         self._cached_position_cible = mean_deg
         return mean_deg
 
+    def log_to_web(self, message: str, level: str = "info"):
+        """
+        Envoie un message au logger pour affichage dans l'interface web.
+
+        Cette méthode permet aux mixins de logger des messages importants
+        qui seront visibles dans l'interface utilisateur (via TrackingLogger).
+
+        Args:
+            message: Message à afficher
+            level: Niveau de log - "info", "warning", "error", "debug"
+        """
+        log_method = getattr(self.logger, level, self.logger.info)
+        log_method(message)
+
     # =========================================================================
     # SESSION DATA LOGGING
     # =========================================================================
