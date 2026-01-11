@@ -1334,3 +1334,256 @@ function log(message, type = 'info') {
         elements.logs.removeChild(elements.logs.lastChild);
     }
 }
+
+// =========================================================================
+// Update Notification System
+// =========================================================================
+
+// Elements for update modal
+const updateElements = {
+    modal: document.getElementById('update-modal'),
+    currentVersion: document.getElementById('update-current-version'),
+    currentCommit: document.getElementById('update-current-commit'),
+    newCommit: document.getElementById('update-new-commit'),
+    commitsBehind: document.getElementById('update-commits-behind'),
+    commitMessages: document.getElementById('update-commit-messages'),
+    changesList: document.getElementById('update-changes-list'),
+    progress: document.getElementById('update-progress'),
+    progressText: document.getElementById('update-progress-text'),
+    error: document.getElementById('update-error'),
+    errorText: document.getElementById('update-error-text'),
+    buttons: document.getElementById('update-buttons'),
+    btnLater: document.getElementById('btn-update-later'),
+    btnNow: document.getElementById('btn-update-now')
+};
+
+// Store update data
+let updateData = null;
+
+/**
+ * Check for updates on page load.
+ * Called once during initialization after a short delay.
+ */
+async function checkForUpdates() {
+    try {
+        const response = await fetch('/api/health/update/check/');
+        if (!response.ok) {
+            console.warn('Update check failed:', response.status);
+            return;
+        }
+
+        const result = await response.json();
+
+        if (result.error) {
+            console.warn('Update check error:', result.error);
+            return;
+        }
+
+        if (result.update_available) {
+            updateData = result;
+            showUpdateModal(result);
+            log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
+        }
+    } catch (error) {
+        console.warn('Update check exception:', error);
+    }
+}
+
+/**
+ * Show the update modal with version info.
+ * @param {Object} data - Update check result
+ */
+function showUpdateModal(data) {
+    if (!updateElements.modal) return;
+
+    // Populate version info
+    if (updateElements.currentVersion) {
+        updateElements.currentVersion.textContent = `v${data.local_version}`;
+    }
+    if (updateElements.currentCommit) {
+        updateElements.currentCommit.textContent = `(${data.local_commit})`;
+    }
+    if (updateElements.newCommit) {
+        updateElements.newCommit.textContent = data.remote_commit;
+    }
+    if (updateElements.commitsBehind) {
+        updateElements.commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
+    }
+
+    // Show commit messages if available
+    if (data.commit_messages && data.commit_messages.length > 0 && updateElements.changesList) {
+        updateElements.changesList.innerHTML = '';
+        data.commit_messages.forEach(msg => {
+            const li = document.createElement('li');
+            li.textContent = msg;
+            updateElements.changesList.appendChild(li);
+        });
+        if (updateElements.commitMessages) {
+            updateElements.commitMessages.classList.remove('hidden');
+        }
+    }
+
+    // Reset state
+    if (updateElements.progress) updateElements.progress.classList.add('hidden');
+    if (updateElements.error) updateElements.error.classList.add('hidden');
+    if (updateElements.buttons) updateElements.buttons.style.display = 'flex';
+    if (updateElements.btnNow) updateElements.btnNow.disabled = false;
+    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+
+    // Show modal
+    updateElements.modal.classList.remove('hidden');
+}
+
+/**
+ * Hide the update modal (dismiss until next page load).
+ */
+function hideUpdateModal() {
+    if (!updateElements.modal) return;
+    updateElements.modal.classList.add('hidden');
+}
+
+/**
+ * Apply the update.
+ * Shows progress, calls API, handles service restart.
+ */
+async function applyUpdate() {
+    if (!updateElements.progress) return;
+
+    // Show progress, disable buttons
+    updateElements.progress.classList.remove('hidden');
+    if (updateElements.error) updateElements.error.classList.add('hidden');
+    if (updateElements.btnNow) updateElements.btnNow.disabled = true;
+    if (updateElements.btnLater) updateElements.btnLater.disabled = true;
+    if (updateElements.progressText) {
+        updateElements.progressText.textContent = 'Mise a jour en cours...';
+    }
+
+    log('Mise a jour en cours...', 'info');
+
+    try {
+        const response = await fetch('/api/health/update/apply/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            if (updateElements.progressText) {
+                updateElements.progressText.textContent = 'Redemarrage des services...';
+            }
+            log('Mise a jour reussie, redemarrage...', 'success');
+
+            // Wait for services to restart, then reload page
+            await waitForServiceRestart();
+
+        } else {
+            showUpdateError(result.error || 'Erreur inconnue');
+            log(`Erreur de mise a jour: ${result.error}`, 'error');
+        }
+    } catch (error) {
+        // Connection error is expected during restart
+        if (updateElements.progressText) {
+            updateElements.progressText.textContent = 'Reconnexion en cours...';
+        }
+        log('Connexion perdue, attente du redemarrage...', 'warning');
+        await waitForServiceRestart();
+    }
+}
+
+/**
+ * Show an error message in the update modal.
+ * @param {string} message - Error message to display
+ */
+function showUpdateError(message) {
+    if (updateElements.progress) updateElements.progress.classList.add('hidden');
+    if (updateElements.error) {
+        updateElements.error.classList.remove('hidden');
+        if (updateElements.errorText) {
+            updateElements.errorText.textContent = message;
+        }
+    }
+    if (updateElements.btnNow) updateElements.btnNow.disabled = false;
+    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+}
+
+/**
+ * Wait for services to restart, then reload the page.
+ * Polls the health endpoint until it responds.
+ */
+async function waitForServiceRestart() {
+    const maxAttempts = 30;  // 30 attempts x 2 seconds = 60 seconds max
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+        await sleep(2000);
+        attempts++;
+
+        if (updateElements.progressText) {
+            updateElements.progressText.textContent = `Reconnexion... (${attempts}/${maxAttempts})`;
+        }
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const response = await fetch('/api/health/', {
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                // Service is back, reload page
+                log('Services redemarres, rechargement...', 'success');
+                if (updateElements.progressText) {
+                    updateElements.progressText.textContent = 'Rechargement de la page...';
+                }
+                await sleep(500);
+                window.location.reload();
+                return;
+            }
+        } catch (e) {
+            // Still waiting, continue polling
+        }
+    }
+
+    // Timeout - ask user to reload manually
+    if (updateElements.progressText) {
+        updateElements.progressText.textContent = 'Delai depasse - rechargez la page manuellement';
+    }
+    log('Delai depasse, rechargez la page manuellement', 'warning');
+
+    // Re-enable later button so user can dismiss
+    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+}
+
+/**
+ * Sleep utility function.
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise} Resolves after the specified time
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Initialize update event listeners.
+ */
+function initUpdateListeners() {
+    if (updateElements.btnLater) {
+        updateElements.btnLater.addEventListener('click', hideUpdateModal);
+    }
+    if (updateElements.btnNow) {
+        updateElements.btnNow.addEventListener('click', applyUpdate);
+    }
+}
+
+// Initialize update system after page load
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize update event listeners
+    initUpdateListeners();
+
+    // Check for updates after a short delay (don't block initial load)
+    setTimeout(checkForUpdates, 3000);
+});

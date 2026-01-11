@@ -6,12 +6,18 @@ Fournit un endpoint /api/health/ qui vérifie l'état de tous les composants :
 - Encoder Daemon (lecture position encodeur)
 - Fichiers IPC (communication inter-processus)
 
+Endpoints de mise à jour :
+- GET /api/health/update/check/  -> Vérifie si mise à jour disponible
+- POST /api/health/update/apply/ -> Applique la mise à jour
+
 Usage:
     GET /api/health/        -> État global de tous les composants
     GET /api/health/motor/  -> État détaillé du Motor Service
     GET /api/health/encoder/ -> État détaillé de l'Encoder Daemon
 """
 
+import logging
+import subprocess
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +27,8 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from web.common.ipc_client import motor_client
+
+logger = logging.getLogger(__name__)
 
 
 # Seuil en secondes pour considérer un fichier comme "stale"
@@ -353,3 +361,122 @@ def diagnostic(request):
         },
         'config': config
     })
+
+
+# =============================================================================
+# Endpoints de mise à jour
+# =============================================================================
+
+# Chemin vers le script de mise à jour
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+UPDATE_SCRIPT = PROJECT_ROOT / "scripts" / "update_to_web.sh"
+
+
+@api_view(['GET'])
+def check_update(request):
+    """
+    Vérifie si une mise à jour est disponible.
+
+    Compare le HEAD local avec origin/main après un git fetch.
+
+    Returns:
+        JSON avec update_available, local_version, commits_behind, etc.
+    """
+    from .update_checker import check_for_updates
+
+    try:
+        result = check_for_updates()
+        result['timestamp'] = datetime.now().isoformat()
+        return Response(result)
+    except Exception as e:
+        logger.exception("Erreur lors de la vérification des mises à jour")
+        return Response({
+            'error': str(e),
+            'update_available': False,
+            'timestamp': datetime.now().isoformat()
+        }, status=500)
+
+
+@api_view(['POST'])
+def apply_update(request):
+    """
+    Applique la mise à jour en exécutant le script update_to_web.sh.
+
+    Ce endpoint déclenche le script qui:
+    1. Arrête les services (motor_service, ems22d, django)
+    2. Fait un git pull (avec préservation de config.json)
+    3. Installe les nouveaux fichiers de service
+    4. Redémarre les services
+
+    Note: La connexion sera perdue pendant le redémarrage.
+    Le frontend doit gérer la reconnexion.
+
+    Returns:
+        JSON avec success, message, old_commit
+    """
+    from .update_checker import get_local_commit
+
+    # Vérifier que le script existe
+    if not UPDATE_SCRIPT.exists():
+        return Response({
+            'success': False,
+            'error': f'Script de mise à jour non trouvé: {UPDATE_SCRIPT}'
+        }, status=500)
+
+    # Sauvegarder le commit actuel
+    old_commit = get_local_commit()
+
+    try:
+        # Exécuter le script avec sudo
+        # Note: Nécessite une configuration sudoers appropriée
+        logger.info(f"Démarrage de la mise à jour depuis {old_commit}")
+
+        result = subprocess.run(
+            ['sudo', str(UPDATE_SCRIPT)],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=300  # 5 minutes max
+        )
+
+        if result.returncode == 0:
+            new_commit = get_local_commit()
+            logger.info(f"Mise à jour réussie: {old_commit} -> {new_commit}")
+            return Response({
+                'success': True,
+                'message': 'Mise à jour terminée',
+                'old_commit': old_commit,
+                'new_commit': new_commit,
+                'output': result.stdout[-2000:] if result.stdout else ''
+            })
+        else:
+            logger.error(f"Échec de la mise à jour: {result.stderr}")
+            return Response({
+                'success': False,
+                'error': f'Le script a échoué (code {result.returncode})',
+                'old_commit': old_commit,
+                'stderr': result.stderr[-1000:] if result.stderr else ''
+            }, status=500)
+
+    except subprocess.TimeoutExpired:
+        # Timeout attendu si les services redémarrent
+        logger.info("Timeout du script - services en cours de redémarrage")
+        return Response({
+            'success': True,
+            'message': 'Mise à jour en cours (services redémarrent)',
+            'old_commit': old_commit
+        })
+    except PermissionError as e:
+        logger.error(f"Permission refusée: {e}")
+        return Response({
+            'success': False,
+            'error': 'Permission refusée. Vérifiez la configuration sudoers.',
+            'old_commit': old_commit
+        }, status=403)
+    except Exception as e:
+        logger.exception("Erreur inattendue lors de la mise à jour")
+        return Response({
+            'success': False,
+            'error': str(e),
+            'old_commit': old_commit
+        }, status=500)

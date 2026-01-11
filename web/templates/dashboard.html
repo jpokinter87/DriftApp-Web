@@ -186,6 +186,48 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js?v=20260106a"></script>
+    <!-- Modal Mise à jour disponible -->
+    <div id="update-modal" class="update-modal hidden">
+        <div class="update-modal-content">
+            <div class="update-modal-header">
+                <span class="update-icon">&#x1F504;</span>
+                <h3>Mise a jour disponible</h3>
+            </div>
+            <div class="update-modal-body">
+                <div class="update-version-info">
+                    <div class="version-current">
+                        <label>Version actuelle</label>
+                        <span id="update-current-version">--</span>
+                        <small id="update-current-commit">(--)</small>
+                    </div>
+                    <div class="version-arrow">&#x2192;</div>
+                    <div class="version-new">
+                        <label>Nouvelle version</label>
+                        <span id="update-new-commit">--</span>
+                        <small id="update-commits-behind">-- commit(s)</small>
+                    </div>
+                </div>
+                <div id="update-commit-messages" class="update-commit-messages hidden">
+                    <label>Changements:</label>
+                    <ul id="update-changes-list"></ul>
+                </div>
+                <div id="update-progress" class="update-progress hidden">
+                    <div class="progress-bar">
+                        <div class="progress-fill progress-indeterminate"></div>
+                    </div>
+                    <span id="update-progress-text">Mise a jour en cours...</span>
+                </div>
+                <div id="update-error" class="update-error hidden">
+                    <span id="update-error-text"></span>
+                </div>
+            </div>
+            <div class="update-modal-footer" id="update-buttons">
+                <button id="btn-update-later" class="btn btn-secondary">Plus tard</button>
+                <button id="btn-update-now" class="btn btn-primary">Mettre a jour</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js?v=20260111a"></script>
 </body>
 </html>

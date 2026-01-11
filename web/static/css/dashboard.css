@@ -1251,3 +1251,252 @@ body {
         font-size: 2rem;
     }
 }
+
+/* =========================================================================
+   Update Modal - Popup de mise a jour disponible
+   ========================================================================= */
+
+.update-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+    backdrop-filter: blur(4px);
+}
+
+.update-modal.hidden {
+    display: none;
+}
+
+.update-modal-content {
+    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
+    border: 2px solid var(--accent-amber);
+    border-radius: 16px;
+    padding: 2rem;
+    min-width: 420px;
+    max-width: 90%;
+    box-shadow: 0 0 30px rgba(212, 160, 85, 0.3), 0 0 60px rgba(212, 160, 85, 0.1);
+    animation: modal-appear 0.3s ease-out;
+}
+
+.update-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.update-modal-header .update-icon {
+    font-size: 2rem;
+    animation: spin-slow 3s linear infinite;
+}
+
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.update-modal-header h3 {
+    color: var(--accent-amber);
+    font-size: 1.4rem;
+    margin: 0;
+}
+
+.update-modal-body {
+    margin-bottom: 1.5rem;
+}
+
+/* Version info: current -> new */
+.update-version-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.version-current,
+.version-new {
+    text-align: center;
+    min-width: 100px;
+}
+
+.version-current label,
+.version-new label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.version-current span,
+.version-new span {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.version-current span {
+    color: var(--text-secondary);
+}
+
+.version-new span {
+    color: var(--accent-green);
+}
+
+.version-arrow {
+    font-size: 1.5rem;
+    color: var(--accent-amber);
+    font-weight: bold;
+}
+
+.version-current small,
+.version-new small {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* Commit messages list */
+.update-commit-messages {
+    padding: 0.75rem;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.update-commit-messages.hidden {
+    display: none;
+}
+
+.update-commit-messages label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.update-commit-messages ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.update-commit-messages li {
+    font-size: 0.85rem;
+    font-family: monospace;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+.update-commit-messages li:last-child {
+    border-bottom: none;
+}
+
+/* Progress bar for update */
+.update-progress {
+    padding: 1rem;
+    background-color: var(--bg-input);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.update-progress.hidden {
+    display: none;
+}
+
+.update-progress .progress-bar {
+    margin-bottom: 0.75rem;
+}
+
+.update-progress .progress-fill.progress-indeterminate {
+    width: 30%;
+    animation: indeterminate-progress 1.5s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--accent-amber) 0%, var(--accent-green) 100%);
+}
+
+@keyframes indeterminate-progress {
+    0% { margin-left: 0%; }
+    50% { margin-left: 70%; }
+    100% { margin-left: 0%; }
+}
+
+#update-progress-text {
+    font-size: 0.9rem;
+    color: var(--accent-amber);
+}
+
+/* Error message */
+.update-error {
+    padding: 0.75rem;
+    background-color: rgba(255, 71, 87, 0.2);
+    border: 1px solid var(--accent-red);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.update-error.hidden {
+    display: none;
+}
+
+#update-error-text {
+    color: var(--accent-red);
+    font-size: 0.9rem;
+}
+
+/* Footer buttons */
+.update-modal-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.update-modal-footer .btn {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    min-width: 120px;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .update-modal-content {
+        min-width: 90%;
+        padding: 1.5rem;
+    }
+
+    .update-modal-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .update-version-info {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .version-arrow {
+        transform: rotate(90deg);
+    }
+
+    .update-modal-footer {
+        flex-direction: column;
+    }
+
+    .update-modal-footer .btn {
+        width: 100%;
+    }
+}

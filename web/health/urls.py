@@ -15,6 +15,10 @@ urlpatterns = [
     path('ipc/', views.ipc_status, name='ipc_status'),
     path('diagnostic/', views.diagnostic, name='diagnostic_api'),
 
+    # Endpoints de mise à jour
+    path('update/check/', views.check_update, name='update_check'),
+    path('update/apply/', views.apply_update, name='update_apply'),
+
     # Page HTML de diagnostic système
     path('system/', TemplateView.as_view(template_name='system.html'), name='system_page'),
 ]
