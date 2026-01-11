@@ -1,6 +1,6 @@
 """
 Contrôleur du moteur pas-à-pas de la coupole.
-Support Raspberry Pi 1-4 (RPi.GPIO) et Raspberry Pi 5 (lgpio).
+Support Raspberry Pi 5 via lgpio.
 
 VERSION 4.0 :
 - Lecture encodeur via démon externe pour éviter les interférences SPI
@@ -21,7 +21,12 @@ VERSION 4.6 :
 - Extraction de DaemonEncoderReader vers daemon_encoder_reader.py
 - moteur.py réduit de ~170 lignes
 
-Date: 24 décembre 2025
+VERSION 4.7 :
+- Simplification: support lgpio uniquement (Raspberry Pi 5)
+- Suppression du support RPi.GPIO obsolète
+- Code plus simple et maintenable
+
+Date: 11 janvier 2026
 """
 
 import logging
@@ -37,29 +42,21 @@ from core.hardware.daemon_encoder_reader import (
     reset_daemon_reader,
 )
 
-# Tentative d'import des bibliothèques GPIO
-GPIO_LIB = None
-gpio_handle = None
-
+# Import lgpio (Raspberry Pi 5)
 try:
     import lgpio
-    GPIO_LIB = "lgpio"
+    LGPIO_AVAILABLE = True
 except ImportError:
-    try:
-        import RPi.GPIO as GPIO
-        GPIO_LIB = "RPi.GPIO"
-    except ImportError:
-        GPIO_LIB = None
+    LGPIO_AVAILABLE = False
+    lgpio = None  # Pour éviter NameError dans les tests
 
 
 class MoteurCoupole:
     """
     Contrôleur pour moteur pas-à-pas de la coupole.
-    Compatible Raspberry Pi 1-5.
+    Raspberry Pi 5 uniquement (lgpio).
 
-    VERSION 4.1 : Refactorisé pour lisibilité et maintenabilité.
-    - Méthodes GPIO unifiées
-    - Découpage en responsabilités uniques
+    VERSION 4.7 : Simplifié pour lgpio uniquement.
     """
 
     def __init__(self, config_moteur):
@@ -76,13 +73,11 @@ class MoteurCoupole:
 
         self._verifier_gpio_disponible()
         self._charger_config(config_moteur)
-        self._valider_config()
         self._calculer_steps_par_tour()
-        self._init_parametres_rampe()
         self._init_gpio()
 
         self.logger.info(
-            f"Moteur initialisé ({self.gpio_lib}) - "
+            f"Moteur initialisé (lgpio) - "
             f"Steps/tour coupole: {self.steps_per_dome_revolution}"
         )
 
@@ -91,13 +86,12 @@ class MoteurCoupole:
     # =========================================================================
 
     def _verifier_gpio_disponible(self):
-        """Vérifie qu'une bibliothèque GPIO est disponible."""
-        if GPIO_LIB is None:
+        """Vérifie que lgpio est disponible."""
+        if not LGPIO_AVAILABLE:
             raise RuntimeError(
-                "Aucune bibliothèque GPIO disponible. "
-                "Installez lgpio (Pi 5) ou RPi.GPIO (Pi 1-4)"
+                "lgpio non disponible. "
+                "Installez lgpio: sudo apt install python3-lgpio"
             )
-        self.gpio_lib = GPIO_LIB
 
     def _charger_config(self, config_moteur):
         """Extrait les paramètres depuis dict ou dataclass via parser centralisé."""
@@ -113,10 +107,6 @@ class MoteurCoupole:
         self.gear_ratio = params.gear_ratio
         self.steps_correction_factor = params.steps_correction_factor
 
-    def _valider_config(self):
-        """Validation déjà effectuée par motor_config_parser."""
-        pass  # Conservé pour compatibilité API, validation dans _charger_config
-
     def _calculer_steps_par_tour(self):
         """Calcule le nombre de pas par tour de coupole."""
         self.steps_per_dome_revolution = int(
@@ -126,46 +116,27 @@ class MoteurCoupole:
             self.steps_correction_factor
         )
 
-    def _init_parametres_rampe(self):
-        """
-        Initialisation des paramètres de rampe.
-
-        VERSION 4.5 : La rampe est maintenant gérée par le module
-        acceleration_ramp.py qui fournit une S-curve pour des transitions
-        douces. Voir AccelerationRamp pour les paramètres.
-
-        La rampe est activée par défaut dans rotation() via use_ramp=True.
-        """
-        # Les paramètres de rampe sont maintenant dans acceleration_ramp.py
-        # Pas de configuration ici pour ne pas modifier les réglages moteur
-        pass
-
     # =========================================================================
-    # ABSTRACTION GPIO (méthodes unifiées)
+    # CONTRÔLE GPIO (lgpio uniquement)
     # =========================================================================
 
     def _gpio_write(self, pin: int, value: int):
         """
-        Écriture GPIO unifiée pour lgpio et RPi.GPIO.
+        Écriture GPIO via lgpio.
 
         Args:
             pin: Numéro de broche GPIO
             value: 0 ou 1
         """
-        if self.gpio_lib == "lgpio":
-            import lgpio
-            lgpio.gpio_write(self.gpio_handle, pin, value)
-        else:  # RPi.GPIO
-            gpio_value = self.gpio_handle.HIGH if value else self.gpio_handle.LOW
-            self.gpio_handle.output(pin, gpio_value)
+        lgpio.gpio_write(self.gpio_handle, pin, value)
 
     def _gpio_high(self, pin: int):
         """Met la broche GPIO à l'état haut."""
-        self._gpio_write(pin, 1)
+        lgpio.gpio_write(self.gpio_handle, pin, 1)
 
     def _gpio_low(self, pin: int):
         """Met la broche GPIO à l'état bas."""
-        self._gpio_write(pin, 0)
+        lgpio.gpio_write(self.gpio_handle, pin, 0)
 
     def _valider_delai(self, delai: float) -> float:
         """
@@ -185,67 +156,28 @@ class MoteurCoupole:
             return delai_min
         return delai
 
-    def _pulse_step(self, delai: float):
-        """
-        Génère une impulsion sur la broche STEP.
-
-        Args:
-            delai: Délai total pour le pas (divisé en HIGH/LOW)
-        """
-        self._gpio_high(self.STEP)
-        time.sleep(delai / 2)
-        self._gpio_low(self.STEP)
-        time.sleep(delai / 2)
-
     def _init_gpio(self):
-        """Initialise les GPIO selon la bibliothèque disponible."""
-        global gpio_handle
-
-        if self.gpio_lib == "lgpio":
-            # Raspberry Pi 5 avec lgpio
+        """Initialise les GPIO avec lgpio."""
+        try:
+            # Ouvrir le chip GPIO (chip 4 sur Pi 5, chip 0 sur Pi 4 et antérieurs)
             try:
-                import lgpio
-                # Ouvrir le chip GPIO (chip 4 sur Pi 5, chip 0 sur Pi 1-4)
-                try:
-                    self.gpio_handle = lgpio.gpiochip_open(4)  # Pi 5
-                except:
-                    self.gpio_handle = lgpio.gpiochip_open(0)  # Fallback Pi 1-4
+                self.gpio_handle = lgpio.gpiochip_open(4)  # Pi 5
+            except lgpio.error:
+                self.gpio_handle = lgpio.gpiochip_open(0)  # Fallback Pi 4
 
-                gpio_handle = self.gpio_handle
+            # Configurer les pins en sortie
+            lgpio.gpio_claim_output(self.gpio_handle, self.DIR)
+            lgpio.gpio_claim_output(self.gpio_handle, self.STEP)
 
-                # Configurer les pins en sortie
-                lgpio.gpio_claim_output(self.gpio_handle, self.DIR)
-                lgpio.gpio_claim_output(self.gpio_handle, self.STEP)
+            # État initial (bas)
+            lgpio.gpio_write(self.gpio_handle, self.DIR, 0)
+            lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
 
-                # État initial
-                lgpio.gpio_write(self.gpio_handle, self.DIR, 0)
-                lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+            self.logger.info("GPIO initialisé avec lgpio")
 
-                self.logger.info(f"GPIO initialisé avec lgpio")
-
-            except Exception as e:
-                self.logger.error(f"Erreur init lgpio: {e}")
-                raise
-
-        elif self.gpio_lib == "RPi.GPIO":
-            # Raspberry Pi 1-4 avec RPi.GPIO
-            try:
-                GPIO.setmode(GPIO.BCM)
-                GPIO.setwarnings(False)
-
-                GPIO.setup(self.DIR, GPIO.OUT)
-                GPIO.setup(self.STEP, GPIO.OUT)
-
-                GPIO.output(self.DIR, GPIO.LOW)
-                GPIO.output(self.STEP, GPIO.LOW)
-
-                self.gpio_handle = GPIO
-
-                self.logger.info("GPIO initialisé avec RPi.GPIO")
-
-            except Exception as e:
-                self.logger.error(f"Erreur init RPi.GPIO: {e}")
-                raise
+        except lgpio.error as e:
+            self.logger.error(f"Erreur init lgpio: {e}")
+            raise
 
     # =========================================================================
     # MÉTHODES DÉMON ENCODEUR (délégation à DaemonEncoderReader)
@@ -313,62 +245,25 @@ class MoteurCoupole:
 
     def faire_un_pas(self, delai: float = 0.0015):
         """
-        Fait faire un pas au moteur.
-
-        VERSION OPTIMISÉE INLINE (alignée sur Dome_v4) :
-        - Pas d'appels de méthodes internes (6 appels → 0)
-        - delai_min réduit à 10µs (était 50µs)
-        - Code GPIO inline pour timing optimal
+        Fait faire un pas au moteur via lgpio.
 
         Args:
-            delai: Délai en secondes entre les impulsions
+            delai: Délai en secondes entre les impulsions (min 10µs)
         """
         if self.gpio_handle is None:
             raise RuntimeError("GPIO non initialisé")
 
-        # Validation inline (comme Dome_v4)
-        delai_min = 0.00001  # 10µs comme Dome_v4 (était 50µs)
+        # Validation du délai minimum
+        delai_min = 0.00001  # 10µs
         if delai < delai_min:
             self.logger.warning(f"Délai {delai:.6f}s < minimum {delai_min:.6f}s")
             delai = delai_min
 
-        # GPIO inline (comme Dome_v4) - PAS d'appels de méthodes
-        if self.gpio_lib == "lgpio":
-            import lgpio
-            lgpio.gpio_write(self.gpio_handle, self.STEP, 1)
-            time.sleep(delai / 2)
-            lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
-            time.sleep(delai / 2)
-        else:  # RPi.GPIO
-            self.gpio_handle.output(self.STEP, self.gpio_handle.HIGH)
-            time.sleep(delai / 2)
-            self.gpio_handle.output(self.STEP, self.gpio_handle.LOW)
-            time.sleep(delai / 2)
-
-    def _calculer_delai_rampe(self, step_index: int, total_steps: int,
-                               vitesse_nominale: float) -> float:
-        """
-        Retourne le délai constant - PAS DE RAMPE.
-
-        ALIGNEMENT SUR calibration_moteur.py qui fonctionne parfaitement.
-
-        La rampe a été supprimée car elle causait des problèmes :
-        - Démarrage brutal pour vitesses rapides (rampe désactivée à tort)
-        - Délai forcé à 0.0015s pour petits mouvements (<50 pas)
-        - Comportement différent de calibration_moteur.py
-
-        Les vitesses testées sur site (0.00012s à 0.0011s) fonctionnent
-        en délai constant. Voir capture_Vitesses.png pour les mesures.
-
-        Args:
-            step_index: Index du pas actuel (ignoré)
-            total_steps: Nombre total de pas (ignoré)
-            vitesse_nominale: Délai cible en secondes
-
-        Returns:
-            Délai constant = vitesse_nominale
-        """
-        return vitesse_nominale
+        # Impulsion STEP (lgpio)
+        lgpio.gpio_write(self.gpio_handle, self.STEP, 1)
+        time.sleep(delai / 2)
+        lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+        time.sleep(delai / 2)
 
     def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
         """
@@ -518,29 +413,25 @@ class MoteurCoupole:
     # =========================================================================
 
     def nettoyer(self):
-        """Nettoie les ressources GPIO."""
+        """Nettoie les ressources GPIO lgpio."""
         if self.gpio_handle is None:
             return
 
         try:
-            if self.gpio_lib == "lgpio":
-                import lgpio
-                try:
-                    lgpio.gpio_free(self.gpio_handle, self.DIR)
-                    lgpio.gpio_free(self.gpio_handle, self.STEP)
-                except:
-                    pass
+            # Libérer les pins
+            try:
+                lgpio.gpio_free(self.gpio_handle, self.DIR)
+                lgpio.gpio_free(self.gpio_handle, self.STEP)
+            except lgpio.error:
+                pass  # Pin déjà libéré
 
-                try:
-                    lgpio.gpiochip_close(self.gpio_handle)
-                except:
-                    pass
+            # Fermer le chip GPIO
+            try:
+                lgpio.gpiochip_close(self.gpio_handle)
+            except lgpio.error:
+                pass  # Chip déjà fermé
 
-                self.logger.info("GPIO nettoyé (lgpio)")
-
-            elif self.gpio_lib == "RPi.GPIO":
-                GPIO.cleanup()
-                self.logger.info("GPIO nettoyé (RPi.GPIO)")
+            self.logger.info("GPIO nettoyé (lgpio)")
 
         except Exception as e:
             self.logger.error(f"Erreur nettoyage GPIO: {e}")

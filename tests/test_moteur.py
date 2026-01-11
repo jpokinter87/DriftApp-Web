@@ -206,7 +206,7 @@ class TestMoteurCoupoleConfig:
     def test_charger_config_dict(self, motor_config_dict, mock_lgpio):
         """Charge la configuration depuis un dict."""
         with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
+            with patch('core.hardware.moteur.LGPIO_AVAILABLE', True):
                 from core.hardware.moteur import MoteurCoupole
 
                 # Contourner l'init complet
@@ -223,7 +223,7 @@ class TestMoteurCoupoleConfig:
     def test_charger_config_dataclass(self, motor_config_dataclass, mock_lgpio):
         """Charge la configuration depuis une dataclass."""
         with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
+            with patch('core.hardware.moteur.LGPIO_AVAILABLE', True):
                 from core.hardware.moteur import MoteurCoupole
 
                 moteur = object.__new__(MoteurCoupole)
@@ -264,7 +264,7 @@ class TestMoteurCoupoleConfig:
     def test_calculer_steps_par_tour(self, mock_lgpio):
         """Calcul correct du nombre de pas par tour."""
         with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
+            with patch('core.hardware.moteur.LGPIO_AVAILABLE', True):
                 from core.hardware.moteur import MoteurCoupole
 
                 moteur = object.__new__(MoteurCoupole)
@@ -292,12 +292,12 @@ class TestMoteurCoupoleControl:
     def mock_moteur(self, motor_config_dict, mock_lgpio):
         """Crée un moteur mocké."""
         with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
+            with patch('core.hardware.moteur.LGPIO_AVAILABLE', True):
                 from core.hardware.moteur import MoteurCoupole
 
                 moteur = object.__new__(MoteurCoupole)
                 moteur.logger = MagicMock()
-                moteur.gpio_lib = 'lgpio'
+                # lgpio uniquement - pas de gpio_lib
                 moteur.gpio_handle = 1
                 moteur._charger_config(motor_config_dict)
                 moteur._calculer_steps_par_tour()
@@ -396,12 +396,12 @@ class TestMoteurCoupoleAbsolute:
     @pytest.fixture
     def mock_moteur(self, motor_config_dict, mock_lgpio):
         with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
+            with patch('core.hardware.moteur.LGPIO_AVAILABLE', True):
                 from core.hardware.moteur import MoteurCoupole
 
                 moteur = object.__new__(MoteurCoupole)
                 moteur.logger = MagicMock()
-                moteur.gpio_lib = 'lgpio'
+                # lgpio uniquement - pas de gpio_lib
                 moteur.gpio_handle = 1
                 moteur._charger_config(motor_config_dict)
                 moteur._calculer_steps_par_tour()
@@ -442,31 +442,9 @@ class TestMoteurCoupoleAbsolute:
 
 
 # =============================================================================
-# TESTS MOTEURCOUPOLE - DÉLAI RAMPE
+# TESTS ACCÉLÉRATION (voir test_acceleration_ramp.py pour tests complets)
 # =============================================================================
 
-class TestMoteurCoupoleRampe:
-    """Tests pour le calcul de délai (rampe désactivée)."""
-
-    @pytest.fixture
-    def mock_moteur(self, motor_config_dict, mock_lgpio):
-        with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
-                from core.hardware.moteur import MoteurCoupole
-
-                moteur = object.__new__(MoteurCoupole)
-                moteur.logger = MagicMock()
-                return moteur
-
-    def test_calculer_delai_rampe_constant(self, mock_moteur):
-        """Délai constant (pas de rampe)."""
-        vitesse_nominale = 0.001
-
-        # Début, milieu, fin - tous doivent être constants
-        delai_debut = mock_moteur._calculer_delai_rampe(0, 1000, vitesse_nominale)
-        delai_milieu = mock_moteur._calculer_delai_rampe(500, 1000, vitesse_nominale)
-        delai_fin = mock_moteur._calculer_delai_rampe(999, 1000, vitesse_nominale)
-
-        assert delai_debut == vitesse_nominale
-        assert delai_milieu == vitesse_nominale
-        assert delai_fin == vitesse_nominale
+# Note: La méthode _calculer_delai_rampe a été supprimée en v4.7
+# La rampe d'accélération est maintenant gérée par AccelerationRamp
+# Voir tests/test_acceleration_ramp.py pour les tests de rampe
