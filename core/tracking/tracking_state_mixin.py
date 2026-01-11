@@ -196,6 +196,43 @@ class TrackingStateMixin:
         log_method(message)
 
     # =========================================================================
+    # ENCODER ACCESS (wrappers pour découplage et testabilité)
+    # =========================================================================
+
+    def _get_encoder_status(self) -> dict | None:
+        """
+        Lit le statut complet du démon encodeur.
+
+        Wrapper pour MoteurCoupole.get_daemon_status() qui centralise
+        l'accès à l'encodeur et facilite le mocking dans les tests.
+
+        Returns:
+            dict: Statut complet (angle, calibrated, status, etc.)
+            None: Si le démon n'est pas accessible
+        """
+        from core.hardware.moteur import MoteurCoupole
+        return MoteurCoupole.get_daemon_status()
+
+    def _get_encoder_angle(self, timeout_ms: int = 200) -> float:
+        """
+        Lit l'angle calibré du démon encodeur.
+
+        Wrapper pour MoteurCoupole.get_daemon_angle() qui centralise
+        l'accès à l'encodeur et facilite le mocking dans les tests.
+
+        Args:
+            timeout_ms: Timeout en millisecondes
+
+        Returns:
+            float: Angle en degrés (0-360)
+
+        Raises:
+            Exception: Si le démon n'est pas accessible ou timeout
+        """
+        from core.hardware.moteur import MoteurCoupole
+        return MoteurCoupole.get_daemon_angle(timeout_ms)
+
+    # =========================================================================
     # SESSION DATA LOGGING
     # =========================================================================
 

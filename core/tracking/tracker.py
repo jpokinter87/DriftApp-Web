@@ -114,7 +114,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             return
 
         try:
-            pos = MoteurCoupole.get_daemon_angle(timeout_ms=200)
+            pos = self._get_encoder_angle(timeout_ms=200)
             self.encoder_available = True
             self.logger.info(f"Encodeur actif - Position: {pos:.1f}°")
         except Exception as e:
@@ -251,7 +251,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         if skip_goto:
             # Utiliser la position réelle comme point de départ
             try:
-                real_position = MoteurCoupole.get_daemon_angle()
+                real_position = self._get_encoder_angle()
                 self._setup_initial_position(azimut, altitude, real_position)
                 self._sync_encoder(real_position)
                 self.logger.info(f"Position initiale depuis encodeur: {real_position:.1f}°")

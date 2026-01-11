@@ -332,7 +332,8 @@ class TestTrackingSessionEncoder:
         }):
             with patch('core.tracking.tracker.AdaptiveTrackingManager'):
                 with patch('core.hardware.hardware_detector.HardwareDetector') as mock_hw:
-                    with patch('core.tracking.tracker.MoteurCoupole') as mock_moteur_cls:
+                    # Patcher MoteurCoupole au niveau du module moteur (utilisé par _get_encoder_angle)
+                    with patch('core.hardware.moteur.MoteurCoupole') as mock_moteur_cls:
                         mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
                         mock_moteur_cls.get_daemon_angle.return_value = 45.0
 
