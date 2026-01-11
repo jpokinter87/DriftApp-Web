@@ -262,6 +262,11 @@ sudo journalctl -u motor_service -f  # Logs temps reel
 | `/deploy` | Deploiement complet sur Raspberry Pi |
 | `/update` | Mise a jour du systeme (git pull + restart) |
 | `/backup` | Sauvegarde/restauration config et sessions |
+
+### Qualite de Code
+| Skill | Description |
+|-------|-------------|
+| `/code-review` | Review complete + refactoring (SOLID, DRY, Clean Code) |
 | `/refactor-code` | Refactoring de code assiste |
 
 ---
