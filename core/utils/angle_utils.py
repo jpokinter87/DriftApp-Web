@@ -145,3 +145,40 @@ def calculate_steps_for_rotation(delta_deg: float, steps_per_revolution: int) ->
     """
     deg_per_step = 360.0 / steps_per_revolution
     return int(abs(delta_deg) / deg_per_step)
+
+
+# =============================================================================
+# CALCULS DE TEMPS ASTRONOMIQUE
+# =============================================================================
+
+def calculate_julian_day(dt_utc) -> float:
+    """
+    Calcule le jour Julien à partir d'une datetime UTC.
+
+    Le jour Julien est un système de datation continue utilisé en astronomie.
+    J2000.0 (1er janvier 2000 à 12h UTC) correspond à JD = 2451545.0.
+
+    Args:
+        dt_utc: datetime en UTC (naive, sans tzinfo)
+
+    Returns:
+        Jour Julien (float)
+
+    Examples:
+        >>> from datetime import datetime
+        >>> # J2000.0 : 1er janvier 2000 à 12h UTC
+        >>> calculate_julian_day(datetime(2000, 1, 1, 12, 0, 0))
+        2451545.0
+    """
+    year, month = dt_utc.year, dt_utc.month
+    day = dt_utc.day + (dt_utc.hour + (dt_utc.minute + dt_utc.second / 60.0) / 60.0) / 24.0
+
+    if month <= 2:
+        year -= 1
+        month += 12
+
+    century = year // 100
+    leap_correction = 2 - century + century // 4
+
+    jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + leap_correction - 1524.5
+    return jd

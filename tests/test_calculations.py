@@ -158,10 +158,12 @@ class TestTempsSideral:
         assert 14 < diff < 16
 
     def test_jour_julien(self, calc):
-        """Test du calcul du jour julien."""
+        """Test du calcul du jour julien (fonction partagée dans angle_utils)."""
+        from core.utils.angle_utils import calculate_julian_day
+
         # J2000.0 = 1er janvier 2000 à 12h TU
         date = datetime(2000, 1, 1, 12, 0, 0)
-        jd = calc._calculate_julian_day(date)
+        jd = calculate_julian_day(date)
 
         assert jd == pytest.approx(2451545.0, abs=0.01)
 

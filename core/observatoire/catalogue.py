@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 try:
     import astropy  # noqa: F401
     ASTROPY_AVAILABLE = True
-except Exception:
+except ImportError:
     ASTROPY_AVAILABLE = False
 
 class GestionnaireCatalogue:
@@ -270,8 +270,6 @@ class GestionnaireCatalogue:
             # Pour les planètes, on a besoin de la position de l'observateur
             # On utilise les coordonnées par défaut du config.json
             try:
-                import json
-                from pathlib import Path
                 cfg_path = Path("data") / "config.json"
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
@@ -289,10 +287,11 @@ class GestionnaireCatalogue:
                         "name": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet"
+                        "type": "planet",
+                        "is_planet": True
                     }
-            except Exception:
-                pass
+            except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+                logger.debug(f"Impossible de calculer la position de {identifiant}: {e}")
 
         objet = self.rechercher_catalogue_local(identifiant)
 

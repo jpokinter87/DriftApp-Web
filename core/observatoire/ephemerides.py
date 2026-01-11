@@ -8,6 +8,8 @@ import math
 from datetime import datetime
 from typing import Tuple, Optional
 
+from core.utils.angle_utils import calculate_julian_day
+
 # Imports conditionnels pour Astropy
 try:
     from astropy.time import Time
@@ -99,7 +101,8 @@ class PlanetaryEphemerides:
 
             return ra_deg, dec_deg
 
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
+            # Erreur de calcul astropy (coordonnées invalides, types incorrects)
             return None
 
     @staticmethod
@@ -119,7 +122,7 @@ class PlanetaryEphemerides:
         l0, l1, _, eccentricity, inclination, _, omega_perihelion = elem
 
         # Siècles juliens depuis J2000
-        jd = PlanetaryEphemerides._julian_date(date_heure)
+        jd = calculate_julian_day(date_heure)
         t_centuries = (jd - 2451545.0) / 36525.0
 
         # Calcul des anomalies
@@ -138,45 +141,3 @@ class PlanetaryEphemerides:
         )
 
         return ra_approx, dec_approx
-
-    @staticmethod
-    def _julian_date(dt: datetime) -> float:
-        """Calcule le jour Julien pour une date donnée."""
-        year, month = dt.year, dt.month
-        day = dt.day + (dt.hour + (dt.minute + dt.second / 60.0) / 60.0) / 24.0
-
-        if month <= 2:
-            year -= 1
-            month += 12
-
-        century = year // 100
-        leap_correction = 2 - century + century // 4
-
-        jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + leap_correction - 1524.5
-        return jd
-
-
-# Test si exécuté directement
-if __name__ == "__main__":
-    print("Test de calcul des positions planétaires\n")
-
-    if ASTROPY_AVAILABLE:
-        print("✓ Astropy disponible - calculs précis\n")
-    else:
-        print("⚠ Astropy non disponible - calculs approximatifs\n")
-
-    planets_to_test = ["Jupiter", "Mars", "Venus", "Saturn"]
-    now = datetime.now()
-
-    for planet in planets_to_test:
-        if PlanetaryEphemerides.is_planet(planet):
-            pos = PlanetaryEphemerides.get_planet_position(
-                planet, now, latitude=45.0, longitude=5.0
-            )
-            if pos:
-                ra, dec = pos
-                print(f"{planet:10s} : RA = {ra:7.2f}°  DEC = {dec:+7.2f}°")
-            else:
-                print(f"{planet:10s} : Erreur de calcul")
-        else:
-            print(f"{planet:10s} : Non reconnu comme planète")

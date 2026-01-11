@@ -16,6 +16,8 @@ from astropy.coordinates import SkyCoord, CIRS
 from astropy.time import Time
 import astropy.units as u
 
+from core.utils.angle_utils import calculate_julian_day
+
 
 class AstronomicalCalculations:
     """Classe pour les calculs astronomiques."""
@@ -104,23 +106,10 @@ class AstronomicalCalculations:
             # si aware, la passer en UTC et enlever tzinfo pour le calcul
             dt_utc = dt.astimezone(timezone.utc).replace(tzinfo=None)
 
-        JD = self._calculate_julian_day(dt_utc)
+        JD = calculate_julian_day(dt_utc)
         GMST_deg = self._calculate_greenwich_sidereal_time(JD)
         # LST = GMST + longitude (Est positif)
         return (GMST_deg + self.longitude) % 360.0
-
-    @staticmethod
-    def _calculate_julian_day(dt_utc: datetime) -> float:
-        """Jour Julien à partir d'une datetime UTC naive."""
-        y, m = dt_utc.year, dt_utc.month
-        d = dt_utc.day + (dt_utc.hour + (dt_utc.minute + dt_utc.second / 60.0) / 60.0) / 24.0
-        if m <= 2:
-            y -= 1
-            m += 12
-        A = y // 100
-        B = 2 - A + A // 4
-        JD = int(365.25 * (y + 4716)) + int(30.6001 * (m + 1)) + d + B - 1524.5
-        return JD
 
     @staticmethod
     def _calculate_greenwich_sidereal_time(JD: float) -> float:
