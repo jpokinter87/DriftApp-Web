@@ -6,7 +6,13 @@
 
 // Configuration
 const API_BASE = '';
-const POLL_INTERVAL = 1000; // 1 seconde
+const POLL_INTERVAL = 1000;  // 1 seconde
+const MAX_LOG_ENTRIES = 50;
+const DEFAULT_TIMER_SECONDS = 60;
+const UPDATE_CHECK_DELAY_MS = 3000;
+const SERVICE_RESTART_MAX_ATTEMPTS = 30;
+const SERVICE_RESTART_POLL_MS = 2000;
+const FETCH_TIMEOUT_MS = 5000;
 
 // État de l'application
 let state = {
@@ -29,9 +35,8 @@ let lastRemainingFromApi = null;
 // Logs tracking (Correction 3)
 let displayedLogs = new Set();
 
-// Timer widget (Correction 2)
-let timerCtx = null;
-let timerTotal = 60;  // Valeur par défaut, sera mise à jour selon le mode
+// Timer settings
+let timerTotal = DEFAULT_TIMER_SECONDS;
 
 // GOTO Modal state
 let gotoModalVisible = false;
@@ -589,7 +594,7 @@ function updatePositionDisplay(encoder, motor) {
             elements.encoderCalibrated.textContent = `FIGÉ ${duration}s`;
             // Log l'alerte (une seule fois)
             if (!state.encoderFrozenLogged) {
-                addLog(`⚠️ ALERTE: Encodeur figé depuis ${duration}s - vérifier connexion SPI!`, 'error');
+                log(`ALERTE: Encodeur fige depuis ${duration}s - verifier connexion SPI!`, 'error');
                 state.encoderFrozenLogged = true;
             }
         } else if (!encoder.calibrated) {
@@ -1144,122 +1149,6 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     }
 }
 
-// Dessiner une pointe de flèche triangulaire
-function drawArrowHead(ctx, cx, cy, angleRad, length, color) {
-    const tipX = cx + length * Math.cos(angleRad);
-    const tipY = cy + length * Math.sin(angleRad);
-
-    const arrowSize = 10;
-    const arrowAngle = 0.4;
-
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(tipX, tipY);
-    ctx.lineTo(
-        tipX - arrowSize * Math.cos(angleRad - arrowAngle),
-        tipY - arrowSize * Math.sin(angleRad - arrowAngle)
-    );
-    ctx.lineTo(
-        tipX - arrowSize * Math.cos(angleRad + arrowAngle),
-        tipY - arrowSize * Math.sin(angleRad + arrowAngle)
-    );
-    ctx.closePath();
-    ctx.fill();
-}
-
-// Légende de la boussole
-function drawCompassLegend(ctx, x, y) {
-    ctx.font = '10px Arial';
-    ctx.textAlign = 'center';
-
-    // CIBLE (direction calculée) en vert
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText('● CIBLE (√x²)', x - 45, y);
-
-    // CIMIER en ambre (aligné avec cartouche CSS --accent-amber)
-    ctx.fillStyle = '#d4a055';
-    ctx.fillText('● CIMIER', x + 45, y);
-}
-
-// =========================================================================
-// Correction 2: Timer circulaire widget
-// =========================================================================
-
-function initTimer() {
-    const timerCanvas = document.getElementById('timer-canvas');
-    if (timerCanvas) {
-        timerCtx = timerCanvas.getContext('2d');
-    }
-}
-
-function drawTimer() {
-    const timerCanvas = document.getElementById('timer-canvas');
-    const timerWidget = document.getElementById('timer-widget');
-    const timerSeconds = document.getElementById('timer-seconds');
-
-    if (!timerCanvas || !timerWidget) return;
-
-    // Initialiser le contexte si nécessaire
-    if (!timerCtx) {
-        timerCtx = timerCanvas.getContext('2d');
-    }
-
-    // Afficher le widget
-    timerWidget.classList.remove('hidden');
-
-    const ctx = timerCtx;
-    const cx = timerCanvas.width / 2;
-    const cy = timerCanvas.height / 2;
-    const radius = Math.min(cx, cy) - 10;
-
-    // Clear
-    ctx.clearRect(0, 0, timerCanvas.width, timerCanvas.height);
-
-    // Fond du cercle
-    ctx.fillStyle = '#1a1a2e';
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Cercle de fond (gris)
-    ctx.strokeStyle = '#2d4059';
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius - 4, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    // Calcul de la progression (clampée à 1.0 max pour éviter arc > 100% lors changement de mode)
-    const remaining = countdownValue !== null ? countdownValue : 0;
-    const progress = Math.min(remaining / timerTotal, 1.0);
-
-    // Couleur selon la progression
-    let color;
-    if (progress > 0.5) {
-        color = '#00d26a';  // Vert
-    } else if (progress > 0.25) {
-        color = '#ffa502';  // Orange
-    } else {
-        color = '#ff4757';  // Rouge
-    }
-
-    // Arc de progression (sens anti-horaire depuis le haut)
-    if (progress > 0) {
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 8;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        const startAngle = -Math.PI / 2;
-        const endAngle = startAngle + (2 * Math.PI * progress);
-        ctx.arc(cx, cy, radius - 4, startAngle, endAngle);
-        ctx.stroke();
-    }
-
-    // Texte au centre
-    if (timerSeconds) {
-        timerSeconds.textContent = remaining > 0 ? `${remaining}s` : '--';
-        timerSeconds.style.color = color;
-    }
-}
 
 // =========================================================================
 // Formatage des coordonnées
@@ -1329,8 +1218,8 @@ function log(message, type = 'info') {
 
     elements.logs.insertBefore(entry, elements.logs.firstChild);
 
-    // Limiter à 50 entrées
-    while (elements.logs.children.length > 50) {
+    // Limiter le nombre d'entrées
+    while (elements.logs.children.length > MAX_LOG_ENTRIES) {
         elements.logs.removeChild(elements.logs.lastChild);
     }
 }
@@ -1621,11 +1510,11 @@ function showUpdateError(message) {
  * Polls the health endpoint until it responds.
  */
 async function waitForServiceRestart() {
-    const maxAttempts = 30;  // 30 attempts x 2 seconds = 60 seconds max
+    const maxAttempts = SERVICE_RESTART_MAX_ATTEMPTS;
     let attempts = 0;
 
     while (attempts < maxAttempts) {
-        await sleep(2000);
+        await sleep(SERVICE_RESTART_POLL_MS);
         attempts++;
 
         if (updateElements.progressText) {
@@ -1634,7 +1523,7 @@ async function waitForServiceRestart() {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
             const response = await fetch('/api/health/', {
                 signal: controller.signal
@@ -1698,5 +1587,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initUpdateListeners();
 
     // Check for updates after a short delay (don't block initial load)
-    setTimeout(checkForUpdates, 3000);
+    setTimeout(checkForUpdates, UPDATE_CHECK_DELAY_MS);
 });
