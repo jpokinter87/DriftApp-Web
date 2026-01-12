@@ -1362,8 +1362,9 @@ const updateElements = {
 
 // Store update data
 let updateData = null;
-// Track if update is available (for badge display)
-let updateAvailable = false;
+
+// Delay for "up to date" feedback display (ms)
+const UPDATE_FEEDBACK_DELAY_MS = 2000;
 
 /**
  * Check for updates on page load.
@@ -1393,8 +1394,7 @@ async function checkForUpdates(showUpToDate = false) {
 
         if (result.update_available) {
             updateData = result;
-            updateAvailable = true;
-            showUpdateBadge();
+            toggleUpdateBadge(true);
             showUpdateModal(result);
             log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
         } else if (showUpToDate) {
@@ -1413,81 +1413,88 @@ async function checkForUpdates(showUpToDate = false) {
 }
 
 /**
+ * Set the update button loading state.
+ * @param {boolean} loading - Whether button is in loading state
+ * @returns {string} Original button text for restoration
+ */
+function setUpdateButtonLoading(loading) {
+    const btn = updateElements.btnCheckUpdate;
+    const textSpan = btn?.querySelector('.update-check-text');
+    const originalText = textSpan?.textContent || 'MAJ';
+
+    if (btn) {
+        btn.classList.toggle('checking', loading);
+        btn.disabled = loading;
+    }
+    if (textSpan) {
+        textSpan.textContent = loading ? '...' : originalText;
+    }
+
+    return originalText;
+}
+
+/**
+ * Show temporary "up to date" feedback on button.
+ * @param {string} originalText - Text to restore after delay
+ */
+function showUpToDateFeedback(originalText) {
+    const textSpan = updateElements.btnCheckUpdate?.querySelector('.update-check-text');
+    if (!textSpan) return;
+
+    textSpan.textContent = 'OK';
+    textSpan.classList.add('up-to-date');
+
+    setTimeout(() => {
+        textSpan.textContent = originalText;
+        textSpan.classList.remove('up-to-date');
+    }, UPDATE_FEEDBACK_DELAY_MS);
+}
+
+/**
  * Manual update check triggered by user clicking the button.
- * Shows loading state and provides feedback.
  */
 async function manualCheckForUpdates() {
     const btn = updateElements.btnCheckUpdate;
-    const textSpan = btn ? btn.querySelector('.update-check-text') : null;
-    const originalText = textSpan ? textSpan.textContent : 'MAJ';
 
-    // Don't allow multiple simultaneous checks
-    if (btn && btn.classList.contains('checking')) {
-        return;
-    }
+    // Prevent multiple simultaneous checks
+    if (btn?.classList.contains('checking')) return;
 
-    // Show loading state
-    if (btn) {
-        btn.classList.add('checking');
-        btn.disabled = true;
-    }
-    if (textSpan) {
-        textSpan.textContent = '...';
-    }
-
+    const originalText = setUpdateButtonLoading(true);
     log('Verification des mises a jour...', 'info');
 
     try {
         const result = await checkForUpdates(true);
 
-        // Show feedback based on result
         if (!result.error && !result.update_available) {
-            // Application is up to date - show temporary green state
-            if (textSpan) {
-                textSpan.textContent = 'OK';
-                textSpan.classList.add('up-to-date');
-            }
-            // Reset to normal after 2 seconds
-            setTimeout(() => {
-                if (textSpan) {
-                    textSpan.textContent = originalText;
-                    textSpan.classList.remove('up-to-date');
-                }
-            }, 2000);
+            showUpToDateFeedback(originalText);
+            return;  // Feedback handles text reset
         }
     } finally {
-        // Reset button state
-        if (btn) {
+        // Only reset if not showing up-to-date feedback
+        const textSpan = btn?.querySelector('.update-check-text');
+        if (!textSpan?.classList.contains('up-to-date')) {
+            setUpdateButtonLoading(false);
+        } else if (btn) {
+            // Still need to re-enable button
             btn.classList.remove('checking');
             btn.disabled = false;
         }
-        if (textSpan && !textSpan.classList.contains('up-to-date')) {
-            textSpan.textContent = originalText;
-        }
     }
 }
 
 /**
- * Show the update badge on the check button.
+ * Toggle the update badge visibility.
+ * @param {boolean} visible - Whether to show the badge
  */
-function showUpdateBadge() {
-    if (updateElements.btnCheckUpdate) {
-        updateElements.btnCheckUpdate.classList.add('has-update');
-    }
-    if (updateElements.updateBadge) {
-        updateElements.updateBadge.classList.remove('hidden');
-    }
-}
+function toggleUpdateBadge(visible) {
+    const btn = updateElements.btnCheckUpdate;
+    const badge = updateElements.updateBadge;
 
-/**
- * Hide the update badge.
- */
-function hideUpdateBadge() {
-    if (updateElements.btnCheckUpdate) {
-        updateElements.btnCheckUpdate.classList.remove('has-update');
+    if (btn) {
+        btn.classList.toggle('has-update', visible);
     }
-    if (updateElements.updateBadge) {
-        updateElements.updateBadge.classList.add('hidden');
+    if (badge) {
+        badge.classList.toggle('hidden', !visible);
     }
 }
 
