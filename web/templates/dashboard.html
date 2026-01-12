@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DriftApp - Contrôle Coupole</title>
-    <link rel="stylesheet" href="/static/css/dashboard.css?v=20251231c">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=20260112a">
 </head>
 <body>
     <div class="container">
@@ -19,6 +19,11 @@
                 <a href="/api/health/system/" class="nav-tab">Systeme</a>
                 <a href="/session/" class="nav-tab">Session</a>
             </nav>
+            <button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
+                <span class="update-check-icon">&#x21BB;</span>
+                <span class="update-check-text">MAJ</span>
+                <span class="update-badge hidden" id="update-badge">!</span>
+            </button>
             <div class="status-indicator" id="service-status">
                 <span class="status-dot"></span>
                 <span class="status-text">Connexion...</span>
@@ -228,6 +233,6 @@
         </div>
     </div>
 
-    <script src="/static/js/dashboard.js?v=20260111a"></script>
+    <script src="/static/js/dashboard.js?v=20260112a"></script>
 </body>
 </html>

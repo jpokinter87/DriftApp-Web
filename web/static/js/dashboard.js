@@ -1354,38 +1354,140 @@ const updateElements = {
     errorText: document.getElementById('update-error-text'),
     buttons: document.getElementById('update-buttons'),
     btnLater: document.getElementById('btn-update-later'),
-    btnNow: document.getElementById('btn-update-now')
+    btnNow: document.getElementById('btn-update-now'),
+    // Update check button in header
+    btnCheckUpdate: document.getElementById('btn-check-update'),
+    updateBadge: document.getElementById('update-badge')
 };
 
 // Store update data
 let updateData = null;
+// Track if update is available (for badge display)
+let updateAvailable = false;
 
 /**
  * Check for updates on page load.
  * Called once during initialization after a short delay.
+ * @param {boolean} showUpToDate - Whether to show "up to date" message if no update
  */
-async function checkForUpdates() {
+async function checkForUpdates(showUpToDate = false) {
     try {
         const response = await fetch('/api/health/update/check/');
         if (!response.ok) {
             console.warn('Update check failed:', response.status);
-            return;
+            if (showUpToDate) {
+                log('Erreur lors de la verification des mises a jour', 'error');
+            }
+            return { error: true };
         }
 
         const result = await response.json();
 
         if (result.error) {
             console.warn('Update check error:', result.error);
-            return;
+            if (showUpToDate) {
+                log(`Erreur: ${result.error}`, 'error');
+            }
+            return { error: true };
         }
 
         if (result.update_available) {
             updateData = result;
+            updateAvailable = true;
+            showUpdateBadge();
             showUpdateModal(result);
             log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
+        } else if (showUpToDate) {
+            // Show "up to date" message only when manually checking
+            log('Application a jour (aucune mise a jour disponible)', 'success');
         }
+
+        return result;
     } catch (error) {
         console.warn('Update check exception:', error);
+        if (showUpToDate) {
+            log('Erreur de connexion lors de la verification', 'error');
+        }
+        return { error: true };
+    }
+}
+
+/**
+ * Manual update check triggered by user clicking the button.
+ * Shows loading state and provides feedback.
+ */
+async function manualCheckForUpdates() {
+    const btn = updateElements.btnCheckUpdate;
+    const textSpan = btn ? btn.querySelector('.update-check-text') : null;
+    const originalText = textSpan ? textSpan.textContent : 'MAJ';
+
+    // Don't allow multiple simultaneous checks
+    if (btn && btn.classList.contains('checking')) {
+        return;
+    }
+
+    // Show loading state
+    if (btn) {
+        btn.classList.add('checking');
+        btn.disabled = true;
+    }
+    if (textSpan) {
+        textSpan.textContent = '...';
+    }
+
+    log('Verification des mises a jour...', 'info');
+
+    try {
+        const result = await checkForUpdates(true);
+
+        // Show feedback based on result
+        if (!result.error && !result.update_available) {
+            // Application is up to date - show temporary green state
+            if (textSpan) {
+                textSpan.textContent = 'OK';
+                textSpan.classList.add('up-to-date');
+            }
+            // Reset to normal after 2 seconds
+            setTimeout(() => {
+                if (textSpan) {
+                    textSpan.textContent = originalText;
+                    textSpan.classList.remove('up-to-date');
+                }
+            }, 2000);
+        }
+    } finally {
+        // Reset button state
+        if (btn) {
+            btn.classList.remove('checking');
+            btn.disabled = false;
+        }
+        if (textSpan && !textSpan.classList.contains('up-to-date')) {
+            textSpan.textContent = originalText;
+        }
+    }
+}
+
+/**
+ * Show the update badge on the check button.
+ */
+function showUpdateBadge() {
+    if (updateElements.btnCheckUpdate) {
+        updateElements.btnCheckUpdate.classList.add('has-update');
+    }
+    if (updateElements.updateBadge) {
+        updateElements.updateBadge.classList.remove('hidden');
+    }
+}
+
+/**
+ * Hide the update badge.
+ */
+function hideUpdateBadge() {
+    if (updateElements.btnCheckUpdate) {
+        updateElements.btnCheckUpdate.classList.remove('has-update');
+    }
+    if (updateElements.updateBadge) {
+        updateElements.updateBadge.classList.add('hidden');
     }
 }
 
@@ -1576,6 +1678,10 @@ function initUpdateListeners() {
     }
     if (updateElements.btnNow) {
         updateElements.btnNow.addEventListener('click', applyUpdate);
+    }
+    // Manual update check button in header
+    if (updateElements.btnCheckUpdate) {
+        updateElements.btnCheckUpdate.addEventListener('click', manualCheckForUpdates);
     }
 }
 

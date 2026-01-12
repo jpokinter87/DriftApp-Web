@@ -1500,3 +1500,105 @@ body {
         width: 100%;
     }
 }
+
+/* =========================================================================
+   BOUTON DE MISE A JOUR (HEADER)
+   ========================================================================= */
+
+.btn-update-check {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.8rem;
+    margin-left: auto;
+    margin-right: 1rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.btn-update-check:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
+}
+
+.btn-update-check:active {
+    transform: scale(0.95);
+}
+
+.btn-update-check:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.update-check-icon {
+    font-size: 1rem;
+    transition: transform 0.3s ease;
+}
+
+.btn-update-check.checking .update-check-icon {
+    animation: spin-update 1s linear infinite;
+}
+
+@keyframes spin-update {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.update-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-amber);
+    color: #1a1612;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse-badge 2s ease-in-out infinite;
+}
+
+.update-badge.hidden {
+    display: none;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.btn-update-check.has-update {
+    border-color: var(--accent-amber);
+    color: var(--accent-amber);
+}
+
+.btn-update-check.has-update:hover {
+    background: rgba(255, 193, 7, 0.1);
+}
+
+/* Message "A jour" temporaire */
+.btn-update-check .update-check-text.up-to-date {
+    color: var(--accent-green);
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+    .btn-update-check {
+        padding: 0.3rem 0.5rem;
+        margin-right: 0.5rem;
+    }
+
+    .btn-update-check .update-check-text {
+        display: none;
+    }
+}
