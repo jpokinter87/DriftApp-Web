@@ -6,6 +6,16 @@
 - `core/exceptions.py`: Custom exception hierarchy (DriftAppError, MotorError, EncoderError, AbaqueError, IPCError, ConfigError)
 - `tests/test_exceptions.py`: Tests for exception classes (39 tests for hierarchy, attributes, chaining)
 
+### Changed (SOLID - OCP)
+- `services/motor_service.py`: Refactored process_command() to use command registry pattern
+  - Extracted handler methods: _handle_goto, _handle_jog, _handle_stop, _handle_continuous, _handle_tracking_start, _handle_tracking_stop, _handle_status
+  - Added _command_registry dict for O(1) command dispatch
+  - Adding new commands now only requires adding to registry (OCP compliant)
+- `tests/test_motor_service.py`: Added 22 tests for registry pattern
+  - TestCommandRegistry: registry completeness, OCP extension test
+  - TestProcessCommand: command dispatch via registry
+  - TestHandlerMethods: individual handler behavior
+
 ### Changed
 - `core/config/config.py`: Replaced bare exception with (JSONDecodeError, OSError)
 - `core/observatoire/catalogue.py`: Replaced 3 bare exceptions with specific types
