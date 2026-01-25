@@ -34,5 +34,13 @@
   - Changed RuntimeError to EncoderError with `from e` for proper chaining
 - `tests/test_abaque_manager.py`: Updated test to use ValueError instead of generic Exception
 
+### Changed (DRY)
+- `core/config/config.py`: Added IPC_BASE, IPC_MOTOR_COMMAND, IPC_MOTOR_STATUS, IPC_ENCODER_POSITION constants
+- `core/hardware/daemon_encoder_reader.py`: Use centralized IPC path + normalize_angle_360()
+- `core/hardware/encoder_reader.py`: Use centralized IPC path
+- `core/hardware/hardware_detector.py`: Use centralized IPC path
+- `services/ipc_manager.py`: Use centralized IPC paths
+- 12 files: Replaced inline % 360 with normalize_angle_360() (25+ occurrences)
+
 ### Fixed
 - B904 violation: Exception chaining now preserved in daemon_encoder_reader.py
