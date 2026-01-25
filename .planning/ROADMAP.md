@@ -13,7 +13,7 @@ Ce milestone transforme DriftApp d'une application fonctionnelle vers une applic
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Code Review** - Analyser la qualite du code et identifier les problemes
-- [ ] **Phase 2: Refactoring** - Appliquer les corrections du code review
+- [x] **Phase 2: Refactoring** - Appliquer les corrections du code review
 - [ ] **Phase 3: Profiling Baseline** - Mesurer le jitter reel avant optimisation
 - [ ] **Phase 4: Timing Optimizations** - Implementer busy-wait et isolation CPU
 - [ ] **Phase 5: Optimization Validation** - Mesurer et valider les ameliorations
@@ -51,9 +51,9 @@ Plans:
 **Plans**: 3 plans (Wave 1: 02-01, 02-03 parallel | Wave 2: 02-02)
 
 Plans:
-- [ ] 02-01-PLAN.md - Create exception hierarchy and fix 15 bare exceptions
-- [ ] 02-02-PLAN.md - Centralize IPC paths and angle normalization (DRY)
-- [ ] 02-03-PLAN.md - Implement command registry pattern (OCP)
+- [x] 02-01-PLAN.md - Create exception hierarchy and fix 15 bare exceptions
+- [x] 02-02-PLAN.md - Centralize IPC paths and angle normalization (DRY)
+- [x] 02-03-PLAN.md - Implement command registry pattern (OCP)
 
 ### Phase 3: Profiling Baseline
 **Goal**: Etablir une mesure objective du jitter moteur avant optimisation
@@ -152,7 +152,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Code Review | 3/3 | Complete | 2026-01-25 |
-| 2. Refactoring | 0/3 | Planned | - |
+| 2. Refactoring | 3/3 | Complete | 2026-01-25 |
 | 3. Profiling Baseline | 0/1 | Not started | - |
 | 4. Timing Optimizations | 0/3 | Not started | - |
 | 5. Optimization Validation | 0/2 | Not started | - |
@@ -162,4 +162,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8
 
 ---
 *Roadmap created: 2026-01-25*
-*Last updated: 2026-01-25 - Phase 2 planned (3 plans)*
+*Last updated: 2026-01-25 - Phase 2 complete (3 plans executed)*

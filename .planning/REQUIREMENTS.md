@@ -16,8 +16,8 @@ Requirements pour ce milestone. Chaque requirement mappe vers une phase du roadm
 
 ### Refactoring
 
-- [ ] **REFACT-01**: Appliquer les corrections identifiees par le code review
-- [ ] **REFACT-02**: Restructurer le code si le review revele des problemes architecturaux
+- [x] **REFACT-01**: Appliquer les corrections identifiees par le code review
+- [x] **REFACT-02**: Restructurer le code si le review revele des problemes architecturaux
 
 ### Optimisation Moteur
 
@@ -75,8 +75,8 @@ Mapping requirements -> phases.
 | REVIEW-02 | Phase 1: Code Review | Complete |
 | REVIEW-03 | Phase 1: Code Review | Complete |
 | REVIEW-04 | Phase 1: Code Review | Complete |
-| REFACT-01 | Phase 2: Refactoring | Pending |
-| REFACT-02 | Phase 2: Refactoring | Pending |
+| REFACT-01 | Phase 2: Refactoring | Complete |
+| REFACT-02 | Phase 2: Refactoring | Complete |
 | OPTIM-01 | Phase 3: Profiling Baseline | Pending |
 | OPTIM-02 | Phase 4: Timing Optimizations | Pending |
 | OPTIM-03 | Phase 4: Timing Optimizations | Pending |
@@ -97,4 +97,4 @@ Mapping requirements -> phases.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 - Phase 1 complete (REVIEW-01 to REVIEW-04)*
+*Last updated: 2026-01-25 - Phase 2 complete (REFACT-01, REFACT-02)*
