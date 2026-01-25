@@ -30,22 +30,24 @@ Ce milestone vise à améliorer la qualité du code existant et la fluidité du 
 
 ### Active
 
-<!-- Scope de ce milestone -->
+<!-- Scope de ce milestone — révisé après recherche -->
 
 - [ ] **REVIEW-01**: Code review complet du codebase
 - [ ] **REFACT-01**: Refactoring selon recommandations du review (si nécessaire)
-- [ ] **MOTOR-01**: Backend pigpio implémenté en parallèle de lgpio
-- [ ] **MOTOR-02**: Abstraction commune GPIO (interface/protocol) pour lgpio et pigpio
-- [ ] **MOTOR-03**: Switch configurable entre backends via config.json
-- [ ] **MOTOR-04**: Tests de performance comparatifs lgpio vs pigpio
-- [ ] **MOTOR-05**: Validation fluidité et vitesse max avec pigpio
+- [ ] **OPTIM-01**: Profiler le jitter réel des pulses moteur
+- [ ] **OPTIM-02**: Remplacer time.sleep() par busy-wait hybride pour timing précis
+- [ ] **OPTIM-03**: Isolation CPU du Motor Service (CPU core affinity)
+- [ ] **OPTIM-04**: Validation fluidité et vitesse max après optimisations
+- [ ] **ARCH-01**: Abstraction GPIO (Protocol) pour backends interchangeables
+- [ ] **ARCH-02**: Backend pigpio pour déploiements Pi 4 (optionnel)
 
 ### Out of Scope
 
-- Modification du câblage hardware — les deux backends utilisent les mêmes GPIOs
+- Modification du câblage hardware — les backends utilisent les mêmes GPIOs
 - Changement d'architecture IPC — fonctionne bien, pas de régression
 - Nouvelles fonctionnalités astronomiques — focus sur qualité et moteur
-- Migration vers un contrôleur externe (Arduino, Tic) — solution software first
+- pigpio sur Pi 5 — incompatible avec architecture RP1 (recherche confirmée)
+- Contrôleur externe (Pico, Arduino) — évaluer seulement si optimisations insuffisantes
 
 ## Context
 
@@ -54,17 +56,19 @@ Ce milestone vise à améliorer la qualité du code existant et la fluidité du 
 - Le suivi astronomique (vitesses lentes) est satisfaisant
 - Les déplacements rapides (GOTO, méridien) présentent des à-coups audibles
 - La console constructeur (code fermé) obtient ~1.5x la vitesse max et plus de fluidité
-- Cause probable : lgpio utilise du software timing, sensible au scheduler Linux
 
-**Hypothèse technique:**
-- pigpio utilise le DMA du Raspberry Pi pour un timing hardware des pulses
-- Devrait éliminer les micro-variations de timing causant les à-coups
-- Même câblage GPIO, changement uniquement côté software
+**Recherche effectuée (2026-01-25):**
+- **Cause confirmée**: `time.sleep()` + scheduler Linux = jitter 100µs à plusieurs ms
+- **pigpio incompatible Pi 5**: Le chip RP1 a changé l'architecture GPIO, pigpio ne fonctionne pas
+- **Aucune lib DMA sur Pi 5**: Actuellement, aucune librairie ne fournit de timing DMA sur Pi 5
+- **Solution recommandée**: Optimiser lgpio (busy-wait, isolation CPU) avant d'envisager hardware externe
+- Détails: `.planning/research/`
 
 **Codebase existant:**
 - ~315 tests passants
 - Architecture bien documentée (.planning/codebase/)
 - Patterns établis : Singleton, Mixins, Strategy
+- 17+ occurrences de bare `except:` à corriger (identifiées par recherche)
 
 ## Constraints
 
@@ -77,9 +81,11 @@ Ce milestone vise à améliorer la qualité du code existant et la fluidité du 
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Backend switchable par config | Permet de tester pigpio sans casser la prod | — Pending |
-| Abstraction GPIO commune | Évite duplication de code entre backends | — Pending |
+| Optimiser lgpio d'abord | pigpio incompatible Pi 5, optimisation peut suffire | — Pending |
+| Busy-wait au lieu de sleep | time.sleep() cause le jitter, busy-wait plus précis | — Pending |
+| Abstraction GPIO (Protocol) | Permet backends interchangeables sans changer appelants | — Pending |
 | Code review avant refactoring | Identifier les vrais problèmes avant de changer | — Pending |
+| pigpio optionnel Pi 4 only | Incompatible Pi 5, mais utile si déploiement Pi 4 | — Pending |
 
 ---
-*Last updated: 2026-01-25 after initialization*
+*Last updated: 2026-01-25 after research phase*
