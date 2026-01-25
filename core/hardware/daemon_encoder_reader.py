@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from core.exceptions import EncoderError
+
 DAEMON_JSON = Path("/dev/shm/ems22_position.json")
 
 
@@ -139,7 +141,10 @@ class DaemonEncoderReader:
 
             except json.JSONDecodeError as e:
                 if elapsed_ms > timeout_ms:
-                    raise RuntimeError(f"Erreur lecture démon: {e}")
+                    raise EncoderError(
+                        f"Erreur lecture démon: {e}",
+                        daemon_path=str(self.daemon_path)
+                    ) from e
                 time.sleep(0.01)
 
     def read_status(self) -> Optional[dict]:

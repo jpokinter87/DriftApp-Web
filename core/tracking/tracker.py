@@ -15,6 +15,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
+from core.exceptions import EncoderError
 from core.hardware.moteur import MoteurCoupole
 from core.hardware.moteur_simule import MoteurSimule
 from core.observatoire import AstronomicalCalculations
@@ -117,7 +118,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             pos = self._get_encoder_angle(timeout_ms=200)
             self.encoder_available = True
             self.logger.info(f"Encodeur actif - Position: {pos:.1f}°")
-        except Exception as e:
+        except (EncoderError, RuntimeError) as e:
             self.logger.warning(f"Encodeur config activé mais démon inaccessible: {e}")
 
         if not self.encoder_available:
@@ -255,7 +256,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
                 self._setup_initial_position(azimut, altitude, real_position)
                 self._sync_encoder(real_position)
                 self.logger.info(f"Position initiale depuis encodeur: {real_position:.1f}°")
-            except Exception:
+            except (EncoderError, RuntimeError):
                 # Fallback: utiliser la position cible calculée
                 self._setup_initial_position(azimut, altitude, position_cible_init)
                 self._sync_encoder(position_cible_init)
@@ -429,7 +430,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         except ImportError:
             # Module session non disponible (ex: tests sans Django)
             self.logger.debug("Module session non disponible - sauvegarde ignorée")
-        except Exception as e:
+        except (ImportError, OSError) as e:
             self.logger.warning(f"Erreur sauvegarde session: {e}")
 
     def _finalize_stop(self):

@@ -52,7 +52,7 @@ def _load_json(path: Path) -> dict:
     try:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, OSError):
         return {}
 
 def _deep_update(base: dict, override: dict) -> dict:

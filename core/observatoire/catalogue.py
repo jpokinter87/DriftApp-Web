@@ -71,7 +71,7 @@ class GestionnaireCatalogue:
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.objets = json.load(f)
-            except Exception as e:
+            except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Erreur lors du chargement du cache: {e}")
                 self.objets = {}
     
@@ -88,7 +88,7 @@ class GestionnaireCatalogue:
             
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.objets, f, indent=2, ensure_ascii=False)
-        except Exception as e:
+        except OSError as e:
             logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
 
 
@@ -178,7 +178,7 @@ class GestionnaireCatalogue:
 
             return objet
 
-        except Exception as e:
+        except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning(f"Erreur lors de la recherche de {identifiant}: {e}")
             return None
 

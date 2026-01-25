@@ -15,6 +15,7 @@ Version: 4.5
 from datetime import datetime
 from typing import Tuple
 
+from core.exceptions import EncoderError, MotorError
 from core.observatoire import PlanetaryEphemerides
 from core.observatoire.catalogue import GestionnaireCatalogue
 
@@ -96,7 +97,7 @@ class TrackingGotoMixin:
             )
             return False, 0.0
 
-        except Exception as e:
+        except (EncoderError, RuntimeError) as e:
             self.logger.debug(f"Daemon non accessible: {e}")
             return False, 0.0
 
@@ -157,7 +158,7 @@ class TrackingGotoMixin:
                 f"SYNC: Coupole={position_cible:.1f}° | "
                 f"Encodeur={real_position:.1f}° | Offset={self.encoder_offset:.1f}°"
             )
-        except Exception as e:
+        except (EncoderError, RuntimeError) as e:
             self.logger.warning(f"Encodeur: {e}")
             self.encoder_available = False
 
@@ -215,7 +216,7 @@ class TrackingGotoMixin:
                     self.logger.info(
                         f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
                     )
-                except Exception as e:
+                except (EncoderError, RuntimeError) as e:
                     self.logger.debug(f"Erreur recalcul offset encodeur (non critique): {e}")
 
             else:
@@ -229,7 +230,7 @@ class TrackingGotoMixin:
             # NE PAS modifier position_relative - elle est déjà correcte !
             # position_relative = position_cible (mise par _setup_initial_position)
 
-        except Exception as e:
+        except (EncoderError, MotorError, RuntimeError) as e:
             self.logger.error(f"Erreur GOTO initial: {e}")
             # En cas d'erreur, position_relative reste à position_cible
             # ce qui est l'hypothèse de départ

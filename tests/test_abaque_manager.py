@@ -72,7 +72,8 @@ class TestAbaqueManagerLoadAbaque:
         """Retourne False en cas d'erreur de lecture."""
         from core.tracking.abaque_manager import AbaqueManager
 
-        mock_load_workbook.side_effect = Exception("Erreur de lecture")
+        # Utiliser une exception specifique (ValueError est attrapee par le handler)
+        mock_load_workbook.side_effect = ValueError("Erreur de lecture")
 
         manager = AbaqueManager()
         # Simuler que le fichier existe

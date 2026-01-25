@@ -124,7 +124,7 @@ class AbaqueManager:
             
             return True
             
-        except Exception as e:
+        except (FileNotFoundError, ValueError, KeyError) as e:
             self.logger.error(f"Erreur lors du chargement de l'abaque: {e}")
             return False
     
@@ -248,7 +248,7 @@ class AbaqueManager:
         try:
             azimut_coupole = self._interpolate_circular(altitude_objet, azimut_objet)
             method = "interpolation" if in_bounds else "extrapolation"
-        except Exception as e:
+        except (ValueError, IndexError) as e:
             self.logger.error(f"Erreur d'interpolation: {e}")
             # Fallback: trouver le point le plus proche
             azimut_coupole = self._nearest_neighbor(altitude_objet, azimut_objet)
@@ -348,6 +348,6 @@ class AbaqueManager:
             self.logger.info(f"Abaque exportée vers {output_file}")
             return True
             
-        except Exception as e:
+        except OSError as e:
             self.logger.error(f"Erreur lors de l'export: {e}")
             return False
