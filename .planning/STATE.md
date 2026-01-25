@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 ## Current Position
 
 Phase: 1 of 8 (Code Review)
-Plan: 2 of 3 in current phase
+Plan: 2 of 3 in current phase (01-01 and 01-02 complete)
 Status: In progress
-Last activity: 2026-01-25 - Completed 01-02-PLAN.md (SOLID Analysis)
+Last activity: 2026-01-25 - Completed 01-01-PLAN.md (Exception Scanner)
 
 Progress: [##--------------] 8% (2/24 plans)
 
@@ -30,7 +30,7 @@ Progress: [##--------------] 8% (2/24 plans)
 | 01-code-review | 2/3 | 4 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (2 min), 01-01 (pending)
+- Last 5 plans: 01-01 (8 min), 01-02 (2 min)
 - Trend: -
 
 *Updated after each plan completion*
@@ -45,6 +45,9 @@ Recent decisions affecting current work:
 - Research: Optimiser lgpio d'abord, pigpio incompatible Pi 5
 - Research: Busy-wait au lieu de sleep pour precision timing
 - Research: Abstraction GPIO via Protocol pour backends interchangeables
+- 01-01: 52 exceptions intentionnelles (daemon/hardware) - pas de modification
+- 01-01: 15 exceptions a corriger dans core/ avec types specifiques
+- 01-01: Recommande creer core/exceptions.py (EncoderError, MotorError, AbaqueError)
 - 01-02: Hardware complexity (CC 18) legitimate for formatting functions
 - 01-02: Motor protocol abstraction recommended (aligns with research)
 - 01-02: Command registry pattern recommended for OCP compliance
@@ -59,6 +62,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-25T17:45:11Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-01-25T17:47:00Z
+Stopped at: Completed 01-01-PLAN.md (Summary created)
 Resume file: None
