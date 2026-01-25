@@ -26,7 +26,7 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 
 # Import conditionnel pour sdnotify (Raspberry Pi uniquement)
 try:
@@ -251,6 +251,18 @@ class MotorService:
             self.simulation_mode, self._write_status, self._add_tracking_log
         )
 
+        # Command registry for OCP-compliant dispatch
+        # Adding new commands only requires adding to this registry
+        self._command_registry: Dict[str, Callable[[Dict[str, Any]], None]] = {
+            'goto': self._handle_goto,
+            'jog': self._handle_jog,
+            'stop': self._handle_stop,
+            'continuous': self._handle_continuous,
+            'tracking_start': self._handle_tracking_start,
+            'tracking_stop': self._handle_tracking_stop,
+            'status': self._handle_status,
+        }
+
     def _cleanup_on_startup(self):
         """
         Nettoie l'état IPC au démarrage pour éviter les états "fantômes".
@@ -362,11 +374,15 @@ class MotorService:
             self._write_status()
 
     # =========================================================================
-    # COMMANDES
+    # COMMANDES - Handlers individuels (OCP pattern)
     # =========================================================================
 
     def handle_stop(self):
-        """Arrête immédiatement tout mouvement."""
+        """Arrête immédiatement tout mouvement (legacy interface)."""
+        self._handle_stop({})
+
+    def _handle_stop(self, command: Dict[str, Any]) -> None:
+        """Handle STOP command."""
         logger.info("STOP demandé")
 
         self.continuous_handler.stop()
@@ -380,53 +396,68 @@ class MotorService:
         self.current_status['tracking_object'] = None
         self._write_status()
 
-    def process_command(self, command: Dict[str, Any]):
-        """Traite une commande reçue."""
+    def _handle_goto(self, command: Dict[str, Any]) -> None:
+        """Handle GOTO command."""
+        angle = command.get('angle', 0)
+        speed = command.get('speed')
+        self.current_status = self.goto_handler.execute(
+            angle, self.current_status, speed
+        )
+
+    def _handle_jog(self, command: Dict[str, Any]) -> None:
+        """Handle JOG command."""
+        delta = command.get('delta', 0)
+        speed = command.get('speed')
+        self.current_status = self.jog_handler.execute(
+            delta, self.current_status, speed
+        )
+
+    def _handle_continuous(self, command: Dict[str, Any]) -> None:
+        """Handle CONTINUOUS movement command."""
+        direction = command.get('direction', 'cw')
+        if self.tracking_handler.is_active:
+            self._handle_stop({})
+        self.continuous_handler.start(direction, self.current_status)
+
+    def _handle_tracking_start(self, command: Dict[str, Any]) -> None:
+        """Handle TRACKING_START command."""
+        object_name = command.get('object', command.get('name'))
+        skip_goto = command.get('skip_goto', False)
+        if object_name:
+            self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
+        else:
+            logger.warning("tracking_start sans nom d'objet")
+
+    def _handle_tracking_stop(self, command: Dict[str, Any]) -> None:
+        """Handle TRACKING_STOP command."""
+        self.tracking_handler.stop(self.current_status)
+
+    def _handle_status(self, command: Dict[str, Any]) -> None:
+        """Handle STATUS request (no-op, status already updated)."""
+        pass
+
+    # =========================================================================
+    # COMMAND DISPATCH (OCP compliant via registry)
+    # =========================================================================
+
+    def process_command(self, command: Dict[str, Any]) -> None:
+        """
+        Process a command from IPC (OCP compliant via registry).
+
+        Uses _command_registry dict for O(1) command dispatch.
+        Adding new commands only requires adding to the registry.
+        """
         cmd_type = command.get('command', command.get('type'))
 
         if not cmd_type:
-            logger.warning(f"Commande invalide: {command}")
+            logger.warning(f"Commande invalide (type manquant): {command}")
             return
 
         logger.info(f"Traitement commande: {cmd_type}")
 
-        if cmd_type == 'goto':
-            angle = command.get('angle', 0)
-            speed = command.get('speed')
-            self.current_status = self.goto_handler.execute(
-                angle, self.current_status, speed
-            )
-
-        elif cmd_type == 'jog':
-            delta = command.get('delta', 0)
-            speed = command.get('speed')
-            self.current_status = self.jog_handler.execute(
-                delta, self.current_status, speed
-            )
-
-        elif cmd_type == 'stop':
-            self.handle_stop()
-
-        elif cmd_type == 'continuous':
-            direction = command.get('direction', 'cw')
-            if self.tracking_handler.is_active:
-                self.handle_stop()
-            self.continuous_handler.start(direction, self.current_status)
-
-        elif cmd_type == 'tracking_start':
-            object_name = command.get('object', command.get('name'))
-            skip_goto = command.get('skip_goto', False)
-            if object_name:
-                self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
-            else:
-                logger.warning("tracking_start sans nom d'objet")
-
-        elif cmd_type == 'tracking_stop':
-            self.tracking_handler.stop(self.current_status)
-
-        elif cmd_type == 'status':
-            pass  # Juste mettre à jour
-
+        handler = self._command_registry.get(cmd_type)
+        if handler:
+            handler(command)
         else:
             logger.warning(f"Commande inconnue: {cmd_type}")
 
