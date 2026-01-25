@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Tuple
 
+from core.utils.angle_utils import normalize_angle_360
+
 
 class TrackingCorrectionsMixin:
     """
@@ -185,8 +187,8 @@ class TrackingCorrectionsMixin:
 
     def _calculer_cibles(self, delta_deg: float) -> tuple:
         """Calcule les positions cibles logique et encodeur."""
-        position_cible_logique = (self.position_relative + delta_deg) % 360
-        angle_cible_encodeur = (position_cible_logique - self.encoder_offset) % 360
+        position_cible_logique = normalize_angle_360(self.position_relative + delta_deg)
+        angle_cible_encodeur = normalize_angle_360(position_cible_logique - self.encoder_offset)
         return position_cible_logique, angle_cible_encodeur
 
     def _executer_rotation_feedback(self, angle_cible: float,

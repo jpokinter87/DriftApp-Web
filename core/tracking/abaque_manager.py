@@ -20,6 +20,8 @@ from typing import Dict, Tuple
 import numpy as np
 import openpyxl
 
+from core.utils.angle_utils import normalize_angle_360
+
 
 class AbaqueManager:
     """
@@ -204,7 +206,7 @@ class AbaqueManager:
                 delta -= 360
             elif delta < -180:
                 delta += 360
-            return (angle1 + frac * delta) % 360
+            return normalize_angle_360(angle1 + frac * delta)
 
         # Interpolation azimut
         frac_az = (az - az1) / (az2 - az1)
@@ -236,7 +238,7 @@ class AbaqueManager:
             raise RuntimeError("Abaque non chargée. Appelez load_abaque() d'abord.")
         
         # Normaliser l'azimut dans [0, 360[
-        azimut_objet = azimut_objet % 360
+        azimut_objet = normalize_angle_360(azimut_objet)
         
         # Vérifier si on est dans les limites de l'abaque
         in_bounds = (

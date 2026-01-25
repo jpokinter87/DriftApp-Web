@@ -8,7 +8,7 @@ import math
 from datetime import datetime
 from typing import Tuple, Optional
 
-from core.utils.angle_utils import calculate_julian_day
+from core.utils.angle_utils import calculate_julian_day, normalize_angle_360
 
 # Imports conditionnels pour Astropy
 try:
@@ -126,8 +126,8 @@ class PlanetaryEphemerides:
         t_centuries = (jd - 2451545.0) / 36525.0
 
         # Calcul des anomalies
-        mean_longitude = (l0 + l1 * t_centuries) % 360.0
-        mean_anomaly_rad = math.radians((mean_longitude - omega_perihelion) % 360.0)
+        mean_longitude = normalize_angle_360(l0 + l1 * t_centuries)
+        mean_anomaly_rad = math.radians(normalize_angle_360(mean_longitude - omega_perihelion))
 
         # Équation de Kepler (10 itérations)
         eccentric_anomaly = mean_anomaly_rad
@@ -135,7 +135,7 @@ class PlanetaryEphemerides:
             eccentric_anomaly = mean_anomaly_rad + eccentricity * math.sin(eccentric_anomaly)
 
         # RA et DEC approximatifs (ATTENTION: très imprécis)
-        ra_approx = (mean_longitude + 90) % 360.0
+        ra_approx = normalize_angle_360(mean_longitude + 90)
         dec_approx = math.degrees(
             math.asin(math.sin(math.radians(inclination)) * math.sin(mean_anomaly_rad))
         )

@@ -106,7 +106,7 @@ class AstronomicalCalculations:
         JD = calculate_julian_day(dt_utc)
         GMST_deg = self._calculate_greenwich_sidereal_time(JD)
         # LST = GMST + longitude (Est positif)
-        return (GMST_deg + self.longitude) % 360.0
+        return normalize_angle_360(GMST_deg + self.longitude)
 
     @staticmethod
     def _calculate_greenwich_sidereal_time(JD: float) -> float:
@@ -173,7 +173,7 @@ class AstronomicalCalculations:
         else:
             az_rad = math.atan2(numerator, denominator)
 
-        az_deg = (math.degrees(az_rad) + 180) % 360
+        az_deg = normalize_angle_360(math.degrees(az_rad) + 180)
         alt_deg = self._apply_refraction_correction(math.degrees(alt_rad))
 
         return az_deg, alt_deg
@@ -195,7 +195,7 @@ class AstronomicalCalculations:
         minuit = date_reference.replace(hour=0, minute=0, second=0, microsecond=0)
         lst_minuit = self.calculer_temps_sideral(minuit)
 
-        diff_deg = (ad_deg - lst_minuit) % 360
+        diff_deg = normalize_angle_360(ad_deg - lst_minuit)
         diff_heures = diff_deg / 15.0
         diff_heures_solaires = diff_heures * (24.0 / 23.934469444)
 

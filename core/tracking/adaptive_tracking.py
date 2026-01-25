@@ -21,6 +21,8 @@ from enum import Enum
 from typing import Tuple, Dict
 import logging
 
+from core.utils.angle_utils import normalize_angle_360
+
 
 class TrackingMode(Enum):
     """Modes de suivi selon la zone du ciel."""
@@ -365,8 +367,8 @@ class AdaptiveTrackingManager:
             - direction_description: Description du chemin
         """
         # Normaliser les positions dans [0, 360[
-        current = current_position % 360
-        target = target_position % 360
+        current = normalize_angle_360(current_position)
+        target = normalize_angle_360(target_position)
         
         # Calculer les deux chemins possibles
         delta_direct = target - current

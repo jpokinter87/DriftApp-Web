@@ -22,6 +22,7 @@ from core.observatoire import AstronomicalCalculations
 from core.observatoire import PlanetaryEphemerides
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 from core.tracking.tracking_logger import TrackingLogger
+from core.utils.angle_utils import normalize_angle_360
 
 # Mixins
 from core.tracking.tracking_state_mixin import TrackingStateMixin
@@ -300,7 +301,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         """Log le démarrage du suivi."""
         self.logger.info(
             f"Méthode: ABAQUE | Az={azimut:.1f}° Alt={altitude:.1f}° | "
-            f"Position cible={position_cible % 360:.1f}°"
+            f"Position cible={normalize_angle_360(position_cible):.1f}°"
         )
 
     def _format_start_message(self, objet_name: str, azimut: float,
@@ -310,7 +311,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             f"Suivi démarré : {objet_name}\n"
             f"  RA={self.ra_deg:.2f}° DEC={self.dec_deg:.2f}°\n"
             f"  Azimut: {azimut:.1f}° | Altitude: {altitude:.1f}°\n"
-            f"  Position coupole: {position_cible % 360:.1f}°\n"
+            f"  Position coupole: {normalize_angle_360(position_cible):.1f}°\n"
             f"  Méthode: ABAQUE"
         )
 
@@ -361,7 +362,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             'obj_az_raw': azimut,
             'obj_alt': altitude,
             'position_cible': position_cible_lissee,
-            'position_relative': self.position_relative % 360,
+            'position_relative': normalize_angle_360(self.position_relative),
             'remaining_seconds': remaining,
             'total_corrections': self.total_corrections,
             'total_movement': self.total_movement,

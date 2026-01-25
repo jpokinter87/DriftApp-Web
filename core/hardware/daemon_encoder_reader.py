@@ -15,6 +15,7 @@ from typing import Optional
 
 from core.config.config import IPC_ENCODER_POSITION
 from core.exceptions import EncoderError
+from core.utils.angle_utils import normalize_angle_360
 
 # Alias for backward compatibility (re-exported in moteur.py)
 DAEMON_JSON = IPC_ENCODER_POSITION
@@ -124,7 +125,7 @@ class DaemonEncoderReader:
                             f"Données encodeur périmées ({age_ms:.0f}ms > {max_age_ms:.0f}ms)"
                         )
 
-                angle = float(data.get("angle", 0.0)) % 360.0
+                angle = normalize_angle_360(float(data.get("angle", 0.0)))
                 status = data.get("status", "OK")
 
                 if status.startswith("OK"):

@@ -33,6 +33,8 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
+from core.utils.angle_utils import normalize_angle_360
+
 # Ré-export pour compatibilité (imports existants depuis moteur.py)
 from core.hardware.daemon_encoder_reader import (
     DAEMON_JSON,
@@ -327,8 +329,8 @@ class MoteurCoupole:
             vitesse: Délai entre les pas
             use_ramp: Si True, utilise la rampe d'accélération (défaut: True)
         """
-        position_cible = position_cible_deg % 360
-        position_actuelle = position_actuelle_deg % 360
+        position_cible = normalize_angle_360(position_cible_deg)
+        position_actuelle = normalize_angle_360(position_actuelle_deg)
 
         diff = position_cible - position_actuelle
 

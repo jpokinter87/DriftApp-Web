@@ -15,6 +15,8 @@ import math
 from collections import deque
 from datetime import datetime
 
+from core.utils.angle_utils import normalize_angle_360
+
 
 class TrackingStateMixin:
     """
@@ -141,7 +143,7 @@ class TrackingStateMixin:
             >>> # Saut important:
             >>> _smooth_position_cible(180.0)  # → 180.0° (reset, pas de lissage)
         """
-        new_position = new_position % 360
+        new_position = normalize_angle_360(new_position)
 
         # Si c'est la première valeur, initialiser le cache
         if self._cached_position_cible is None:
@@ -176,7 +178,7 @@ class TrackingStateMixin:
         sin_sum = sum(math.sin(math.radians(p)) for p in self._position_cible_history)
         cos_sum = sum(math.cos(math.radians(p)) for p in self._position_cible_history)
         mean_rad = math.atan2(sin_sum, cos_sum)
-        mean_deg = math.degrees(mean_rad) % 360
+        mean_deg = normalize_angle_360(math.degrees(mean_rad))
 
         self._cached_position_cible = mean_deg
         return mean_deg

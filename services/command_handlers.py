@@ -23,7 +23,7 @@ from core.hardware.moteur_simule import set_simulated_position, get_simulated_po
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
-from core.utils.angle_utils import shortest_angular_distance
+from core.utils.angle_utils import normalize_angle_360, shortest_angular_distance
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +283,7 @@ class JogHandler:
                 current_status['position'] = pos_finale
             else:
                 current = current_status.get('position', 0)
-                current_status['position'] = (current + delta) % 360
+                current_status['position'] = normalize_angle_360(current + delta)
 
             current_status['status'] = 'idle'
             logger.info(f"JOG terminé: position={current_status['position']:.1f}°")
@@ -361,7 +361,7 @@ class ContinuousHandler:
 
                 if self.simulation_mode:
                     current = get_simulated_position()
-                    new_pos = (current + delta_per_step) % 360
+                    new_pos = normalize_angle_360(current + delta_per_step)
                     set_simulated_position(new_pos)
                     current_status['position'] = new_pos
                 else:
@@ -504,7 +504,7 @@ class TrackingHandler:
         if self.session:
             if self.simulation_mode:
                 status = self.session.get_status()
-                final_pos = status.get('position_relative', 0) % 360
+                final_pos = normalize_angle_360(status.get('position_relative', 0))
                 set_simulated_position(final_pos)
                 current_status['position'] = final_pos
 

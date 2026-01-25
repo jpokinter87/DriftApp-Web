@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
-from core.utils.angle_utils import shortest_angular_distance
+from core.utils.angle_utils import normalize_angle_360, shortest_angular_distance
 from core.hardware.daemon_encoder_reader import StaleDataError, FrozenEncoderError
 
 if TYPE_CHECKING:
@@ -529,7 +529,7 @@ class FeedbackController:
                 'mode': 'sans_feedback'
             }
 
-        angle_cible = (position_actuelle + delta_deg) % 360
+        angle_cible = normalize_angle_360(position_actuelle + delta_deg)
 
         self.logger.info(
             f"Rotation relative: {delta_deg:+.1f}° "
