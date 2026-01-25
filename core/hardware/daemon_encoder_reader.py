@@ -13,9 +13,11 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from core.config.config import IPC_ENCODER_POSITION
 from core.exceptions import EncoderError
 
-DAEMON_JSON = Path("/dev/shm/ems22_position.json")
+# Alias for backward compatibility (re-exported in moteur.py)
+DAEMON_JSON = IPC_ENCODER_POSITION
 
 
 class StaleDataError(RuntimeError):

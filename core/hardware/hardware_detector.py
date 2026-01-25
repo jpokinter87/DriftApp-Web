@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Tuple, Optional
 
+from core.config.config import IPC_ENCODER_POSITION
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,15 +119,13 @@ class HardwareDetector:
         Returns:
             Tuple (is_available, error_message, test_position)
         """
-        daemon_json = Path("/dev/shm/ems22_position.json")
-        
         # Vérifier si le fichier existe
-        if not daemon_json.exists():
+        if not IPC_ENCODER_POSITION.exists():
             return False, "Démon encodeur non actif (fichier JSON absent)", None
         
         try:
             # Lire le fichier JSON avec verrou fcntl
-            with open(daemon_json, "r") as f:
+            with open(IPC_ENCODER_POSITION, "r") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
                 try:
                     data = json.load(f)

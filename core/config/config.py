@@ -13,7 +13,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
-# Chemins
+# =============================================================================
+# IPC file paths (centralized - single source of truth)
+# =============================================================================
+IPC_BASE = Path("/dev/shm")
+IPC_MOTOR_COMMAND = IPC_BASE / "motor_command.json"
+IPC_MOTOR_STATUS = IPC_BASE / "motor_status.json"
+IPC_ENCODER_POSITION = IPC_BASE / "ems22_position.json"
+
+# =============================================================================
+# Data and configuration paths
+# =============================================================================
 DATA_DIR: Path = Path("data")
 LOGS_DIR: Path = Path("logs")
 CONFIG_FILE: Path = DATA_DIR / "config.json"

@@ -21,10 +21,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-# Chemins des fichiers IPC
-COMMAND_FILE = Path("/dev/shm/motor_command.json")
-STATUS_FILE = Path("/dev/shm/motor_status.json")
-ENCODER_FILE = Path("/dev/shm/ems22_position.json")
+from core.config.config import IPC_MOTOR_COMMAND, IPC_MOTOR_STATUS, IPC_ENCODER_POSITION
+
+# Aliases for backward compatibility (used throughout this module)
+COMMAND_FILE = IPC_MOTOR_COMMAND
+STATUS_FILE = IPC_MOTOR_STATUS
+ENCODER_FILE = IPC_ENCODER_POSITION
 
 logger = logging.getLogger(__name__)
 

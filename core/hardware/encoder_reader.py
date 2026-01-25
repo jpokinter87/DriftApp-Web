@@ -4,8 +4,10 @@ import time
 from pathlib import Path
 from typing import Tuple, Optional
 
-# Chemin vers la mémoire partagée (RAM)
-SHARED_FILE = Path("/dev/shm/ems22_position.json")
+from core.config.config import IPC_ENCODER_POSITION
+
+# Alias for backward compatibility
+SHARED_FILE = IPC_ENCODER_POSITION
 
 
 def read_encoder_daemon(max_age_seconds: float = 2.0) -> Tuple[Optional[float], bool, float]:
