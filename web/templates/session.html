@@ -4,30 +4,6 @@
 
 {% block extra_css %}
 <style>
-/* ── Shared styles (from dashboard.css, needed on session page) ── */
-.panel-astro {
-    background-image: url('/static/img/constellations-pattern.svg');
-    background-size: 400px 400px;
-    background-repeat: repeat;
-    position: relative;
-}
-.panel-astro:hover {
-    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15), 0 0 30px rgba(212, 160, 85, 0.05);
-    transition: box-shadow 0.3s ease;
-}
-.section-title-fire {
-    font-size: 1rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 700;
-    color: transparent !important;
-    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-}
-</style>
-<style>
 /* ── Session selector tabs ── */
 .selector-tab {
     padding: 0.4rem 1rem;
@@ -70,7 +46,7 @@
 /* ── Mode distribution bars ── */
 .mode-bar-container {
     display: grid;
-    grid-template-columns: 100px 1fr 80px;
+    grid-template-columns: minmax(60px, 100px) 1fr minmax(40px, 80px);
     align-items: center;
     gap: 0.5rem;
     padding: 0.25rem 0;
@@ -203,17 +179,12 @@
     border-radius: 50%;
     display: inline-block;
     background: var(--color-obs-text-muted);
-    animation: session-pulse 2s infinite;
+    animation: shared-pulse 2s infinite;
 }
 .session-status-dot.active { background: var(--color-accent-green); }
 .session-status-dot.inactive { background: var(--color-obs-text-muted); }
 .session-status-dot.history { background: var(--color-accent-amber); }
 .session-status-dot.error { background: var(--color-accent-red); }
-
-@keyframes session-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
 
 /* ── Refresh button spin ── */
 @keyframes session-spin {
@@ -287,10 +258,10 @@
     <h2 class="section-title section-title-fire mb-3">Evolution Altitude / Azimut</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div class="chart-wrapper">
-            <canvas id="altitude-chart"></canvas>
+            <canvas id="altitude-chart" aria-label="Graphique altitude"></canvas>
         </div>
         <div class="chart-wrapper">
-            <canvas id="azimut-chart"></canvas>
+            <canvas id="azimut-chart" aria-label="Graphique azimut"></canvas>
         </div>
     </div>
     <div class="chart-legend mt-2 text-xs text-obs-text-secondary">
@@ -365,7 +336,7 @@
 <!-- ═══ Section Journal des corrections ═══ -->
 <section class="panel panel-astro mb-4">
     <h2 class="section-title section-title-fire mb-3">Journal des corrections</h2>
-    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto">
+    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto overflow-x-auto">
         <table class="session-table" id="corrections-table">
             <thead>
                 <tr>
@@ -386,7 +357,7 @@
 <!-- ═══ Section GOTO ═══ -->
 <section class="panel panel-astro mb-4">
     <h2 class="section-title section-title-fire mb-3">Mouvements GOTO</h2>
-    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto">
+    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto overflow-x-auto">
         <table class="session-table" id="goto-table">
             <thead>
                 <tr>

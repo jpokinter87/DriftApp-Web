@@ -5,30 +5,6 @@
 {% block extra_css %}
 <style>[x-cloak] { display: none !important; }</style>
 <style>
-/* ── Shared styles (from dashboard.css, needed on system page) ── */
-.panel-astro {
-    background-image: url('/static/img/constellations-pattern.svg');
-    background-size: 400px 400px;
-    background-repeat: repeat;
-    position: relative;
-}
-.panel-astro:hover {
-    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15), 0 0 30px rgba(212, 160, 85, 0.05);
-    transition: box-shadow 0.3s ease;
-}
-.section-title-fire {
-    font-size: 1rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 700;
-    color: transparent !important;
-    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-}
-</style>
-<style>
 /* ── Status badges (component health) ── */
 .sys-badge {
     display: inline-flex;
@@ -105,23 +81,18 @@
     animation: sys-spin 0.5s linear;
 }
 
-/* ── Status dot pulse (system page) ── */
+/* ── Status dot (system page) ── */
 .sys-status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     display: inline-block;
     background: var(--color-obs-text-muted);
-    animation: sys-pulse 2s infinite;
+    animation: shared-pulse 2s infinite;
 }
 .sys-status-dot.healthy { background: var(--color-accent-green); }
 .sys-status-dot.unhealthy { background: var(--color-accent-red); }
 .sys-status-dot.stale { background: var(--color-accent-orange); }
-
-@keyframes sys-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
 </style>
 {% endblock %}
 
@@ -316,7 +287,7 @@
         </div>
 
         <!-- Modes Adaptatifs -->
-        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3 overflow-x-auto">
             <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Modes Adaptatifs</h3>
             <table class="w-full text-xs border-collapse">
                 <thead>

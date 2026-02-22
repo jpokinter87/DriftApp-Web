@@ -5,8 +5,8 @@ Modernisation de l'interface web de DriftApp avec Tailwind CSS et Alpine.js, en 
 
 ## Current Milestone
 **v5.0 Interface Moderne** (v5.0.0)
-Status: In progress
-Phases: 4 of 5 complete
+Status: Complete
+Phases: 5 of 5 complete
 
 ## Phases
 
@@ -16,7 +16,7 @@ Phases: 4 of 5 complete
 | 2 | Dashboard Modernization | 3 | Complete | 2026-02-22 |
 | 3 | System Page Modernization | 2 | Complete | 2026-02-22 |
 | 4 | Session Page Modernization | 2 | Complete | 2026-02-22 |
-| 5 | Polish & Responsive | 2 | Not started | - |
+| 5 | Polish & Responsive | 2 | Complete | 2026-02-22 |
 
 ## Phase Details
 
@@ -99,9 +99,9 @@ Phases: 4 of 5 complete
 - Accessibilite de base (aria, focus states)
 
 **Plans:**
-- [ ] 05-01: Responsive breakpoints et animations
-- [ ] 05-02: Nettoyage CSS legacy et accessibilite
+- [x] 05-01: CSS factorization, responsive breakpoints, dead file cleanup
+- [x] 05-02: Legacy CSS cleanup et accessibilite de base
 
 ---
 *Roadmap created: 2026-02-22*
-*Last updated: 2026-02-22 — Phase 4 complete*
+*Last updated: 2026-02-22 — Milestone v5.0 complete*

@@ -9,8 +9,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- [ ] Responsive mobile/tablette + animations coherentes
-- [ ] Nettoyage CSS legacy + accessibilite de base
+None — all requirements validated for v5.0
 
 ### Validated
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
@@ -22,6 +21,9 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Zero regression fonctionnelle sur dashboard — Phase 2
 - ✓ Page Systeme modernisee (cards, IPC, config, Alpine.store) — Phase 3
 - ✓ Page Session modernisee (selecteur, charts, tables, stats, Alpine.store) — Phase 4
+- ✓ Responsive mobile/tablette + breakpoints mobile-first — Phase 5
+- ✓ CSS legacy nettoye + accessibilite de base (aria, focus ring) — Phase 5
+- ✓ Styles partages factorises (panel-astro, section-title-fire) — Phase 5
 
 ## Constraints
 - Tailwind v4 standalone CLI (pas de Node.js)
@@ -44,6 +46,10 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Alpine.store('session') bridge | 4 | Meme pattern que system pour status, tabs, auto-refresh |
 | Chart.js theme colors adapted | 4 | Grid/tick colors matching observatory theme |
 | session.css retire | 4 | 3eme page 100% Tailwind + inline CSS |
+| Shared components factorises | 5 | panel-astro, section-title-fire, shared-pulse dans tailwind-input.css |
+| Mobile-first grid (grid-cols-1 lg:) | 5 | Standard Tailwind pattern pour responsive |
+| prefers-reduced-motion global | 5 | Accessibilite pour troubles vestibulaires |
+| focus-visible amber outline | 5 | Navigation clavier avec theme observatory |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -62,4 +68,4 @@ Quick Reference:
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-02-22 after Phase 4*
+*Last updated: 2026-02-22 after Phase 5 — Milestone v5.0 complete*

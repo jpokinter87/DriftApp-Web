@@ -8,21 +8,8 @@
 */
 
 /* =========================================================================
-   Section titles — Gradient feu/ambre (heritage dashboard original)
+   Section titles — header fire gradient (dashboard-specific override)
    ========================================================================= */
-
-/* Gradient feu sur les titres de section */
-.section-title-fire {
-    font-size: 1rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-weight: 700;
-    color: transparent !important;
-    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
-    -webkit-background-clip: text !important;
-    -webkit-text-fill-color: transparent !important;
-    background-clip: text !important;
-}
 
 /* Gradient feu sur le titre DriftApp du header */
 header h1 span {
@@ -30,24 +17,6 @@ header h1 span {
     -webkit-background-clip: text !important;
     -webkit-text-fill-color: transparent !important;
     background-clip: text !important;
-}
-
-/* =========================================================================
-   Panel Astro — Motif astronomique de fond (constellations)
-   ========================================================================= */
-
-.panel-astro {
-    background-image: url('/static/img/constellations-pattern.svg');
-    background-size: 400px 400px;
-    background-repeat: repeat;
-    position: relative;
-}
-
-/* Glow subtil au hover sur les panels */
-.panel-astro:hover {
-    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15),
-                0 0 30px rgba(212, 160, 85, 0.05);
-    transition: box-shadow 0.3s ease;
 }
 
 /* Bouton STOP — glow rouge permanent */
@@ -86,14 +55,6 @@ header h1 span {
         transparent 100%);
     margin: 0.75rem 0;
     opacity: 0.5;
-}
-
-/* =========================================================================
-   Utility: hidden (JS toggle)
-   ========================================================================= */
-
-.hidden {
-    display: none !important;
 }
 
 /* =========================================================================
@@ -237,22 +198,6 @@ header h1 span {
 .mode-value.continuous {
     background-color: var(--color-accent-red);
     color: white;
-}
-
-.mode-value.fast_track {
-    background-color: var(--color-accent-purple);
-    color: white;
-}
-
-/* Mode classes for hidden compat elements */
-.mode-normal { color: var(--color-accent-green); }
-.mode-critical { color: var(--color-accent-orange); }
-.mode-continuous { color: var(--color-accent-red); }
-.mode-fast_track { color: var(--color-accent-purple); }
-
-/* Timer widget — integre dans la boussole */
-.timer-widget {
-    display: none !important;
 }
 
 /* =========================================================================
