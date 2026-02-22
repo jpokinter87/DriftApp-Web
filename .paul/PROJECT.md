@@ -9,7 +9,6 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- [ ] Page Session modernisee (selecteur, charts, tables, stats)
 - [ ] Responsive mobile/tablette + animations coherentes
 - [ ] Nettoyage CSS legacy + accessibilite de base
 
@@ -22,6 +21,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Alpine.js store reactif pour modales, logs et tracking — Phase 2
 - ✓ Zero regression fonctionnelle sur dashboard — Phase 2
 - ✓ Page Systeme modernisee (cards, IPC, config, Alpine.store) — Phase 3
+- ✓ Page Session modernisee (selecteur, charts, tables, stats, Alpine.store) — Phase 4
 
 ## Constraints
 - Tailwind v4 standalone CLI (pas de Node.js)
@@ -41,6 +41,9 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Pages secondaires: inline CSS pour styles partages | 3 | dashboard.css non charge hors dashboard, duplication inline |
 | Alpine.store('system') bridge | 3 | Meme pattern que dashboard pour status, badges, auto-refresh |
 | TemplateView extra_context pour nav | 3 | active_tab pour highlighting nav sur pages statiques |
+| Alpine.store('session') bridge | 4 | Meme pattern que system pour status, tabs, auto-refresh |
+| Chart.js theme colors adapted | 4 | Grid/tick colors matching observatory theme |
+| session.css retire | 4 | 3eme page 100% Tailwind + inline CSS |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -59,4 +62,4 @@ Quick Reference:
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-02-22 after Phase 3*
+*Last updated: 2026-02-22 after Phase 4*

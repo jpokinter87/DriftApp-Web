@@ -17,7 +17,7 @@ urlpatterns = [
 
     # Interface web principale
     path('', TemplateView.as_view(template_name='dashboard.html'), name='dashboard'),
-    path('session/', TemplateView.as_view(template_name='session.html'), name='session'),
+    path('session/', TemplateView.as_view(template_name='session.html', extra_context={'active_tab': 'session'}), name='session'),
 
     # Favicon (évite les 404 dans les logs)
     path('favicon.ico', lambda r: HttpResponse(status=204)),

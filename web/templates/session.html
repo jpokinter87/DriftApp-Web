@@ -1,202 +1,421 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DriftApp - Rapport de Session</title>
-    <link rel="stylesheet" href="/static/css/session.css?v=20251231c">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-</head>
-<body>
-    <div class="container">
-        <!-- En-tete avec navigation -->
-        <header class="header">
-            <div class="header-left">
-                <h1>DriftApp</h1>
-                <span class="subtitle">Rapport de Session</span>
-            </div>
-            <nav class="nav-tabs">
-                <a href="/" class="nav-tab">Controle</a>
-                <a href="/api/health/system/" class="nav-tab">Systeme</a>
-                <a href="/session/" class="nav-tab active">Session</a>
-            </nav>
-            <div class="header-right">
-                <div class="status-indicator" id="session-status">
-                    <span class="status-dot"></span>
-                    <span class="status-text">--</span>
-                </div>
-            </div>
-        </header>
+{% extends "base.html" %}
 
-        <!-- Contenu principal -->
-        <main class="main-content">
-            <!-- Section Session Active / Sélection -->
-            <section class="section session-selector">
-                <div class="selector-tabs">
-                    <button class="selector-tab active" data-tab="current">Session en cours</button>
-                    <button class="selector-tab" data-tab="history">Historique</button>
-                </div>
+{% block title %}Rapport de Session{% endblock %}
 
-                <!-- Info session active -->
-                <div id="current-session-info" class="session-info">
-                    <div class="session-header-info">
-                        <div class="object-name">
-                            <span class="label">Objet:</span>
-                            <span id="session-object" class="value">--</span>
-                        </div>
-                        <div class="session-duration">
-                            <span class="label">Duree:</span>
-                            <span id="session-duration" class="value">--</span>
-                        </div>
-                        <div class="session-coords">
-                            <span class="label">RA/DEC:</span>
-                            <span id="session-coords" class="value">-- / --</span>
-                        </div>
-                    </div>
-                </div>
+{% block extra_css %}
+<style>
+/* ── Shared styles (from dashboard.css, needed on session page) ── */
+.panel-astro {
+    background-image: url('/static/img/constellations-pattern.svg');
+    background-size: 400px 400px;
+    background-repeat: repeat;
+    position: relative;
+}
+.panel-astro:hover {
+    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15), 0 0 30px rgba(212, 160, 85, 0.05);
+    transition: box-shadow 0.3s ease;
+}
+.section-title-fire {
+    font-size: 1rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: transparent !important;
+    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+</style>
+<style>
+/* ── Session selector tabs ── */
+.selector-tab {
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--color-obs-border);
+    background: transparent;
+    color: var(--color-obs-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.selector-tab:first-child { border-radius: var(--radius-badge) 0 0 var(--radius-badge); }
+.selector-tab:last-child { border-radius: 0 var(--radius-badge) var(--radius-badge) 0; }
+.selector-tab.active {
+    background: rgba(212, 160, 85, 0.15);
+    color: var(--color-accent-amber);
+    border-color: var(--color-accent-amber);
+}
+.selector-tab:hover:not(.active) {
+    color: var(--color-obs-text);
+    background: var(--color-obs-hover);
+}
 
-                <!-- Liste historique (cachée par défaut) -->
-                <div id="history-panel" class="history-panel hidden">
-                    <div class="history-list" id="history-list">
-                        <div class="loading">Chargement...</div>
-                    </div>
-                </div>
-            </section>
+/* ── Stat cards ── */
+.stat-card {
+    background: var(--color-obs-dark);
+    border: 1px solid var(--color-obs-border);
+    border-radius: var(--radius-button);
+    padding: 0.75rem;
+    text-align: center;
+    transition: border-color 0.2s ease;
+}
+.stat-card:hover { border-color: var(--color-accent-amber); }
+.stat-card.clockwise { border-left: 3px solid var(--color-accent-green); }
+.stat-card.counterclockwise { border-left: 3px solid var(--color-accent-red); }
 
-            <!-- Section Graphiques -->
-            <section class="section charts-section">
-                <h2>Evolution Altitude / Azimut</h2>
-                <div class="charts-container">
-                    <div class="chart-wrapper">
-                        <canvas id="altitude-chart"></canvas>
-                    </div>
-                    <div class="chart-wrapper">
-                        <canvas id="azimut-chart"></canvas>
-                    </div>
-                </div>
-                <div class="chart-legend">
-                    <div class="legend-item">
-                        <span class="legend-color normal"></span>
-                        <span>NORMAL</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color critical"></span>
-                        <span>CRITICAL</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-color continuous"></span>
-                        <span>CONTINUOUS</span>
-                    </div>
-                    <div class="legend-item">
-                        <span class="legend-dot correction"></span>
-                        <span>Correction</span>
-                    </div>
-                </div>
-            </section>
+/* ── Mode distribution bars ── */
+.mode-bar-container {
+    display: grid;
+    grid-template-columns: 100px 1fr 80px;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+.mode-bar {
+    height: 1.25rem;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    min-width: 2px;
+}
+.mode-bar.normal { background: var(--color-accent-green); }
+.mode-bar.critical { background: var(--color-accent-orange); }
+.mode-bar.continuous { background: var(--color-accent-red); }
+.mode-bar-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-obs-text-secondary);
+}
+.mode-bar-value {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-obs-text);
+    text-align: right;
+}
 
-            <!-- Section Statistiques -->
-            <section class="section stats-section">
-                <h2>Statistiques</h2>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-corrections">0</div>
-                        <div class="stat-label">Corrections</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-total-movement">0.00</div>
-                        <div class="stat-label">Deplacement total</div>
-                    </div>
-                    <div class="stat-card clockwise">
-                        <div class="stat-value" id="stat-cw">0.00</div>
-                        <div class="stat-label">Horaire (CW)</div>
-                    </div>
-                    <div class="stat-card counterclockwise">
-                        <div class="stat-value" id="stat-ccw">0.00</div>
-                        <div class="stat-label">Anti-horaire (CCW)</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="stat-avg-correction">0.00</div>
-                        <div class="stat-label">Correction moyenne</div>
-                    </div>
-                </div>
+/* ── Chart wrapper ── */
+.chart-wrapper {
+    background: var(--color-obs-dark);
+    border: 1px solid var(--color-obs-border);
+    border-radius: var(--radius-button);
+    padding: 0.5rem;
+    height: 250px;
+    position: relative;
+}
 
-                <!-- Distribution des modes -->
-                <div class="mode-distribution">
-                    <h3>Distribution des modes</h3>
-                    <div class="mode-bars">
-                        <div class="mode-bar-container">
-                            <div class="mode-bar normal" id="mode-bar-normal" style="width: 0%"></div>
-                            <span class="mode-bar-label">NORMAL</span>
-                            <span class="mode-bar-value" id="mode-time-normal">0s</span>
-                        </div>
-                        <div class="mode-bar-container">
-                            <div class="mode-bar critical" id="mode-bar-critical" style="width: 0%"></div>
-                            <span class="mode-bar-label">CRITICAL</span>
-                            <span class="mode-bar-value" id="mode-time-critical">0s</span>
-                        </div>
-                        <div class="mode-bar-container">
-                            <div class="mode-bar continuous" id="mode-bar-continuous" style="width: 0%"></div>
-                            <span class="mode-bar-label">CONTINUOUS</span>
-                            <span class="mode-bar-value" id="mode-time-continuous">0s</span>
-                        </div>
-                    </div>
-                </div>
-            </section>
+/* ── Chart legend ── */
+.chart-legend {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.legend-color, .legend-dot {
+    display: inline-block;
+    width: 24px;
+    height: 3px;
+    border-radius: 2px;
+    vertical-align: middle;
+    margin-right: 0.25rem;
+}
+.legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+.legend-color.normal { background: var(--color-accent-green); }
+.legend-color.critical { background: var(--color-accent-orange); }
+.legend-color.continuous { background: var(--color-accent-red); }
+.legend-dot.correction { background: var(--color-accent-red); }
 
-            <!-- Section Journal des corrections -->
-            <section class="section corrections-section">
-                <h2>Journal des corrections</h2>
-                <div class="table-container">
-                    <table class="data-table" id="corrections-table">
-                        <thead>
-                            <tr>
-                                <th>Heure</th>
-                                <th>Azimut</th>
-                                <th>Altitude</th>
-                                <th>Correction</th>
-                                <th>Mode</th>
-                            </tr>
-                        </thead>
-                        <tbody id="corrections-tbody">
-                            <tr><td colspan="5" class="empty">Aucune correction</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+/* ── Data tables ── */
+.session-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+}
+.session-table thead th {
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--color-obs-text-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--color-obs-border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.session-table tbody td {
+    padding: 0.35rem 0.75rem;
+    color: var(--color-obs-text-secondary);
+    border-bottom: 1px solid rgba(74, 61, 46, 0.3);
+}
+.session-table tbody tr:hover td {
+    background: rgba(212, 160, 85, 0.05);
+}
 
-            <!-- Section GOTO -->
-            <section class="section goto-section">
-                <h2>Mouvements GOTO</h2>
-                <div class="table-container">
-                    <table class="data-table" id="goto-table">
-                        <thead>
-                            <tr>
-                                <th>Heure</th>
-                                <th>Depart</th>
-                                <th>Cible</th>
-                                <th>Delta</th>
-                                <th>Raison</th>
-                            </tr>
-                        </thead>
-                        <tbody id="goto-tbody">
-                            <tr><td colspan="5" class="empty">Aucun GOTO</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-        </main>
+/* ── Correction values ── */
+.correction-value.positive { color: var(--color-accent-green); }
+.correction-value.negative { color: var(--color-accent-red); }
 
-        <!-- Pied de page -->
-        <footer class="footer">
-            <span>DriftApp v4.5 - Rapport de Session</span>
-            <span id="last-update">Derniere mise a jour: --</span>
-            <label class="auto-refresh">
-                <input type="checkbox" id="auto-refresh-toggle" checked>
-                Auto-refresh (5s)
-            </label>
-        </footer>
+/* ── Mode badges (in correction table) ── */
+.mode-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--radius-badge);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.mode-badge.normal { background: rgba(0, 210, 106, 0.15); color: var(--color-accent-green); }
+.mode-badge.critical { background: rgba(255, 165, 2, 0.15); color: var(--color-accent-orange); }
+.mode-badge.continuous { background: rgba(255, 71, 87, 0.15); color: var(--color-accent-red); }
+
+/* ── History items ── */
+.history-item {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--color-obs-border);
+    border-radius: var(--radius-button);
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--color-obs-dark);
+}
+.history-item:hover {
+    border-color: var(--color-accent-amber);
+    background: rgba(212, 160, 85, 0.05);
+}
+.history-item.selected {
+    border-color: var(--color-accent-amber);
+    background: rgba(212, 160, 85, 0.1);
+}
+
+/* ── Session status dot ── */
+.session-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: var(--color-obs-text-muted);
+    animation: session-pulse 2s infinite;
+}
+.session-status-dot.active { background: var(--color-accent-green); }
+.session-status-dot.inactive { background: var(--color-obs-text-muted); }
+.session-status-dot.history { background: var(--color-accent-amber); }
+.session-status-dot.error { background: var(--color-accent-red); }
+
+@keyframes session-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ── Refresh button spin ── */
+@keyframes session-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spinning { animation: session-spin 0.5s linear; }
+
+/* ── Table empty state ── */
+.session-table .empty {
+    text-align: center;
+    color: var(--color-obs-text-muted);
+    font-style: italic;
+    padding: 1rem;
+}
+</style>
+{% endblock %}
+
+{% block status_indicator %}
+<div class="flex items-center gap-1.5 text-xs font-mono" id="session-status" x-data>
+    <span class="session-status-dot"
+          :class="$store.session.statusClass"></span>
+    <span class="status-text text-obs-text-muted"
+          x-text="$store.session.statusText">--</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- ═══ Section Selecteur de Session ═══ -->
+<section class="panel panel-astro mb-4">
+    <div class="flex items-center justify-between mb-3">
+        <h2 class="section-title section-title-fire">Session</h2>
+        <div class="flex" x-data>
+            <button class="selector-tab" data-tab="current"
+                    :class="{ 'active': $store.session.currentTab === 'current' }"
+                    @click="$store.session.currentTab = 'current'">Session en cours</button>
+            <button class="selector-tab" data-tab="history"
+                    :class="{ 'active': $store.session.currentTab === 'history' }"
+                    @click="$store.session.currentTab = 'history'">Historique</button>
+        </div>
     </div>
 
-    <script src="/static/js/session.js?v=20251225b"></script>
-</body>
-</html>
+    <!-- Info session active -->
+    <div id="current-session-info" x-data x-show="$store.session.currentTab === 'current'">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+                <span class="text-xs text-obs-text-secondary">Objet</span>
+                <div class="font-mono text-sm text-obs-text mt-0.5" id="session-object">--</div>
+            </div>
+            <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+                <span class="text-xs text-obs-text-secondary">Duree</span>
+                <div class="font-mono text-sm text-obs-text mt-0.5" id="session-duration">--</div>
+            </div>
+            <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+                <span class="text-xs text-obs-text-secondary">RA / DEC</span>
+                <div class="font-mono text-sm text-obs-text mt-0.5" id="session-coords">-- / --</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste historique (cachee par defaut) -->
+    <div id="history-panel" x-data x-show="$store.session.currentTab === 'history'" class="max-h-72 overflow-y-auto">
+        <div id="history-list">
+            <div class="text-xs text-obs-text-muted text-center py-4">Chargement...</div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ Section Graphiques ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Evolution Altitude / Azimut</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div class="chart-wrapper">
+            <canvas id="altitude-chart"></canvas>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="azimut-chart"></canvas>
+        </div>
+    </div>
+    <div class="chart-legend mt-2 text-xs text-obs-text-secondary">
+        <div class="flex items-center gap-1">
+            <span class="legend-color normal"></span>
+            <span>NORMAL</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-color critical"></span>
+            <span>CRITICAL</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-color continuous"></span>
+            <span>CONTINUOUS</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-dot correction"></span>
+            <span>Correction</span>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ Section Statistiques ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Statistiques</h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div class="stat-card">
+            <div class="font-mono text-lg font-bold text-accent-amber" id="stat-corrections">0</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Corrections</div>
+        </div>
+        <div class="stat-card">
+            <div class="font-mono text-lg font-bold text-obs-text" id="stat-total-movement">0.00</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Deplacement total</div>
+        </div>
+        <div class="stat-card clockwise">
+            <div class="font-mono text-lg font-bold text-accent-green" id="stat-cw">0.00</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Horaire (CW)</div>
+        </div>
+        <div class="stat-card counterclockwise">
+            <div class="font-mono text-lg font-bold text-accent-red" id="stat-ccw">0.00</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Anti-horaire (CCW)</div>
+        </div>
+        <div class="stat-card">
+            <div class="font-mono text-lg font-bold text-obs-text" id="stat-avg-correction">0.00</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Correction moyenne</div>
+        </div>
+    </div>
+
+    <!-- Distribution des modes -->
+    <div class="mt-4">
+        <h3 class="text-xs font-display text-accent-amber mb-2 font-medium uppercase tracking-wide">Distribution des modes</h3>
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <div class="mode-bar-container">
+                <span class="mode-bar-label">NORMAL</span>
+                <div class="mode-bar normal" id="mode-bar-normal" style="width: 0%"></div>
+                <span class="mode-bar-value" id="mode-time-normal">0s</span>
+            </div>
+            <div class="mode-bar-container">
+                <span class="mode-bar-label">CRITICAL</span>
+                <div class="mode-bar critical" id="mode-bar-critical" style="width: 0%"></div>
+                <span class="mode-bar-value" id="mode-time-critical">0s</span>
+            </div>
+            <div class="mode-bar-container">
+                <span class="mode-bar-label">CONTINUOUS</span>
+                <div class="mode-bar continuous" id="mode-bar-continuous" style="width: 0%"></div>
+                <span class="mode-bar-value" id="mode-time-continuous">0s</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ Section Journal des corrections ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Journal des corrections</h2>
+    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto">
+        <table class="session-table" id="corrections-table">
+            <thead>
+                <tr>
+                    <th>Heure</th>
+                    <th>Azimut</th>
+                    <th>Altitude</th>
+                    <th>Correction</th>
+                    <th>Mode</th>
+                </tr>
+            </thead>
+            <tbody id="corrections-tbody">
+                <tr><td colspan="5" class="empty">Aucune correction</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ═══ Section GOTO ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Mouvements GOTO</h2>
+    <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden max-h-72 overflow-y-auto">
+        <table class="session-table" id="goto-table">
+            <thead>
+                <tr>
+                    <th>Heure</th>
+                    <th>Depart</th>
+                    <th>Cible</th>
+                    <th>Delta</th>
+                    <th>Raison</th>
+                </tr>
+            </thead>
+            <tbody id="goto-tbody">
+                <tr><td colspan="5" class="empty">Aucun GOTO</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block footer_extra %}
+<div class="flex items-center gap-3">
+    <span id="last-update" class="text-obs-text-muted">Derniere mise a jour: --</span>
+    <label class="flex items-center gap-1.5 text-obs-text-muted cursor-pointer">
+        <input type="checkbox" id="auto-refresh-toggle" x-data x-model="$store.session.autoRefresh" checked class="cursor-pointer accent-accent-amber">
+        Auto-refresh (5s)
+    </label>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/js/session.js?v=20260222a"></script>
+{% endblock %}

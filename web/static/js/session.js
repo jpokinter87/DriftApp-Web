@@ -33,17 +33,32 @@ const CONFIG = {
 };
 
 // =============================================================================
-// ÉTAT GLOBAL
+// ALPINE.JS STORE — pont entre vanilla JS et couche reactive
+// =============================================================================
+
+document.addEventListener('alpine:init', () => {
+    Alpine.store('session', {
+        // Status indicator
+        statusClass: '',
+        statusText: '--',
+        // Auto-refresh
+        autoRefresh: true,
+        // Tab switching
+        currentTab: 'current',
+    });
+});
+
+// =============================================================================
+// ÉTAT GLOBAL (vanilla JS — Chart.js, data, timers)
 // =============================================================================
 
 let state = {
-    currentTab: 'current',
-    autoRefresh: true,
     refreshTimer: null,
     altitudeChart: null,
     azimutChart: null,
     currentSessionData: null,
-    historyLoaded: false
+    historyLoaded: false,
+    _lastTab: 'current'
 };
 
 // =============================================================================
@@ -51,66 +66,54 @@ let state = {
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    initTabSwitcher();
-    initAutoRefresh();
     initCharts();
+    startRefreshTimer();
 
     // Charger les données initiales
     loadCurrentSession();
+
+    // Watch Alpine store pour sync auto-refresh et tab switching avec polling
+    setInterval(() => {
+        try {
+            const store = Alpine.store('session');
+
+            // Sync auto-refresh
+            if (store.autoRefresh && !state.refreshTimer) {
+                startRefreshTimer();
+            } else if (!store.autoRefresh && state.refreshTimer) {
+                stopRefreshTimer();
+            }
+
+            // Sync tab switching
+            if (store.currentTab !== state._lastTab) {
+                state._lastTab = store.currentTab;
+                onTabChanged(store.currentTab);
+            }
+        } catch (e) { /* Alpine pas encore pret */ }
+    }, 200);
 });
 
-function initTabSwitcher() {
-    const tabs = document.querySelectorAll('.selector-tab');
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            const tabName = tab.dataset.tab;
-            switchTab(tabName);
-        });
-    });
-}
-
-function switchTab(tabName) {
-    state.currentTab = tabName;
-
-    // Mettre à jour les onglets actifs
-    document.querySelectorAll('.selector-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
-    // Afficher/masquer les panneaux
-    const currentInfo = document.getElementById('current-session-info');
-    const historyPanel = document.getElementById('history-panel');
-
+/**
+ * Reagit au changement de tab (declenche par le watcher)
+ */
+function onTabChanged(tabName) {
     if (tabName === 'current') {
-        currentInfo.classList.remove('hidden');
-        historyPanel.classList.add('hidden');
         loadCurrentSession();
     } else {
-        currentInfo.classList.add('hidden');
-        historyPanel.classList.remove('hidden');
         if (!state.historyLoaded) {
             loadHistory();
         }
     }
 }
 
-function initAutoRefresh() {
-    const toggle = document.getElementById('auto-refresh-toggle');
-    toggle.addEventListener('change', (e) => {
-        state.autoRefresh = e.target.checked;
-        if (state.autoRefresh) {
-            startRefreshTimer();
-        } else {
-            stopRefreshTimer();
-        }
-    });
-
-    startRefreshTimer();
-}
-
 function startRefreshTimer() {
     stopRefreshTimer();
     state.refreshTimer = setInterval(() => {
-        if (state.currentTab === 'current') {
+        try {
+            if (Alpine.store('session').currentTab === 'current') {
+                loadCurrentSession();
+            }
+        } catch (e) {
             loadCurrentSession();
         }
     }, CONFIG.REFRESH_INTERVAL);
@@ -267,12 +270,9 @@ function updateSessionDisplay(data) {
 }
 
 function updateSessionStatus(status, text) {
-    const indicator = document.getElementById('session-status');
-    const dot = indicator.querySelector('.status-dot');
-    const textEl = indicator.querySelector('.status-text');
-
-    dot.className = 'status-dot ' + status;
-    textEl.textContent = text;
+    const store = Alpine.store('session');
+    store.statusClass = status;
+    store.statusText = text;
 }
 
 function updateStats(summary) {
@@ -342,14 +342,14 @@ function initCharts() {
                 title: {
                     display: true,
                     text: 'Temps (minutes)',
-                    color: '#a0a0a0'
+                    color: 'rgba(160, 144, 128, 1)'
                 },
-                ticks: { color: '#a0a0a0' },
-                grid: { color: '#333' }
+                ticks: { color: 'rgba(160, 144, 128, 1)' },
+                grid: { color: 'rgba(74, 61, 46, 0.5)' }
             },
             y: {
-                ticks: { color: '#a0a0a0' },
-                grid: { color: '#333' }
+                ticks: { color: 'rgba(160, 144, 128, 1)' },
+                grid: { color: 'rgba(74, 61, 46, 0.5)' }
             }
         }
     };
@@ -389,7 +389,7 @@ function initCharts() {
                     title: {
                         display: true,
                         text: 'Altitude (°)',
-                        color: '#a0a0a0'
+                        color: 'rgba(160, 144, 128, 1)'
                     }
                 }
             }
@@ -431,7 +431,7 @@ function initCharts() {
                     title: {
                         display: true,
                         text: 'Position Coupole (°)',
-                        color: '#a0a0a0'
+                        color: 'rgba(160, 144, 128, 1)'
                     }
                 }
             }
@@ -630,14 +630,14 @@ function displayHistory(sessions) {
 
         return `
             <div class="history-item" data-session-id="${session.session_id}">
-                <div class="history-item-header">
-                    <span class="history-object">${session.object_name || '--'}</span>
-                    <span class="history-actions">
-                        <button class="btn-delete" data-session-id="${session.session_id}" title="Supprimer">🗑</button>
-                        <span class="history-date">${dateStr} ${timeStr}</span>
+                <div class="flex items-center justify-between">
+                    <span class="font-mono text-sm text-accent-amber font-medium">${session.object_name || '--'}</span>
+                    <span class="flex items-center gap-2">
+                        <button class="btn-delete text-obs-text-muted hover:text-accent-red transition-colors cursor-pointer text-sm" data-session-id="${session.session_id}" title="Supprimer">&#x1F5D1;</button>
+                        <span class="text-xs text-obs-text-muted font-mono">${dateStr} ${timeStr}</span>
                     </span>
                 </div>
-                <div class="history-item-stats">
+                <div class="flex gap-3 mt-1 text-xs text-obs-text-secondary font-mono">
                     <span>Duree: ${formatDuration(session.duration_seconds || 0)}</span>
                     <span>Corrections: ${session.total_corrections || 0}</span>
                 </div>
