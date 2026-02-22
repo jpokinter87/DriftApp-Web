@@ -9,7 +9,6 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- [ ] Page Systeme modernisee (cards composants, IPC monitoring, config)
 - [ ] Page Session modernisee (selecteur, charts, tables, stats)
 - [ ] Responsive mobile/tablette + animations coherentes
 - [ ] Nettoyage CSS legacy + accessibilite de base
@@ -22,6 +21,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Panels observatory avec champ etoile SVG et glow effects — Phase 2
 - ✓ Alpine.js store reactif pour modales, logs et tracking — Phase 2
 - ✓ Zero regression fonctionnelle sur dashboard — Phase 2
+- ✓ Page Systeme modernisee (cards, IPC, config, Alpine.store) — Phase 3
 
 ## Constraints
 - Tailwind v4 standalone CLI (pas de Node.js)
@@ -38,6 +38,9 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Champ etoile aleatoire (500 pts) SVG | 2 | Plus convaincant que des constellations pour public astronome |
 | Alpine.store bridge pattern | 2 | Migration progressive: Alpine pour UI, vanilla JS pour logique |
 | x-cloak pour anti-flash | 2 | Evite le flash de contenu non-initialise |
+| Pages secondaires: inline CSS pour styles partages | 3 | dashboard.css non charge hors dashboard, duplication inline |
+| Alpine.store('system') bridge | 3 | Meme pattern que dashboard pour status, badges, auto-refresh |
+| TemplateView extra_context pour nav | 3 | active_tab pour highlighting nav sur pages statiques |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -56,4 +59,4 @@ Quick Reference:
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-02-22 after Phase 2*
+*Last updated: 2026-02-22 after Phase 3*

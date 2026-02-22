@@ -20,5 +20,5 @@ urlpatterns = [
     path('update/apply/', views.apply_update, name='update_apply'),
 
     # Page HTML de diagnostic système
-    path('system/', TemplateView.as_view(template_name='system.html'), name='system_page'),
+    path('system/', TemplateView.as_view(template_name='system.html', extra_context={'active_tab': 'system'}), name='system_page'),
 ]

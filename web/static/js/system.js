@@ -2,17 +2,35 @@
  * DriftApp - Page Diagnostic Systeme
  *
  * Rafraichissement automatique des donnees systeme via l'API /api/health/diagnostic/
+ * Alpine.store('system') pour status global, auto-refresh et badges composants
  */
 
 // Configuration
 const REFRESH_INTERVAL = 2000; // 2 secondes
 const API_ENDPOINT = '/api/health/diagnostic/';
 
-// Elements DOM (caches au chargement)
-let elements = {};
-
 // Timer de rafraichissement
 let refreshTimer = null;
+
+// Elements DOM (caches au chargement — uniquement ceux non geres par Alpine)
+let elements = {};
+
+/**
+ * Alpine.js store — pont entre vanilla JS et couche reactive
+ */
+document.addEventListener('alpine:init', () => {
+    Alpine.store('system', {
+        // Global status
+        globalHealthy: null,
+        globalStatusText: 'Chargement...',
+        // Auto-refresh
+        autoRefresh: true,
+        // Motor Service badge
+        motor: { badgeText: '--', badgeClass: '', cardClass: '' },
+        // Encoder Daemon badge
+        encoder: { badgeText: '--', badgeClass: '', cardClass: '' },
+    });
+});
 
 /**
  * Initialisation au chargement de la page
@@ -22,39 +40,44 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     fetchDiagnostic();
     startAutoRefresh();
+
+    // Watch Alpine store autoRefresh pour sync avec polling
+    const checkAutoRefresh = () => {
+        try {
+            const store = Alpine.store('system');
+            if (store.autoRefresh && !refreshTimer) {
+                startAutoRefresh();
+            } else if (!store.autoRefresh && refreshTimer) {
+                stopAutoRefresh();
+            }
+        } catch (e) { /* Alpine pas encore pret */ }
+    };
+    setInterval(checkAutoRefresh, 500);
 });
 
 /**
- * Cache les references aux elements DOM
+ * Cache les references aux elements DOM (uniquement ceux non geres par Alpine)
  */
 function cacheElements() {
     elements = {
-        // Global
-        globalStatus: document.getElementById('global-status'),
-        globalStatusDot: document.querySelector('#global-status .status-dot'),
-        globalStatusText: document.querySelector('#global-status .status-text'),
+        // Global (refresh button only — status gere par Alpine)
         btnRefresh: document.getElementById('btn-refresh'),
-        autoRefreshToggle: document.getElementById('auto-refresh-toggle'),
         lastUpdate: document.getElementById('last-update'),
 
-        // Motor Service
-        motorCard: document.getElementById('motor-card'),
-        motorStatusBadge: document.getElementById('motor-status-badge'),
+        // Motor Service (detail values — badge gere par Alpine)
         motorStatus: document.getElementById('motor-status'),
         motorMode: document.getElementById('motor-mode'),
         motorPosition: document.getElementById('motor-position'),
         motorSimulation: document.getElementById('motor-simulation'),
         motorFileAge: document.getElementById('motor-file-age'),
 
-        // Encoder Daemon
-        encoderCard: document.getElementById('encoder-card'),
-        encoderStatusBadge: document.getElementById('encoder-status-badge'),
+        // Encoder Daemon (detail values — badge gere par Alpine)
         encoderStatus: document.getElementById('encoder-status'),
         encoderAngle: document.getElementById('encoder-angle'),
         encoderCalibrated: document.getElementById('encoder-calibrated'),
         encoderFileAge: document.getElementById('encoder-file-age'),
 
-        // IPC Files
+        // IPC Files (restent en vanilla JS)
         ipcStatusFresh: document.getElementById('ipc-status-fresh'),
         ipcStatusContent: document.getElementById('ipc-status-content'),
         ipcEncoderFresh: document.getElementById('ipc-encoder-fresh'),
@@ -62,7 +85,7 @@ function cacheElements() {
         ipcCommandFresh: document.getElementById('ipc-command-fresh'),
         ipcCommandContent: document.getElementById('ipc-command-content'),
 
-        // Config
+        // Config (restent en vanilla JS)
         siteName: document.getElementById('site-name'),
         siteLat: document.getElementById('site-lat'),
         siteLon: document.getElementById('site-lon'),
@@ -83,18 +106,11 @@ function cacheElements() {
  * Configure les ecouteurs d'evenements
  */
 function setupEventListeners() {
+    // Refresh button (Alpine x-model gere le toggle auto-refresh)
     elements.btnRefresh.addEventListener('click', () => {
         elements.btnRefresh.classList.add('spinning');
         fetchDiagnostic();
         setTimeout(() => elements.btnRefresh.classList.remove('spinning'), 500);
-    });
-
-    elements.autoRefreshToggle.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            startAutoRefresh();
-        } else {
-            stopAutoRefresh();
-        }
     });
 }
 
@@ -134,7 +150,7 @@ async function fetchDiagnostic() {
  * Met a jour l'interface avec les donnees
  */
 function updateUI(data) {
-    // Status global
+    // Status global (Alpine store)
     updateGlobalStatus(data.overall_healthy, data.overall_healthy ? 'Systeme OK' : 'Probleme detecte');
 
     // Timestamp
@@ -153,23 +169,29 @@ function updateUI(data) {
 }
 
 /**
- * Met a jour le status global
+ * Met a jour le status global (via Alpine store)
  */
 function updateGlobalStatus(healthy, text) {
-    elements.globalStatusDot.className = 'status-dot ' + (healthy ? 'healthy' : 'unhealthy');
-    elements.globalStatusText.textContent = text;
+    const store = Alpine.store('system');
+    store.globalHealthy = healthy;
+    store.globalStatusText = text;
 }
 
 /**
  * Met a jour la section Motor Service
  */
 function updateMotorService(motor) {
-    const statusClass = motor.healthy ? 'healthy' : (motor.status === 'stale' ? 'stale' : 'unhealthy');
+    // Badge et card border via Alpine store
+    const store = Alpine.store('system');
+    const badgeClass = motor.healthy ? 'sys-badge-ok' : (motor.status === 'stale' ? 'sys-badge-stale' : 'sys-badge-error');
+    const cardClass = motor.healthy ? 'sys-card-healthy' : (motor.status === 'stale' ? 'sys-card-stale' : 'sys-card-unhealthy');
+    store.motor = {
+        badgeText: motor.healthy ? 'OK' : motor.status.toUpperCase(),
+        badgeClass: badgeClass,
+        cardClass: cardClass
+    };
 
-    elements.motorCard.className = 'component-card ' + statusClass;
-    elements.motorStatusBadge.className = 'component-status ' + statusClass;
-    elements.motorStatusBadge.textContent = motor.healthy ? 'OK' : motor.status.toUpperCase();
-
+    // Detail values via getElementById (simple text updates)
     elements.motorStatus.textContent = motor.status;
 
     if (motor.healthy && motor.details) {
@@ -193,12 +215,17 @@ function updateMotorService(motor) {
  * Met a jour la section Encoder Daemon
  */
 function updateEncoderDaemon(encoder) {
-    const statusClass = encoder.healthy ? 'healthy' : (encoder.status === 'stale' ? 'stale' : 'unhealthy');
+    // Badge et card border via Alpine store
+    const store = Alpine.store('system');
+    const badgeClass = encoder.healthy ? 'sys-badge-ok' : (encoder.status === 'stale' ? 'sys-badge-stale' : 'sys-badge-error');
+    const cardClass = encoder.healthy ? 'sys-card-healthy' : (encoder.status === 'stale' ? 'sys-card-stale' : 'sys-card-unhealthy');
+    store.encoder = {
+        badgeText: encoder.healthy ? 'OK' : encoder.status.toUpperCase(),
+        badgeClass: badgeClass,
+        cardClass: cardClass
+    };
 
-    elements.encoderCard.className = 'component-card ' + statusClass;
-    elements.encoderStatusBadge.className = 'component-status ' + statusClass;
-    elements.encoderStatusBadge.textContent = encoder.healthy ? 'OK' : encoder.status.toUpperCase();
-
+    // Detail values via getElementById
     elements.encoderStatus.textContent = encoder.status;
 
     if (encoder.healthy && encoder.details) {
@@ -220,7 +247,6 @@ function updateEncoderDaemon(encoder) {
  * Met a jour les fichiers IPC
  */
 function updateIpcFiles(ipc) {
-    // motor_status.json
     updateIpcCard(
         elements.ipcStatusFresh,
         elements.ipcStatusContent,
@@ -228,7 +254,6 @@ function updateIpcFiles(ipc) {
         ipc.freshness.status_file
     );
 
-    // ems22_position.json
     updateIpcCard(
         elements.ipcEncoderFresh,
         elements.ipcEncoderContent,
@@ -236,7 +261,6 @@ function updateIpcFiles(ipc) {
         ipc.freshness.encoder_file
     );
 
-    // motor_command.json
     updateIpcCard(
         elements.ipcCommandFresh,
         elements.ipcCommandContent,
@@ -250,11 +274,11 @@ function updateIpcFiles(ipc) {
  */
 function updateIpcCard(freshEl, contentEl, content, freshness) {
     if (!freshness.exists) {
-        freshEl.className = 'ipc-freshness missing';
+        freshEl.className = 'ipc-fresh ipc-fresh-missing';
         freshEl.textContent = 'Non trouve';
         contentEl.textContent = '(fichier non trouve)';
     } else if (!freshness.fresh) {
-        freshEl.className = 'ipc-freshness stale';
+        freshEl.className = 'ipc-fresh ipc-fresh-stale';
         freshEl.textContent = formatAge(freshness.age_sec);
         contentEl.textContent = content.content
             ? JSON.stringify(content.content, null, 2)
@@ -262,7 +286,7 @@ function updateIpcCard(freshEl, contentEl, content, freshness) {
                 ? '(aucune commande en attente)'
                 : content.error || '(erreur lecture)';
     } else {
-        freshEl.className = 'ipc-freshness fresh';
+        freshEl.className = 'ipc-fresh ipc-fresh-ok';
         freshEl.textContent = formatAge(freshness.age_sec);
         contentEl.textContent = content.content
             ? JSON.stringify(content.content, null, 2)
@@ -281,7 +305,6 @@ function updateConfig(config) {
         return;
     }
 
-    // Site
     if (config.site) {
         elements.siteName.textContent = config.site.nom || '--';
         elements.siteLat.textContent = config.site.latitude ? config.site.latitude + '°' : '--';
@@ -289,7 +312,6 @@ function updateConfig(config) {
         elements.siteAlt.textContent = config.site.altitude ? config.site.altitude + 'm' : '--';
     }
 
-    // Moteur
     if (config.moteur) {
         elements.motorSteps.textContent = config.moteur.steps_per_revolution || '--';
         elements.motorMicrosteps.textContent = config.moteur.microsteps || '--';
@@ -299,7 +321,6 @@ function updateConfig(config) {
             : '--';
     }
 
-    // Seuils
     if (config.thresholds) {
         elements.thresholdFeedback.textContent = config.thresholds.feedback_min_deg
             ? config.thresholds.feedback_min_deg + '°' : '--';
@@ -311,15 +332,14 @@ function updateConfig(config) {
             ? config.thresholds.default_tolerance_deg + '°' : '--';
     }
 
-    // Modes adaptatifs
     if (config.adaptive_modes) {
         let html = '';
         for (const [name, mode] of Object.entries(config.adaptive_modes)) {
-            html += `<tr>
-                <td>${name}</td>
-                <td>${mode.interval_sec}s</td>
-                <td>${mode.threshold_deg}°</td>
-                <td>${(mode.motor_delay * 1000).toFixed(2)}ms</td>
+            html += `<tr class="border-b border-obs-border/50">
+                <td class="py-1 pr-2 text-obs-text">${name}</td>
+                <td class="py-1 pr-2">${mode.interval_sec}s</td>
+                <td class="py-1 pr-2">${mode.threshold_deg}°</td>
+                <td class="py-1">${(mode.motor_delay * 1000).toFixed(2)}ms</td>
             </tr>`;
         }
         elements.modesTbody.innerHTML = html || '<tr><td colspan="4">--</td></tr>';

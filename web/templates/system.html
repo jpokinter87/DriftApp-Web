@@ -1,239 +1,352 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DriftApp - Diagnostic Systeme</title>
-    <link rel="stylesheet" href="/static/css/system.css?v=20251231c">
-</head>
-<body>
-    <div class="container">
-        <!-- En-tete avec navigation -->
-        <header class="header">
-            <div class="header-left">
-                <h1>DriftApp</h1>
-                <span class="subtitle">Diagnostic Systeme</span>
+{% extends "base.html" %}
+
+{% block title %}Diagnostic Systeme{% endblock %}
+
+{% block extra_css %}
+<style>[x-cloak] { display: none !important; }</style>
+<style>
+/* ── Shared styles (from dashboard.css, needed on system page) ── */
+.panel-astro {
+    background-image: url('/static/img/constellations-pattern.svg');
+    background-size: 400px 400px;
+    background-repeat: repeat;
+    position: relative;
+}
+.panel-astro:hover {
+    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15), 0 0 30px rgba(212, 160, 85, 0.05);
+    transition: box-shadow 0.3s ease;
+}
+.section-title-fire {
+    font-size: 1rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: transparent !important;
+    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
+}
+</style>
+<style>
+/* ── Status badges (component health) ── */
+.sys-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-badge);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+    letter-spacing: 0.03em;
+}
+.sys-badge-ok {
+    background: rgba(0, 210, 106, 0.15);
+    color: var(--color-accent-green);
+}
+.sys-badge-stale {
+    background: rgba(255, 165, 2, 0.15);
+    color: var(--color-accent-orange);
+}
+.sys-badge-error {
+    background: rgba(255, 71, 87, 0.15);
+    color: var(--color-accent-red);
+}
+
+/* ── Component card dynamic borders ── */
+.sys-card-healthy { border-color: var(--color-accent-green); }
+.sys-card-stale { border-color: var(--color-accent-orange); }
+.sys-card-unhealthy { border-color: var(--color-accent-red); }
+
+/* ── IPC freshness badges ── */
+.ipc-fresh {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-badge);
+    font-family: var(--font-mono);
+    font-weight: 500;
+}
+.ipc-fresh-ok {
+    background: rgba(0, 210, 106, 0.15);
+    color: var(--color-accent-green);
+}
+.ipc-fresh-stale {
+    background: rgba(255, 165, 2, 0.15);
+    color: var(--color-accent-orange);
+}
+.ipc-fresh-missing {
+    background: rgba(255, 71, 87, 0.15);
+    color: var(--color-accent-red);
+}
+
+/* ── IPC JSON content ── */
+.ipc-json {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    line-height: 1.5;
+    background: var(--color-obs-dark);
+    color: var(--color-obs-text-secondary);
+    max-height: 100px;
+    overflow-y: auto;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* ── Refresh button spin ── */
+@keyframes sys-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.spinning {
+    animation: sys-spin 0.5s linear;
+}
+
+/* ── Status dot pulse (system page) ── */
+.sys-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    background: var(--color-obs-text-muted);
+    animation: sys-pulse 2s infinite;
+}
+.sys-status-dot.healthy { background: var(--color-accent-green); }
+.sys-status-dot.unhealthy { background: var(--color-accent-red); }
+.sys-status-dot.stale { background: var(--color-accent-orange); }
+
+@keyframes sys-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+</style>
+{% endblock %}
+
+{% block status_indicator %}
+<div class="flex items-center gap-1.5 text-xs font-mono" id="global-status" x-data>
+    <span class="sys-status-dot"
+          :class="{ 'healthy': $store.system.globalHealthy === true,
+                    'unhealthy': $store.system.globalHealthy === false }"></span>
+    <span class="status-text text-obs-text-muted"
+          x-text="$store.system.globalStatusText">Chargement...</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- ═══ Section Composants ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Composants</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+        <!-- Motor Service -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3 transition-colors duration-200"
+             id="motor-card" x-data :class="$store.system.motor.cardClass">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-xl opacity-70">&#x2699;</span>
+                <h3 class="flex-1 font-display text-sm font-medium text-obs-text">Motor Service</h3>
+                <span class="sys-badge" id="motor-status-badge"
+                      :class="$store.system.motor.badgeClass"
+                      x-text="$store.system.motor.badgeText">--</span>
             </div>
-            <nav class="nav-tabs">
-                <a href="/" class="nav-tab">Controle</a>
-                <a href="/api/health/system/" class="nav-tab active">Systeme</a>
-                <a href="/session/" class="nav-tab">Session</a>
-            </nav>
-            <div class="header-right">
-                <div class="status-indicator" id="global-status">
-                    <span class="status-dot"></span>
-                    <span class="status-text">Chargement...</span>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Status:</span>
+                    <span class="font-mono text-obs-text" id="motor-status">--</span>
                 </div>
-                <button id="btn-refresh" class="btn-refresh" title="Rafraichir">&#x21bb;</button>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Mode:</span>
+                    <span class="font-mono text-obs-text" id="motor-mode">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Position:</span>
+                    <span class="font-mono text-obs-text" id="motor-position">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Simulation:</span>
+                    <span class="font-mono text-obs-text" id="motor-simulation">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Fichier age:</span>
+                    <span class="font-mono text-obs-text" id="motor-file-age">--</span>
+                </div>
             </div>
-        </header>
+        </div>
 
-        <!-- Contenu principal -->
-        <main class="main-content">
-            <!-- Section Composants -->
-            <section class="section components-section">
-                <h2>Composants</h2>
-                <div class="components-grid">
-                    <!-- Motor Service -->
-                    <div class="component-card" id="motor-card">
-                        <div class="component-header">
-                            <span class="component-icon">&#x2699;</span>
-                            <h3>Motor Service</h3>
-                            <span class="component-status" id="motor-status-badge">--</span>
-                        </div>
-                        <div class="component-details" id="motor-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Status:</span>
-                                <span class="detail-value" id="motor-status">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Mode:</span>
-                                <span class="detail-value" id="motor-mode">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Position:</span>
-                                <span class="detail-value" id="motor-position">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Simulation:</span>
-                                <span class="detail-value" id="motor-simulation">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Fichier age:</span>
-                                <span class="detail-value" id="motor-file-age">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Encoder Daemon -->
-                    <div class="component-card" id="encoder-card">
-                        <div class="component-header">
-                            <span class="component-icon">&#x25CE;</span>
-                            <h3>Encoder Daemon</h3>
-                            <span class="component-status" id="encoder-status-badge">--</span>
-                        </div>
-                        <div class="component-details" id="encoder-details">
-                            <div class="detail-row">
-                                <span class="detail-label">Status:</span>
-                                <span class="detail-value" id="encoder-status">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Angle:</span>
-                                <span class="detail-value" id="encoder-angle">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Calibre:</span>
-                                <span class="detail-value" id="encoder-calibrated">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Fichier age:</span>
-                                <span class="detail-value" id="encoder-file-age">--</span>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Encoder Daemon -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3 transition-colors duration-200"
+             id="encoder-card" x-data :class="$store.system.encoder.cardClass">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="text-xl opacity-70">&#x25CE;</span>
+                <h3 class="flex-1 font-display text-sm font-medium text-obs-text">Encoder Daemon</h3>
+                <span class="sys-badge" id="encoder-status-badge"
+                      :class="$store.system.encoder.badgeClass"
+                      x-text="$store.system.encoder.badgeText">--</span>
+            </div>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Status:</span>
+                    <span class="font-mono text-obs-text" id="encoder-status">--</span>
                 </div>
-            </section>
-
-            <!-- Section Fichiers IPC -->
-            <section class="section ipc-section">
-                <h2>Fichiers IPC (temps reel)</h2>
-                <div class="ipc-grid">
-                    <!-- motor_status.json -->
-                    <div class="ipc-card">
-                        <div class="ipc-header">
-                            <span class="ipc-filename">motor_status.json</span>
-                            <span class="ipc-freshness" id="ipc-status-fresh">--</span>
-                        </div>
-                        <pre class="ipc-content" id="ipc-status-content">Chargement...</pre>
-                    </div>
-
-                    <!-- ems22_position.json -->
-                    <div class="ipc-card">
-                        <div class="ipc-header">
-                            <span class="ipc-filename">ems22_position.json</span>
-                            <span class="ipc-freshness" id="ipc-encoder-fresh">--</span>
-                        </div>
-                        <pre class="ipc-content" id="ipc-encoder-content">Chargement...</pre>
-                    </div>
-
-                    <!-- motor_command.json -->
-                    <div class="ipc-card">
-                        <div class="ipc-header">
-                            <span class="ipc-filename">motor_command.json</span>
-                            <span class="ipc-freshness" id="ipc-command-fresh">--</span>
-                        </div>
-                        <pre class="ipc-content" id="ipc-command-content">Chargement...</pre>
-                    </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Angle:</span>
+                    <span class="font-mono text-obs-text" id="encoder-angle">--</span>
                 </div>
-            </section>
-
-            <!-- Section Configuration -->
-            <section class="section config-section">
-                <h2>Configuration Active</h2>
-                <div class="config-grid">
-                    <!-- Site -->
-                    <div class="config-card">
-                        <h3>Site</h3>
-                        <div class="config-content" id="config-site">
-                            <div class="detail-row">
-                                <span class="detail-label">Nom:</span>
-                                <span class="detail-value" id="site-name">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Latitude:</span>
-                                <span class="detail-value" id="site-lat">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Longitude:</span>
-                                <span class="detail-value" id="site-lon">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Altitude:</span>
-                                <span class="detail-value" id="site-alt">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Moteur -->
-                    <div class="config-card">
-                        <h3>Moteur</h3>
-                        <div class="config-content" id="config-motor">
-                            <div class="detail-row">
-                                <span class="detail-label">Steps/rev:</span>
-                                <span class="detail-value" id="motor-steps">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Microsteps:</span>
-                                <span class="detail-value" id="motor-microsteps">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Gear ratio:</span>
-                                <span class="detail-value" id="motor-gear">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Delay base:</span>
-                                <span class="detail-value" id="motor-delay">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Seuils -->
-                    <div class="config-card">
-                        <h3>Seuils</h3>
-                        <div class="config-content" id="config-thresholds">
-                            <div class="detail-row">
-                                <span class="detail-label">Feedback min:</span>
-                                <span class="detail-value" id="threshold-feedback">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Large mvt:</span>
-                                <span class="detail-value" id="threshold-large">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Protection:</span>
-                                <span class="detail-value" id="threshold-protection">--</span>
-                            </div>
-                            <div class="detail-row">
-                                <span class="detail-label">Tolerance:</span>
-                                <span class="detail-value" id="threshold-tolerance">--</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Modes adaptatifs -->
-                    <div class="config-card">
-                        <h3>Modes Adaptatifs</h3>
-                        <div class="config-content" id="config-modes">
-                            <table class="modes-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mode</th>
-                                        <th>Interval</th>
-                                        <th>Seuil</th>
-                                        <th>Delay</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="modes-tbody">
-                                    <tr><td colspan="4">Chargement...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Calibre:</span>
+                    <span class="font-mono text-obs-text" id="encoder-calibrated">--</span>
                 </div>
-            </section>
-        </main>
-
-        <!-- Pied de page -->
-        <footer class="footer">
-            <span>DriftApp v4.4 - Diagnostic Systeme</span>
-            <span id="last-update">Derniere mise a jour: --</span>
-            <label class="auto-refresh">
-                <input type="checkbox" id="auto-refresh-toggle" checked>
-                Auto-refresh (2s)
-            </label>
-        </footer>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Fichier age:</span>
+                    <span class="font-mono text-obs-text" id="encoder-file-age">--</span>
+                </div>
+            </div>
+        </div>
     </div>
+</section>
 
-    <script src="/static/js/system.js"></script>
-</body>
-</html>
+<!-- ═══ Section Fichiers IPC ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Fichiers IPC (temps reel)</h2>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+
+        <!-- motor_status.json -->
+        <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden">
+            <div class="flex justify-between items-center px-3 py-2 bg-black/30 border-b border-obs-border">
+                <span class="font-mono text-xs text-accent-amber">motor_status.json</span>
+                <span class="ipc-fresh" id="ipc-status-fresh">--</span>
+            </div>
+            <pre class="ipc-json" id="ipc-status-content">Chargement...</pre>
+        </div>
+
+        <!-- ems22_position.json -->
+        <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden">
+            <div class="flex justify-between items-center px-3 py-2 bg-black/30 border-b border-obs-border">
+                <span class="font-mono text-xs text-accent-amber">ems22_position.json</span>
+                <span class="ipc-fresh" id="ipc-encoder-fresh">--</span>
+            </div>
+            <pre class="ipc-json" id="ipc-encoder-content">Chargement...</pre>
+        </div>
+
+        <!-- motor_command.json -->
+        <div class="bg-obs-dark rounded-button border border-obs-border overflow-hidden">
+            <div class="flex justify-between items-center px-3 py-2 bg-black/30 border-b border-obs-border">
+                <span class="font-mono text-xs text-accent-amber">motor_command.json</span>
+                <span class="ipc-fresh" id="ipc-command-fresh">--</span>
+            </div>
+            <pre class="ipc-json" id="ipc-command-content">Chargement...</pre>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ Section Configuration (placeholder — Plan 03-02) ═══ -->
+<section class="panel panel-astro mb-4">
+    <h2 class="section-title section-title-fire mb-3">Configuration Active</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+        <!-- Site -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Site</h3>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Nom:</span>
+                    <span class="font-mono text-obs-text" id="site-name">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Latitude:</span>
+                    <span class="font-mono text-obs-text" id="site-lat">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Longitude:</span>
+                    <span class="font-mono text-obs-text" id="site-lon">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Altitude:</span>
+                    <span class="font-mono text-obs-text" id="site-alt">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Moteur -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Moteur</h3>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Steps/rev:</span>
+                    <span class="font-mono text-obs-text" id="motor-steps">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Microsteps:</span>
+                    <span class="font-mono text-obs-text" id="motor-microsteps">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Gear ratio:</span>
+                    <span class="font-mono text-obs-text" id="motor-gear">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Delay base:</span>
+                    <span class="font-mono text-obs-text" id="motor-delay">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seuils -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Seuils</h3>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Feedback min:</span>
+                    <span class="font-mono text-obs-text" id="threshold-feedback">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Large mvt:</span>
+                    <span class="font-mono text-obs-text" id="threshold-large">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Protection:</span>
+                    <span class="font-mono text-obs-text" id="threshold-protection">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Tolerance:</span>
+                    <span class="font-mono text-obs-text" id="threshold-tolerance">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modes Adaptatifs -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Modes Adaptatifs</h3>
+            <table class="w-full text-xs border-collapse">
+                <thead>
+                    <tr>
+                        <th class="text-left text-obs-text-muted font-normal pb-1">Mode</th>
+                        <th class="text-left text-obs-text-muted font-normal pb-1">Interval</th>
+                        <th class="text-left text-obs-text-muted font-normal pb-1">Seuil</th>
+                        <th class="text-left text-obs-text-muted font-normal pb-1">Delay</th>
+                    </tr>
+                </thead>
+                <tbody id="modes-tbody" class="font-mono">
+                    <tr><td colspan="4" class="text-obs-text-muted py-1">Chargement...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block footer_extra %}
+<div class="flex items-center gap-3">
+    <span id="last-update" class="text-obs-text-muted">Derniere mise a jour: --</span>
+    <button id="btn-refresh" class="text-obs-text-secondary hover:text-accent-amber transition-colors text-base cursor-pointer" title="Rafraichir">&#x21bb;</button>
+    <label class="flex items-center gap-1.5 text-obs-text-muted cursor-pointer">
+        <input type="checkbox" id="auto-refresh-toggle" x-data x-model="$store.system.autoRefresh" class="cursor-pointer accent-accent-amber">
+        Auto-refresh (2s)
+    </label>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/system.js?v=20260222a"></script>
+{% endblock %}
