@@ -49,3 +49,7 @@ capture_*.png
 
 # Précédente version
 Dome_v4/
+
+# Tailwind CSS
+tailwindcss
+web/static/css/tailwind-output.css

@@ -2,7 +2,40 @@
  * DriftApp Web - Dashboard JavaScript
  *
  * Gère l'interface utilisateur et la communication avec l'API REST.
+ * Alpine.js store pour les modales, logs et visibilité tracking.
  */
+
+// =========================================================================
+// Alpine.js Store — Couche réactive (modales, logs, tracking visibility)
+// =========================================================================
+
+document.addEventListener('alpine:init', () => {
+    Alpine.store('dashboard', {
+        // GOTO Modal visibility
+        gotoModalVisible: false,
+        // Update Modal visibility
+        updateModalVisible: false,
+        // Update Modal state
+        updateShowProgress: false,
+        updateShowError: false,
+        updateButtonsDisabled: false,
+        // Tracking panel visibility
+        trackingVisible: false,
+        // Logs (reactive array)
+        logs: [],
+
+        addLog(message, type = 'info') {
+            this.logs.unshift({
+                message,
+                type,
+                time: new Date().toLocaleTimeString()
+            });
+            if (this.logs.length > 50) {
+                this.logs.length = 50;
+            }
+        }
+    });
+});
 
 // Configuration
 const API_BASE = '';
@@ -370,7 +403,6 @@ async function gotoPosition() {
 // =========================================================================
 
 function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
-    if (!elements.gotoModal) return;
 
     // Mémoriser la position de départ et le timestamp pour le calcul de position estimée
     gotoStartPosition = startPos;
@@ -421,15 +453,13 @@ function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
     // Mettre à jour la position actuelle
     updateGotoModalPosition(currentPos, startPos, targetPos);
 
-    // Afficher la modal
-    elements.gotoModal.classList.remove('hidden');
+    // Afficher la modal via Alpine.js store
+    Alpine.store('dashboard').gotoModalVisible = true;
     gotoModalVisible = true;
 }
 
 function hideGotoModal() {
-    if (!elements.gotoModal) return;
-
-    elements.gotoModal.classList.add('hidden');
+    Alpine.store('dashboard').gotoModalVisible = false;
     gotoModalVisible = false;
     gotoStartPosition = null;
     gotoStartTime = null;
@@ -701,7 +731,7 @@ function updateTrackingDisplay(motor) {
             initialSyncDone = true;
         }
 
-        elements.trackingInfo.classList.remove('hidden');
+        Alpine.store('dashboard').trackingVisible = true;
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
 
@@ -784,7 +814,7 @@ function updateTrackingDisplay(motor) {
             });
         }
     } else {
-        elements.trackingInfo.classList.add('hidden');
+        Alpine.store('dashboard').trackingVisible = false;
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
 
@@ -1323,171 +1353,53 @@ function formatHMS(degrees, precision = 0) {
 // =========================================================================
 
 function log(message, type = 'info') {
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-
-    elements.logs.insertBefore(entry, elements.logs.firstChild);
-
-    // Limiter à 50 entrées
-    while (elements.logs.children.length > 50) {
-        elements.logs.removeChild(elements.logs.lastChild);
+    // Utiliser le store Alpine.js pour les logs réactifs
+    const store = Alpine.store('dashboard');
+    if (store) {
+        store.addLog(message, type);
     }
+}
+
+// Alias pour les appels legacy (addLog utilisé dans updateTrackingDisplay)
+function addLog(message, type = 'info') {
+    log(message, type);
 }
 
 // =========================================================================
 // Update Notification System
 // =========================================================================
 
-// Elements for update modal
-const updateElements = {
-    modal: document.getElementById('update-modal'),
-    currentVersion: document.getElementById('update-current-version'),
-    currentCommit: document.getElementById('update-current-commit'),
-    newCommit: document.getElementById('update-new-commit'),
-    commitsBehind: document.getElementById('update-commits-behind'),
-    commitMessages: document.getElementById('update-commit-messages'),
-    changesList: document.getElementById('update-changes-list'),
-    progress: document.getElementById('update-progress'),
-    progressText: document.getElementById('update-progress-text'),
-    error: document.getElementById('update-error'),
-    errorText: document.getElementById('update-error-text'),
-    buttons: document.getElementById('update-buttons'),
-    btnLater: document.getElementById('btn-update-later'),
-    btnNow: document.getElementById('btn-update-now'),
-    // Update check button in header
-    btnCheckUpdate: document.getElementById('btn-check-update'),
-    updateBadge: document.getElementById('update-badge')
-};
+// Update modal: éléments gérés via Alpine.js store + getElementById ponctuel
 
 // Store update data
 let updateData = null;
-// Track if update is available (for badge display)
-let updateAvailable = false;
 
 /**
  * Check for updates on page load.
  * Called once during initialization after a short delay.
- * @param {boolean} showUpToDate - Whether to show "up to date" message if no update
  */
-async function checkForUpdates(showUpToDate = false) {
+async function checkForUpdates() {
     try {
         const response = await fetch('/api/health/update/check/');
         if (!response.ok) {
             console.warn('Update check failed:', response.status);
-            if (showUpToDate) {
-                log('Erreur lors de la verification des mises a jour', 'error');
-            }
-            return { error: true };
+            return;
         }
 
         const result = await response.json();
 
         if (result.error) {
             console.warn('Update check error:', result.error);
-            if (showUpToDate) {
-                log(`Erreur: ${result.error}`, 'error');
-            }
-            return { error: true };
+            return;
         }
 
         if (result.update_available) {
             updateData = result;
-            updateAvailable = true;
-            showUpdateBadge();
             showUpdateModal(result);
             log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
-        } else if (showUpToDate) {
-            // Show "up to date" message only when manually checking
-            log('Application a jour (aucune mise a jour disponible)', 'success');
         }
-
-        return result;
     } catch (error) {
         console.warn('Update check exception:', error);
-        if (showUpToDate) {
-            log('Erreur de connexion lors de la verification', 'error');
-        }
-        return { error: true };
-    }
-}
-
-/**
- * Manual update check triggered by user clicking the button.
- * Shows loading state and provides feedback.
- */
-async function manualCheckForUpdates() {
-    const btn = updateElements.btnCheckUpdate;
-    const textSpan = btn ? btn.querySelector('.update-check-text') : null;
-    const originalText = textSpan ? textSpan.textContent : 'MAJ';
-
-    // Don't allow multiple simultaneous checks
-    if (btn && btn.classList.contains('checking')) {
-        return;
-    }
-
-    // Show loading state
-    if (btn) {
-        btn.classList.add('checking');
-        btn.disabled = true;
-    }
-    if (textSpan) {
-        textSpan.textContent = '...';
-    }
-
-    log('Verification des mises a jour...', 'info');
-
-    try {
-        const result = await checkForUpdates(true);
-
-        // Show feedback based on result
-        if (!result.error && !result.update_available) {
-            // Application is up to date - show temporary green state
-            if (textSpan) {
-                textSpan.textContent = 'OK';
-                textSpan.classList.add('up-to-date');
-            }
-            // Reset to normal after 2 seconds
-            setTimeout(() => {
-                if (textSpan) {
-                    textSpan.textContent = originalText;
-                    textSpan.classList.remove('up-to-date');
-                }
-            }, 2000);
-        }
-    } finally {
-        // Reset button state
-        if (btn) {
-            btn.classList.remove('checking');
-            btn.disabled = false;
-        }
-        if (textSpan && !textSpan.classList.contains('up-to-date')) {
-            textSpan.textContent = originalText;
-        }
-    }
-}
-
-/**
- * Show the update badge on the check button.
- */
-function showUpdateBadge() {
-    if (updateElements.btnCheckUpdate) {
-        updateElements.btnCheckUpdate.classList.add('has-update');
-    }
-    if (updateElements.updateBadge) {
-        updateElements.updateBadge.classList.remove('hidden');
-    }
-}
-
-/**
- * Hide the update badge.
- */
-function hideUpdateBadge() {
-    if (updateElements.btnCheckUpdate) {
-        updateElements.btnCheckUpdate.classList.remove('has-update');
-    }
-    if (updateElements.updateBadge) {
-        updateElements.updateBadge.classList.add('hidden');
     }
 }
 
@@ -1496,52 +1408,47 @@ function hideUpdateBadge() {
  * @param {Object} data - Update check result
  */
 function showUpdateModal(data) {
-    if (!updateElements.modal) return;
+    const store = Alpine.store('dashboard');
 
-    // Populate version info
-    if (updateElements.currentVersion) {
-        updateElements.currentVersion.textContent = `v${data.local_version}`;
-    }
-    if (updateElements.currentCommit) {
-        updateElements.currentCommit.textContent = `(${data.local_commit})`;
-    }
-    if (updateElements.newCommit) {
-        updateElements.newCommit.textContent = data.remote_commit;
-    }
-    if (updateElements.commitsBehind) {
-        updateElements.commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
-    }
+    // Populate version info via DOM (complex content)
+    const el = (id) => document.getElementById(id);
+    const currentVersion = el('update-current-version');
+    const currentCommit = el('update-current-commit');
+    const newCommit = el('update-new-commit');
+    const commitsBehind = el('update-commits-behind');
+    const changesList = el('update-changes-list');
+    const commitMessages = el('update-commit-messages');
+
+    if (currentVersion) currentVersion.textContent = `v${data.local_version}`;
+    if (currentCommit) currentCommit.textContent = `(${data.local_commit})`;
+    if (newCommit) newCommit.textContent = data.remote_commit;
+    if (commitsBehind) commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
 
     // Show commit messages if available
-    if (data.commit_messages && data.commit_messages.length > 0 && updateElements.changesList) {
-        updateElements.changesList.innerHTML = '';
+    if (data.commit_messages && data.commit_messages.length > 0 && changesList) {
+        changesList.innerHTML = '';
         data.commit_messages.forEach(msg => {
             const li = document.createElement('li');
             li.textContent = msg;
-            updateElements.changesList.appendChild(li);
+            changesList.appendChild(li);
         });
-        if (updateElements.commitMessages) {
-            updateElements.commitMessages.classList.remove('hidden');
-        }
+        if (commitMessages) commitMessages.classList.remove('hidden');
     }
 
-    // Reset state
-    if (updateElements.progress) updateElements.progress.classList.add('hidden');
-    if (updateElements.error) updateElements.error.classList.add('hidden');
-    if (updateElements.buttons) updateElements.buttons.style.display = 'flex';
-    if (updateElements.btnNow) updateElements.btnNow.disabled = false;
-    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+    // Reset state via Alpine store
+    store.updateShowProgress = false;
+    store.updateShowError = false;
+    store.updateButtonsDisabled = false;
 
-    // Show modal
-    updateElements.modal.classList.remove('hidden');
+    // Show modal via Alpine store
+    store.updateModalVisible = true;
 }
 
 /**
  * Hide the update modal (dismiss until next page load).
  */
 function hideUpdateModal() {
-    if (!updateElements.modal) return;
-    updateElements.modal.classList.add('hidden');
+    Alpine.store('dashboard').updateModalVisible = false;
 }
 
 /**
@@ -1549,16 +1456,14 @@ function hideUpdateModal() {
  * Shows progress, calls API, handles service restart.
  */
 async function applyUpdate() {
-    if (!updateElements.progress) return;
+    const store = Alpine.store('dashboard');
+    const progressText = document.getElementById('update-progress-text');
 
-    // Show progress, disable buttons
-    updateElements.progress.classList.remove('hidden');
-    if (updateElements.error) updateElements.error.classList.add('hidden');
-    if (updateElements.btnNow) updateElements.btnNow.disabled = true;
-    if (updateElements.btnLater) updateElements.btnLater.disabled = true;
-    if (updateElements.progressText) {
-        updateElements.progressText.textContent = 'Mise a jour en cours...';
-    }
+    // Show progress, disable buttons via Alpine store
+    store.updateShowProgress = true;
+    store.updateShowError = false;
+    store.updateButtonsDisabled = true;
+    if (progressText) progressText.textContent = 'Mise a jour en cours...';
 
     log('Mise a jour en cours...', 'info');
 
@@ -1571,23 +1476,15 @@ async function applyUpdate() {
         const result = await response.json();
 
         if (result.success) {
-            if (updateElements.progressText) {
-                updateElements.progressText.textContent = 'Redemarrage des services...';
-            }
+            if (progressText) progressText.textContent = 'Redemarrage des services...';
             log('Mise a jour reussie, redemarrage...', 'success');
-
-            // Wait for services to restart, then reload page
             await waitForServiceRestart();
-
         } else {
             showUpdateError(result.error || 'Erreur inconnue');
             log(`Erreur de mise a jour: ${result.error}`, 'error');
         }
     } catch (error) {
-        // Connection error is expected during restart
-        if (updateElements.progressText) {
-            updateElements.progressText.textContent = 'Reconnexion en cours...';
-        }
+        if (progressText) progressText.textContent = 'Reconnexion en cours...';
         log('Connexion perdue, attente du redemarrage...', 'warning');
         await waitForServiceRestart();
     }
@@ -1598,15 +1495,12 @@ async function applyUpdate() {
  * @param {string} message - Error message to display
  */
 function showUpdateError(message) {
-    if (updateElements.progress) updateElements.progress.classList.add('hidden');
-    if (updateElements.error) {
-        updateElements.error.classList.remove('hidden');
-        if (updateElements.errorText) {
-            updateElements.errorText.textContent = message;
-        }
-    }
-    if (updateElements.btnNow) updateElements.btnNow.disabled = false;
-    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+    const store = Alpine.store('dashboard');
+    store.updateShowProgress = false;
+    store.updateShowError = true;
+    store.updateButtonsDisabled = false;
+    const errorText = document.getElementById('update-error-text');
+    if (errorText) errorText.textContent = message;
 }
 
 /**
@@ -1673,16 +1567,10 @@ function sleep(ms) {
  * Initialize update event listeners.
  */
 function initUpdateListeners() {
-    if (updateElements.btnLater) {
-        updateElements.btnLater.addEventListener('click', hideUpdateModal);
-    }
-    if (updateElements.btnNow) {
-        updateElements.btnNow.addEventListener('click', applyUpdate);
-    }
-    // Manual update check button in header
-    if (updateElements.btnCheckUpdate) {
-        updateElements.btnCheckUpdate.addEventListener('click', manualCheckForUpdates);
-    }
+    const btnLater = document.getElementById('btn-update-later');
+    const btnNow = document.getElementById('btn-update-now');
+    if (btnLater) btnLater.addEventListener('click', hideUpdateModal);
+    if (btnNow) btnNow.addEventListener('click', applyUpdate);
 }
 
 // Initialize update system after page load

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DriftApp{% endblock %} — Observatoire Ubik</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS (compiled) -->
+    <link rel="stylesheet" href="/static/css/tailwind-output.css?v=5.0.0">
+
+    {% block extra_css %}{% endblock %}
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-obs-dark text-obs-text min-h-screen flex flex-col font-body antialiased">
+
+    <!-- ═══ Header ═══ -->
+    <header class="sticky top-0 z-50 bg-obs-panel/95 backdrop-blur-sm border-b border-obs-border">
+        <div class="max-w-screen-2xl mx-auto px-4 h-14 flex items-center justify-between">
+
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3">
+                <h1 class="text-lg font-display font-bold tracking-tight">
+                    <span class="bg-gradient-to-r from-accent-amber to-accent-amber-light bg-clip-text text-transparent">
+                        DriftApp
+                    </span>
+                </h1>
+                <span class="hidden sm:inline text-xs text-obs-text-muted font-mono tracking-wide uppercase">
+                    Observatoire Ubik
+                </span>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="flex items-center gap-1">
+                {% block nav_items %}
+                <a href="/"
+                   class="nav-tab px-3 py-1.5 rounded-button text-sm font-medium transition-colors duration-200
+                          {% if active_tab == 'control' %}
+                          bg-accent-amber/15 text-accent-amber
+                          {% else %}
+                          text-obs-text-secondary hover:text-obs-text hover:bg-obs-hover
+                          {% endif %}">
+                    Controle
+                </a>
+                <a href="/api/health/system/"
+                   class="nav-tab px-3 py-1.5 rounded-button text-sm font-medium transition-colors duration-200
+                          {% if active_tab == 'system' %}
+                          bg-accent-amber/15 text-accent-amber
+                          {% else %}
+                          text-obs-text-secondary hover:text-obs-text hover:bg-obs-hover
+                          {% endif %}">
+                    Systeme
+                </a>
+                <a href="/session/"
+                   class="nav-tab px-3 py-1.5 rounded-button text-sm font-medium transition-colors duration-200
+                          {% if active_tab == 'session' %}
+                          bg-accent-amber/15 text-accent-amber
+                          {% else %}
+                          text-obs-text-secondary hover:text-obs-text hover:bg-obs-hover
+                          {% endif %}">
+                    Session
+                </a>
+                {% endblock %}
+            </nav>
+
+            <!-- Status Indicator -->
+            <div class="flex items-center gap-2">
+                {% block status_indicator %}
+                <div class="flex items-center gap-1.5 text-xs font-mono text-obs-text-muted">
+                    <span class="status-dot status-dot-ok"></span>
+                    <span>Connecte</span>
+                </div>
+                {% endblock %}
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══ Main Content ═══ -->
+    <main class="flex-1 max-w-screen-2xl mx-auto w-full px-4 py-4">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ═══ Footer ═══ -->
+    <footer class="border-t border-obs-border bg-obs-panel/50">
+        <div class="max-w-screen-2xl mx-auto px-4 py-2 flex items-center justify-between text-xs text-obs-text-muted font-mono">
+            <span>DriftApp v{% block version %}5.0{% endblock %}</span>
+            {% block footer_extra %}{% endblock %}
+            <span id="footer-time"></span>
+        </div>
+    </footer>
+
+    <!-- Footer clock -->
+    <script>
+        (function() {
+            const el = document.getElementById('footer-time');
+            if (el) {
+                function tick() {
+                    const now = new Date();
+                    el.textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+                tick();
+                setInterval(tick, 1000);
+            }
+        })();
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

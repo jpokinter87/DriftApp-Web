@@ -1,105 +1,117 @@
-/* DriftApp Web - Dashboard Styles */
+/* DriftApp Dashboard — Styles specifiques (post-migration Tailwind Phase 2)
+   Layout et composants generaux: Tailwind CSS + base.html
+   Ce fichier ne contient que les styles specifiques au dashboard:
+   - Canvas compass
+   - Etats dynamiques JS (status-dot, encodeur, mode)
+   - Animations (flash, pulse, frozen)
+   - Modals (GOTO, Update)
+*/
 
-:root {
-    /* Palette marron/ambre observatoire */
-    --bg-dark: #1a1612;
-    --bg-panel: #241e18;
-    --bg-input: #2d261e;
-    --text-primary: #e8e4df;
-    --text-secondary: #a09080;
-    --border-color: #4a3d2e;
-    --pattern-stroke: #3a3028;
+/* =========================================================================
+   Section titles — Gradient feu/ambre (heritage dashboard original)
+   ========================================================================= */
 
-    /* Couleur d'accent principale: ambre */
-    --accent-amber: #d4a055;
-    --accent-amber-light: #e8c080;
-    --accent-amber-dark: #b08040;
-
-    /* Couleurs d'état (conservées) */
-    --accent-green: #00d26a;
-    --accent-red: #ff4757;
-    --accent-orange: #ffa502;
-    --accent-purple: #a855f7;
-
-    /* Dégradé feu/ambre pour titres */
-    --gradient-fire: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%);
-
-    /* Alias pour compatibilité (bleu → ambre) */
-    --accent-blue: var(--accent-amber);
-
-    /* Pattern astronomique SVG dense pour fond des sections */
-    --astro-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none' stroke='%233a3028' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 12 L15 6 M15 18 L15 24 M9 15 L3 15 M21 15 L27 15'/%3E%3Ccircle cx='15' cy='15' r='2'/%3E%3Ccircle cx='55' cy='18' r='6'/%3E%3Cellipse cx='55' cy='18' rx='12' ry='4' transform='rotate(-15 55 18)'/%3E%3Cpath d='M95 15 Q102 8 106 15 Q110 22 102 26 Q94 30 90 22 Q86 14 95 10'/%3E%3Cpath d='M135 8 A10 10 0 1 1 135 28 A7 7 0 1 0 135 8'/%3E%3Ccircle cx='168' cy='15' r='3'/%3E%3Cpath d='M165 18 L155 28 M166 20 L158 26'/%3E%3Ccircle cx='25' cy='50' r='5'/%3E%3Cpath d='M22 54 L10 66 M24 56 L14 64'/%3E%3Cpath d='M60 45 L60 35 M60 55 L60 65 M50 50 L40 50 M70 50 L80 50 M54 44 L50 40 M66 44 L70 40'/%3E%3Ccircle cx='105' cy='48' r='8'/%3E%3Cellipse cx='105' cy='48' rx='16' ry='5'/%3E%3Ccircle cx='145' cy='42' r='1.5'/%3E%3Ccircle cx='152' cy='50' r='2'/%3E%3Ccircle cx='148' cy='58' r='1.5'/%3E%3Ccircle cx='158' cy='45' r='1'/%3E%3Ccircle cx='162' cy='55' r='1.5'/%3E%3Cpath d='M20 95 L28 80 L36 95 M23 95 L23 108 L33 108 L33 95 M21 108 L18 118 M35 108 L38 118'/%3E%3Ccircle cx='65' cy='90' r='6'/%3E%3Ccircle cx='65' cy='90' r='12' stroke-dasharray='2 3'/%3E%3Ccircle cx='77' cy='90' r='2'/%3E%3Cpath d='M110 82 Q120 75 125 85 Q130 95 120 100 Q110 105 105 95 Q100 85 110 80 Q125 72 135 88'/%3E%3Cpath d='M155 80 L170 95 M152 83 L167 98'/%3E%3Crect x='170' y='95' width='8' height='12' rx='1'/%3E%3Ccircle cx='25' cy='135' r='2'/%3E%3Ccircle cx='38' cy='128' r='1.5'/%3E%3Ccircle cx='42' cy='140' r='2'/%3E%3Ccircle cx='30' cy='145' r='1.5'/%3E%3Cpath d='M27 135 L36 129 M40 130 L41 138 M40 142 L32 144' stroke-dasharray='2 2'/%3E%3Cpath d='M70 125 L70 115 M70 135 L70 145 M60 130 L50 130 M80 130 L90 130 M63 123 L58 118 M77 123 L82 118 M63 137 L58 142 M77 137 L82 142'/%3E%3Ccircle cx='70' cy='130' r='3'/%3E%3Ccircle cx='115' cy='130' r='4'/%3E%3Cpath d='M111 134 L100 145 M113 136 L104 143'/%3E%3Ccircle cx='155' cy='125' r='7'/%3E%3Cellipse cx='155' cy='125' rx='14' ry='4' transform='rotate(20 155 125)'/%3E%3Cpath d='M18 168 L18 160 M18 176 L18 184 M10 172 L2 172 M26 172 L34 172'/%3E%3Ccircle cx='55' cy='170' r='5'/%3E%3Ccircle cx='55' cy='170' r='10' stroke-dasharray='2 3'/%3E%3Ccircle cx='65' cy='170' r='2'/%3E%3Cpath d='M100 165 A8 8 0 1 1 100 181 A5 5 0 1 0 100 165'/%3E%3Ccircle cx='140' cy='168' r='2'/%3E%3Ccircle cx='150' cy='162' r='1.5'/%3E%3Ccircle cx='155' cy='172' r='2'/%3E%3Ccircle cx='145' cy='178' r='1.5'/%3E%3Cpath d='M142 168 L148 163 M152 164 L154 170 M153 174 L147 177' stroke-dasharray='2 2'/%3E%3C/g%3E%3C/svg%3E");
+/* Gradient feu sur les titres de section */
+.section-title-fire {
+    font-size: 1rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    color: transparent !important;
+    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+/* Gradient feu sur le titre DriftApp du header */
+header h1 span {
+    background: linear-gradient(90deg, #ff6b00 0%, #ff8c00 30%, #ffa500 50%, #d4a055 80%, #c09050 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
 }
 
-body {
-    font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--bg-dark);
-    color: var(--text-primary);
-    min-height: 100vh;
+/* =========================================================================
+   Panel Astro — Motif astronomique de fond (constellations)
+   ========================================================================= */
+
+.panel-astro {
+    background-image: url('/static/img/constellations-pattern.svg');
+    background-size: 400px 400px;
+    background-repeat: repeat;
+    position: relative;
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 1rem;
+/* Glow subtil au hover sur les panels */
+.panel-astro:hover {
+    box-shadow: 0 0 15px rgba(212, 160, 85, 0.15),
+                0 0 30px rgba(212, 160, 85, 0.05);
+    transition: box-shadow 0.3s ease;
 }
 
-/* Header */
-.header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background-color: var(--bg-panel);
-    background-image: var(--astro-pattern);
-    background-size: 180px 180px;
-    border-radius: 8px;
-    margin-bottom: 1rem;
+/* Bouton STOP — glow rouge permanent */
+.btn-stop {
+    box-shadow: 0 0 8px rgba(255, 71, 87, 0.4),
+                0 0 20px rgba(255, 71, 87, 0.15);
 }
 
-.header h1 {
-    font-size: 1.5rem;
-    background: var(--gradient-fire);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+/* Suivi Actif — bordure verte avec glow anime */
+.tracking-active-glow {
+    border: 2px solid var(--color-accent-green);
+    box-shadow: 0 0 10px rgba(76, 209, 55, 0.3),
+                0 0 25px rgba(76, 209, 55, 0.1);
+    animation: tracking-glow-pulse 3s ease-in-out infinite;
 }
 
-.header .subtitle {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
+@keyframes tracking-glow-pulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(76, 209, 55, 0.3),
+                    0 0 25px rgba(76, 209, 55, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(76, 209, 55, 0.5),
+                    0 0 35px rgba(76, 209, 55, 0.2);
+    }
 }
 
-.status-indicator {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+/* Separateurs de section dans Controle Manuel */
+.section-divider {
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        var(--color-obs-border) 20%,
+        var(--color-accent-amber) 50%,
+        var(--color-obs-border) 80%,
+        transparent 100%);
+    margin: 0.75rem 0;
+    opacity: 0.5;
 }
 
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background-color: var(--text-secondary);
+/* =========================================================================
+   Utility: hidden (JS toggle)
+   ========================================================================= */
+
+.hidden {
+    display: none !important;
 }
+
+/* =========================================================================
+   Status dot — JS dynamic states
+   ========================================================================= */
 
 .status-dot.connected {
-    background-color: var(--accent-green);
+    background-color: var(--color-accent-green);
+    box-shadow: var(--shadow-glow-green);
 }
 
 .status-dot.disconnected {
-    background-color: var(--accent-red);
+    background-color: var(--color-accent-red);
+    box-shadow: var(--shadow-glow-red);
 }
 
 .status-dot.moving {
-    background-color: var(--accent-orange);
+    background-color: var(--color-accent-orange);
     animation: pulse 1s infinite;
 }
 
@@ -108,613 +120,37 @@ body {
     50% { opacity: 0.5; }
 }
 
-/* Header layout avec navigation */
-.header-left {
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
+/* =========================================================================
+   Canvas Compass
+   ========================================================================= */
+
+#compass {
+    background-color: var(--color-obs-dark);
 }
 
-.nav-tabs {
-    display: flex;
-    gap: 0.5rem;
-    margin-left: 2rem;
-}
-
-.nav-tab {
-    padding: 0.5rem 1rem;
-    color: var(--text-secondary);
-    text-decoration: none;
-    border-radius: 4px;
-    transition: all 0.2s;
-    font-size: 0.9rem;
-}
-
-.nav-tab:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
-}
-
-.nav-tab.active {
-    background: var(--accent-amber);
-    color: #1a1612;
-    font-weight: 600;
-}
-
-/* Main content */
-.main-content {
-    display: grid;
-    grid-template-columns: 350px 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-@media (max-width: 768px) {
-    .main-content {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Écrans 720p et petits (hauteur < 800px) */
+/* Ecrans 720p et petits */
 @media (max-height: 800px) {
-    .container {
-        padding: 0.5rem;
-    }
-
-    .header {
-        padding: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .header h1 {
-        font-size: 1.2rem;
-    }
-
-    .main-content {
-        grid-template-columns: 280px 1fr;
-        gap: 0.5rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .compass-section {
-        padding: 0.5rem;
-    }
-
-    .compass-section h2 {
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
-
     #compass {
         width: 200px !important;
         height: 200px !important;
     }
-
-    .compass-container {
-        margin-bottom: 0.5rem;
-    }
-
-    .position-info {
-        gap: 0.3rem;
-    }
-
-    .position-info .info-item {
-        padding: 0.3rem;
-        font-size: 0.8rem;
-    }
-
-    .control-panel {
-        padding: 0.5rem;
-    }
-
-    .control-panel h3 {
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .input-group {
-        margin-bottom: 0.5rem;
-    }
-
-    .input-group input {
-        padding: 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .btn {
-        padding: 0.5rem 1rem;
-        font-size: 0.9rem;
-    }
-
-    .btn-jog {
-        padding: 0.5rem;
-        font-size: 0.85rem;
-    }
-
-    .btn-stop {
-        padding: 0.5rem;
-    }
-
-    .btn-continuous {
-        padding: 0.5rem;
-        font-size: 0.85rem;
-    }
-
-    .tracking-info {
-        padding: 0.5rem;
-    }
-
-    .tracking-info h3 {
-        margin-bottom: 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .info-grid, .info-grid-simple {
-        gap: 0.3rem;
-    }
-
-    .info-grid .info-item,
-    .info-grid-simple .info-item {
-        padding: 0.3rem;
-    }
-
-    .info-grid label,
-    .info-grid-simple label {
-        font-size: 0.7rem;
-    }
-
-    .info-grid span,
-    .info-grid-simple span {
-        font-size: 0.85rem;
-    }
-
-    .logs-section {
-        padding: 0.5rem;
-    }
-
-    .logs-section h3 {
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
-
-    .logs-container {
-        height: 100px;
-        font-size: 0.75rem;
-    }
-
-    .control-section {
-        gap: 0.5rem;
-    }
-
-    .jog-buttons {
-        margin-bottom: 0.5rem;
-    }
-
-    .continuous-buttons {
-        margin-bottom: 0.5rem;
-    }
-
-    .goto-group input {
-        padding: 0.5rem;
-        font-size: 0.9rem;
-    }
-
-    .object-info {
-        padding: 0.5rem;
-        margin-bottom: 0.5rem;
-        font-size: 0.85rem;
-    }
 }
 
-/* Écrans très petits en hauteur (< 650px) - mode ultra-compact */
+/* Ecrans tres petits en hauteur */
 @media (max-height: 650px) {
-    .header {
-        padding: 0.3rem 0.5rem;
-    }
-
-    .header h1 {
-        font-size: 1rem;
-    }
-
-    .header .subtitle {
-        display: none;
-    }
-
-    .main-content {
-        grid-template-columns: 240px 1fr;
-    }
-
     #compass {
         width: 160px !important;
         height: 160px !important;
     }
-
-    .logs-container {
-        height: 70px;
-    }
 }
 
-/* Compass section */
-.compass-section {
-    background-color: var(--bg-panel);
-    background-image: var(--astro-pattern);
-    background-size: 180px 180px;
-    border-radius: 8px;
-    padding: 1rem;
-}
+/* =========================================================================
+   Position Info — Cartouches specifiques
+   ========================================================================= */
 
-.compass-section h2 {
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    background: var(--gradient-fire);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.compass-container {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 1rem;
-}
-
-#compass {
-    background-color: var(--bg-dark);
-    border-radius: 50%;
-    border: 2px solid var(--border-color);
-}
-
-.position-info {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-}
-
-.position-info .info-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem;
-    background-color: var(--bg-input);
-    border-radius: 4px;
-}
-
-.position-info .info-item:last-child {
-    grid-column: span 2;
-}
-
-.position-info label {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-}
-
-.position-info span {
-    font-weight: bold;
-    color: var(--accent-blue);
-}
-
-/* Control section */
-.control-section {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.control-panel {
-    background-color: var(--bg-panel);
-    background-image: var(--astro-pattern);
-    background-size: 180px 180px;
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-.control-panel h3 {
-    font-size: 1rem;
-    margin-bottom: 1rem;
-    background: var(--gradient-fire);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-/* Input groups */
-.input-group {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.75rem;
-}
-
-.input-group input {
-    flex: 1;
-    padding: 0.75rem;
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 1rem;
-}
-
-.input-group input:focus {
-    outline: none;
-    border-color: var(--accent-amber);
-}
-
-/* Object info */
-.object-info {
-    padding: 0.75rem;
-    background-color: var(--bg-input);
-    border-radius: 4px;
-    margin-bottom: 0.75rem;
-    font-size: 0.9rem;
-}
-
-.object-info.hidden {
-    display: none;
-}
-
-/* Buttons */
-.btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 1rem;
-    font-weight: 500;
-    transition: all 0.2s;
-}
-
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.btn-primary {
-    background-color: var(--accent-amber);
-    color: #1a1612;
-    font-weight: 600;
-}
-
-.btn-primary:hover:not(:disabled) {
-    background-color: var(--accent-amber-light);
-}
-
-.btn-secondary {
-    background-color: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover:not(:disabled) {
-    background-color: var(--border-color);
-}
-
-.btn-danger {
-    background-color: var(--accent-red);
-    color: white;
-    font-weight: 600;
-}
-
-.btn-danger:hover:not(:disabled) {
-    background-color: #e8404e;
-}
-
-.button-group {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.button-group .btn {
-    flex: 1;
-}
-
-/* Tracking info */
-.tracking-info {
-    background-color: var(--bg-panel);
-    background-image: var(--astro-pattern);
-    background-size: 180px 180px;
-    border-radius: 8px;
-    padding: 1rem;
-    border: 2px solid var(--accent-green);
-}
-
-.tracking-info.hidden {
-    display: none;
-}
-
-.tracking-info h3 {
-    color: var(--accent-green);
-    margin-bottom: 1rem;
-}
-
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-}
-
-.info-grid .info-item {
-    display: flex;
-    flex-direction: column;
-    padding: 0.5rem;
-    background-color: var(--bg-input);
-    border-radius: 4px;
-}
-
-.info-grid label {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-}
-
-.info-grid span {
-    font-weight: bold;
-    color: var(--text-primary);
-}
-
-/* Jog buttons */
-.jog-buttons {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.btn-jog {
-    flex: 1;
-    padding: 1rem;
-    background-color: var(--bg-input);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-}
-
-.btn-jog:hover {
-    background-color: var(--border-color);
-}
-
-.btn-stop {
-    flex: 1;
-    padding: 1rem;
-    background-color: var(--accent-red);
-    color: white;
-    font-weight: bold;
-}
-
-.btn-stop:hover {
-    background-color: #e8404e;
-}
-
-/* GOTO group */
-.goto-group {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.goto-group input {
-    flex: 1;
-    padding: 0.75rem;
-    background-color: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-primary);
-    font-size: 1rem;
-}
-
-.goto-group input:focus {
-    outline: none;
-    border-color: var(--accent-amber);
-}
-
-/* Logs section */
-.logs-section {
-    background-color: var(--bg-panel);
-    background-image: var(--astro-pattern);
-    background-size: 180px 180px;
-    border-radius: 8px;
-    padding: 1rem;
-}
-
-.logs-section h3 {
-    font-size: 1rem;
-    margin-bottom: 0.75rem;
-    background: var(--gradient-fire);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.logs-container {
-    height: 150px;
-    overflow-y: auto;
-    background-color: var(--bg-dark);
-    border-radius: 4px;
-    padding: 0.5rem;
-    font-family: monospace;
-    font-size: 0.85rem;
-}
-
-.log-entry {
-    padding: 0.25rem 0;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.log-entry:last-child {
-    border-bottom: none;
-}
-
-.log-entry.error {
-    color: var(--accent-red);
-}
-
-.log-entry.success {
-    color: var(--accent-green);
-}
-
-.log-entry.warning {
-    color: var(--accent-orange);
-}
-
-/* Footer */
-.footer {
-    display: flex;
-    justify-content: space-between;
-    padding: 1rem;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-}
-
-/* Mode icons */
-.mode-normal { color: var(--accent-green); }
-.mode-critical { color: var(--accent-orange); }
-.mode-continuous { color: var(--accent-red); }
-.mode-fast_track { color: var(--accent-purple); }
-
-/* Timer widget - désormais intégré dans la boussole */
-.timer-widget {
-    display: none !important;
-}
-
-/* Log types pour les corrections */
-.log-entry.correction {
-    color: var(--accent-amber);
-}
-
-.log-entry.tracking {
-    color: var(--accent-green);
-}
-
-/* Cartouches COUPOLE (ambre) et TÉLESCOPE (vert) */
-.coupole-item label {
-    color: var(--accent-amber) !important;
-    font-weight: bold;
-}
-
-.coupole-value {
-    color: var(--accent-amber-light) !important;
-}
-
-.telescope-item label {
-    color: var(--accent-green) !important;
-    font-weight: bold;
-}
-
-.telescope-value {
-    color: var(--accent-green) !important;
-}
-
-/* Cartouche ENC (encodeur) avec états colorés via bordure */
-.enc-item {
-    border: 3px solid var(--border-color);  /* Bordure par défaut */
-}
-
-.enc-item label {
-    color: var(--text-secondary) !important;
-    font-weight: bold;
-}
-
-#encoder-calibrated {
-    font-weight: bold;
-}
-
-/* États de l'encodeur (bordure épaisse colorée) */
+/* Encodeur: etats colores via bordure */
 .enc-item.enc-absent {
-    border-color: #666666 !important;  /* Gris = absent */
+    border-color: #666666 !important;
 }
 
 .enc-item.enc-absent #encoder-calibrated {
@@ -722,7 +158,7 @@ body {
 }
 
 .enc-item.enc-uncalibrated {
-    border-color: #CD853F !important;  /* Marron/Peru = non calibré */
+    border-color: #CD853F !important;
 }
 
 .enc-item.enc-uncalibrated #encoder-calibrated {
@@ -730,16 +166,16 @@ body {
 }
 
 .enc-item.enc-calibrated {
-    border-color: var(--accent-green) !important;  /* Vert = calibré */
+    border-color: var(--color-accent-green) !important;
 }
 
 .enc-item.enc-calibrated #encoder-calibrated {
-    color: var(--accent-green) !important;
+    color: var(--color-accent-green) !important;
 }
 
-/* État FROZEN (encodeur figé) - ALERTE ROUGE NÉON CLIGNOTANT */
+/* Etat FROZEN — ALERTE ROUGE NEON CLIGNOTANT */
 .enc-item.enc-frozen {
-    border-color: #ff0040 !important;  /* Rouge vif */
+    border-color: #ff0040 !important;
     animation: neon-pulse-red 0.8s ease-in-out infinite !important;
     background: rgba(255, 0, 64, 0.15) !important;
 }
@@ -755,7 +191,6 @@ body {
     animation: text-blink 0.8s ease-in-out infinite;
 }
 
-/* Animation néon pulsant rouge */
 @keyframes neon-pulse-red {
     0%, 100% {
         border-color: #ff0040;
@@ -777,21 +212,12 @@ body {
     }
 }
 
-/* Animation clignotement texte */
 @keyframes text-blink {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
 }
 
-/* Cartouche MODE avec couleur dynamique */
-.mode-item {
-    position: relative;
-}
-
-.mode-item label {
-    font-weight: bold;
-}
-
+/* Mode value — pastilles colorees */
 .mode-value {
     font-weight: bold;
     padding: 2px 8px;
@@ -799,107 +225,40 @@ body {
 }
 
 .mode-value.normal {
-    background-color: var(--accent-green);
+    background-color: var(--color-accent-green);
     color: white;
 }
 
 .mode-value.critical {
-    background-color: var(--accent-orange);
+    background-color: var(--color-accent-orange);
     color: white;
 }
 
 .mode-value.continuous {
-    background-color: var(--accent-red);
+    background-color: var(--color-accent-red);
     color: white;
 }
 
 .mode-value.fast_track {
-    background-color: var(--accent-purple);
+    background-color: var(--color-accent-purple);
     color: white;
 }
 
-/* Cartouche CORRECTIONS - sur une seule ligne */
-.corrections-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+/* Mode classes for hidden compat elements */
+.mode-normal { color: var(--color-accent-green); }
+.mode-critical { color: var(--color-accent-orange); }
+.mode-continuous { color: var(--color-accent-red); }
+.mode-fast_track { color: var(--color-accent-purple); }
+
+/* Timer widget — integre dans la boussole */
+.timer-widget {
+    display: none !important;
 }
 
-.corrections-item label {
-    color: var(--accent-purple) !important;
-    font-weight: bold;
-}
+/* =========================================================================
+   Button Flash — Objet trouve, pret a demarrer
+   ========================================================================= */
 
-.corrections-left {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-}
-
-.corrections-count {
-    color: var(--accent-purple) !important;
-    font-weight: bold;
-}
-
-.corrections-right {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-}
-
-.corrections-total {
-    color: var(--accent-purple) !important;
-    font-weight: bold;
-}
-
-/* Grille simplifiée pour Suivi Actif */
-.info-grid-simple {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-}
-
-.info-grid-simple .info-item {
-    display: flex;
-    flex-direction: column;
-    padding: 0.5rem;
-    background-color: var(--bg-input);
-    border-radius: 4px;
-}
-
-/* Boutons mouvement continu (toggle) */
-.continuous-buttons {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.btn-continuous {
-    flex: 1;
-    padding: 0.75rem;
-    background-color: var(--bg-input);
-    color: var(--text-primary);
-    border: 2px solid var(--border-color);
-    font-weight: bold;
-    transition: all 0.2s;
-}
-
-.btn-continuous:hover {
-    background-color: var(--border-color);
-}
-
-.btn-continuous.active {
-    background-color: var(--accent-orange);
-    color: white;
-    border-color: var(--accent-orange);
-    animation: pulse-continuous 1s infinite;
-}
-
-@keyframes pulse-continuous {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-
-/* Effet clignotement feu/ambre pour session prête à démarrer */
 .btn.flash-success,
 .btn-primary.flash-success {
     animation: flash-fire-border 0.8s ease-in-out infinite !important;
@@ -918,34 +277,18 @@ body {
     }
 }
 
-/* Position info grid adjustments for 5 items */
-.position-info {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-}
-
-.position-info .info-item:nth-child(5) {
-    grid-column: span 2;
-}
-
-/* GOTO initial details styling (legacy inline display) */
-.goto-details {
-    display: block;
-    font-size: 0.85rem;
-    color: var(--accent-orange);
-    margin-top: 0.3rem;
-    font-family: monospace;
-    animation: pulse-goto 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse-goto {
+/* Continuous button active state pulse */
+@keyframes pulse-continuous {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
+    50% { opacity: 0.7; }
+}
+
+.btn-continuous.active {
+    animation: pulse-continuous 1s infinite;
 }
 
 /* =========================================================================
-   GOTO Modal - Popup avec animation chevrons
+   GOTO Modal — Popup avec animation chevrons
    ========================================================================= */
 
 .goto-modal {
@@ -967,8 +310,8 @@ body {
 }
 
 .goto-modal-content {
-    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
-    border: 2px solid var(--accent-orange);
+    background: linear-gradient(135deg, var(--color-obs-panel) 0%, var(--color-obs-dark) 100%);
+    border: 2px solid var(--color-accent-orange);
     border-radius: 16px;
     padding: 2rem;
     min-width: 400px;
@@ -1007,7 +350,7 @@ body {
 }
 
 .goto-modal-header h3 {
-    color: var(--accent-orange);
+    color: var(--color-accent-orange);
     font-size: 1.4rem;
     margin: 0;
 }
@@ -1020,17 +363,17 @@ body {
 .goto-modal-object span {
     font-size: 1.6rem;
     font-weight: bold;
-    color: var(--accent-amber-light);
+    color: var(--color-accent-amber-light);
 }
 
-/* Positions départ / cible avec chevrons au milieu */
+/* Positions depart / cible avec chevrons au milieu */
 .goto-modal-positions {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 1.5rem;
     padding: 1rem;
-    background-color: var(--bg-input);
+    background-color: var(--color-obs-input);
     border-radius: 8px;
 }
 
@@ -1043,7 +386,7 @@ body {
 
 .goto-position label {
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--color-obs-text-secondary);
     margin-bottom: 0.3rem;
     text-transform: uppercase;
 }
@@ -1055,11 +398,11 @@ body {
 }
 
 .goto-start span {
-    color: var(--text-secondary);
+    color: var(--color-obs-text-secondary);
 }
 
 .goto-end span {
-    color: var(--accent-green);
+    color: var(--color-accent-green);
 }
 
 /* Animation des chevrons */
@@ -1068,7 +411,7 @@ body {
     gap: 0.3rem;
     font-size: 1.8rem;
     font-weight: bold;
-    color: var(--accent-orange);
+    color: var(--color-accent-orange);
 }
 
 .goto-chevrons .chevron {
@@ -1076,68 +419,44 @@ body {
     opacity: 0.3;
 }
 
-/* Animation sens horaire (CW) : chevrons vers la droite >>> */
-.goto-chevrons.direction-cw .chevron:nth-child(1) {
-    animation-delay: 0s;
-}
-.goto-chevrons.direction-cw .chevron:nth-child(2) {
-    animation-delay: 0.15s;
-}
-.goto-chevrons.direction-cw .chevron:nth-child(3) {
-    animation-delay: 0.3s;
-}
+/* Sens horaire (CW) */
+.goto-chevrons.direction-cw .chevron:nth-child(1) { animation-delay: 0s; }
+.goto-chevrons.direction-cw .chevron:nth-child(2) { animation-delay: 0.15s; }
+.goto-chevrons.direction-cw .chevron:nth-child(3) { animation-delay: 0.3s; }
 
 @keyframes chevron-move-cw {
-    0%, 100% {
-        opacity: 0.3;
-        transform: translateX(0);
-    }
-    50% {
-        opacity: 1;
-        transform: translateX(5px);
-    }
+    0%, 100% { opacity: 0.3; transform: translateX(0); }
+    50% { opacity: 1; transform: translateX(5px); }
 }
 
-/* Animation sens anti-horaire (CCW) : chevrons vers la gauche <<< */
+/* Sens anti-horaire (CCW) */
 .goto-chevrons.direction-ccw .chevron {
     animation: chevron-move-ccw 1s ease-in-out infinite;
 }
 
-.goto-chevrons.direction-ccw .chevron:nth-child(3) {
-    animation-delay: 0s;
-}
-.goto-chevrons.direction-ccw .chevron:nth-child(2) {
-    animation-delay: 0.15s;
-}
-.goto-chevrons.direction-ccw .chevron:nth-child(1) {
-    animation-delay: 0.3s;
-}
+.goto-chevrons.direction-ccw .chevron:nth-child(3) { animation-delay: 0s; }
+.goto-chevrons.direction-ccw .chevron:nth-child(2) { animation-delay: 0.15s; }
+.goto-chevrons.direction-ccw .chevron:nth-child(1) { animation-delay: 0.3s; }
 
 @keyframes chevron-move-ccw {
-    0%, 100% {
-        opacity: 0.3;
-        transform: translateX(0);
-    }
-    50% {
-        opacity: 1;
-        transform: translateX(-5px);
-    }
+    0%, 100% { opacity: 0.3; transform: translateX(0); }
+    50% { opacity: 1; transform: translateX(-5px); }
 }
 
-/* Position actuelle (grande valeur au centre) */
+/* Position actuelle */
 .goto-modal-current {
     text-align: center;
     margin-bottom: 1.5rem;
     padding: 1rem;
-    background: linear-gradient(135deg, rgba(77, 166, 255, 0.2) 0%, rgba(77, 166, 255, 0.05) 100%);
-    border: 1px solid var(--accent-blue);
+    background: linear-gradient(135deg, rgba(212, 160, 85, 0.2) 0%, rgba(212, 160, 85, 0.05) 100%);
+    border: 1px solid var(--color-accent-amber);
     border-radius: 8px;
 }
 
 .goto-modal-current label {
     display: block;
     font-size: 0.85rem;
-    color: var(--text-secondary);
+    color: var(--color-obs-text-secondary);
     margin-bottom: 0.5rem;
     text-transform: uppercase;
 }
@@ -1145,9 +464,9 @@ body {
 .goto-modal-current span {
     font-size: 2.5rem;
     font-weight: bold;
-    color: var(--accent-blue);
+    color: var(--color-accent-amber);
     font-family: monospace;
-    text-shadow: 0 0 10px rgba(77, 166, 255, 0.5);
+    text-shadow: 0 0 10px rgba(212, 160, 85, 0.5);
 }
 
 /* Barre de progression */
@@ -1161,15 +480,15 @@ body {
 .progress-bar {
     flex: 1;
     height: 12px;
-    background-color: var(--bg-input);
+    background-color: var(--color-obs-input);
     border-radius: 6px;
     overflow: hidden;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--color-obs-border);
 }
 
 .progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent-orange) 0%, var(--accent-green) 100%);
+    background: linear-gradient(90deg, var(--color-accent-orange) 0%, var(--color-accent-green) 100%);
     border-radius: 6px;
     width: 0%;
     transition: width 0.3s ease-out;
@@ -1178,25 +497,249 @@ body {
 .progress-text {
     font-size: 1rem;
     font-weight: bold;
-    color: var(--accent-orange);
+    color: var(--color-accent-orange);
     min-width: 50px;
     text-align: right;
 }
 
-/* Delta (déplacement total) */
+/* Delta */
 .goto-modal-delta {
     text-align: center;
     font-size: 0.9rem;
-    color: var(--text-secondary);
+    color: var(--color-obs-text-secondary);
 }
 
 .goto-modal-delta span {
-    color: var(--accent-orange);
+    color: var(--color-accent-orange);
     font-weight: bold;
     font-family: monospace;
 }
 
-/* Responsive pour petits écrans */
+/* GOTO details (legacy inline) */
+.goto-details {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--color-accent-orange);
+    margin-top: 0.3rem;
+    font-family: monospace;
+    animation: pulse-goto 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-goto {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* =========================================================================
+   Update Modal — Popup de mise a jour disponible
+   ========================================================================= */
+
+.update-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+    backdrop-filter: blur(4px);
+}
+
+.update-modal.hidden {
+    display: none;
+}
+
+.update-modal-content {
+    background: linear-gradient(135deg, var(--color-obs-panel) 0%, var(--color-obs-dark) 100%);
+    border: 2px solid var(--color-accent-amber);
+    border-radius: 16px;
+    padding: 2rem;
+    min-width: 420px;
+    max-width: 90%;
+    box-shadow: 0 0 30px rgba(212, 160, 85, 0.3), 0 0 60px rgba(212, 160, 85, 0.1);
+    animation: modal-appear 0.3s ease-out;
+}
+
+.update-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.update-modal-header .update-icon {
+    font-size: 2rem;
+    animation: spin-slow 3s linear infinite;
+}
+
+@keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.update-modal-header h3 {
+    color: var(--color-accent-amber);
+    font-size: 1.4rem;
+    margin: 0;
+}
+
+.update-modal-body {
+    margin-bottom: 1.5rem;
+}
+
+/* Version info */
+.update-version-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background-color: var(--color-obs-input);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.version-current,
+.version-new {
+    text-align: center;
+    min-width: 100px;
+}
+
+.version-current label,
+.version-new label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-obs-text-secondary);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.version-current span,
+.version-new span {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.version-current span {
+    color: var(--color-obs-text-secondary);
+}
+
+.version-new span {
+    color: var(--color-accent-green);
+}
+
+.version-arrow {
+    font-size: 1.5rem;
+    color: var(--color-accent-amber);
+    font-weight: bold;
+}
+
+.version-current small,
+.version-new small {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--color-obs-text-secondary);
+    margin-top: 0.25rem;
+}
+
+/* Commit messages list */
+.update-commit-messages {
+    padding: 0.75rem;
+    background-color: var(--color-obs-input);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.update-commit-messages label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-obs-text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.update-commit-messages ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.update-commit-messages li {
+    font-size: 0.85rem;
+    font-family: monospace;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--color-obs-border);
+    color: var(--color-obs-text);
+}
+
+.update-commit-messages li:last-child {
+    border-bottom: none;
+}
+
+/* Progress bar for update */
+.update-progress {
+    padding: 1rem;
+    background-color: var(--color-obs-input);
+    border-radius: 8px;
+    text-align: center;
+}
+
+.update-progress .progress-bar {
+    margin-bottom: 0.75rem;
+}
+
+.update-progress .progress-fill.progress-indeterminate {
+    width: 30%;
+    animation: indeterminate-progress 1.5s ease-in-out infinite;
+    background: linear-gradient(90deg, var(--color-accent-amber) 0%, var(--color-accent-green) 100%);
+}
+
+@keyframes indeterminate-progress {
+    0% { margin-left: 0%; }
+    50% { margin-left: 70%; }
+    100% { margin-left: 0%; }
+}
+
+#update-progress-text {
+    font-size: 0.9rem;
+    color: var(--color-accent-amber);
+}
+
+/* Error message */
+.update-error {
+    padding: 0.75rem;
+    background-color: rgba(255, 71, 87, 0.2);
+    border: 1px solid var(--color-accent-red);
+    border-radius: 8px;
+    text-align: center;
+}
+
+#update-error-text {
+    color: var(--color-accent-red);
+    font-size: 0.9rem;
+}
+
+/* Footer buttons */
+.update-modal-footer {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+}
+
+.update-modal-footer .btn {
+    min-width: 120px;
+}
+
+/* =========================================================================
+   Responsive — Modal specifics
+   ========================================================================= */
+
 @media (max-width: 500px) {
     .goto-modal-content {
         min-width: 90%;
@@ -1221,6 +764,32 @@ body {
 
     .goto-modal-current span {
         font-size: 2rem;
+    }
+
+    .update-modal-content {
+        min-width: 90%;
+        padding: 1.5rem;
+    }
+
+    .update-modal-header h3 {
+        font-size: 1.2rem;
+    }
+
+    .update-version-info {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .version-arrow {
+        transform: rotate(90deg);
+    }
+
+    .update-modal-footer {
+        flex-direction: column;
+    }
+
+    .update-modal-footer .btn {
+        width: 100%;
     }
 }
 
@@ -1249,356 +818,5 @@ body {
 
     .goto-modal-current span {
         font-size: 2rem;
-    }
-}
-
-/* =========================================================================
-   Update Modal - Popup de mise a jour disponible
-   ========================================================================= */
-
-.update-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.85);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1001;
-    backdrop-filter: blur(4px);
-}
-
-.update-modal.hidden {
-    display: none;
-}
-
-.update-modal-content {
-    background: linear-gradient(135deg, var(--bg-panel) 0%, var(--bg-dark) 100%);
-    border: 2px solid var(--accent-amber);
-    border-radius: 16px;
-    padding: 2rem;
-    min-width: 420px;
-    max-width: 90%;
-    box-shadow: 0 0 30px rgba(212, 160, 85, 0.3), 0 0 60px rgba(212, 160, 85, 0.1);
-    animation: modal-appear 0.3s ease-out;
-}
-
-.update-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.75rem;
-    margin-bottom: 1.5rem;
-}
-
-.update-modal-header .update-icon {
-    font-size: 2rem;
-    animation: spin-slow 3s linear infinite;
-}
-
-@keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.update-modal-header h3 {
-    color: var(--accent-amber);
-    font-size: 1.4rem;
-    margin: 0;
-}
-
-.update-modal-body {
-    margin-bottom: 1.5rem;
-}
-
-/* Version info: current -> new */
-.update-version-info {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem;
-    background-color: var(--bg-input);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}
-
-.version-current,
-.version-new {
-    text-align: center;
-    min-width: 100px;
-}
-
-.version-current label,
-.version-new label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    margin-bottom: 0.25rem;
-}
-
-.version-current span,
-.version-new span {
-    display: block;
-    font-size: 1.2rem;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.version-current span {
-    color: var(--text-secondary);
-}
-
-.version-new span {
-    color: var(--accent-green);
-}
-
-.version-arrow {
-    font-size: 1.5rem;
-    color: var(--accent-amber);
-    font-weight: bold;
-}
-
-.version-current small,
-.version-new small {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-top: 0.25rem;
-}
-
-/* Commit messages list */
-.update-commit-messages {
-    padding: 0.75rem;
-    background-color: var(--bg-input);
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}
-
-.update-commit-messages.hidden {
-    display: none;
-}
-
-.update-commit-messages label {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.5rem;
-}
-
-.update-commit-messages ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    max-height: 120px;
-    overflow-y: auto;
-}
-
-.update-commit-messages li {
-    font-size: 0.85rem;
-    font-family: monospace;
-    padding: 0.3rem 0;
-    border-bottom: 1px solid var(--border-color);
-    color: var(--text-primary);
-}
-
-.update-commit-messages li:last-child {
-    border-bottom: none;
-}
-
-/* Progress bar for update */
-.update-progress {
-    padding: 1rem;
-    background-color: var(--bg-input);
-    border-radius: 8px;
-    text-align: center;
-}
-
-.update-progress.hidden {
-    display: none;
-}
-
-.update-progress .progress-bar {
-    margin-bottom: 0.75rem;
-}
-
-.update-progress .progress-fill.progress-indeterminate {
-    width: 30%;
-    animation: indeterminate-progress 1.5s ease-in-out infinite;
-    background: linear-gradient(90deg, var(--accent-amber) 0%, var(--accent-green) 100%);
-}
-
-@keyframes indeterminate-progress {
-    0% { margin-left: 0%; }
-    50% { margin-left: 70%; }
-    100% { margin-left: 0%; }
-}
-
-#update-progress-text {
-    font-size: 0.9rem;
-    color: var(--accent-amber);
-}
-
-/* Error message */
-.update-error {
-    padding: 0.75rem;
-    background-color: rgba(255, 71, 87, 0.2);
-    border: 1px solid var(--accent-red);
-    border-radius: 8px;
-    text-align: center;
-}
-
-.update-error.hidden {
-    display: none;
-}
-
-#update-error-text {
-    color: var(--accent-red);
-    font-size: 0.9rem;
-}
-
-/* Footer buttons */
-.update-modal-footer {
-    display: flex;
-    gap: 1rem;
-    justify-content: flex-end;
-}
-
-.update-modal-footer .btn {
-    padding: 0.75rem 1.5rem;
-    font-size: 1rem;
-    min-width: 120px;
-}
-
-/* Responsive */
-@media (max-width: 500px) {
-    .update-modal-content {
-        min-width: 90%;
-        padding: 1.5rem;
-    }
-
-    .update-modal-header h3 {
-        font-size: 1.2rem;
-    }
-
-    .update-version-info {
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .version-arrow {
-        transform: rotate(90deg);
-    }
-
-    .update-modal-footer {
-        flex-direction: column;
-    }
-
-    .update-modal-footer .btn {
-        width: 100%;
-    }
-}
-
-/* =========================================================================
-   BOUTON DE MISE A JOUR (HEADER)
-   ========================================================================= */
-
-.btn-update-check {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.4rem 0.8rem;
-    margin-left: auto;
-    margin-right: 1rem;
-    background: transparent;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    position: relative;
-}
-
-.btn-update-check:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--text-primary);
-    border-color: var(--text-secondary);
-}
-
-.btn-update-check:active {
-    transform: scale(0.95);
-}
-
-.btn-update-check:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-.update-check-icon {
-    font-size: 1rem;
-    transition: transform 0.3s ease;
-}
-
-.btn-update-check.checking .update-check-icon {
-    animation: spin-update 1s linear infinite;
-}
-
-@keyframes spin-update {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
-.update-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    width: 16px;
-    height: 16px;
-    background: var(--accent-amber);
-    color: #1a1612;
-    border-radius: 50%;
-    font-size: 0.7rem;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    animation: pulse-badge 2s ease-in-out infinite;
-}
-
-.update-badge.hidden {
-    display: none;
-}
-
-@keyframes pulse-badge {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-}
-
-.btn-update-check.has-update {
-    border-color: var(--accent-amber);
-    color: var(--accent-amber);
-}
-
-.btn-update-check.has-update:hover {
-    background: rgba(255, 193, 7, 0.1);
-}
-
-/* Message "A jour" temporaire */
-.btn-update-check .update-check-text.up-to-date {
-    color: var(--accent-green);
-}
-
-/* Responsive pour mobile */
-@media (max-width: 768px) {
-    .btn-update-check {
-        padding: 0.3rem 0.5rem;
-        margin-right: 0.5rem;
-    }
-
-    .btn-update-check .update-check-text {
-        display: none;
     }
 }
