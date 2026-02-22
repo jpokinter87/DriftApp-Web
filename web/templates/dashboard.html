@@ -3,11 +3,16 @@
 {% block title %}Controle Coupole{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/dashboard.css?v=5.0.2">
+<link rel="stylesheet" href="/static/css/dashboard.css?v=5.0.3">
 <style>[x-cloak] { display: none !important; }</style>
 {% endblock %}
 
 {% block status_indicator %}
+<button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
+    <span class="update-check-icon">&#x21BB;</span>
+    <span class="update-check-text">MAJ</span>
+    <span class="update-badge hidden" id="update-badge">!</span>
+</button>
 <div class="flex items-center gap-1.5 text-xs font-mono" id="service-status">
     <span class="status-dot"></span>
     <span class="status-text text-obs-text-muted">Connexion...</span>
@@ -227,7 +232,7 @@
                 <div class="version-arrow">&#x2192;</div>
                 <div class="version-new">
                     <label>Nouvelle version</label>
-                    <span id="update-new-commit">--</span>
+                    <span id="update-new-version">--</span>
                     <small id="update-commits-behind">-- commit(s)</small>
                 </div>
             </div>
@@ -262,5 +267,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/dashboard.js?v=20260222b"></script>
+<script src="/static/js/dashboard.js?v=20260222c"></script>
 {% endblock %}

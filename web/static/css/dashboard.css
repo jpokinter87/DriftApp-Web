@@ -682,6 +682,95 @@ header h1 span {
 }
 
 /* =========================================================================
+   Update Check Button — Header MAJ button
+   ========================================================================= */
+
+.btn-update-check {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    background: transparent;
+    border: 1px solid var(--color-obs-border);
+    border-radius: 6px;
+    color: var(--color-obs-text-secondary);
+    font-size: 0.75rem;
+    font-family: inherit;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.btn-update-check:hover {
+    background-color: var(--color-obs-input);
+    border-color: var(--color-obs-text-secondary);
+    color: var(--color-obs-text);
+}
+
+.btn-update-check:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Spinning icon during check */
+.btn-update-check.checking .update-check-icon {
+    animation: spin-update 1s linear infinite;
+}
+
+@keyframes spin-update {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Badge notification */
+.update-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--color-accent-amber);
+    color: var(--color-obs-dark);
+    font-size: 0.6rem;
+    font-weight: bold;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: badge-pulse 2s ease-in-out infinite;
+}
+
+.update-badge.hidden {
+    display: none;
+}
+
+@keyframes badge-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+/* Has update state — amber border and text */
+.btn-update-check.has-update {
+    border-color: var(--color-accent-amber);
+    color: var(--color-accent-amber);
+}
+
+.btn-update-check.has-update:hover {
+    background-color: rgba(212, 160, 85, 0.15);
+}
+
+/* Responsive: hide text on mobile, keep icon */
+@media (max-width: 500px) {
+    .update-check-text {
+        display: none;
+    }
+
+    .btn-update-check {
+        padding: 0.25rem 0.4rem;
+    }
+}
+
+/* =========================================================================
    Responsive — Modal specifics
    ========================================================================= */
 

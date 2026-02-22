@@ -165,6 +165,30 @@ def get_commit_messages(count: int = 5) -> list[str]:
         return []
 
 
+def get_remote_version() -> str:
+    """
+    Lit la version depuis pyproject.toml de origin/main.
+
+    Returns:
+        Version string (ex: "5.0.1") ou "unknown" si erreur
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'show', 'origin/main:pyproject.toml'],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            match = re.search(r'version\s*=\s*"([^"]+)"', result.stdout)
+            return match.group(1) if match else "unknown"
+        return "unknown"
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
+        logger.warning(f"Impossible de lire la version distante: {e}")
+        return "unknown"
+
+
 def check_for_updates() -> dict:
     """
     Vérifie si des mises à jour sont disponibles.
@@ -195,6 +219,7 @@ def check_for_updates() -> dict:
         'local_commit': local_commit,
         'remote_commit': remote_commit,
         'commits_behind': commits_behind,
+        'remote_version': get_remote_version(),
         'fetch_success': fetch_success
     }
 

@@ -125,6 +125,10 @@ const elements = {
     logs: document.getElementById('logs'),
     lastUpdate: document.getElementById('last-update'),
 
+    // Update button
+    btnCheckUpdate: document.getElementById('btn-check-update'),
+    updateBadge: document.getElementById('update-badge'),
+
     // GOTO Modal
     gotoModal: document.getElementById('goto-modal'),
     gotoModalObjectName: document.getElementById('goto-modal-object-name'),
@@ -1375,10 +1379,10 @@ function addLog(message, type = 'info') {
 let updateData = null;
 
 /**
- * Check for updates on page load.
- * Called once during initialization after a short delay.
+ * Check for updates.
+ * @param {boolean} showUpToDate - If true, show feedback when already up to date
  */
-async function checkForUpdates() {
+async function checkForUpdates(showUpToDate = false) {
     try {
         const response = await fetch('/api/health/update/check/');
         if (!response.ok) {
@@ -1395,12 +1399,55 @@ async function checkForUpdates() {
 
         if (result.update_available) {
             updateData = result;
+            showUpdateBadge();
             showUpdateModal(result);
             log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
+        } else {
+            hideUpdateBadge();
+            if (showUpToDate) {
+                log('Systeme a jour', 'success');
+            }
         }
     } catch (error) {
         console.warn('Update check exception:', error);
     }
+}
+
+/**
+ * Manual update check triggered by the header button.
+ * Shows loading state and feedback.
+ */
+async function manualCheckForUpdates() {
+    const btn = elements.btnCheckUpdate;
+    if (!btn) return;
+
+    // Set loading state
+    btn.classList.add('checking');
+    btn.disabled = true;
+
+    try {
+        await checkForUpdates(true);
+    } finally {
+        // Remove loading state
+        btn.classList.remove('checking');
+        btn.disabled = false;
+    }
+}
+
+/**
+ * Show the update badge on the header button.
+ */
+function showUpdateBadge() {
+    if (elements.updateBadge) elements.updateBadge.classList.remove('hidden');
+    if (elements.btnCheckUpdate) elements.btnCheckUpdate.classList.add('has-update');
+}
+
+/**
+ * Hide the update badge on the header button.
+ */
+function hideUpdateBadge() {
+    if (elements.updateBadge) elements.updateBadge.classList.add('hidden');
+    if (elements.btnCheckUpdate) elements.btnCheckUpdate.classList.remove('has-update');
 }
 
 /**
@@ -1414,14 +1461,18 @@ function showUpdateModal(data) {
     const el = (id) => document.getElementById(id);
     const currentVersion = el('update-current-version');
     const currentCommit = el('update-current-commit');
-    const newCommit = el('update-new-commit');
+    const newVersion = el('update-new-version');
     const commitsBehind = el('update-commits-behind');
     const changesList = el('update-changes-list');
     const commitMessages = el('update-commit-messages');
 
     if (currentVersion) currentVersion.textContent = `v${data.local_version}`;
     if (currentCommit) currentCommit.textContent = `(${data.local_commit})`;
-    if (newCommit) newCommit.textContent = data.remote_commit;
+    if (newVersion) {
+        const ver = data.remote_version && data.remote_version !== 'unknown'
+            ? `v${data.remote_version}` : data.remote_commit;
+        newVersion.textContent = ver;
+    }
     if (commitsBehind) commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
 
     // Show commit messages if available
@@ -1571,6 +1622,11 @@ function initUpdateListeners() {
     const btnNow = document.getElementById('btn-update-now');
     if (btnLater) btnLater.addEventListener('click', hideUpdateModal);
     if (btnNow) btnNow.addEventListener('click', applyUpdate);
+
+    // Header update check button
+    if (elements.btnCheckUpdate) {
+        elements.btnCheckUpdate.addEventListener('click', manualCheckForUpdates);
+    }
 }
 
 // Initialize update system after page load
