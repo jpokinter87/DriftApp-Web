@@ -66,6 +66,14 @@ Quick Reference:
 - /code-review → Review de code et refactoring qualite
 - /refactor-code → Refactoring et amelioration de la qualite du code
 
+## Current State
+
+| Field | Value |
+|-------|-------|
+| Version | 5.0.0 |
+| Last milestone | v5.0 Interface Moderne (2026-02-22) |
+| Status | Stable — ready for next milestone |
+
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-02-22 after Phase 5 — Milestone v5.0 complete*
+*Last updated: 2026-02-22 after v5.0 Interface Moderne complete*
