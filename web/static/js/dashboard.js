@@ -756,7 +756,7 @@ function updateTrackingDisplay(motor) {
         const mode = motor.mode || 'normal';
         const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
         elements.trackingMode.textContent = `${modeEmoji[mode] || ''} ${mode.toUpperCase()}`;
-        elements.trackingMode.className = `mode-${mode}`;
+        elements.trackingMode.className = `hidden mode-${mode}`;
 
         // Cartouche MODE avec couleur (dans la section position)
         if (elements.trackingModeIndicator) {
