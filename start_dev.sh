@@ -12,6 +12,16 @@
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR"
 
+# Python du virtual environment
+PYTHON="$PROJECT_DIR/.venv/bin/python"
+
+# Vérifier que le venv existe
+if [[ ! -f "$PYTHON" ]]; then
+    echo -e "\033[0;31m[ERROR]\033[0m Virtual environment non trouvé!"
+    echo "  → Exécutez d'abord: uv sync"
+    exit 1
+fi
+
 # Couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,7 +43,7 @@ log_error() {
 
 check_dependencies() {
     # Vérifier Django
-    if ! python3 -c "import django" 2>/dev/null; then
+    if ! "$PYTHON" -c "import django" 2>/dev/null; then
         log_warn "Django non installé"
         echo ""
         echo -e "${CYAN}Installation des dépendances:${NC}"
@@ -56,7 +66,7 @@ start_motor_service() {
         log_info "Motor Service déjà en cours d'exécution"
     else
         log_info "Démarrage du Motor Service (simulation)..."
-        python3 services/motor_service.py &
+        "$PYTHON" services/motor_service.py &
         sleep 2
         if pgrep -f "motor_service.py" > /dev/null; then
             log_info "Motor Service démarré (PID: $(pgrep -f motor_service.py))"
@@ -73,14 +83,14 @@ start_django() {
     else
         log_info "Démarrage de Django..."
         cd web
-        python3 manage.py runserver 0.0.0.0:8000 2>&1 &
+        "$PYTHON" manage.py runserver 0.0.0.0:8000 2>&1 &
         cd ..
         sleep 3
         if pgrep -f "manage.py runserver" > /dev/null; then
             log_info "Django démarré"
         else
             log_error "Échec du démarrage de Django"
-            log_info "Essayez: cd web && python3 manage.py runserver"
+            log_info "Essayez: cd web && $PYTHON manage.py runserver"
         fi
     fi
 }
@@ -117,8 +127,8 @@ status() {
     if pgrep -f "motor_service.py" > /dev/null; then
         echo -e "Motor Service:    ${GREEN}EN COURS${NC} (PID: $(pgrep -f motor_service.py))"
         if [[ -f /dev/shm/motor_status.json ]]; then
-            status=$(python3 -c "import json; print(json.load(open('/dev/shm/motor_status.json')).get('status', '?'))" 2>/dev/null)
-            pos=$(python3 -c "import json; print(f\"{json.load(open('/dev/shm/motor_status.json')).get('position', 0):.1f}\")" 2>/dev/null)
+            status=$("$PYTHON" -c "import json; print(json.load(open('/dev/shm/motor_status.json')).get('status', '?'))" 2>/dev/null)
+            pos=$("$PYTHON" -c "import json; print(f\"{json.load(open('/dev/shm/motor_status.json')).get('position', 0):.1f}\")" 2>/dev/null)
             echo "  État: $status | Position: ${pos}°"
         fi
     else
