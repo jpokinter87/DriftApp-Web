@@ -22,9 +22,8 @@ from core.observatoire.catalogue import GestionnaireCatalogue
 def empty_catalogue(tmp_path, monkeypatch):
     """Catalogue avec un cache vide dans un répertoire temporaire."""
     cache_file = tmp_path / "objets_cache.json"
-    # Monkey-patch CACHE_FILE avant l'import
-    import core.config.config as config_module
-    monkeypatch.setattr(config_module, "CACHE_FILE", cache_file)
+    import core.config.config_loader as config_loader_module
+    monkeypatch.setattr(config_loader_module, "CACHE_FILE", cache_file)
     # Reload le module catalogue pour utiliser le nouveau CACHE_FILE
     import importlib
     import core.observatoire.catalogue as cat_module
@@ -61,8 +60,8 @@ def populated_catalogue(tmp_path, monkeypatch):
     }
     cache_file.write_text(json.dumps(objects, indent=2))
 
-    import core.config.config as config_module
-    monkeypatch.setattr(config_module, "CACHE_FILE", cache_file)
+    import core.config.config_loader as config_loader_module
+    monkeypatch.setattr(config_loader_module, "CACHE_FILE", cache_file)
     import importlib
     import core.observatoire.catalogue as cat_module
     importlib.reload(cat_module)
@@ -136,8 +135,7 @@ class TestRechercher:
     def test_planet_search(self, populated_catalogue):
         """Recherche d'une planète (Jupiter)."""
         result = populated_catalogue.rechercher("Jupiter", utiliser_api=False)
-        # Peut réussir ou échouer selon le working directory (finding C-04)
-        # Si config.json accessible → résultat avec ra_deg, dec_deg
+        # Avec chemin absolu corrigé (C-04), la recherche devrait fonctionner
         if result is not None:
             assert "ra_deg" in result
             assert "dec_deg" in result
@@ -170,8 +168,8 @@ class TestSauvegardeCache:
         assert empty_catalogue.cache_file.exists()
 
         # Recharger
-        import core.config.config as config_module
-        monkeypatch.setattr(config_module, "CACHE_FILE", empty_catalogue.cache_file)
+        import core.config.config_loader as config_loader_module
+        monkeypatch.setattr(config_loader_module, "CACHE_FILE", empty_catalogue.cache_file)
         import importlib
         import core.observatoire.catalogue as cat_module
         importlib.reload(cat_module)

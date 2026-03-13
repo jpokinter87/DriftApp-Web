@@ -273,14 +273,14 @@ class MotorService:
 
         Args:
             angle: Angle cible (0-360°)
-            speed: Vitesse moteur (delay en secondes), None = config fast_track
+            speed: Vitesse moteur (delay en secondes), None = config continuous
         """
         logger.info(f"GOTO vers {angle:.1f}°")
 
-        # Vitesse par défaut = fast_track
+        # Vitesse par défaut = continuous
         if speed is None:
-            fast_track = self.config.adaptive.modes.get('fast_track')
-            speed = fast_track.motor_delay if fast_track else 0.00015
+            continuous = self.config.adaptive.modes.get('continuous')
+            speed = continuous.motor_delay if continuous else 0.00015
 
         self.current_status['status'] = 'moving'
         self.current_status['target'] = angle
@@ -346,8 +346,8 @@ class MotorService:
         logger.info(f"JOG de {delta:+.1f}°")
 
         if speed is None:
-            fast_track = self.config.adaptive.modes.get('fast_track')
-            speed = fast_track.motor_delay if fast_track else 0.00015
+            continuous = self.config.adaptive.modes.get('continuous')
+            speed = continuous.motor_delay if continuous else 0.00015
 
         self.current_status['status'] = 'moving'
         self.write_status()
@@ -551,9 +551,9 @@ class MotorService:
                     # Mode production: faire un petit déplacement réel
                     # Clear stop avant chaque rotation pour permettre le mouvement
                     self.moteur.clear_stop_request()
-                    # Utiliser la vitesse FAST_TRACK pour les mouvements manuels rapides
-                    fast_track = self.config.adaptive.modes.get('fast_track')
-                    speed = fast_track.motor_delay if fast_track else 0.00015
+                    # Utiliser la vitesse CONTINUOUS pour les mouvements manuels rapides
+                    continuous = self.config.adaptive.modes.get('continuous')
+                    speed = continuous.motor_delay if continuous else 0.00015
                     self.moteur.rotation(delta_per_step, vitesse=speed)
 
                     # Vérifier arrêt après rotation

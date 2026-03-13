@@ -13,8 +13,8 @@ Phases: 1 of 6 complete
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Code Review & Audit | 4 | Complete | 2026-03-13 |
-| 1.5 | Tests Exhaustifs | 6 | Not started | - |
-| 2 | Refactoring & Corrections | TBD | Not started | - |
+| 1.5 | Tests Exhaustifs | 6 | Complete | 2026-03-13 |
+| 2 | Refactoring & Corrections | TBD | Planning | - |
 | 2.1 | Bug Fixes Terrain | TBD | Not started | - |
 | 3 | Tests Complémentaires | TBD | Not started | - |
 | 4 | CI/CD & Versioning | TBD | Not started | - |

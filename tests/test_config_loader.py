@@ -5,7 +5,6 @@ Couvre :
 - Toutes les dataclasses (SiteConfig, MotorConfig, etc.)
 - ConfigLoader : chargement, parsing, validation
 - load_config() : fonction publique
-- load_site_config() : compatibilité deprecated
 - Gestion d'erreurs (fichier manquant, JSON invalide, clés manquantes)
 - Valeurs par défaut silencieuses
 """
@@ -164,24 +163,6 @@ class TestDriftAppConfig:
         )
         assert config.is_production is False
 
-    def test_to_dict_raises(self):
-        config = DriftAppConfig(
-            site=SiteConfig(0, 0, 0, "", "", 0),
-            motor=MotorConfig(GPIOPins(0, 0), 200, 4, 2230, 1, 0, 0, 0, 0, 0),
-            tracking=TrackingConfig(0.5, 60, ""),
-            adaptive=AdaptiveConfig(
-                AltitudeThresholds(68, 75), MovementThresholds(30, 50), {}, []
-            ),
-            encoder=EncoderConfig(
-                False, EncoderSPIConfig(0, 0, 0, 0),
-                EncoderMecaniqueConfig(0, 0, 0), 0
-            ),
-            simulation=True,
-        )
-        with pytest.raises(NotImplementedError):
-            config.to_dict()
-
-
 class TestAdaptiveConfig:
     def test_get_mode_exists(self):
         modes = {"normal": TrackingModeParams(60, 0.5, 0.002)}
@@ -320,15 +301,11 @@ class TestConfigLoader:
         assert config.motor.steps_per_revolution == 200
         assert config.motor.gpio_pins.dir == 17
 
-    def test_fast_track_mode_still_parsed(self, tmp_config_file):
-        """Documente le bug connu C-02 : fast_track encore parsé."""
+    def test_fast_track_removed(self, tmp_config_file):
+        """C-02 corrigé : fast_track n'est plus parsé."""
         config = ConfigLoader(tmp_config_file).load()
-        # fast_track est créé avec des valeurs par défaut même s'il n'est pas dans le JSON
-        assert "fast_track" in config.adaptive.modes
-        # Ses valeurs sont les défauts hardcodés, pas celles de la config
-        ft = config.adaptive.modes["fast_track"]
-        assert ft.interval_sec == 60  # Défaut
-        assert ft.motor_delay == 0.002  # Défaut
+        assert "fast_track" not in config.adaptive.modes
+        assert set(config.adaptive.modes.keys()) == {"normal", "critical", "continuous"}
 
 
 # =============================================================================
