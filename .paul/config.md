@@ -1,13 +1,13 @@
 # Project Config
 
-**Project:** Dome_web_v4_6
-**Created:** 2026-02-22
+**Project:** DriftApp
+**Created:** 2026-03-13
 
 ## Project Settings
 
 ```yaml
 project:
-  name: Dome_web_v4_6
+  name: DriftApp
   version: 0.0.0
 ```
 
@@ -18,7 +18,7 @@ project:
 ```yaml
 sonarqube:
   enabled: true
-  project_key: Dome_web_v4_6
+  project_key: DriftApp
 ```
 
 ## Preferences
@@ -30,4 +30,4 @@ preferences:
 ```
 
 ---
-*Config created: 2026-02-22*
+*Config created: 2026-03-13*

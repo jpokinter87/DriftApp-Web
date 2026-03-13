@@ -3,18 +3,12 @@ Module de détection automatique du matériel (Raspberry Pi, démon encodeur, mo
 VERSION DAEMON : Détecte le démon encodeur au lieu du singleton.
 """
 
-import fcntl
-import json
-import logging
 import platform
 import subprocess
-import time
 from pathlib import Path
 from typing import Tuple, Optional
-
-from core.config.config import IPC_ENCODER_POSITION
-
-logger = logging.getLogger(__name__)
+import json
+import time
 
 
 class HardwareDetector:
@@ -119,19 +113,17 @@ class HardwareDetector:
         Returns:
             Tuple (is_available, error_message, test_position)
         """
+        daemon_json = Path("/dev/shm/ems22_position.json")
+        
         # Vérifier si le fichier existe
-        if not IPC_ENCODER_POSITION.exists():
+        if not daemon_json.exists():
             return False, "Démon encodeur non actif (fichier JSON absent)", None
         
         try:
-            # Lire le fichier JSON avec verrou fcntl
-            with open(IPC_ENCODER_POSITION, "r") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
-                try:
-                    data = json.load(f)
-                finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
-
+            # Lire le fichier JSON
+            with open(daemon_json, "r") as f:
+                data = json.load(f)
+            
             # Vérifier le statut
             status = data.get("status", "UNKNOWN")
             angle = data.get("angle", None)
@@ -150,8 +142,6 @@ class HardwareDetector:
             else:
                 return False, f"Démon encodeur en erreur: {status}", angle if angle else None
                 
-        except BlockingIOError:
-            return False, "Fichier démon verrouillé, réessayer", None
         except json.JSONDecodeError as e:
             return False, f"Erreur lecture JSON démon: {str(e)}", None
         except Exception as e:
@@ -184,7 +174,7 @@ class HardwareDetector:
                 spi_info["spi_module"] = "loaded"
             else:
                 spi_info["spi_module"] = "not loaded"
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        except:
             spi_info["spi_module"] = "unknown"
 
         return spi_info
@@ -199,13 +189,13 @@ class HardwareDetector:
         """
         try:
             result = subprocess.run(
-                ["ps", "aux"],
-                capture_output=True,
-                text=True,
+                ["ps", "aux"], 
+                capture_output=True, 
+                text=True, 
                 timeout=2
             )
             return "ems22d_calibrated" in result.stdout
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        except:
             return False
 
     @staticmethod
@@ -391,7 +381,7 @@ class HardwareDetector:
 
             return True
         except Exception as e:
-            logger.error(f"Erreur sauvegarde rapport: {e}")
+            print(f"Erreur sauvegarde: {e}")
             return False
 
 

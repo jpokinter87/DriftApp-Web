@@ -4,9 +4,13 @@
 
 | Work Type | Skill/Command | Priority | When Required |
 |-----------|---------------|----------|---------------|
-| Creation et modernisation des composants UI web | /frontend-design | required | Avant toute creation ou modification de templates HTML |
-| Review de code et refactoring qualite | /code-review | required | Apres chaque phase completee, avant UNIFY |
-| Refactoring et amelioration de la qualite du code | /refactor-code | required | Apres modification significative de modules existants |
+| Web interface pages | /frontend-design | required | Avant d'écrire du HTML ou JavaScript |
+| Code review | /code-review | required | Avant de merger ou valider du code |
+| Git workflow | /commit-commands | required | Pour chaque commit, push ou PR |
+| Documentation | /documate | optional | Après changements significatifs d'API ou d'architecture |
+| Code quality review | /simplify | optional | Après écriture de code, avant commit |
+| Context-aware rules | /carl | required | Toujours actif (règles globales) |
+| Refactoring | /refactor-code | optional | Quand le code nécessite restructuration |
 
 ## Phase Overrides
 
@@ -17,4 +21,5 @@ None configured.
 None configured.
 
 ---
-*SPECIAL-FLOWS created: 2026-02-22*
+*SPECIAL-FLOWS.md — Created: 2026-03-13*
+*Verification occurs during UNIFY phase*

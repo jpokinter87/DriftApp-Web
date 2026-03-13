@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 try:
     import astropy  # noqa: F401
     ASTROPY_AVAILABLE = True
-except ImportError:
+except Exception:
     ASTROPY_AVAILABLE = False
 
 class GestionnaireCatalogue:
@@ -41,24 +41,16 @@ class GestionnaireCatalogue:
     def __init__(self) -> None:
         """
         Initialise le gestionnaire de catalogue.
-        
-        Charge le cache d'objets s'il existe et configure SIMBAD si disponible.
+
+        Charge le cache d'objets s'il existe. SIMBAD est configuré paresseusement
+        lors de la première requête en ligne pour éviter les blocages réseau.
         """
         self.objets: Dict[str, Dict[str, Any]] = {}  # Catalogue local
         self.cache_file: Path = CACHE_FILE  # Fichier de cache
-        
+        self.simbad = None  # Configuré paresseusement si nécessaire
+
         # Charger le cache s'il existe
         self._charger_cache()
-        
-        # Configurer Simbad si disponible
-        if ASTROPY_AVAILABLE:
-            try:
-                from astroquery.simbad import Simbad
-                # Ajouter des colonnes à la requête Simbad
-                self.simbad = Simbad()
-                self.simbad.add_votable_fields('otype', 'ra(d)', 'dec(d)', 'flux(V)', 'morphtype')
-            except ImportError:
-                self.simbad = None
     
     def _charger_cache(self) -> None:
         """
@@ -71,7 +63,7 @@ class GestionnaireCatalogue:
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.objets = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
+            except Exception as e:
                 logger.warning(f"Erreur lors du chargement du cache: {e}")
                 self.objets = {}
     
@@ -88,7 +80,7 @@ class GestionnaireCatalogue:
             
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.objets, f, indent=2, ensure_ascii=False)
-        except OSError as e:
+        except Exception as e:
             logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
 
 
@@ -178,7 +170,7 @@ class GestionnaireCatalogue:
 
             return objet
 
-        except (ConnectionError, TimeoutError, OSError) as e:
+        except Exception as e:
             logger.warning(f"Erreur lors de la recherche de {identifiant}: {e}")
             return None
 
@@ -270,6 +262,8 @@ class GestionnaireCatalogue:
             # Pour les planètes, on a besoin de la position de l'observateur
             # On utilise les coordonnées par défaut du config.json
             try:
+                import json
+                from pathlib import Path
                 cfg_path = Path("data") / "config.json"
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
@@ -287,11 +281,10 @@ class GestionnaireCatalogue:
                         "name": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet",
-                        "is_planet": True
+                        "type": "planet"
                     }
-            except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-                logger.debug(f"Impossible de calculer la position de {identifiant}: {e}")
+            except Exception:
+                pass
 
         objet = self.rechercher_catalogue_local(identifiant)
 

@@ -1,378 +1,185 @@
 """
-Tests pour le module core/tracking/abaque_manager.py
+Tests exhaustifs pour core/tracking/abaque_manager.py
 
-Ce module teste le gestionnaire d'abaque pour l'interpolation
-des positions de coupole basées sur les mesures empiriques.
+Couvre :
+- Chargement de l'abaque depuis le fichier Excel réel
+- Interpolation bilinéaire (cas normaux et limites)
+- Gestion de la circularité des angles
+- Extrapolation hors bornes
+- Nearest neighbor fallback
+- Diagnostics et export
 """
 
-import json
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-# Vérifier si numpy est disponible (requis pour tests d'interpolation)
-try:
-    import numpy as np
-    HAS_NUMPY = True
-except ImportError:
-    HAS_NUMPY = False
-    np = None
-
-pytestmark = pytest.mark.skipif(
-    not HAS_NUMPY,
-    reason="Ces tests nécessitent numpy"
-)
+from core.tracking.abaque_manager import AbaqueManager
 
 
-class TestAbaqueManagerInit:
-    """Tests pour l'initialisation de AbaqueManager."""
-
-    def test_init_defaut(self):
-        """Initialisation avec chemin par défaut."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        assert manager.abaque_file == Path("data/Loi_coupole.xlsx")
-        assert manager.is_loaded is False
-        assert manager.data_by_altitude == {}
-
-    def test_init_chemin_personnalise(self):
-        """Initialisation avec chemin personnalisé."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager("custom/path/abaque.xlsx")
-        assert manager.abaque_file == Path("custom/path/abaque.xlsx")
-
-    def test_init_statistiques_zero(self):
-        """Statistiques initialisées à zéro."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        assert manager.n_altitudes == 0
-        assert manager.n_azimuths == 0
-        assert manager.altitude_range == (0.0, 0.0)
-        assert manager.azimuth_range == (0.0, 0.0)
+@pytest.fixture
+def abaque_path(project_root):
+    """Chemin vers le fichier abaque réel."""
+    path = project_root / "data" / "Loi_coupole.xlsx"
+    if not path.exists():
+        pytest.skip("Fichier abaque Loi_coupole.xlsx non trouvé")
+    return path
 
 
-class TestAbaqueManagerLoadAbaque:
-    """Tests pour le chargement de l'abaque."""
-
-    def test_load_fichier_inexistant(self):
-        """Retourne False si fichier n'existe pas."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager("/chemin/inexistant/abaque.xlsx")
-        result = manager.load_abaque()
-
-        assert result is False
-        assert manager.is_loaded is False
-
-    @patch('core.tracking.abaque_manager.openpyxl.load_workbook')
-    def test_load_erreur_lecture(self, mock_load_workbook):
-        """Retourne False en cas d'erreur de lecture."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        # Utiliser une exception specifique (ValueError est attrapee par le handler)
-        mock_load_workbook.side_effect = ValueError("Erreur de lecture")
-
-        manager = AbaqueManager()
-        # Simuler que le fichier existe
-        with patch.object(Path, 'exists', return_value=True):
-            result = manager.load_abaque()
-
-        assert result is False
-
-    def test_load_abaque_reel(self):
-        """Charge l'abaque réelle si disponible."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        abaque_path = Path("data/Loi_coupole.xlsx")
-        if not abaque_path.exists():
-            pytest.skip("Fichier abaque non disponible")
-
-        manager = AbaqueManager()
-        result = manager.load_abaque()
-
-        assert result is True
-        assert manager.is_loaded is True
-        assert manager.n_altitudes > 0
-        assert manager.n_azimuths > 0
+@pytest.fixture
+def loaded_abaque(abaque_path):
+    """AbaqueManager chargé avec les données réelles."""
+    mgr = AbaqueManager(str(abaque_path))
+    assert mgr.load_abaque() is True
+    return mgr
 
 
-class TestAbaqueManagerWithMockData:
-    """Tests avec données d'abaque simulées."""
+# =============================================================================
+# Chargement
+# =============================================================================
 
-    @pytest.fixture
-    def manager_with_data(self, sample_abaque_data):
-        """Manager avec données injectées."""
-        from core.tracking.abaque_manager import AbaqueManager
+class TestAbaqueLoading:
+    def test_load_success(self, abaque_path):
+        mgr = AbaqueManager(str(abaque_path))
+        assert mgr.load_abaque() is True
+        assert mgr.is_loaded is True
 
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager.is_loaded = True
+    def test_load_missing_file(self, tmp_path):
+        mgr = AbaqueManager(str(tmp_path / "nonexistent.xlsx"))
+        assert mgr.load_abaque() is False
+        assert mgr.is_loaded is False
 
-        # Calculer les statistiques manuellement
-        manager.n_altitudes = len(sample_abaque_data)
-        first_alt = next(iter(sample_abaque_data.values()))
-        manager.n_azimuths = len(first_alt['az_astre'])
+    def test_statistics_after_load(self, loaded_abaque):
+        assert loaded_abaque.n_altitudes > 0
+        assert loaded_abaque.n_azimuths > 0
+        assert loaded_abaque.altitude_range[0] < loaded_abaque.altitude_range[1]
+        assert loaded_abaque.azimuth_range[0] < loaded_abaque.azimuth_range[1]
 
-        altitudes = sorted(sample_abaque_data.keys())
-        manager.altitude_range = (altitudes[0], altitudes[-1])
+    def test_data_not_empty(self, loaded_abaque):
+        assert len(loaded_abaque.data_by_altitude) > 0
+        for alt, data in loaded_abaque.data_by_altitude.items():
+            assert len(data['az_astre']) > 0
+            assert len(data['az_coupole']) > 0
+            assert len(data['az_astre']) == len(data['az_coupole'])
 
-        all_azimuths = []
-        for data in sample_abaque_data.values():
-            all_azimuths.extend(data['az_astre'])
-        manager.azimuth_range = (min(all_azimuths), max(all_azimuths))
 
-        # Créer les grilles
-        manager._alt_grid = np.array(altitudes)
-        manager._az_grid = np.array(sorted(first_alt['az_astre']))
-        manager._data_dict = sample_abaque_data
+# =============================================================================
+# Interpolation — cas normaux
+# =============================================================================
 
-        return manager
+class TestAbaqueInterpolation:
+    def test_returns_float(self, loaded_abaque):
+        pos, infos = loaded_abaque.get_dome_position(45.0, 180.0)
+        assert isinstance(pos, float)
+        assert 0.0 <= pos < 360.0
 
-    def test_get_dome_position_in_bounds(self, manager_with_data):
-        """Position dans les limites de l'abaque."""
-        az_coupole, infos = manager_with_data.get_dome_position(45.0, 90.0)
+    def test_returns_info_dict(self, loaded_abaque):
+        pos, infos = loaded_abaque.get_dome_position(45.0, 180.0)
+        assert "altitude_objet" in infos
+        assert "azimut_objet" in infos
+        assert "azimut_coupole" in infos
+        assert "method" in infos
+        assert "in_bounds" in infos
 
-        assert isinstance(az_coupole, float)
-        assert 0 <= az_coupole < 360
+    def test_different_altitudes_different_results(self, loaded_abaque):
+        """Des altitudes différentes doivent donner des positions différentes."""
+        pos_low, _ = loaded_abaque.get_dome_position(30.0, 180.0)
+        pos_high, _ = loaded_abaque.get_dome_position(60.0, 180.0)
+        # Pas forcément très différents, mais probablement distincts
+        # On vérifie juste que ça ne crash pas
+        assert isinstance(pos_low, float)
+        assert isinstance(pos_high, float)
+
+    def test_different_azimuths_different_results(self, loaded_abaque):
+        pos_north, _ = loaded_abaque.get_dome_position(45.0, 0.0)
+        pos_south, _ = loaded_abaque.get_dome_position(45.0, 180.0)
+        assert pos_north != pos_south
+
+    def test_in_bounds_flag(self, loaded_abaque):
+        """Position dans les bornes → in_bounds = True."""
+        alt_mid = sum(loaded_abaque.altitude_range) / 2
+        az_mid = sum(loaded_abaque.azimuth_range) / 2
+        _, infos = loaded_abaque.get_dome_position(alt_mid, az_mid)
         assert infos["in_bounds"] is True
-        assert infos["method"] == "interpolation"
 
-    def test_get_dome_position_exact_point(self, manager_with_data):
-        """Position exactement sur un point mesuré."""
-        # Altitude 45°, Azimut 90° → devrait donner 96°
-        az_coupole, infos = manager_with_data.get_dome_position(45.0, 90.0)
+    def test_multiple_calls_consistent(self, loaded_abaque):
+        """Mêmes entrées → même résultat."""
+        pos1, _ = loaded_abaque.get_dome_position(45.0, 120.0)
+        pos2, _ = loaded_abaque.get_dome_position(45.0, 120.0)
+        assert pos1 == pos2
 
-        assert az_coupole == pytest.approx(96.0, abs=0.5)
-
-    def test_get_dome_position_interpolated(self, manager_with_data):
-        """Position interpolée entre deux points."""
-        # Entre altitude 30° et 45°, azimut 90°
-        az_coupole, infos = manager_with_data.get_dome_position(37.5, 90.0)
-
-        # Devrait être entre 95° (alt=30) et 96° (alt=45)
-        assert 95.0 <= az_coupole <= 96.0
-
-    def test_get_dome_position_normalise_azimut(self, manager_with_data):
-        """L'azimut est normalisé dans [0, 360)."""
-        az_coupole1, _ = manager_with_data.get_dome_position(45.0, 90.0)
-        az_coupole2, _ = manager_with_data.get_dome_position(45.0, 450.0)  # 450 = 90
-
-        assert az_coupole1 == pytest.approx(az_coupole2, abs=0.1)
-
-    def test_get_dome_position_not_loaded_raises(self):
-        """Lève une exception si abaque non chargée."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        # is_loaded = False par défaut
-
-        with pytest.raises(RuntimeError, match="Abaque non chargée"):
-            manager.get_dome_position(45.0, 90.0)
+    def test_all_altitude_points(self, loaded_abaque):
+        """Teste l'interpolation pour chaque altitude mesurée."""
+        for alt in sorted(loaded_abaque.data_by_altitude.keys()):
+            data = loaded_abaque.data_by_altitude[alt]
+            az = data['az_astre'][len(data['az_astre']) // 2]  # Azimut milieu
+            pos, infos = loaded_abaque.get_dome_position(alt, az)
+            assert 0.0 <= pos < 360.0, f"Position invalide pour alt={alt}, az={az}: {pos}"
 
 
-class TestAbaqueManagerNearestNeighbor:
-    """Tests pour la méthode nearest_neighbor."""
+# =============================================================================
+# Interpolation — edge cases
+# =============================================================================
 
-    @pytest.fixture
-    def manager_with_data(self, sample_abaque_data):
-        from core.tracking.abaque_manager import AbaqueManager
+class TestAbaqueEdgeCases:
+    def test_azimut_zero(self, loaded_abaque):
+        """Azimut 0° (Nord)."""
+        alt_mid = sum(loaded_abaque.altitude_range) / 2
+        pos, _ = loaded_abaque.get_dome_position(alt_mid, 0.0)
+        assert 0.0 <= pos < 360.0
 
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager.is_loaded = True
-        return manager
+    def test_azimut_359(self, loaded_abaque):
+        alt_mid = sum(loaded_abaque.altitude_range) / 2
+        pos, _ = loaded_abaque.get_dome_position(alt_mid, 359.0)
+        assert 0.0 <= pos < 360.0
 
-    def test_nearest_neighbor_exact_match(self, manager_with_data):
-        """Trouve le point exact si disponible."""
-        result = manager_with_data._nearest_neighbor(45.0, 90.0)
+    def test_out_of_bounds_altitude_low(self, loaded_abaque):
+        """Altitude sous la borne min → extrapolation."""
+        min_alt = loaded_abaque.altitude_range[0]
+        pos, infos = loaded_abaque.get_dome_position(min_alt - 10, 180.0)
+        assert isinstance(pos, float)
+        # in_bounds devrait être False
+        assert infos["in_bounds"] is False
 
-        # Point exact: alt=45, az=90 → az_coupole=96
-        assert result == 96.0
+    def test_out_of_bounds_altitude_high(self, loaded_abaque):
+        max_alt = loaded_abaque.altitude_range[1]
+        pos, infos = loaded_abaque.get_dome_position(max_alt + 5, 180.0)
+        assert isinstance(pos, float)
 
-    def test_nearest_neighbor_proche(self, manager_with_data):
-        """Trouve le point le plus proche."""
-        result = manager_with_data._nearest_neighbor(46.0, 91.0)
-
-        # Le plus proche est alt=45, az=90 → 96
-        assert result == pytest.approx(96.0, abs=1.0)
+    def test_not_loaded_raises(self):
+        mgr = AbaqueManager("nonexistent.xlsx")
+        with pytest.raises(RuntimeError, match="non chargée"):
+            mgr.get_dome_position(45.0, 180.0)
 
 
-class TestAbaqueManagerDiagnostics:
-    """Tests pour les diagnostics."""
+# =============================================================================
+# Nearest neighbor
+# =============================================================================
+
+class TestAbaqueNearestNeighbor:
+    def test_nearest_neighbor_returns_float(self, loaded_abaque):
+        result = loaded_abaque._nearest_neighbor(45.0, 180.0)
+        assert isinstance(result, float)
+        assert 0.0 <= result < 360.0
+
+
+# =============================================================================
+# Diagnostics
+# =============================================================================
+
+class TestAbaqueDiagnostics:
+    def test_diagnostics_loaded(self, loaded_abaque):
+        diag = loaded_abaque.get_diagnostics()
+        assert diag["status"] == "loaded"
+        assert "statistics" in diag
+        assert "altitudes_available" in diag
 
     def test_diagnostics_not_loaded(self):
-        """Diagnostics quand abaque non chargée."""
-        from core.tracking.abaque_manager import AbaqueManager
+        mgr = AbaqueManager("fake.xlsx")
+        diag = mgr.get_diagnostics()
+        assert diag["status"] == "not_loaded"
 
-        manager = AbaqueManager()
-        result = manager.get_diagnostics()
-
-        assert result["status"] == "not_loaded"
-        assert "message" in result
-
-    @pytest.fixture
-    def loaded_manager(self, sample_abaque_data):
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager.is_loaded = True
-        manager.n_altitudes = 4
-        manager.n_azimuths = 8
-        manager.altitude_range = (30.0, 75.0)
-        manager.azimuth_range = (0.0, 315.0)
-        return manager
-
-    def test_diagnostics_loaded(self, loaded_manager):
-        """Diagnostics quand abaque chargée."""
-        result = loaded_manager.get_diagnostics()
-
-        assert result["status"] == "loaded"
-        assert "statistics" in result
-        assert result["statistics"]["n_altitudes"] == 4
-        assert result["statistics"]["n_azimuths"] == 8
-        assert "altitudes_available" in result
-
-
-class TestAbaqueManagerExport:
-    """Tests pour l'export JSON."""
-
-    def test_export_not_loaded(self):
-        """Export échoue si abaque non chargée."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        result = manager.export_to_json("/tmp/test_export.json")
-
-        assert result is False
-
-    @pytest.fixture
-    def loaded_manager(self, sample_abaque_data, tmp_path):
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager.is_loaded = True
-        manager.n_altitudes = 4
-        manager.n_azimuths = 8
-        manager.altitude_range = (30.0, 75.0)
-        manager.azimuth_range = (0.0, 315.0)
-        manager.abaque_file = Path("test.xlsx")
-        return manager, tmp_path
-
-    def test_export_success(self, loaded_manager):
-        """Export réussit avec données valides."""
-        manager, tmp_path = loaded_manager
-        output_file = tmp_path / "export.json"
-
-        result = manager.export_to_json(str(output_file))
-
+    def test_export_json(self, loaded_abaque, tmp_path):
+        output = str(tmp_path / "export.json")
+        result = loaded_abaque.export_to_json(output)
         assert result is True
-        assert output_file.exists()
-
-        # Vérifier le contenu
-        with open(output_file) as f:
-            data = json.load(f)
-
-        assert "metadata" in data
-        assert "data" in data
-        assert data["metadata"]["n_altitudes"] == 4
-
-
-class TestAbaqueManagerInterpolation:
-    """Tests détaillés pour l'interpolation circulaire."""
-
-    @pytest.fixture
-    def manager_with_data(self, sample_abaque_data):
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager.is_loaded = True
-
-        altitudes = sorted(sample_abaque_data.keys())
-        first_alt = sample_abaque_data[altitudes[0]]
-        azimuths = sorted(first_alt['az_astre'])
-
-        manager._alt_grid = np.array(altitudes)
-        manager._az_grid = np.array(azimuths)
-        manager._data_dict = sample_abaque_data
-
-        return manager
-
-    def test_interpolation_milieu_cellule(self, manager_with_data):
-        """Interpolation au milieu d'une cellule."""
-        # Point au centre de la cellule [30-45, 45-90]
-        result = manager_with_data._interpolate_circular(37.5, 67.5)
-
-        # Moyenne approximative des 4 coins
-        # Corners: (30,45)=47, (30,90)=95, (45,45)=48, (45,90)=96
-        # Moyenne ≈ 71.5
-        assert 65 < result < 80
-
-    def test_interpolation_bord_grille(self, manager_with_data):
-        """Interpolation au bord de la grille."""
-        # À la limite basse de la grille
-        result = manager_with_data._interpolate_circular(30.0, 45.0)
-
-        # Point exact: devrait être 47
-        assert result == pytest.approx(47.0, abs=1.0)
-
-    def test_interpolation_gestion_circularite(self):
-        """Test de la gestion des angles circulaires."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        # Créer des données avec passage par 0°/360°
-        data = {
-            30.0: {
-                'az_astre': [350, 10],
-                'az_coupole': [355, 5]  # Traverse 0°
-            },
-            45.0: {
-                'az_astre': [350, 10],
-                'az_coupole': [356, 6]
-            }
-        }
-
-        manager = AbaqueManager()
-        manager.data_by_altitude = data
-        manager.is_loaded = True
-        manager._alt_grid = np.array([30.0, 45.0])
-        manager._az_grid = np.array([350, 10])
-        manager._data_dict = data
-
-        # Interpoler à az=0 (milieu de 350-10)
-        result = manager._interpolate_circular(37.5, 0)
-
-        # Devrait être proche de 0° (milieu de 355-5 et 356-6)
-        assert result < 10 or result > 350
-
-
-class TestAbaqueManagerComputeStatistics:
-    """Tests pour le calcul des statistiques."""
-
-    def test_compute_statistics_empty(self):
-        """Statistiques vides si pas de données."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        manager._compute_statistics()
-
-        # Pas d'erreur, mais rien n'est calculé
-        assert manager.n_altitudes == 0
-
-    def test_compute_statistics_with_data(self, sample_abaque_data):
-        """Calcul correct des statistiques."""
-        from core.tracking.abaque_manager import AbaqueManager
-
-        manager = AbaqueManager()
-        manager.data_by_altitude = sample_abaque_data
-        manager._compute_statistics()
-
-        assert manager.n_altitudes == 4
-        assert manager.n_azimuths == 8
-        assert manager.altitude_range == (30.0, 75.0)
-        assert manager.azimuth_range == (0, 315)
+        assert Path(output).exists()

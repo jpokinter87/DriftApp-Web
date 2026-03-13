@@ -1,13 +1,67 @@
 """
 Vues API REST pour le suivi d'objets célestes.
 """
+import json
+import uuid
+from pathlib import Path
+
+from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 # Import du catalogue depuis core/
 from core.observatoire.catalogue import GestionnaireCatalogue
-from web.common.ipc_client import motor_client
+
+
+class MotorServiceClient:
+    """Client pour communiquer avec le Motor Service via fichiers IPC."""
+
+    def __init__(self):
+        self.command_file = Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
+        self.status_file = Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
+
+    def send_command(self, command_type: str, **params) -> bool:
+        """
+        Envoie une commande au Motor Service.
+
+        Args:
+            command_type: Type de commande (tracking_start, tracking_stop, etc.)
+            **params: Paramètres de la commande
+
+        Returns:
+            bool: True si la commande a été envoyée
+        """
+        command = {
+            'id': str(uuid.uuid4()),
+            'command': command_type,
+            **params
+        }
+
+        try:
+            self.command_file.write_text(json.dumps(command))
+            return True
+        except IOError:
+            return False
+
+    def get_status(self) -> dict:
+        """
+        Lit le statut du Motor Service.
+
+        Returns:
+            dict: État actuel du service
+        """
+        try:
+            if self.status_file.exists():
+                return json.loads(self.status_file.read_text())
+        except (IOError, json.JSONDecodeError):
+            pass
+
+        return {'status': 'unknown', 'error': 'Motor Service non disponible'}
+
+
+# Instance globale du client
+motor_client = MotorServiceClient()
 
 
 class TrackingStartView(APIView):
@@ -19,7 +73,6 @@ class TrackingStartView(APIView):
 
     def post(self, request):
         object_name = request.data.get('object') or request.data.get('name')
-        skip_goto = request.data.get('skip_goto', False)
 
         if not object_name:
             return Response(
@@ -38,12 +91,7 @@ class TrackingStartView(APIView):
             )
 
         # Envoyer la commande au Motor Service
-        # skip_goto=True : ne pas faire de GOTO initial (position actuelle conservée)
-        success = motor_client.send_command(
-            'tracking_start',
-            object=object_name,
-            skip_goto=skip_goto
-        )
+        success = motor_client.send_command('tracking_start', object=object_name)
 
         if success:
             return Response({

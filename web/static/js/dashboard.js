@@ -2,40 +2,7 @@
  * DriftApp Web - Dashboard JavaScript
  *
  * Gère l'interface utilisateur et la communication avec l'API REST.
- * Alpine.js store pour les modales, logs et visibilité tracking.
  */
-
-// =========================================================================
-// Alpine.js Store — Couche réactive (modales, logs, tracking visibility)
-// =========================================================================
-
-document.addEventListener('alpine:init', () => {
-    Alpine.store('dashboard', {
-        // GOTO Modal visibility
-        gotoModalVisible: false,
-        // Update Modal visibility
-        updateModalVisible: false,
-        // Update Modal state
-        updateShowProgress: false,
-        updateShowError: false,
-        updateButtonsDisabled: false,
-        // Tracking panel visibility
-        trackingVisible: false,
-        // Logs (reactive array)
-        logs: [],
-
-        addLog(message, type = 'info') {
-            this.logs.unshift({
-                message,
-                type,
-                time: new Date().toLocaleTimeString()
-            });
-            if (this.logs.length > 50) {
-                this.logs.length = 50;
-            }
-        }
-    });
-});
 
 // Configuration
 const API_BASE = '';
@@ -49,9 +16,7 @@ let state = {
     trackingObject: null,
     searchedObject: null,
     lastUpdate: null,
-    trackingInfo: {},  // Pour position_cible, etc.
-    gotoInfo: null,    // Pour la modal GOTO
-    encoderFrozenLogged: false  // Pour éviter de logger l'alerte plusieurs fois
+    trackingInfo: {}  // Pour position_cible, etc.
 };
 
 // Countdown timer (Correction 1)
@@ -65,14 +30,6 @@ let displayedLogs = new Set();
 // Timer widget (Correction 2)
 let timerCtx = null;
 let timerTotal = 60;  // Valeur par défaut, sera mise à jour selon le mode
-
-// GOTO Modal state
-let gotoModalVisible = false;
-let gotoStartPosition = null;
-let gotoStartTime = null;  // Timestamp du début du GOTO pour calcul position estimée
-
-// Vitesse CONTINUOUS en degrés/seconde (51°/min selon config.json ajusté 30/12/2025)
-const CONTINUOUS_SPEED_DEG_PER_SEC = 51.0 / 60;  // ~0.85°/s
 
 // Éléments DOM
 const elements = {
@@ -123,29 +80,11 @@ const elements = {
 
     // Logs
     logs: document.getElementById('logs'),
-    lastUpdate: document.getElementById('last-update'),
-
-    // Update button
-    btnCheckUpdate: document.getElementById('btn-check-update'),
-    updateBadge: document.getElementById('update-badge'),
-
-    // GOTO Modal
-    gotoModal: document.getElementById('goto-modal'),
-    gotoModalObjectName: document.getElementById('goto-modal-object-name'),
-    gotoModalStart: document.getElementById('goto-modal-start'),
-    gotoModalTarget: document.getElementById('goto-modal-target'),
-    gotoModalCurrentPos: document.getElementById('goto-modal-current-pos'),
-    gotoChevrons: document.getElementById('goto-chevrons'),
-    gotoProgressFill: document.getElementById('goto-progress-fill'),
-    gotoProgressText: document.getElementById('goto-progress-text'),
-    gotoModalDelta: document.getElementById('goto-modal-delta')
+    lastUpdate: document.getElementById('last-update')
 };
 
 // État mouvement continu
 let continuousMovement = null;
-
-// Flag pour la synchronisation initiale (reconnexion à une session en cours)
-let initialSyncDone = false;
 
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
@@ -173,10 +112,7 @@ function initEventListeners() {
     });
 
     // Suivi
-    // Shift+clic = démarrer sans GOTO (position actuelle conservée)
-    elements.btnStartTracking.addEventListener('click', (e) => {
-        startTracking(e.shiftKey);
-    });
+    elements.btnStartTracking.addEventListener('click', startTracking);
     elements.btnStopTracking.addEventListener('click', stopTracking);
 
     // Contrôle manuel
@@ -185,10 +121,16 @@ function initEventListeners() {
     elements.btnStop.addEventListener('click', stopMotor);
     elements.btnJogCW1.addEventListener('click', () => jog(1));
     elements.btnJogCW10.addEventListener('click', () => jog(10));
-    elements.btnGoto.addEventListener('click', gotoPosition);
-    elements.gotoAngle.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') gotoPosition();
-    });
+
+    // GOTO (optionnel - peut être supprimé du UI)
+    if (elements.btnGoto) {
+        elements.btnGoto.addEventListener('click', gotoPosition);
+    }
+    if (elements.gotoAngle) {
+        elements.gotoAngle.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') gotoPosition();
+        });
+    }
 
     // Boutons mouvement continu (toggle)
     if (elements.btnContCCW) {
@@ -197,6 +139,15 @@ function initEventListeners() {
     if (elements.btnContCW) {
         elements.btnContCW.addEventListener('click', () => toggleContinuous('cw'));
     }
+
+    // Boutons parking
+    const btnPark = document.getElementById('btn-park');
+    const btnCalibrate = document.getElementById('btn-calibrate');
+    const btnEndSession = document.getElementById('btn-end-session');
+
+    if (btnPark) btnPark.addEventListener('click', parkDome);
+    if (btnCalibrate) btnCalibrate.addEventListener('click', calibrateDome);
+    if (btnEndSession) btnEndSession.addEventListener('click', endSession);
 }
 
 // =========================================================================
@@ -253,20 +204,9 @@ async function searchObject() {
         elements.btnStartTracking.disabled = true;
         state.searchedObject = null;
     } else {
-        const raDeg = result.ra_deg ?? null;
-        const decDeg = result.dec_deg ?? null;
-
-        // Format décimal
-        const raDecimal = raDeg !== null ? raDeg.toFixed(2) + '°' : '--';
-        const decDecimal = decDeg !== null ? decDeg.toFixed(2) + '°' : '--';
-
-        // Format sexagésimal : HMS pour RA, DMS pour DEC
-        const raHMS = formatHMS(raDeg);
-        const decDMS = formatDMS(decDeg);
-
-        // Affichage sur deux lignes : décimal + sexagésimal
-        elements.objectCoords.innerHTML =
-            `RA: ${raDecimal} (${raHMS})<br>DEC: ${decDecimal} (${decDMS})`;
+        const ra = result.ra_deg?.toFixed(2) || result.coord?.ra_h || '--';
+        const dec = result.dec_deg?.toFixed(2) || result.coord?.dec_d || '--';
+        elements.objectCoords.textContent = `RA: ${ra}° | DEC: ${dec}°`;
         elements.objectInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = false;
         state.searchedObject = result.nom || name;
@@ -293,23 +233,15 @@ function flashButtonSuccess(button, duration = 5000) {
     }, duration);
 }
 
-async function startTracking(skipGoto = false) {
+async function startTracking() {
     const name = state.searchedObject || elements.objectName.value.trim();
     if (!name) {
         log('Aucun objet sélectionné', 'warning');
         return;
     }
 
-    if (skipGoto) {
-        log(`Démarrage du suivi de ${name} (position actuelle conservée)...`);
-    } else {
-        log(`Démarrage du suivi de ${name}...`);
-    }
-
-    const result = await apiCall('/api/tracking/start/', 'POST', {
-        object: name,
-        skip_goto: skipGoto
-    });
+    log(`Démarrage du suivi de ${name}...`);
+    const result = await apiCall('/api/tracking/start/', 'POST', { object: name });
 
     if (result.error) {
         log(`Erreur: ${result.error}`, 'error');
@@ -331,9 +263,6 @@ async function stopTracking() {
         elements.btnStartTracking.disabled = false;
         elements.btnStopTracking.disabled = true;
         elements.trackingInfo.classList.add('hidden');
-        
-        // Fermer la modal GOTO si ouverte
-        hideGotoModal();
     }
 }
 
@@ -351,8 +280,6 @@ async function stopMotor() {
     await apiCall('/api/hardware/stop/', 'POST');
     // Arrêter aussi le mouvement continu
     stopContinuousMovement();
-    // Fermer la modal GOTO si ouverte
-    hideGotoModal();
 }
 
 // Mouvement continu (toggle)
@@ -403,137 +330,6 @@ async function gotoPosition() {
 }
 
 // =========================================================================
-// GOTO Modal Management
-// =========================================================================
-
-function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
-
-    // Mémoriser la position de départ et le timestamp pour le calcul de position estimée
-    gotoStartPosition = startPos;
-    gotoStartTime = Date.now();
-
-    // Mettre à jour le contenu
-    if (elements.gotoModalObjectName) {
-        elements.gotoModalObjectName.textContent = objectName || '--';
-    }
-
-    // Affichage des positions : toujours dans l'ordre de lecture naturel
-    // - Horaire (CW) : Départ >>> Cible (gauche vers droite)
-    // - Anti-horaire (CCW) : Cible <<< Départ (les chevrons pointent vers la cible à gauche)
-    const labelLeft = document.getElementById('goto-label-left');
-    const labelRight = document.getElementById('goto-label-right');
-
-    if (delta >= 0) {
-        // Sens horaire : départ à gauche, cible à droite
-        if (elements.gotoModalStart) {
-            elements.gotoModalStart.textContent = `${startPos.toFixed(1)}°`;
-        }
-        if (elements.gotoModalTarget) {
-            elements.gotoModalTarget.textContent = `${targetPos.toFixed(1)}°`;
-        }
-        if (labelLeft) labelLeft.textContent = 'Départ';
-        if (labelRight) labelRight.textContent = 'Cible';
-    } else {
-        // Sens anti-horaire : cible à gauche, départ à droite
-        // Pour que l'affichage soit "45° <<< 175°" au lieu de "175° <<< 45°"
-        if (elements.gotoModalStart) {
-            elements.gotoModalStart.textContent = `${targetPos.toFixed(1)}°`;
-        }
-        if (elements.gotoModalTarget) {
-            elements.gotoModalTarget.textContent = `${startPos.toFixed(1)}°`;
-        }
-        if (labelLeft) labelLeft.textContent = 'Cible';
-        if (labelRight) labelRight.textContent = 'Départ';
-    }
-
-    if (elements.gotoModalDelta) {
-        const deltaStr = delta >= 0 ? `+${delta.toFixed(1)}°` : `${delta.toFixed(1)}°`;
-        elements.gotoModalDelta.textContent = deltaStr;
-    }
-
-    // Configurer la direction des chevrons
-    updateGotoChevrons(delta);
-
-    // Mettre à jour la position actuelle
-    updateGotoModalPosition(currentPos, startPos, targetPos);
-
-    // Afficher la modal via Alpine.js store
-    Alpine.store('dashboard').gotoModalVisible = true;
-    gotoModalVisible = true;
-}
-
-function hideGotoModal() {
-    Alpine.store('dashboard').gotoModalVisible = false;
-    gotoModalVisible = false;
-    gotoStartPosition = null;
-    gotoStartTime = null;
-}
-
-function updateGotoChevrons(delta) {
-    if (!elements.gotoChevrons) return;
-
-    // Supprimer les classes de direction précédentes
-    elements.gotoChevrons.classList.remove('direction-cw', 'direction-ccw');
-
-    // Mettre à jour le contenu des chevrons selon la direction
-    if (delta >= 0) {
-        // Sens horaire (CW) : ›››
-        elements.gotoChevrons.innerHTML = '<span class="chevron">›</span><span class="chevron">›</span><span class="chevron">›</span>';
-        elements.gotoChevrons.classList.add('direction-cw');
-    } else {
-        // Sens anti-horaire (CCW) : ‹‹‹
-        elements.gotoChevrons.innerHTML = '<span class="chevron">‹</span><span class="chevron">‹</span><span class="chevron">‹</span>';
-        elements.gotoChevrons.classList.add('direction-ccw');
-    }
-}
-
-function updateGotoModalPosition(currentPos, startPos, targetPos) {
-    if (!elements.gotoModalCurrentPos) return;
-
-    // Mettre à jour la position actuelle
-    elements.gotoModalCurrentPos.textContent = `${currentPos.toFixed(1)}°`;
-
-    // Calculer la direction du mouvement (delta signé)
-    let delta = targetPos - startPos;
-    
-    // Gérer le cas où on traverse 0°/360° (prendre le chemin le plus court)
-    if (delta > 180) {
-        delta -= 360;
-    } else if (delta < -180) {
-        delta += 360;
-    }
-    
-    const totalDistance = Math.abs(delta);
-    let traveled;
-    
-    if (delta >= 0) {
-        // Sens horaire : currentPos augmente de startPos vers targetPos
-        traveled = currentPos - startPos;
-        // Gérer le wrap si on traverse 0°
-        if (traveled < 0) traveled += 360;
-        // Ne pas dépasser la distance totale
-        if (traveled > totalDistance) traveled = totalDistance;
-    } else {
-        // Sens anti-horaire : currentPos diminue de startPos vers targetPos
-        traveled = startPos - currentPos;
-        // Gérer le wrap si on traverse 0°
-        if (traveled < 0) traveled += 360;
-        // Ne pas dépasser la distance totale
-        if (traveled > totalDistance) traveled = totalDistance;
-    }
-
-    // Calculer le pourcentage (plafonné à 100%)
-    const progress = Math.min(100, (traveled / totalDistance) * 100);
-
-    if (elements.gotoProgressFill) {
-        elements.gotoProgressFill.style.width = `${progress}%`;
-    }
-    if (elements.gotoProgressText) {
-        elements.gotoProgressText.textContent = `${Math.round(progress)}%`;
-    }
-}
-
-// =========================================================================
 // Polling & Updates
 // =========================================================================
 
@@ -547,27 +343,15 @@ async function updateStatus() {
 
     // Mettre à jour l'état
     state.status = motor.status || 'unknown';
-
-    // Position de la coupole:
-    // - En suivi actif: utiliser motor.position (position LOGIQUE du tracker, compensée par l'offset encodeur)
-    // - Sinon: utiliser encoder.angle (lecture brute pour manoeuvres manuelles)
-    // Cela garantit que CIMIER ≈ CIBLE pendant le suivi
-    if (motor.status === 'tracking' && motor.position !== undefined) {
-        state.position = motor.position;
-    } else {
-        state.position = encoder.angle || motor.position || 0;
-    }
-
+    state.position = encoder.angle || motor.position || 0;
     state.target = motor.target;
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
-    state.gotoInfo = motor.goto_info || null;
 
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);
-    updatePositionDisplay(encoder, motor);
+    updatePositionDisplay(encoder);
     updateTrackingDisplay(motor);
-    updateGotoModal(motor, encoder);
     drawCompass();
 
     elements.lastUpdate.textContent = `Dernière mise à jour: ${state.lastUpdate.toLocaleTimeString()}`;
@@ -584,172 +368,62 @@ function updateServiceStatus(motor, encoder) {
     } else if (status === 'moving') {
         elements.statusDot.classList.add('moving');
         elements.statusText.textContent = 'En mouvement';
-    } else if (status === 'initializing') {
-        // Nouveau statut : GOTO initial en cours avant le tracking
+    } else if (status === 'parking') {
         elements.statusDot.classList.add('moving');
-        elements.statusText.textContent = 'GOTO initial...';
+        elements.statusText.textContent = '🅿️ Parking...';
+    } else if (status === 'calibrating') {
+        elements.statusDot.classList.add('moving');
+        elements.statusText.textContent = '🔧 Calibration...';
     } else if (status === 'error') {
         elements.statusDot.classList.add('disconnected');
         elements.statusText.textContent = 'Erreur';
     } else {
         elements.statusText.textContent = 'Déconnecté';
     }
+
+    // Mettre à jour l'état de l'encodeur et des boutons parking
+    updateEncoderStatus(motor);
+    updateParkingButtons(motor);
 }
 
-function updatePositionDisplay(encoder, motor) {
+function updatePositionDisplay(encoder) {
     elements.domePosition.textContent = `${state.position.toFixed(2)}°`;
     elements.domeTarget.textContent = state.target ? `${state.target.toFixed(2)}°` : '--';
-
-    // Récupérer l'offset encodeur depuis tracking_info (si suivi actif)
-    let encoderOffset = 0;
-    if (motor && motor.tracking_info && motor.tracking_info.encoder_offset !== undefined) {
-        encoderOffset = motor.tracking_info.encoder_offset;
-    }
 
     // Cartouche ENC avec angle encodeur et état coloré
     const encItem = elements.encItem;
     if (encItem) {
         // Supprimer les classes d'état précédentes
-        encItem.classList.remove('enc-absent', 'enc-uncalibrated', 'enc-calibrated', 'enc-frozen');
+        encItem.classList.remove('enc-absent', 'enc-uncalibrated', 'enc-calibrated');
 
         if (!encoder || encoder.error || encoder.status === 'absent') {
             // Gris = absent (daemon non disponible)
             encItem.classList.add('enc-absent');
             elements.encoderCalibrated.textContent = 'ABSENT';
-        } else if (encoder.frozen === true || encoder.status === 'FROZEN') {
-            // ROUGE CLIGNOTANT = encodeur figé (dysfonctionnement détecté)
-            encItem.classList.add('enc-frozen');
-            const duration = encoder.frozen_duration ? encoder.frozen_duration.toFixed(1) : '?';
-            elements.encoderCalibrated.textContent = `FIGÉ ${duration}s`;
-            // Log l'alerte (une seule fois)
-            if (!state.encoderFrozenLogged) {
-                addLog(`⚠️ ALERTE: Encodeur figé depuis ${duration}s - vérifier connexion SPI!`, 'error');
-                state.encoderFrozenLogged = true;
-            }
         } else if (!encoder.calibrated) {
             // Marron = non calibré
             encItem.classList.add('enc-uncalibrated');
             elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
-            state.encoderFrozenLogged = false;  // Reset pour prochaine alerte
         } else {
             // Vert = calibré
             encItem.classList.add('enc-calibrated');
-            const angle = (encoder.angle || 0).toFixed(2);
-            // Afficher l'offset si significatif (> 1°) pendant le suivi
-            if (Math.abs(encoderOffset) > 1.0 && motor && motor.status === 'tracking') {
-                const sign = encoderOffset >= 0 ? '+' : '';
-                elements.encoderCalibrated.textContent = `${angle}° (${sign}${encoderOffset.toFixed(1)}°)`;
-            } else {
-                elements.encoderCalibrated.textContent = `${angle}°`;
-            }
-            state.encoderFrozenLogged = false;  // Reset pour prochaine alerte
+            elements.encoderCalibrated.textContent = `${(encoder.angle || 0).toFixed(2)}°`;
         }
     }
-}
-
-// Mise à jour de la modal GOTO
-// IMPORTANT: Utilise une position CALCULÉE à partir de la vitesse CONTINUOUS
-// pour éviter toute lecture d'encodeur qui pourrait causer des micro-coupures moteur
-function updateGotoModal(motor, encoder) {
-    const isInitializing = motor.status === 'initializing' && motor.tracking_object;
-    const gotoInfo = motor.goto_info;
-
-    if (isInitializing && gotoInfo) {
-        if (!gotoModalVisible) {
-            // Première ouverture de la modal
-            showGotoModal(
-                motor.tracking_object,
-                gotoInfo.current_position,  // Position au moment du démarrage
-                gotoInfo.target_position,
-                gotoInfo.current_position,  // Position initiale = position de départ
-                gotoInfo.delta
-            );
-        } else {
-            // Calculer la position ESTIMÉE à partir du temps écoulé et de la vitesse CONTINUOUS
-            // Cela évite de lire l'encodeur pendant le GOTO (pas de micro-coupures)
-            const estimatedPos = calculateEstimatedPosition(
-                gotoStartPosition || gotoInfo.current_position,
-                gotoInfo.delta,
-                gotoStartTime
-            );
-
-            // Mise à jour en temps réel avec la position calculée
-            updateGotoModalPosition(
-                estimatedPos,
-                gotoStartPosition || gotoInfo.current_position,
-                gotoInfo.target_position
-            );
-            // Mettre à jour aussi l'affichage de la position
-            if (elements.gotoModalCurrentPos) {
-                elements.gotoModalCurrentPos.textContent = `${estimatedPos.toFixed(1)}°`;
-            }
-        }
-    } else if (gotoModalVisible) {
-        // Le GOTO est terminé, fermer la modal
-        hideGotoModal();
-    }
-}
-
-// Calcule la position estimée basée sur la vitesse CONTINUOUS (~41°/min)
-// Aucune lecture d'encodeur - calcul purement basé sur le temps écoulé
-function calculateEstimatedPosition(startPos, delta, startTime) {
-    if (!startTime) return startPos;
-
-    const elapsedSeconds = (Date.now() - startTime) / 1000;
-    const distanceTraveled = CONTINUOUS_SPEED_DEG_PER_SEC * elapsedSeconds;
-
-    // Ne pas dépasser la distance totale du GOTO
-    const totalDistance = Math.abs(delta);
-    const clampedDistance = Math.min(distanceTraveled, totalDistance);
-
-    // Calculer la position estimée en tenant compte de la direction
-    const direction = delta >= 0 ? 1 : -1;
-    let estimatedPos = startPos + (direction * clampedDistance);
-
-    // Normaliser entre 0 et 360
-    estimatedPos = ((estimatedPos % 360) + 360) % 360;
-
-    return estimatedPos;
 }
 
 function updateTrackingDisplay(motor) {
-    // Afficher le panneau pendant l'initialisation (GOTO initial) OU pendant le tracking actif
-    const isInitializing = motor.status === 'initializing' && motor.tracking_object;
-    const isTracking = motor.status === 'tracking' && motor.tracking_object;
-
-    if (isInitializing || isTracking) {
-        // === SYNCHRONISATION MULTI-APPAREILS ===
-        // Si un suivi est en cours et qu'on vient de se connecter, synchroniser l'état
-        if (!initialSyncDone && motor.tracking_object) {
-            state.searchedObject = motor.tracking_object;
-            elements.objectName.value = motor.tracking_object;
-
-            // Log informatif pour l'utilisateur
-            const info = motor.tracking_info || {};
-            const corrections = info.total_corrections || 0;
-            log(`Reconnexion à la session en cours: ${motor.tracking_object}`, 'success');
-            if (corrections > 0) {
-                log(`Session active: ${corrections} corrections effectuées`, 'info');
-            }
-
-            initialSyncDone = true;
-        }
-
-        Alpine.store('dashboard').trackingVisible = true;
+    if (motor.status === 'tracking' && motor.tracking_object) {
+        elements.trackingInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
 
-        // Afficher le nom de l'objet (simplifié - la modal gère les détails du GOTO)
-        if (isInitializing) {
-            elements.trackingObject.textContent = `${motor.tracking_object} (GOTO...)`;
-        } else {
-            elements.trackingObject.textContent = motor.tracking_object;
-        }
+        elements.trackingObject.textContent = motor.tracking_object;
 
         const info = motor.tracking_info || {};
         state.trackingInfo = info;  // Stocker pour drawCompass
 
-        // Mettre à jour le cartouche CIBLE avec position_cible pendant le tracking
+        // Mettre à jour le cartouche TÉLESCOPE avec position_cible pendant le tracking
         if (info.position_cible !== undefined && info.position_cible !== null) {
             elements.domeTarget.textContent = `${info.position_cible.toFixed(2)}°`;
         }
@@ -760,7 +434,7 @@ function updateTrackingDisplay(motor) {
         const mode = motor.mode || 'normal';
         const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
         elements.trackingMode.textContent = `${modeEmoji[mode] || ''} ${mode.toUpperCase()}`;
-        elements.trackingMode.className = `hidden mode-${mode}`;
+        elements.trackingMode.className = `mode-${mode}`;
 
         // Cartouche MODE avec couleur (dans la section position)
         if (elements.trackingModeIndicator) {
@@ -805,8 +479,8 @@ function updateTrackingDisplay(motor) {
             elements.trackingRemaining.textContent = apiRemaining ? `${apiRemaining}s` : '--';
         }
 
-        // Timer intégré dans la boussole - redessiner
-        drawCompass();
+        // Correction 2: Mettre à jour le timer circulaire
+        drawTimer();
 
         // Correction 3: Afficher les logs de suivi du Motor Service
         if (motor.tracking_logs && Array.isArray(motor.tracking_logs)) {
@@ -818,7 +492,7 @@ function updateTrackingDisplay(motor) {
             });
         }
     } else {
-        Alpine.store('dashboard').trackingVisible = false;
+        elements.trackingInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
 
@@ -841,10 +515,6 @@ function updateTrackingDisplay(motor) {
         if (elements.correctionsTotal) {
             elements.correctionsTotal.textContent = '0.00°';
         }
-
-        // Reset du flag de sync pour permettre la reconnexion à une future session
-        // (permet de sync si un suivi démarre depuis un autre appareil)
-        initialSyncDone = false;
     }
 }
 
@@ -856,13 +526,13 @@ function startCountdown() {
         if (countdownValue !== null && countdownValue > 0) {
             countdownValue--;
             elements.trackingRemaining.textContent = `${countdownValue}s`;
-            drawCompass();  // Timer intégré dans la boussole
+            drawTimer();  // Mettre à jour le timer visuel
         } else if (countdownValue === 0) {
-            // Réinitialiser pour permettre le redémarrage au prochain cycle
+            // Correction 2: Réinitialiser pour permettre le redémarrage au prochain cycle
             lastRemainingFromApi = null;
             // Garder l'affichage "0s" en attendant la nouvelle valeur de l'API
             elements.trackingRemaining.textContent = '0s';
-            drawCompass();
+            drawTimer();
         }
     }, 1000);
 }
@@ -883,299 +553,211 @@ function stopCountdown() {
 let compassCtx = null;
 
 function initCompass() {
-    const canvas = elements.compass;
-    if (canvas) {
-        compassCtx = canvas.getContext('2d');
-        drawCompass();
-    }
+    compassCtx = elements.compass.getContext('2d');
+    drawCompass();
 }
 
 function drawCompass() {
+    if (!compassCtx) return;
+
     const canvas = elements.compass;
-    if (!canvas || !compassCtx) return;
-
     const ctx = compassCtx;
-    const width = canvas.width;
-    const height = canvas.height;
-    const cx = width / 2;
-    const cy = height / 2;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const radius = Math.min(cx, cy) - 20;
 
-    // Rayons - couronne extérieure au maximum, coupole agrandie
-    const outerRadius = Math.min(cx, cy) - 4;   // Couronne extérieure (timer) - au max
-    const domeRadius = 95;                       // Couronne de la coupole (agrandie pour marge télescope)
+    // Night vision optimized colors
+    const colors = {
+        background: '#0a0a0f',
+        panel: '#12121a',
+        border: '#2a2a35',
+        red: '#c43c3c',
+        redDim: '#8b2d2d',
+        amber: '#d4873f',
+        green: '#4caf6a',
+        blue: '#4a7a9e',
+        textDim: '#5a5855',
+        textSecondary: '#8a8680'
+    };
 
     // Clear
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // =========================================================================
-    // COUCHE 1: Fond général
-    // =========================================================================
-    ctx.fillStyle = '#1a1a2e';
+    // Fond with subtle gradient effect
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius + 10);
+    gradient.addColorStop(0, '#1a1a24');
+    gradient.addColorStop(1, colors.background);
+    ctx.fillStyle = gradient;
     ctx.beginPath();
-    ctx.arc(cx, cy, outerRadius + 2, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, radius + 10, 0, 2 * Math.PI);
     ctx.fill();
 
-    // =========================================================================
-    // COUCHE 2: Arc Timer sur couronne extérieure
-    // =========================================================================
-    const isTracking = state.trackingInfo && countdownValue !== null;
-    const timerLineWidth = 6;  // Épaisseur réduite
-
-    // Fond de la couronne timer (cercle discret)
-    ctx.strokeStyle = '#1e2d42';
-    ctx.lineWidth = timerLineWidth;
+    // Outer glow ring
+    ctx.strokeStyle = 'rgba(196, 60, 60, 0.15)';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(cx, cy, outerRadius - timerLineWidth / 2, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, radius + 5, 0, 2 * Math.PI);
     ctx.stroke();
 
-    // Arc de progression du timer
-    let timerColor = '#2d8a5e';  // Couleur par défaut
-    if (isTracking && countdownValue !== null && timerTotal > 0) {
-        const progress = Math.min(countdownValue / timerTotal, 1.0);
-
-        // Couleurs atténuées pour observatoire
-        if (progress > 0.5) {
-            timerColor = '#2d8a5e';  // Vert sombre
-        } else if (progress > 0.25) {
-            timerColor = '#b8860b';  // Or sombre
-        } else {
-            timerColor = '#8b3a3a';  // Rouge sombre
-        }
-
-        if (progress > 0) {
-            ctx.strokeStyle = timerColor;
-            ctx.lineWidth = timerLineWidth;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            const startAngle = -Math.PI / 2;
-            const endAngle = startAngle + (2 * Math.PI * progress);
-            ctx.arc(cx, cy, outerRadius - timerLineWidth / 2, startAngle, endAngle);
-            ctx.stroke();
-            ctx.lineCap = 'butt';
-        }
-    }
+    // Cercle principal
+    ctx.strokeStyle = colors.border;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.stroke();
 
     // =========================================================================
-    // COUCHE 3: Graduations cardinales sur couronne extérieure
+    // Arc representing dome slit (trappe)
     // =========================================================================
-    ctx.strokeStyle = '#4a6a8a';
-    for (let deg = 0; deg < 360; deg += 90) {
-        const rad = (deg - 90) * Math.PI / 180;
-        const x1 = cx + (outerRadius - timerLineWidth - 2) * Math.cos(rad);
-        const y1 = cy + (outerRadius - timerLineWidth - 2) * Math.sin(rad);
-        const x2 = cx + (outerRadius - timerLineWidth - 10) * Math.cos(rad);
-        const y2 = cy + (outerRadius - timerLineWidth - 10) * Math.sin(rad);
-
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-    }
-
-    // =========================================================================
-    // COUCHE 4: Ciel étoilé (entre couronne extérieure et coupole)
-    // =========================================================================
-    drawStarField(ctx, cx, cy, outerRadius - timerLineWidth - 12, domeRadius + 10);
-
-    // =========================================================================
-    // COUCHE 5: Labels cardinaux (dans le ciel étoilé)
-    // =========================================================================
-    ctx.font = 'bold 13px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#5a8ab8';  // Bleu discret
-
-    const labelRadius = outerRadius - 25;
-    const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
-    for (const [deg, label] of Object.entries(labels)) {
-        const rad = (parseInt(deg) - 90) * Math.PI / 180;
-        const lx = cx + labelRadius * Math.cos(rad);
-        const ly = cy + labelRadius * Math.sin(rad);
-        ctx.fillText(label, lx, ly);
-    }
-
-    // =========================================================================
-    // COUCHE 6: Arc de la coupole (partie fermée en rouge sombre)
-    // =========================================================================
-    const OPENING_ANGLE = 40.1;  // degrés (70cm / pi x 200cm x 360)
+    const OPENING_ANGLE = 40.1;  // degrees (70cm / pi x 200cm x 360)
     const domeAngle = state.position;
 
-    // Calculer les limites de l'ouverture
+    // Calculate opening limits
     const openingStart = domeAngle - OPENING_ANGLE / 2;
     const openingEnd = domeAngle + OPENING_ANGLE / 2;
 
-    // Bordure extérieure de la coupole
-    ctx.strokeStyle = '#3d5068';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(cx, cy, domeRadius + 7, 0, 2 * Math.PI);
-    ctx.stroke();
-
-    // Graduations cardinales sur la coupole
-    ctx.strokeStyle = '#4a6a8a';
-    for (let deg = 0; deg < 360; deg += 90) {
-        const rad = (deg - 90) * Math.PI / 180;
-        const x1 = cx + (domeRadius + 7) * Math.cos(rad);
-        const y1 = cy + (domeRadius + 7) * Math.sin(rad);
-        const x2 = cx + (domeRadius + 14) * Math.cos(rad);
-        const y2 = cy + (domeRadius + 14) * Math.sin(rad);
-
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-    }
-
-    // Arc ambre = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
-    // Couleur alignée avec cartouche CIMIER (--accent-amber: #d4a055)
-    ctx.strokeStyle = 'rgba(212, 160, 85, 0.75)';
+    // Red arc = CLOSED portion (from openingEnd to openingStart, through opposite)
+    ctx.strokeStyle = 'rgba(196, 60, 60, 0.25)';
     ctx.lineWidth = 12;
     ctx.beginPath();
     const closedStartRad = (openingEnd - 90) * Math.PI / 180;
     const closedEndRad = (openingStart - 90 + 360) * Math.PI / 180;
-    ctx.arc(cx, cy, domeRadius, closedStartRad, closedEndRad);
+    ctx.arc(cx, cy, radius - 6, closedStartRad, closedEndRad);
     ctx.stroke();
 
-    // Bordure intérieure de la coupole
-    ctx.strokeStyle = '#2d4059';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, domeRadius - 7, 0, 2 * Math.PI);
-    ctx.stroke();
+    // Graduations with amber/red tones for night vision
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
-    // =========================================================================
-    // COUCHE 7: Télescope au centre avec timer
-    // =========================================================================
-    const telescopeAngle = state.trackingInfo?.position_cible;
-    drawTelescope(ctx, cx, cy, telescopeAngle, countdownValue, timerColor);
-}
+    for (let deg = 0; deg < 360; deg += 30) {
+        const rad = (deg - 90) * Math.PI / 180;
+        const x1 = cx + (radius - 15) * Math.cos(rad);
+        const y1 = cy + (radius - 15) * Math.sin(rad);
+        const x2 = cx + radius * Math.cos(rad);
+        const y2 = cy + radius * Math.sin(rad);
 
-// Dessiner un champ d'étoiles dans une zone annulaire
-function drawStarField(ctx, cx, cy, outerR, innerR) {
-    // Utiliser une seed basée sur les rayons pour avoir un pattern stable
-    const starCount = 60;
-
-    ctx.fillStyle = '#ffffff';
-
-    for (let i = 0; i < starCount; i++) {
-        // Pseudo-random basé sur l'index (pattern stable)
-        const seed1 = Math.sin(i * 12.9898) * 43758.5453;
-        const seed2 = Math.sin(i * 78.233) * 43758.5453;
-        const seed3 = Math.sin(i * 45.164) * 43758.5453;
-
-        const angle = (seed1 - Math.floor(seed1)) * 2 * Math.PI;
-        const radiusFactor = (seed2 - Math.floor(seed2));
-        const r = innerR + (outerR - innerR) * radiusFactor;
-
-        const x = cx + r * Math.cos(angle);
-        const y = cy + r * Math.sin(angle);
-
-        // Taille et opacité variables
-        const size = 0.5 + (seed3 - Math.floor(seed3)) * 1.5;
-        const opacity = 0.3 + (seed3 - Math.floor(seed3)) * 0.7;
-
-        ctx.globalAlpha = opacity;
+        // Tick marks - amber for cardinal, dimmer for others
+        ctx.strokeStyle = deg % 90 === 0 ? colors.amber : colors.textDim;
+        ctx.lineWidth = deg % 90 === 0 ? 2 : 1;
         ctx.beginPath();
-        ctx.arc(x, y, size, 0, 2 * Math.PI);
-        ctx.fill();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        // Cardinal labels
+        if (deg % 90 === 0) {
+            const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
+            const lx = cx + (radius - 30) * Math.cos(rad);
+            const ly = cy + (radius - 30) * Math.sin(rad);
+            ctx.fillStyle = colors.amber;
+            ctx.font = 'bold 13px Inter, sans-serif';
+            ctx.fillText(labels[deg], lx, ly);
+        }
     }
 
-    ctx.globalAlpha = 1.0;
+    // =========================================================================
+    // Double indicator: TELESCOPE + DOME
+    // =========================================================================
+
+    // TELESCOPE needle (green) - target position that evolves continuously
+    const telescopeAngle = state.trackingInfo?.position_cible;
+    if (telescopeAngle !== undefined && telescopeAngle !== null) {
+        const teleRad = (telescopeAngle - 90) * Math.PI / 180;
+
+        // Telescope needle line with glow
+        ctx.shadowColor = 'rgba(76, 175, 106, 0.5)';
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = colors.green;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + (radius - 45) * Math.cos(teleRad), cy + (radius - 45) * Math.sin(teleRad));
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Green triangular arrowhead
+        drawArrowHead(ctx, cx, cy, teleRad, radius - 45, colors.green);
+    }
+
+    // DOME needle (blue) - current dome position
+    const domeRad = (state.position - 90) * Math.PI / 180;
+
+    // Dome needle line with glow
+    ctx.shadowColor = 'rgba(74, 122, 158, 0.5)';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = colors.blue;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + (radius - 40) * Math.cos(domeRad), cy + (radius - 40) * Math.sin(domeRad));
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Blue triangular arrowhead
+    drawArrowHead(ctx, cx, cy, domeRad, radius - 40, colors.blue);
+
+    // Center with telescope representation
+    drawTelescope(ctx, cx, cy, telescopeAngle);
 }
 
-// Dessiner la flèche de direction calculée (√x²) avec timer intégré
-function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
-    // Si pas d'angle de tracking, utiliser la position coupole
+// Draw telescope at center (rectangular tube)
+function drawTelescope(ctx, cx, cy, angle) {
+    // If no tracking angle, use dome position
     const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
     const teleRad = teleAngle * Math.PI / 180;
 
-    // Dimensions de la flèche
-    const arrowLength = 65;
-    const arrowHeadSize = 12;
-    const arrowWidth = 3;
+    // Tube dimensions
+    const tubeLength = 65;
+    const tubeWidth = 24;
 
-    // Rayon du centre pour le symbole √x² et timer
-    const centerRadius = 28;
+    // Night vision colors
+    const colors = {
+        tubeFill: '#1e1e28',
+        tubeStroke: '#3a3a48',
+        aperture: '#2a2a35',
+        mountOuter: '#1a1a24',
+        mountInner: '#c43c3c',  // Red accent for night vision
+        mountGlow: 'rgba(196, 60, 60, 0.3)'
+    };
 
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(teleRad);
 
-    // === FLÈCHE ===
-    // Tige de la flèche (du cercle central vers l'extérieur)
-    ctx.strokeStyle = '#4ade80';  // Vert clair
-    ctx.lineWidth = arrowWidth;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(0, -centerRadius - 2);
-    ctx.lineTo(0, -arrowLength);
-    ctx.stroke();
+    // Tube body (dark)
+    ctx.fillStyle = colors.tubeFill;
+    ctx.fillRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
 
-    // Pointe de la flèche (triangle)
-    ctx.fillStyle = '#4ade80';
-    ctx.beginPath();
-    ctx.moveTo(0, -arrowLength - arrowHeadSize);  // Pointe
-    ctx.lineTo(-arrowHeadSize/2, -arrowLength + 2);  // Coin gauche
-    ctx.lineTo(arrowHeadSize/2, -arrowLength + 2);   // Coin droit
-    ctx.closePath();
-    ctx.fill();
-
-    // === CERCLE CENTRAL avec symbole √x² ===
-    // Cercle extérieur
-    ctx.fillStyle = '#1e3a5f';
-    ctx.beginPath();
-    ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Bordure du cercle
-    ctx.strokeStyle = '#4ade80';
+    // Tube border
+    ctx.strokeStyle = colors.tubeStroke;
     ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.strokeRect(-tubeWidth/2, -tubeLength, tubeWidth, tubeLength);
 
+    // Tube aperture (slightly lighter ellipse)
+    ctx.fillStyle = colors.aperture;
+    ctx.beginPath();
+    ctx.ellipse(0, -tubeLength + 6, tubeWidth/2 - 3, 5, 0, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Mount (outer circle)
+    ctx.fillStyle = colors.mountOuter;
+    ctx.beginPath();
+    ctx.arc(0, 0, 14, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Mount glow effect
+    ctx.shadowColor = colors.mountGlow;
+    ctx.shadowBlur = 10;
+
+    // Mount (inner circle with red accent)
+    ctx.fillStyle = colors.mountInner;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
     ctx.restore();
-
-    // === CONTENU DU CERCLE CENTRAL ===
-    const hasTimer = countdownValue !== undefined && countdownValue !== null && countdownValue !== '--';
-
-    if (hasTimer) {
-        // Mode avec timer: afficher timer + symbole √x² en dessous
-        // Formater le texte du timer
-        let timerText;
-        if (typeof countdownValue === 'number') {
-            timerText = Math.round(countdownValue) + 's';
-        } else {
-            timerText = String(countdownValue);
-        }
-
-        // Timer (légèrement au-dessus du centre)
-        ctx.save();
-        ctx.fillStyle = timerColor || '#4da6ff';
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(timerText, cx, cy - 7);
-        ctx.restore();
-
-        // Symbole √x² en dessous du timer
-        ctx.save();
-        ctx.fillStyle = '#4ade80';
-        ctx.font = 'bold 14px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('√x²', cx, cy + 10);
-        ctx.restore();
-    } else {
-        // Mode sans timer: symbole √x² seul, centré
-        ctx.save();
-        ctx.fillStyle = '#4ade80';
-        ctx.font = 'bold 20px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('√x²', cx, cy);
-        ctx.restore();
-    }
 }
 
 // Dessiner une pointe de flèche triangulaire
@@ -1206,13 +788,13 @@ function drawCompassLegend(ctx, x, y) {
     ctx.font = '10px Arial';
     ctx.textAlign = 'center';
 
-    // CIBLE (direction calculée) en vert
-    ctx.fillStyle = '#4ade80';
-    ctx.fillText('● CIBLE (√x²)', x - 45, y);
+    // TÉLESCOPE en vert
+    ctx.fillStyle = '#00d26a';
+    ctx.fillText('● TÉLESCOPE', x - 45, y);
 
-    // CIMIER en ambre (aligné avec cartouche CSS --accent-amber)
-    ctx.fillStyle = '#d4a055';
-    ctx.fillText('● CIMIER', x + 45, y);
+    // COUPOLE en bleu
+    ctx.fillStyle = '#4da6ff';
+    ctx.fillText('● COUPOLE', x + 45, y);
 }
 
 // =========================================================================
@@ -1233,12 +815,12 @@ function drawTimer() {
 
     if (!timerCanvas || !timerWidget) return;
 
-    // Initialiser le contexte si nécessaire
+    // Initialize context if needed
     if (!timerCtx) {
         timerCtx = timerCanvas.getContext('2d');
     }
 
-    // Afficher le widget
+    // Show widget
     timerWidget.classList.remove('hidden');
 
     const ctx = timerCtx;
@@ -1246,38 +828,54 @@ function drawTimer() {
     const cy = timerCanvas.height / 2;
     const radius = Math.min(cx, cy) - 10;
 
+    // Night vision optimized colors
+    const colors = {
+        background: '#12121a',
+        track: '#2a2a35',
+        green: '#4caf6a',
+        amber: '#d4873f',
+        red: '#c43c3c'
+    };
+
     // Clear
     ctx.clearRect(0, 0, timerCanvas.width, timerCanvas.height);
 
-    // Fond du cercle
-    ctx.fillStyle = '#1a1a2e';
+    // Background circle with subtle gradient
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    gradient.addColorStop(0, '#1a1a24');
+    gradient.addColorStop(1, colors.background);
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
     ctx.fill();
 
-    // Cercle de fond (gris)
-    ctx.strokeStyle = '#2d4059';
+    // Track circle (background ring)
+    ctx.strokeStyle = colors.track;
     ctx.lineWidth = 8;
     ctx.beginPath();
     ctx.arc(cx, cy, radius - 4, 0, 2 * Math.PI);
     ctx.stroke();
 
-    // Calcul de la progression (clampée à 1.0 max pour éviter arc > 100% lors changement de mode)
+    // Calculate progress (clamped to 1.0 max)
     const remaining = countdownValue !== null ? countdownValue : 0;
     const progress = Math.min(remaining / timerTotal, 1.0);
 
-    // Couleur selon la progression
+    // Color based on progress - night vision friendly
     let color;
     if (progress > 0.5) {
-        color = '#00d26a';  // Vert
+        color = colors.green;
     } else if (progress > 0.25) {
-        color = '#ffa502';  // Orange
+        color = colors.amber;
     } else {
-        color = '#ff4757';  // Rouge
+        color = colors.red;
     }
 
-    // Arc de progression (sens anti-horaire depuis le haut)
+    // Progress arc (clockwise from top)
     if (progress > 0) {
+        // Add glow effect
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+
         ctx.strokeStyle = color;
         ctx.lineWidth = 8;
         ctx.lineCap = 'round';
@@ -1286,70 +884,166 @@ function drawTimer() {
         const endAngle = startAngle + (2 * Math.PI * progress);
         ctx.arc(cx, cy, radius - 4, startAngle, endAngle);
         ctx.stroke();
+
+        ctx.shadowBlur = 0;
     }
 
-    // Texte au centre
+    // Update center text
     if (timerSeconds) {
         timerSeconds.textContent = remaining > 0 ? `${remaining}s` : '--';
         timerSeconds.style.color = color;
+        timerSeconds.style.textShadow = `0 0 10px ${color}40`;
     }
 }
 
 // =========================================================================
-// Formatage des coordonnées
+// Mode Parking
 // =========================================================================
 
 /**
- * Convertit une valeur décimale en format DMS (Degrés, Minutes, Secondes)
- * Ex: -1.59 → "-1°35'24''"
- * @param {number} decimal - Valeur en degrés décimaux
- * @param {number} precision - Nombre de décimales pour les secondes (défaut: 0)
- * @returns {string} Format DMS
+ * Parque la coupole à la position 44° (avant le switch).
  */
-function formatDMS(decimal, precision = 0) {
-    if (decimal === null || decimal === undefined || isNaN(decimal)) {
-        return '--';
+async function parkDome() {
+    log('🅿️ Parking de la coupole...', 'info');
+    const result = await apiCall('/api/hardware/park/', 'POST');
+
+    if (result.error) {
+        log(`Erreur parking: ${result.error}`, 'error');
+    } else {
+        log('🅿️ Parking en cours vers 44°...', 'info');
     }
-
-    const sign = decimal < 0 ? '-' : '';
-    const absVal = Math.abs(decimal);
-
-    const degrees = Math.floor(absVal);
-    const minFloat = (absVal - degrees) * 60;
-    const minutes = Math.floor(minFloat);
-    const seconds = (minFloat - minutes) * 60;
-
-    // Formater les secondes selon la précision demandée
-    const secStr = precision > 0 ? seconds.toFixed(precision) : Math.round(seconds).toString();
-
-    return `${sign}${degrees}°${minutes}'${secStr}''`;
 }
 
 /**
- * Convertit une valeur en degrés vers le format horaire HMS (Heures, Minutes, Secondes)
- * Utilisé pour l'Ascension Droite (RA) : 1h = 15°
- * Ex: 45.0° → "3h00m00s"
- * @param {number} degrees - Valeur en degrés
- * @param {number} precision - Nombre de décimales pour les secondes (défaut: 0)
- * @returns {string} Format HMS
+ * Calibre l'encodeur en passant par le switch (45°).
  */
-function formatHMS(degrees, precision = 0) {
-    if (degrees === null || degrees === undefined || isNaN(degrees)) {
-        return '--';
+async function calibrateDome() {
+    log('🔧 Calibration de l\'encodeur...', 'info');
+    const result = await apiCall('/api/hardware/calibrate/', 'POST');
+
+    if (result.error) {
+        log(`Erreur calibration: ${result.error}`, 'error');
+    } else {
+        log('🔧 Calibration en cours (passage par 45°)...', 'info');
+    }
+}
+
+/**
+ * Termine la session d'observation.
+ * Arrête le suivi et parque la coupole.
+ */
+async function endSession() {
+    // Confirmation
+    if (!confirm('Terminer la session et parquer la coupole ?')) {
+        return;
     }
 
-    // Convertir degrés en heures (1h = 15°)
-    const hours = degrees / 15;
-    const absHours = Math.abs(hours);
+    log('🌙 Fin de session demandée...', 'info');
 
-    const h = Math.floor(absHours);
-    const minFloat = (absHours - h) * 60;
-    const m = Math.floor(minFloat);
-    const s = (minFloat - m) * 60;
+    // Afficher l'overlay de fin de session
+    showEndSessionOverlay();
 
-    const secStr = precision > 0 ? s.toFixed(precision) : Math.round(s).toString();
+    const result = await apiCall('/api/hardware/end-session/', 'POST');
 
-    return `${h}h${m.toString().padStart(2, '0')}m${secStr.padStart(2, '0')}s`;
+    if (result.error) {
+        log(`Erreur fin de session: ${result.error}`, 'error');
+        hideEndSessionOverlay();
+    } else {
+        log('🌙 Parking en cours - Veuillez patienter...', 'info');
+        // L'overlay sera masqué quand le status passera à 'idle'
+    }
+}
+
+/**
+ * Affiche l'overlay de fin de session pendant le parking.
+ */
+function showEndSessionOverlay() {
+    let overlay = document.getElementById('end-session-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'end-session-overlay';
+        overlay.innerHTML = `
+            <div class="end-session-content">
+                <div class="end-session-icon">🌙</div>
+                <div class="end-session-title">Fin de session</div>
+                <div class="end-session-message">Parking en cours...</div>
+                <div class="end-session-spinner"></div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+    overlay.classList.add('visible');
+}
+
+/**
+ * Masque l'overlay de fin de session.
+ */
+function hideEndSessionOverlay() {
+    const overlay = document.getElementById('end-session-overlay');
+    if (overlay) {
+        // Afficher le message de confirmation avant de masquer
+        const message = overlay.querySelector('.end-session-message');
+        const spinner = overlay.querySelector('.end-session-spinner');
+        if (message) message.textContent = 'Session terminée - Vous pouvez éteindre';
+        if (spinner) spinner.style.display = 'none';
+
+        // Masquer après 3 secondes
+        setTimeout(() => {
+            overlay.classList.remove('visible');
+        }, 3000);
+    }
+}
+
+/**
+ * Met à jour l'indicateur d'état de l'encodeur.
+ */
+function updateEncoderStatus(motor) {
+    const encoderStatus = document.getElementById('encoder-status');
+    if (!encoderStatus) return;
+
+    const isCalibrated = motor.encoder_calibrated || false;
+
+    if (isCalibrated) {
+        encoderStatus.textContent = '✓ Calibré';
+        encoderStatus.className = 'encoder-calibrated';
+    } else {
+        encoderStatus.textContent = '⚠ Non calibré';
+        encoderStatus.className = 'encoder-uncalibrated';
+    }
+}
+
+/**
+ * Met à jour l'état des boutons parking selon le status.
+ */
+function updateParkingButtons(motor) {
+    const btnPark = document.getElementById('btn-park');
+    const btnCalibrate = document.getElementById('btn-calibrate');
+    const btnEndSession = document.getElementById('btn-end-session');
+
+    const status = motor.status || 'unknown';
+    const isMoving = ['parking', 'calibrating', 'moving', 'tracking'].includes(status);
+
+    if (btnPark) {
+        btnPark.disabled = isMoving;
+        btnPark.classList.toggle('active', status === 'parking');
+    }
+
+    if (btnCalibrate) {
+        btnCalibrate.disabled = isMoving;
+        btnCalibrate.classList.toggle('active', status === 'calibrating');
+    }
+
+    if (btnEndSession) {
+        btnEndSession.disabled = isMoving && status !== 'parking';
+    }
+
+    // Masquer l'overlay de fin de session quand le parking est terminé
+    if (status === 'idle') {
+        const overlay = document.getElementById('end-session-overlay');
+        if (overlay && overlay.classList.contains('visible')) {
+            hideEndSessionOverlay();
+        }
+    }
 }
 
 // =========================================================================
@@ -1357,283 +1051,14 @@ function formatHMS(degrees, precision = 0) {
 // =========================================================================
 
 function log(message, type = 'info') {
-    // Utiliser le store Alpine.js pour les logs réactifs
-    const store = Alpine.store('dashboard');
-    if (store) {
-        store.addLog(message, type);
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+
+    elements.logs.insertBefore(entry, elements.logs.firstChild);
+
+    // Limiter à 50 entrées
+    while (elements.logs.children.length > 50) {
+        elements.logs.removeChild(elements.logs.lastChild);
     }
 }
-
-// Alias pour les appels legacy (addLog utilisé dans updateTrackingDisplay)
-function addLog(message, type = 'info') {
-    log(message, type);
-}
-
-// =========================================================================
-// Update Notification System
-// =========================================================================
-
-// Update modal: éléments gérés via Alpine.js store + getElementById ponctuel
-
-// Store update data
-let updateData = null;
-
-/**
- * Check for updates.
- * @param {boolean} showUpToDate - If true, show feedback when already up to date
- */
-async function checkForUpdates(showUpToDate = false) {
-    try {
-        const response = await fetch('/api/health/update/check/');
-        if (!response.ok) {
-            console.warn('Update check failed:', response.status);
-            return;
-        }
-
-        const result = await response.json();
-
-        if (result.error) {
-            console.warn('Update check error:', result.error);
-            return;
-        }
-
-        if (result.update_available) {
-            updateData = result;
-            showUpdateBadge();
-            showUpdateModal(result);
-            log(`Mise a jour disponible: ${result.commits_behind} commit(s)`, 'info');
-        } else {
-            hideUpdateBadge();
-            if (showUpToDate) {
-                log('Systeme a jour', 'success');
-            }
-        }
-    } catch (error) {
-        console.warn('Update check exception:', error);
-    }
-}
-
-/**
- * Manual update check triggered by the header button.
- * Shows loading state and feedback.
- */
-async function manualCheckForUpdates() {
-    const btn = elements.btnCheckUpdate;
-    if (!btn) return;
-
-    // Set loading state
-    btn.classList.add('checking');
-    btn.disabled = true;
-
-    try {
-        await checkForUpdates(true);
-    } finally {
-        // Remove loading state
-        btn.classList.remove('checking');
-        btn.disabled = false;
-    }
-}
-
-/**
- * Show the update badge on the header button.
- */
-function showUpdateBadge() {
-    if (elements.updateBadge) elements.updateBadge.classList.remove('hidden');
-    if (elements.btnCheckUpdate) elements.btnCheckUpdate.classList.add('has-update');
-}
-
-/**
- * Hide the update badge on the header button.
- */
-function hideUpdateBadge() {
-    if (elements.updateBadge) elements.updateBadge.classList.add('hidden');
-    if (elements.btnCheckUpdate) elements.btnCheckUpdate.classList.remove('has-update');
-}
-
-/**
- * Show the update modal with version info.
- * @param {Object} data - Update check result
- */
-function showUpdateModal(data) {
-    const store = Alpine.store('dashboard');
-
-    // Populate version info via DOM (complex content)
-    const el = (id) => document.getElementById(id);
-    const currentVersion = el('update-current-version');
-    const currentCommit = el('update-current-commit');
-    const newVersion = el('update-new-version');
-    const commitsBehind = el('update-commits-behind');
-    const changesList = el('update-changes-list');
-    const commitMessages = el('update-commit-messages');
-
-    if (currentVersion) currentVersion.textContent = `v${data.local_version}`;
-    if (currentCommit) currentCommit.textContent = `(${data.local_commit})`;
-    if (newVersion) {
-        const ver = data.remote_version && data.remote_version !== 'unknown'
-            ? `v${data.remote_version}` : data.remote_commit;
-        newVersion.textContent = ver;
-    }
-    if (commitsBehind) commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
-
-    // Show commit messages if available
-    if (data.commit_messages && data.commit_messages.length > 0 && changesList) {
-        changesList.innerHTML = '';
-        data.commit_messages.forEach(msg => {
-            const li = document.createElement('li');
-            li.textContent = msg;
-            changesList.appendChild(li);
-        });
-        if (commitMessages) commitMessages.classList.remove('hidden');
-    }
-
-    // Reset state via Alpine store
-    store.updateShowProgress = false;
-    store.updateShowError = false;
-    store.updateButtonsDisabled = false;
-
-    // Show modal via Alpine store
-    store.updateModalVisible = true;
-}
-
-/**
- * Hide the update modal (dismiss until next page load).
- */
-function hideUpdateModal() {
-    Alpine.store('dashboard').updateModalVisible = false;
-}
-
-/**
- * Apply the update.
- * Shows progress, calls API, handles service restart.
- */
-async function applyUpdate() {
-    const store = Alpine.store('dashboard');
-    const progressText = document.getElementById('update-progress-text');
-
-    // Show progress, disable buttons via Alpine store
-    store.updateShowProgress = true;
-    store.updateShowError = false;
-    store.updateButtonsDisabled = true;
-    if (progressText) progressText.textContent = 'Mise a jour en cours...';
-
-    log('Mise a jour en cours...', 'info');
-
-    try {
-        const response = await fetch('/api/health/update/apply/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            if (progressText) progressText.textContent = 'Redemarrage des services...';
-            log('Mise a jour reussie, redemarrage...', 'success');
-            await waitForServiceRestart();
-        } else {
-            showUpdateError(result.error || 'Erreur inconnue');
-            log(`Erreur de mise a jour: ${result.error}`, 'error');
-        }
-    } catch (error) {
-        if (progressText) progressText.textContent = 'Reconnexion en cours...';
-        log('Connexion perdue, attente du redemarrage...', 'warning');
-        await waitForServiceRestart();
-    }
-}
-
-/**
- * Show an error message in the update modal.
- * @param {string} message - Error message to display
- */
-function showUpdateError(message) {
-    const store = Alpine.store('dashboard');
-    store.updateShowProgress = false;
-    store.updateShowError = true;
-    store.updateButtonsDisabled = false;
-    const errorText = document.getElementById('update-error-text');
-    if (errorText) errorText.textContent = message;
-}
-
-/**
- * Wait for services to restart, then reload the page.
- * Polls the health endpoint until it responds.
- */
-async function waitForServiceRestart() {
-    const maxAttempts = 30;  // 30 attempts x 2 seconds = 60 seconds max
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-        await sleep(2000);
-        attempts++;
-
-        if (updateElements.progressText) {
-            updateElements.progressText.textContent = `Reconnexion... (${attempts}/${maxAttempts})`;
-        }
-
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-            const response = await fetch('/api/health/', {
-                signal: controller.signal
-            });
-
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                // Service is back, reload page
-                log('Services redemarres, rechargement...', 'success');
-                if (updateElements.progressText) {
-                    updateElements.progressText.textContent = 'Rechargement de la page...';
-                }
-                await sleep(500);
-                window.location.reload();
-                return;
-            }
-        } catch (e) {
-            // Still waiting, continue polling
-        }
-    }
-
-    // Timeout - ask user to reload manually
-    if (updateElements.progressText) {
-        updateElements.progressText.textContent = 'Delai depasse - rechargez la page manuellement';
-    }
-    log('Delai depasse, rechargez la page manuellement', 'warning');
-
-    // Re-enable later button so user can dismiss
-    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
-}
-
-/**
- * Sleep utility function.
- * @param {number} ms - Milliseconds to sleep
- * @returns {Promise} Resolves after the specified time
- */
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Initialize update event listeners.
- */
-function initUpdateListeners() {
-    const btnLater = document.getElementById('btn-update-later');
-    const btnNow = document.getElementById('btn-update-now');
-    if (btnLater) btnLater.addEventListener('click', hideUpdateModal);
-    if (btnNow) btnNow.addEventListener('click', applyUpdate);
-
-    // Header update check button
-    if (elements.btnCheckUpdate) {
-        elements.btnCheckUpdate.addEventListener('click', manualCheckForUpdates);
-    }
-}
-
-// Initialize update system after page load
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize update event listeners
-    initUpdateListeners();
-
-    // Check for updates after a short delay (don't block initial load)
-    setTimeout(checkForUpdates, 3000);
-});

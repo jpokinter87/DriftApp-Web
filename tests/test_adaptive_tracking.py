@@ -1,37 +1,73 @@
 """
-Tests pour le module core/tracking/adaptive_tracking.py
+Tests exhaustifs pour core/tracking/adaptive_tracking.py
 
-Ce module teste le système de suivi adaptatif à 3 modes.
-Note: Ces tests fonctionnent SANS astropy car adaptive_tracking
-n'a pas de dépendance directe à astropy.
+Couvre :
+- TrackingMode enum
+- TrackingParameters dataclass
+- AdaptiveTrackingManager :
+  - Évaluation des zones (normal, critical, continuous)
+  - Seuils d'altitude et de mouvement
+  - Zones critiques définies
+  - Changements de mode
+  - verify_shortest_path
+  - Diagnostic info
 """
 
 import pytest
-from unittest.mock import MagicMock
 
+from core.tracking.adaptive_tracking import (
+    AdaptiveTrackingManager,
+    TrackingMode,
+    TrackingParameters,
+)
+
+
+@pytest.fixture
+def manager():
+    """Manager avec valeurs par défaut (sans config)."""
+    return AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+
+
+@pytest.fixture
+def manager_with_config(sample_config_dict):
+    """Manager avec config complète."""
+    from core.config.config_loader import ConfigLoader
+    import json
+    from pathlib import Path
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(sample_config_dict, f)
+        tmp_path = Path(f.name)
+
+    config = ConfigLoader(tmp_path).load()
+    tmp_path.unlink()
+
+    return AdaptiveTrackingManager(
+        base_interval=config.tracking.intervalle_verification_sec,
+        base_threshold=config.tracking.seuil_correction_deg,
+        adaptive_config=config.adaptive,
+    )
+
+
+# =============================================================================
+# Enums et Dataclasses
+# =============================================================================
 
 class TestTrackingMode:
-    """Tests pour l'enum TrackingMode."""
-
-    def test_modes_disponibles(self):
-        """Vérifie que les 3 modes existent (v2.2: FAST_TRACK supprimé)."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
+    def test_values(self):
         assert TrackingMode.NORMAL.value == "normal"
         assert TrackingMode.CRITICAL.value == "critical"
         assert TrackingMode.CONTINUOUS.value == "continuous"
-        # Note: FAST_TRACK a été supprimé en v2.2 (redondant avec CONTINUOUS)
+
+    def test_no_fast_track(self):
+        """FAST_TRACK supprimé en v4.4."""
+        modes = [m.value for m in TrackingMode]
+        assert "fast_track" not in modes
 
 
 class TestTrackingParameters:
-    """Tests pour le dataclass TrackingParameters."""
-
-    def test_creation_parametres(self):
-        """Création de paramètres de suivi."""
-        from core.tracking.adaptive_tracking import (
-            TrackingMode, TrackingParameters
-        )
-
+    def test_construction(self):
         params = TrackingParameters(
             mode=TrackingMode.NORMAL,
             check_interval=60,
@@ -39,455 +75,214 @@ class TestTrackingParameters:
             motor_delay=0.002,
             description="Test"
         )
-
         assert params.mode == TrackingMode.NORMAL
         assert params.check_interval == 60
-        assert params.correction_threshold == 0.5
-        assert params.motor_delay == 0.002
-        assert params.description == "Test"
 
 
-class TestAdaptiveTrackingManagerInit:
-    """Tests pour l'initialisation du gestionnaire adaptatif."""
+# =============================================================================
+# Évaluation des zones — sans config
+# =============================================================================
 
-    def test_init_sans_config(self):
-        """Initialisation avec valeurs par défaut."""
-        from core.tracking.adaptive_tracking import (
-            AdaptiveTrackingManager, TrackingMode
-        )
-
-        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-        assert manager.base_interval == 60
-        assert manager.base_threshold == 0.5
-        assert manager.ALTITUDE_CRITICAL == 68.0
-        assert manager.ALTITUDE_ZENITH == 75.0
-        assert manager.MOVEMENT_CRITICAL == 30.0
-        assert manager.MOVEMENT_EXTREME == 50.0
-        assert manager.current_mode == TrackingMode.NORMAL
-
-    def test_init_avec_config(self, adaptive_config):
-        """Initialisation avec configuration injectée."""
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-
-        manager = AdaptiveTrackingManager(
-            base_interval=60,
-            base_threshold=0.5,
-            adaptive_config=adaptive_config
-        )
-
-        assert manager.ALTITUDE_CRITICAL == 68.0
-        assert manager.ALTITUDE_ZENITH == 75.0
-        assert manager.CRITICAL_ZONE_1 is not None
-
-
-class TestGetParams:
-    """Tests pour les méthodes _get_*_params."""
-
-    @pytest.fixture
-    def manager(self):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-    def test_get_normal_params(self, manager):
-        """Paramètres du mode NORMAL."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        params = manager._get_normal_params()
-
+class TestEvaluateTrackingZoneDefaults:
+    def test_normal_zone(self, manager):
+        params = manager.evaluate_tracking_zone(altitude=45.0, azimut=120.0, delta_required=2.0)
         assert params.mode == TrackingMode.NORMAL
-        assert params.check_interval == 60
-        assert params.correction_threshold == 0.5
-        assert params.motor_delay == 0.002
 
-    def test_get_critical_params(self, manager):
-        """Paramètres du mode CRITICAL."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        params = manager._get_critical_params()
-
+    def test_critical_altitude(self, manager):
+        """Altitude >= 68° → CRITICAL."""
+        params = manager.evaluate_tracking_zone(altitude=70.0, azimut=120.0, delta_required=2.0)
         assert params.mode == TrackingMode.CRITICAL
-        assert params.check_interval == 15
-        assert params.motor_delay == 0.001
 
-    def test_get_continuous_params(self, manager):
-        """Paramètres du mode CONTINUOUS."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        params = manager._get_continuous_params()
-
+    def test_continuous_extreme_movement(self, manager):
+        """Mouvement >= 50° → CONTINUOUS."""
+        params = manager.evaluate_tracking_zone(altitude=45.0, azimut=120.0, delta_required=55.0)
         assert params.mode == TrackingMode.CONTINUOUS
-        assert params.check_interval == 5
-        assert params.correction_threshold == 0.1
-    # Note: test_get_fast_track_params supprimé (mode FAST_TRACK supprimé en v2.2)
+
+    def test_continuous_zenith_with_movement(self, manager):
+        """Altitude >= 75° + mouvement >= 1° → CONTINUOUS."""
+        params = manager.evaluate_tracking_zone(altitude=76.0, azimut=120.0, delta_required=5.0)
+        assert params.mode == TrackingMode.CONTINUOUS
+
+    def test_critical_zenith_without_movement(self, manager):
+        """Altitude >= 75° mais mouvement < 1° → CRITICAL (pas CONTINUOUS)."""
+        params = manager.evaluate_tracking_zone(altitude=76.0, azimut=120.0, delta_required=0.5)
+        assert params.mode == TrackingMode.CRITICAL
+
+    def test_critical_movement(self, manager):
+        """Mouvement >= 30° mais < 50° → CRITICAL."""
+        params = manager.evaluate_tracking_zone(altitude=45.0, azimut=120.0, delta_required=35.0)
+        assert params.mode == TrackingMode.CRITICAL
 
 
-class TestPredicats:
-    """Tests pour les prédicats d'évaluation."""
+# =============================================================================
+# Évaluation des zones — avec config
+# =============================================================================
 
-    @pytest.fixture
-    def manager(self, adaptive_config):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(
-            base_interval=60,
-            base_threshold=0.5,
-            adaptive_config=adaptive_config
-        )
+class TestEvaluateTrackingZoneWithConfig:
+    def test_normal_returns_config_values(self, manager_with_config):
+        params = manager_with_config.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        assert params.mode == TrackingMode.NORMAL
+        assert params.motor_delay == 0.002
+        assert params.check_interval == 60
 
-    def test_get_altitude_level_normal(self, manager):
-        """Altitude normale (< 68°)."""
-        assert manager._get_altitude_level(45.0) == "normal"
-        assert manager._get_altitude_level(67.9) == "normal"
+    def test_critical_returns_config_values(self, manager_with_config):
+        params = manager_with_config.evaluate_tracking_zone(70.0, 120.0, 2.0)
+        assert params.mode == TrackingMode.CRITICAL
+        assert params.motor_delay == 0.001
+        assert params.check_interval == 30
 
-    def test_get_altitude_level_critical(self, manager):
-        """Altitude critique (68-75°)."""
-        assert manager._get_altitude_level(68.0) == "critical"
-        assert manager._get_altitude_level(74.9) == "critical"
+    def test_continuous_returns_config_values(self, manager_with_config):
+        params = manager_with_config.evaluate_tracking_zone(76.0, 120.0, 5.0)
+        assert params.mode == TrackingMode.CONTINUOUS
+        assert params.motor_delay == 0.00015
 
-    def test_get_altitude_level_zenith(self, manager):
-        """Altitude zénith (>= 75°)."""
-        assert manager._get_altitude_level(75.0) == "zenith"
-        assert manager._get_altitude_level(89.0) == "zenith"
-
-    def test_get_movement_level_normal(self, manager):
-        """Mouvement normal (< 30°)."""
-        assert manager._get_movement_level(10.0) == "normal"
-        assert manager._get_movement_level(29.9) == "normal"
-
-    def test_get_movement_level_critical(self, manager):
-        """Mouvement critique (30-50°)."""
-        assert manager._get_movement_level(30.0) == "critical"
-        assert manager._get_movement_level(49.9) == "critical"
-
-    def test_get_movement_level_extreme(self, manager):
-        """Mouvement extrême (>= 50°)."""
-        assert manager._get_movement_level(50.0) == "extreme"
-        assert manager._get_movement_level(100.0) == "extreme"
-
-    # Note: test_has_significant_movement supprimé (méthode inline en v2.2)
-    # Le seuil est défini par MOVEMENT_MIN_FOR_CONTINUOUS (1.0 par défaut)
-
-    def test_is_in_critical_zone(self, manager):
-        """Test de détection de zone critique."""
-        # Dans la zone (alt: 65-80, az: 45-75)
-        assert manager._is_in_critical_zone(70.0, 60.0) is True
-        # Hors zone
-        assert manager._is_in_critical_zone(50.0, 60.0) is False
-        assert manager._is_in_critical_zone(70.0, 100.0) is False
+    def test_critical_zone_defined(self, manager_with_config):
+        """Zone critique définie (alt 68-73, az 50-70) → CRITICAL."""
+        params = manager_with_config.evaluate_tracking_zone(70.0, 60.0, 2.0)
+        assert params.mode == TrackingMode.CRITICAL
 
 
-class TestDecideMode:
-    """Tests pour la décision de mode (v2.2 - 3 modes)."""
+# =============================================================================
+# Changements de mode
+# =============================================================================
 
-    @pytest.fixture
-    def manager(self):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-    def test_mode_normal_conditions_standard(self, manager):
-        """Mode NORMAL en conditions standard."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="normal",
-            movement_level="normal",
-            in_critical_zone=False,
-            altitude=45.0,
-            delta_required=5.0
-        )
-
-        assert mode == TrackingMode.NORMAL
-        assert "Conditions standard" in reasons[0]
-
-    def test_mode_critical_altitude_critique(self, manager):
-        """Mode CRITICAL pour altitude critique."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="critical",
-            movement_level="normal",
-            in_critical_zone=False,
-            altitude=70.0,
-            delta_required=5.0
-        )
-
-        assert mode == TrackingMode.CRITICAL
-
-    def test_mode_critical_mouvement_critique(self, manager):
-        """Mode CRITICAL pour mouvement critique."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="normal",
-            movement_level="critical",
-            in_critical_zone=False,
-            altitude=45.0,
-            delta_required=35.0
-        )
-
-        assert mode == TrackingMode.CRITICAL
-
-    def test_mode_critical_grand_deplacement(self, manager):
-        """Mode CRITICAL pour grand déplacement (>30°)."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="normal",
-            movement_level="critical",
-            in_critical_zone=False,
-            altitude=45.0,
-            delta_required=35.0
-        )
-
-        assert mode == TrackingMode.CRITICAL
-
-    def test_mode_continuous_mouvement_extreme(self, manager):
-        """Mode CONTINUOUS pour mouvement extrême."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="normal",
-            movement_level="extreme",
-            in_critical_zone=False,
-            altitude=45.0,
-            delta_required=60.0
-        )
-
-        assert mode == TrackingMode.CONTINUOUS
-
-    def test_mode_critical_zenith_avec_mouvement(self, manager):
-        """Mode CRITICAL au zénith avec mouvement significatif (v2.3).
-
-        Note: Avant v2.3, zénith + mouvement → CONTINUOUS.
-        Cette règle a été supprimée pour réduire le stress mécanique.
-        """
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="zenith",
-            movement_level="normal",
-            in_critical_zone=False,
-            altitude=78.0,
-            delta_required=2.0  # > 1.0, mouvement significatif
-        )
-
-        # v2.3: Zénith utilise toujours CRITICAL (pas CONTINUOUS)
-        assert mode == TrackingMode.CRITICAL
-
-    def test_mode_critical_zenith_sans_mouvement(self, manager):
-        """Mode CRITICAL au zénith même avec mouvement faible (v2.3).
-
-        Note: v2.3 utilise CRITICAL pour TOUT le zénith pour réduire le stress
-        mécanique causé par le mode CONTINUOUS.
-        """
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        mode, reasons = manager._decide_mode(
-            altitude_level="zenith",
-            movement_level="normal",
-            in_critical_zone=False,
-            altitude=78.0,
-            delta_required=0.5  # < 1.0, mouvement faible
-        )
-
-        # v2.3: Zénith utilise toujours CRITICAL
-        assert mode == TrackingMode.CRITICAL
-
-
-class TestEvaluateTrackingZone:
-    """Tests pour evaluate_tracking_zone."""
-
-    @pytest.fixture
-    def manager(self):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-    def test_evaluate_retourne_parametres(self, manager):
-        """Retourne des TrackingParameters valides."""
-        from core.tracking.adaptive_tracking import TrackingParameters
-
-        params = manager.evaluate_tracking_zone(
-            altitude=45.0,
-            azimut=120.0,
-            delta_required=2.0
-        )
-
-        assert isinstance(params, TrackingParameters)
-
-    def test_evaluate_change_mode_interne(self, manager):
-        """Le mode courant est mis à jour."""
-        from core.tracking.adaptive_tracking import TrackingMode
-
-        # Commencer en NORMAL
+class TestModeChanges:
+    def test_mode_change_logged(self, manager):
+        """Premier appel en normal, puis passage en critical."""
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
         assert manager.current_mode == TrackingMode.NORMAL
 
-        # Évaluer une zone critique
-        manager.evaluate_tracking_zone(
-            altitude=70.0,  # Altitude critique
-            azimut=120.0,
-            delta_required=2.0
-        )
-
+        manager.evaluate_tracking_zone(70.0, 120.0, 2.0)
         assert manager.current_mode == TrackingMode.CRITICAL
 
-    def test_evaluate_scenarios_complets(self, manager):
-        """Test de scénarios complets (v2.3 - CONTINUOUS réservé aux mouvements extrêmes)."""
-        from core.tracking.adaptive_tracking import TrackingMode
+    def test_mode_stable_no_log(self, manager):
+        """Même mode consécutif → pas de changement."""
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        mode1 = manager.current_mode
+        manager.evaluate_tracking_zone(50.0, 130.0, 3.0)
+        mode2 = manager.current_mode
+        assert mode1 == mode2 == TrackingMode.NORMAL
 
-        scenarios = [
-            # (altitude, azimut, delta, mode_attendu)
-            (45.0, 120.0, 0.3, TrackingMode.NORMAL),
-            (69.0, 60.0, 2.0, TrackingMode.CRITICAL),
-            (76.0, 180.0, 5.0, TrackingMode.CRITICAL),  # v2.3: Zénith → CRITICAL (pas CONTINUOUS)
-            (50.0, 100.0, 55.0, TrackingMode.CONTINUOUS),  # Mouvement extrême (> 30°)
-        ]
+    def test_return_to_normal(self, manager):
+        """Critical → Normal quand altitude redescend."""
+        manager.evaluate_tracking_zone(70.0, 120.0, 2.0)
+        assert manager.current_mode == TrackingMode.CRITICAL
 
-        for alt, az, delta, expected_mode in scenarios:
-            params = manager.evaluate_tracking_zone(alt, az, delta)
-            assert params.mode == expected_mode, \
-                f"Alt={alt}, Delta={delta}: attendu {expected_mode}, obtenu {params.mode}"
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        assert manager.current_mode == TrackingMode.NORMAL
 
+
+# =============================================================================
+# verify_shortest_path
+# =============================================================================
 
 class TestVerifyShortestPath:
-    """Tests pour verify_shortest_path."""
+    def test_small_positive(self, manager):
+        delta, desc = manager.verify_shortest_path(10.0, 20.0)
+        assert delta == pytest.approx(10.0)
 
-    @pytest.fixture
-    def manager(self):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+    def test_small_negative(self, manager):
+        delta, desc = manager.verify_shortest_path(20.0, 10.0)
+        assert delta == pytest.approx(-10.0)
 
-    def test_chemin_direct_positif(self, manager):
-        """Chemin direct dans le sens horaire."""
-        delta, desc = manager.verify_shortest_path(10.0, 50.0)
-
-        assert delta == pytest.approx(40.0)
-        assert "horaire" in desc
-
-    def test_chemin_direct_negatif(self, manager):
-        """Chemin direct dans le sens anti-horaire."""
-        delta, desc = manager.verify_shortest_path(50.0, 10.0)
-
-        assert delta == pytest.approx(-40.0)
-        assert "anti-horaire" in desc
-
-    def test_traversee_zero_horaire(self, manager):
-        """Traversée de 0° dans le sens horaire."""
+    def test_crossing_zero_clockwise(self, manager):
+        """350° → 10° = +20° (plus court)."""
         delta, desc = manager.verify_shortest_path(350.0, 10.0)
-
         assert delta == pytest.approx(20.0)
-        assert "horaire" in desc
 
-    def test_traversee_zero_antihoraire(self, manager):
-        """Traversée de 0° dans le sens anti-horaire."""
+    def test_crossing_zero_counterclockwise(self, manager):
+        """10° → 350° = -20° (plus court)."""
         delta, desc = manager.verify_shortest_path(10.0, 350.0)
-
         assert delta == pytest.approx(-20.0)
-        assert "anti-horaire" in desc
 
-    def test_chemin_long_vs_court(self, manager):
-        """Choisit le chemin le plus court."""
-        # De 10° à 300°: chemin court = -70°, pas +290°
-        delta, desc = manager.verify_shortest_path(10.0, 300.0)
-
-        assert abs(delta) == pytest.approx(70.0)
-        assert delta < 0  # Anti-horaire est plus court
-
-    def test_angle_180_ambigu(self, manager):
-        """Cas ambigu à 180°."""
+    def test_half_circle(self, manager):
         delta, desc = manager.verify_shortest_path(0.0, 180.0)
-
         assert abs(delta) == pytest.approx(180.0)
 
+    def test_same_position(self, manager):
+        delta, desc = manager.verify_shortest_path(45.0, 45.0)
+        assert delta == pytest.approx(0.0)
 
-class TestGetDiagnosticInfo:
-    """Tests pour get_diagnostic_info."""
+    def test_returns_description(self, manager):
+        _, desc = manager.verify_shortest_path(10.0, 20.0)
+        assert isinstance(desc, str)
+        assert "Chemin" in desc
 
-    @pytest.fixture
-    def manager(self, adaptive_config):
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-        return AdaptiveTrackingManager(
-            base_interval=60,
-            base_threshold=0.5,
-            adaptive_config=adaptive_config
-        )
 
-    def test_diagnostic_contient_cles(self, manager):
-        """Le diagnostic contient toutes les clés attendues."""
-        # D'abord évaluer pour initialiser current_params
+# =============================================================================
+# Diagnostic info
+# =============================================================================
+
+class TestDiagnosticInfo:
+    def test_returns_dict(self, manager):
         manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
-
         info = manager.get_diagnostic_info(45.0, 120.0, 2.0)
+        assert isinstance(info, dict)
 
+    def test_keys_present(self, manager):
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        info = manager.get_diagnostic_info(45.0, 120.0, 2.0)
         expected_keys = [
             'mode', 'mode_description', 'check_interval',
             'correction_threshold', 'motor_delay',
             'in_critical_zone', 'is_high_altitude', 'is_large_movement',
-            'altitude_level', 'movement_level'
+            'altitude_level', 'movement_level',
         ]
         for key in expected_keys:
-            assert key in info
+            assert key in info, f"Clé manquante : {key}"
 
-    def test_diagnostic_altitude_level(self, manager):
-        """Niveau d'altitude correct dans le diagnostic."""
-        manager.evaluate_tracking_zone(80.0, 120.0, 2.0)
+    def test_altitude_levels(self, manager):
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        info = manager.get_diagnostic_info(45.0, 120.0, 2.0)
+        assert info['altitude_level'] == 'normal'
+
+        info = manager.get_diagnostic_info(70.0, 120.0, 2.0)
+        assert info['altitude_level'] == 'critical'
+
         info = manager.get_diagnostic_info(80.0, 120.0, 2.0)
+        assert info['altitude_level'] == 'zenith'
 
-        assert info['altitude_level'] == "zenith"
+    def test_movement_levels(self, manager):
+        manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
+        info = manager.get_diagnostic_info(45.0, 120.0, 2.0)
+        assert info['movement_level'] == 'normal'
 
-    def test_diagnostic_movement_level(self, manager):
-        """Niveau de mouvement correct dans le diagnostic."""
-        manager.evaluate_tracking_zone(45.0, 120.0, 55.0)
+        info = manager.get_diagnostic_info(45.0, 120.0, 35.0)
+        assert info['movement_level'] == 'critical'
+
         info = manager.get_diagnostic_info(45.0, 120.0, 55.0)
+        assert info['movement_level'] == 'extreme'
 
-        assert info['movement_level'] == "extreme"
 
+# =============================================================================
+# Prédicats internes
+# =============================================================================
 
-class TestModeTransitions:
-    """Tests pour les transitions de mode."""
+class TestPredicates:
+    def test_altitude_level_normal(self, manager):
+        assert manager._get_altitude_level(45.0) == "normal"
 
-    def test_transition_normal_vers_critical(self):
-        """Transition de NORMAL vers CRITICAL."""
-        from core.tracking.adaptive_tracking import (
-            AdaptiveTrackingManager, TrackingMode
-        )
+    def test_altitude_level_critical(self, manager):
+        assert manager._get_altitude_level(70.0) == "critical"
 
-        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-        assert manager.current_mode == TrackingMode.NORMAL
+    def test_altitude_level_zenith(self, manager):
+        assert manager._get_altitude_level(80.0) == "zenith"
 
-        # Passer en altitude critique
-        params = manager.evaluate_tracking_zone(70.0, 120.0, 2.0)
-        assert params.mode == TrackingMode.CRITICAL
-        assert manager.current_mode == TrackingMode.CRITICAL
+    def test_movement_level_normal(self, manager):
+        assert manager._get_movement_level(5.0) == "normal"
 
-    def test_transition_critical_vers_continuous(self):
-        """Transition de CRITICAL vers CONTINUOUS."""
-        from core.tracking.adaptive_tracking import (
-            AdaptiveTrackingManager, TrackingMode
-        )
+    def test_movement_level_critical(self, manager):
+        assert manager._get_movement_level(35.0) == "critical"
 
-        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+    def test_movement_level_extreme(self, manager):
+        assert manager._get_movement_level(55.0) == "extreme"
 
-        # D'abord en CRITICAL
-        manager.evaluate_tracking_zone(70.0, 120.0, 2.0)
-        assert manager.current_mode == TrackingMode.CRITICAL
+    def test_critical_zone_without_config(self, manager):
+        """Sans config, pas de zone critique."""
+        assert manager._is_in_critical_zone(70.0, 60.0) is False
 
-        # Puis mouvement extrême → CONTINUOUS
-        params = manager.evaluate_tracking_zone(70.0, 120.0, 55.0)
-        assert params.mode == TrackingMode.CONTINUOUS
-
-    def test_retour_en_normal(self):
-        """Retour au mode NORMAL."""
-        from core.tracking.adaptive_tracking import (
-            AdaptiveTrackingManager, TrackingMode
-        )
-
-        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-        # Passer en CRITICAL
-        manager.evaluate_tracking_zone(70.0, 120.0, 2.0)
-        assert manager.current_mode == TrackingMode.CRITICAL
-
-        # Retour en conditions normales
-        params = manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
-        assert params.mode == TrackingMode.NORMAL
-        assert manager.current_mode == TrackingMode.NORMAL
+    def test_critical_zone_with_config(self, manager_with_config):
+        """Zone définie : alt 68-73, az 50-70."""
+        assert manager_with_config._is_in_critical_zone(70.0, 60.0) is True
+        assert manager_with_config._is_in_critical_zone(70.0, 120.0) is False
+        assert manager_with_config._is_in_critical_zone(45.0, 60.0) is False

@@ -11,8 +11,7 @@ import logging
 import time
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
-from core.utils.angle_utils import normalize_angle_360, shortest_angular_distance
-from core.hardware.daemon_encoder_reader import StaleDataError, FrozenEncoderError
+from core.utils.angle_utils import shortest_angular_distance
 
 if TYPE_CHECKING:
     from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
@@ -31,38 +30,18 @@ class FeedbackController:
         result = feedback.rotation_avec_feedback(angle_cible=45.0)
     """
 
-    # Seuil par défaut pour la protection contre mouvements anormaux
-    DEFAULT_PROTECTION_THRESHOLD = 20.0
-
-    # Nombre max de corrections consécutives sans mouvement détecté
-    # Si l'encodeur ne bouge pas après N corrections, il est probablement figé
-    MAX_STAGNANT_CORRECTIONS = 3
-    # Seuil minimum de mouvement entre corrections (degrés)
-    MIN_MOVEMENT_THRESHOLD = 0.1
-
-    def __init__(
-        self,
-        moteur: 'MoteurCoupole',
-        daemon_reader: 'DaemonEncoderReader',
-        protection_threshold: Optional[float] = None
-    ):
+    def __init__(self, moteur: 'MoteurCoupole', daemon_reader: 'DaemonEncoderReader'):
         """
         Initialise le contrôleur de feedback.
 
         Args:
             moteur: Instance de MoteurCoupole pour le contrôle moteur
             daemon_reader: Instance de DaemonEncoderReader pour la lecture position
-            protection_threshold: Seuil de protection contre mouvements anormaux (°)
-                                  Si non fourni, utilise DEFAULT_PROTECTION_THRESHOLD (20.0°)
         """
         self.moteur = moteur
         self.daemon_reader = daemon_reader
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("FeedbackController")
         self.stop_requested = False
-        self.protection_threshold = (
-            protection_threshold if protection_threshold is not None
-            else self.DEFAULT_PROTECTION_THRESHOLD
-        )
 
     # =========================================================================
     # CONTRÔLE D'ARRÊT
@@ -141,8 +120,7 @@ class FeedbackController:
     def _creer_resultat(self, success: bool, position_initiale: float,
                         position_finale: float, angle_cible: float,
                         erreur_finale: float, iterations: int,
-                        corrections: list, temps_total: float,
-                        timeout: bool = False) -> Dict[str, Any]:
+                        corrections: list, temps_total: float) -> Dict[str, Any]:
         """Crée le résultat final de la rotation."""
         return {
             'success': success,
@@ -153,8 +131,7 @@ class FeedbackController:
             'iterations': iterations,
             'corrections': corrections,
             'temps_total': temps_total,
-            'mode': 'feedback_daemon',
-            'timeout': timeout
+            'mode': 'feedback_daemon'
         }
 
     # =========================================================================
@@ -264,9 +241,6 @@ class FeedbackController:
         # Lecture position et calcul erreur
         try:
             position_actuelle = self._lire_position_stable()
-        except (FrozenEncoderError, StaleDataError):
-            # Propager ces exceptions spécifiques pour que la boucle les traite
-            raise
         except RuntimeError:
             self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
             return None
@@ -288,9 +262,9 @@ class FeedbackController:
             self.logger.debug(f"  Objectif atteint ! Erreur={erreur:+.2f}°")
             return None
 
-        # PROTECTION: Si l'erreur est trop grande, quelque chose ne va pas
+        # PROTECTION: Si l'erreur est trop grande (> 20°), quelque chose ne va pas
         # Sauf si allow_large_movement=True (GOTO initial)
-        if abs(erreur) > self.protection_threshold and not allow_large_movement:
+        if abs(erreur) > 20.0 and not allow_large_movement:
             self.logger.warning(
                 f"  ⚠️ Erreur anormalement grande ({erreur:+.1f}°) - abandon correction"
             )
@@ -332,7 +306,7 @@ class FeedbackController:
         max_iterations: int = 10,
         max_correction_par_iteration: float = 180.0,
         allow_large_movement: bool = False,
-        max_duration: float = 60.0
+        timeout_seconds: float = 120.0
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -346,15 +320,18 @@ class FeedbackController:
                                           180° = mouvement continu sans interruption
             allow_large_movement: Si True, autorise les grands mouvements (> 20°)
                                   Utilisé pour GOTO initial après calibration
-            max_duration: Durée maximale totale en secondes (défaut 60s)
-                         Protection contre encodeur erratique
+            timeout_seconds: Timeout global en secondes (défaut 120s)
 
         Returns:
             dict: Statistiques du mouvement (success, positions, erreur, etc.)
-                  Contient 'timeout': True si durée dépassée
         """
         start_time = time.time()
         self.clear_stop_request()
+
+        # Variables pour détecter la non-progression
+        last_position = None
+        no_progress_count = 0
+        max_no_progress = 3  # Abandon après 3 itérations sans progression
 
         # Lecture position initiale
         try:
@@ -370,133 +347,83 @@ class FeedbackController:
             f"Rotation avec feedback: {position_initiale:.1f}° -> {angle_cible:.1f}°"
         )
 
-        # Calcul timeout dynamique basé sur la distance à parcourir
-        # Pour les grands déplacements (flip méridien > 30°), le timeout fixe de 60s est insuffisant
-        distance = abs(self._calculer_delta_angulaire(position_initiale, angle_cible))
-        if distance > 30.0 and hasattr(self.moteur, 'steps_per_dome_revolution'):
-            steps_per_degree = self.moteur.steps_per_dome_revolution / 360.0
-            temps_estime = distance * steps_per_degree * vitesse
-            # Facteur de marge x2 pour les itérations de correction
-            timeout_calcule = temps_estime * 2.0 + 30.0  # +30s de marge fixe
-            if timeout_calcule > max_duration:
-                self.logger.debug(
-                    f"Timeout ajusté: {max_duration}s -> {timeout_calcule:.0f}s "
-                    f"(distance={distance:.1f}°, temps_estimé={temps_estime:.0f}s)"
-                )
-                max_duration = timeout_calcule
-
         # Boucle de correction
         corrections = []
         iteration = 0
-        timeout_reached = False
-        encoder_frozen = False
-        stagnant_count = 0  # Compteur de corrections sans mouvement
 
         while iteration < max_iterations:
-            # Vérification timeout global
+            # Protection timeout global
             elapsed = time.time() - start_time
-            if elapsed > max_duration:
-                self.logger.warning(
-                    f"⚠️ Timeout global atteint ({elapsed:.1f}s > {max_duration}s) - "
-                    f"abandon après {iteration} itérations"
+            if elapsed > timeout_seconds:
+                self.logger.error(
+                    f"Timeout atteint ({timeout_seconds}s) - abandon de la correction"
                 )
-                timeout_reached = True
                 break
 
             if self.stop_requested:
                 self.logger.info("Arrêt demandé, abandon de la correction")
                 break
 
+            # Lecture position pour détecter la progression
             try:
-                correction = self._executer_iteration(
-                    angle_cible, vitesse, tolerance,
-                    max_correction_par_iteration, iteration,
-                    position_initiale=position_initiale,  # Pour détecter recalibration switch
-                    allow_large_movement=allow_large_movement  # Pour GOTO initial
-                )
-            except (FrozenEncoderError, StaleDataError) as e:
-                self.logger.error(f"⚠️ Problème encodeur détecté: {e}")
-                encoder_frozen = True
+                current_pos = self._lire_position_stable()
+            except RuntimeError:
+                self.logger.warning("Erreur lecture position - abandon")
                 break
+
+            # Vérifier la progression
+            if last_position is not None:
+                # Calculer le delta en tenant compte de la circularité
+                pos_delta = abs(current_pos - last_position)
+                if pos_delta > 180:
+                    pos_delta = 360 - pos_delta
+
+                if pos_delta < 0.1:  # Moins de 0.1° de mouvement = pas de progression
+                    no_progress_count += 1
+                    if no_progress_count >= max_no_progress:
+                        self.logger.error(
+                            f"Aucune progression détectée après {no_progress_count} itérations - abandon"
+                        )
+                        break
+                else:
+                    no_progress_count = 0  # Réinitialiser le compteur
+
+            last_position = current_pos
+
+            correction = self._executer_iteration(
+                angle_cible, vitesse, tolerance,
+                max_correction_par_iteration, iteration,
+                position_initiale=position_initiale,  # Pour détecter recalibration switch
+                allow_large_movement=allow_large_movement  # Pour GOTO initial
+            )
 
             if correction is None:
                 break
 
             corrections.append(correction)
-
-            # Détection de non-mouvement: l'encodeur ne bouge pas malgré les corrections
-            # IMPORTANT: Vérifier le mouvement TOTAL depuis le début, pas seulement entre échantillons
-            # Cela évite les faux positifs lors de grands déplacements (ex: passage méridien)
-            if len(corrections) >= 2:
-                last_pos = corrections[-1]['position_avant']
-                prev_pos = corrections[-2]['position_avant']
-                inter_sample_movement = abs(last_pos - prev_pos)
-                # Gérer le wraparound 0-360
-                inter_sample_movement = min(inter_sample_movement, 360 - inter_sample_movement)
-
-                # Calculer le mouvement total depuis le début
-                total_movement = abs(last_pos - position_initiale)
-                total_movement = min(total_movement, 360 - total_movement)
-
-                # L'encodeur est considéré figé SEULEMENT si:
-                # 1. Le mouvement inter-échantillon est faible ET
-                # 2. Le mouvement total depuis le début est aussi faible (< 1°)
-                # Cela évite les faux positifs lors de grands déplacements où
-                # l'encodeur peut être lu plusieurs fois à la même position
-                if inter_sample_movement < self.MIN_MOVEMENT_THRESHOLD:
-                    if total_movement < 1.0:
-                        # Vraiment figé: pas de mouvement depuis le début
-                        stagnant_count += 1
-                        self.logger.warning(
-                            f"⚠️ Encodeur stagnant: inter-sample={inter_sample_movement:.2f}°, "
-                            f"total={total_movement:.2f}° [{stagnant_count}/{self.MAX_STAGNANT_CORRECTIONS}]"
-                        )
-                        if stagnant_count >= self.MAX_STAGNANT_CORRECTIONS:
-                            self.logger.error(
-                                f"⚠️ ARRÊT: Encodeur figé détecté - "
-                                f"{stagnant_count} corrections sans mouvement"
-                            )
-                            encoder_frozen = True
-                            break
-                    else:
-                        # Mouvement total significatif: l'encodeur fonctionne
-                        # Juste un échantillonnage temporaire au même point
-                        self.logger.debug(
-                            f"Inter-sample faible ({inter_sample_movement:.2f}°) mais "
-                            f"mouvement total OK ({total_movement:.1f}°) - encodeur fonctionnel"
-                        )
-                        stagnant_count = 0
-                else:
-                    stagnant_count = 0  # Réinitialiser si mouvement détecté
-
             iteration += 1
             time.sleep(0.05)  # Pause stabilisation
 
         # Mesure finale
         try:
             position_finale = self._lire_position_stable()
-        except (RuntimeError, FrozenEncoderError, StaleDataError):
+        except RuntimeError:
             position_finale = angle_cible
             self.logger.warning("Impossible de lire position finale")
 
         erreur_finale = self._calculer_delta_angulaire(position_finale, angle_cible)
         temps_total = time.time() - start_time
-        # Success si erreur < tolerance ET pas de timeout ET encodeur non figé
-        success = abs(erreur_finale) < tolerance and not timeout_reached and not encoder_frozen
+        success = abs(erreur_finale) < tolerance
 
         self._log_resultat_final(
             success, position_initiale, position_finale,
             erreur_finale, iteration, max_iterations, temps_total
         )
 
-        result = self._creer_resultat(
+        return self._creer_resultat(
             success, position_initiale, position_finale, angle_cible,
-            erreur_finale, iteration, corrections, temps_total,
-            timeout=timeout_reached
+            erreur_finale, iteration, corrections, temps_total
         )
-        # Ajouter info encodeur figé
-        result['encoder_frozen'] = encoder_frozen
-        return result
 
     def rotation_relative_avec_feedback(
         self,
@@ -529,7 +456,7 @@ class FeedbackController:
                 'mode': 'sans_feedback'
             }
 
-        angle_cible = normalize_angle_360(position_actuelle + delta_deg)
+        angle_cible = (position_actuelle + delta_deg) % 360
 
         self.logger.info(
             f"Rotation relative: {delta_deg:+.1f}° "

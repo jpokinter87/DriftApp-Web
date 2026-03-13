@@ -6,22 +6,19 @@ Ce module permet d'adapter automatiquement :
 2. La vitesse du moteur (délai entre pas)
 3. La vérification du chemin le plus court
 
-VERSION 2.3 - Système adaptatif simplifié (3 modes)
-- NORMAL: Conditions standard (altitude < 68°)
-- CRITICAL: Altitude >= 68° OU mouvement critique (utilisé pour TOUT le suivi)
-- CONTINUOUS: Réservé aux GOTO et mouvements extrêmes (> 30°, flip méridien)
+VERSION 2.2 - Système adaptatif simplifié (3 modes)
+- NORMAL: Conditions standard
+- CRITICAL: Altitude >= 68° OU mouvement critique
+- CONTINUOUS: Mouvement extrême OU (altitude >= 75° ET mouvement significatif)
+              AUSSI utilisé pour les GOTO (vitesse max fluide)
 
-CHANGEMENT v2.3: CONTINUOUS n'est plus déclenché par "zenith + mouvement significatif".
-Le suivi utilise exclusivement NORMAL et CRITICAL pour réduire le stress mécanique.
-CONTINUOUS est réservé aux GOTO initiaux, GOTO manuels 10°, et flip méridien.
+CHANGEMENT v2.2: FAST_TRACK supprimé (redondant avec CONTINUOUS après calibration)
 """
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Tuple, Dict
 import logging
-
-from core.utils.angle_utils import normalize_angle_360
 
 
 class TrackingMode(Enum):
@@ -156,24 +153,12 @@ class AdaptiveTrackingManager:
             mode=TrackingMode.CONTINUOUS,
             check_interval=5,
             correction_threshold=0.1,
-            motor_delay=0.00012,  # Ajusté 30/12/2025 sur retour terrain
+            motor_delay=0.00015,
             description="Mode continu - Corrections permanentes / GOTO"
         )
 
     def _get_continuous_params(self) -> TrackingParameters:
         return self._get_continuous_params_from_config(self.adaptive_config)
-
-    def get_continuous_motor_delay(self) -> float:
-        """
-        Retourne le délai moteur pour le mode CONTINUOUS (vitesse max).
-
-        Utilisé pour les GOTO initiaux et manuels pour garantir
-        une vitesse rapide et fluide (~41°/min).
-
-        Returns:
-            Délai entre pas en secondes (ex: 0.00015)
-        """
-        return self._get_continuous_params().motor_delay
 
     # =========================================================================
     # PRÉDICATS D'ÉVALUATION
@@ -223,13 +208,9 @@ class AdaptiveTrackingManager:
         Décide du mode de suivi approprié.
 
         Priorité (du plus urgent au moins urgent):
-        1. CONTINUOUS: mouvement extrême UNIQUEMENT (> 30°, flip méridien)
-        2. CRITICAL: zone critique OU altitude critique/zénith OU mouvement critique
+        1. CONTINUOUS: mouvement extrême OU (zénith + mouvement significatif)
+        2. CRITICAL: zone critique OU altitude critique OU mouvement critique
         3. NORMAL: conditions standard
-
-        Note v2.3: La règle "zénith + mouvement significatif → CONTINUOUS" a été
-        supprimée pour réduire le stress mécanique. Le suivi utilise exclusivement
-        NORMAL et CRITICAL. CONTINUOUS est réservé aux GOTO et flip méridien.
 
         Returns:
             Tuple (mode, liste des raisons)
@@ -237,10 +218,14 @@ class AdaptiveTrackingManager:
         reasons = []
 
         # === CONTINUOUS ===
-        # Mouvement extrême UNIQUEMENT (> 30°, typiquement flip méridien)
-        # Note v2.3: C'est le SEUL cas où CONTINUOUS est déclenché pendant le suivi
+        # Mouvement extrême (> 50°)
         if movement_level == "extreme":
             reasons.append(f"Mouvement extrême ({abs(delta_required):.1f}°)")
+            return TrackingMode.CONTINUOUS, reasons
+
+        # Proche zénith ET mouvement significatif (> seuil minimum)
+        if altitude_level == "zenith" and abs(delta_required) >= self.MOVEMENT_MIN_FOR_CONTINUOUS:
+            reasons.append(f"Proche zénith ({altitude:.1f}°) + mouvement significatif ({abs(delta_required):.1f}°)")
             return TrackingMode.CONTINUOUS, reasons
 
         # === CRITICAL ===
@@ -249,19 +234,15 @@ class AdaptiveTrackingManager:
             reasons.append(f"Zone critique ({self.CRITICAL_ZONE_1['name']})")
             return TrackingMode.CRITICAL, reasons
 
-        # Altitude zénith (>= 75°) - utilise CRITICAL, pas CONTINUOUS
-        # Note v2.3: Le zénith utilise maintenant CRITICAL pour réduire le stress mécanique
-        # CRITICAL (délai 1ms, ~9°/min) est suffisant pour les corrections normales
-        if altitude_level == "zenith":
-            reasons.append(f"Proche zénith ({altitude:.1f}°)")
+        # Altitude critique OU proche zénith sans mouvement significatif
+        if altitude_level in ["critical", "zenith"]:
+            if altitude_level == "zenith":
+                reasons.append(f"Proche zénith ({altitude:.1f}°) - mouvement faible, pas de CONTINUOUS")
+            else:
+                reasons.append(f"Altitude critique ({altitude:.1f}°)")
             return TrackingMode.CRITICAL, reasons
 
-        # Altitude critique (68-75°)
-        if altitude_level == "critical":
-            reasons.append(f"Altitude critique ({altitude:.1f}°)")
-            return TrackingMode.CRITICAL, reasons
-
-        # Mouvement critique (mais pas extrême)
+        # Mouvement critique
         if movement_level == "critical":
             reasons.append(f"Mouvement critique ({abs(delta_required):.1f}°)")
             return TrackingMode.CRITICAL, reasons
@@ -349,26 +330,23 @@ class AdaptiveTrackingManager:
     def verify_shortest_path(
         self,
         current_position: float,
-        target_position: float,
-        log_large_movements: bool = True
+        target_position: float
     ) -> Tuple[float, str]:
         """
         Vérifie et retourne le chemin le plus court.
-
+        
         Args:
             current_position: Position actuelle (degrés)
             target_position: Position coupole (degrés)
-            log_large_movements: Si True, log les grands mouvements (> 30°).
-                                 Mettre à False pour les appels fréquents (get_status).
-
+        
         Returns:
             Tuple (delta, direction_description)
             - delta: Déplacement à effectuer (+ = horaire, - = anti-horaire)
             - direction_description: Description du chemin
         """
         # Normaliser les positions dans [0, 360[
-        current = normalize_angle_360(current_position)
-        target = normalize_angle_360(target_position)
+        current = current_position % 360
+        target = target_position % 360
         
         # Calculer les deux chemins possibles
         delta_direct = target - current
@@ -399,8 +377,8 @@ class AdaptiveTrackingManager:
             chosen_description = f"{path2_direction} ({path2_angle:.1f}°)"
             verification = f"Chemin le plus court: {chosen_description}"
         
-        # Logger la vérification pour les grands mouvements (sauf si désactivé)
-        if log_large_movements and abs(chosen_angle) > 30:
+        # Logger la vérification pour les grands mouvements
+        if abs(chosen_angle) > 30:
             self.logger.info(f"🔍 Vérification chemin:")
             self.logger.info(f"   Position actuelle: {current:.1f}°")
             self.logger.info(f"   Position coupole: {target:.1f}°")
@@ -428,12 +406,18 @@ class AdaptiveTrackingManager:
             Dictionnaire d'informations
         """
         params = self.current_params
-
-        # Réutiliser les méthodes existantes (DRY)
-        in_critical_zone = self._is_in_critical_zone(altitude, azimut)
-        altitude_level = self._get_altitude_level(altitude)
-        movement_level = self._get_movement_level(delta)
-
+        
+        # Déterminer les drapeaux d'alerte
+        in_critical_zone = False
+        if self.CRITICAL_ZONE_1:
+            in_critical_zone = (
+                self.CRITICAL_ZONE_1['alt_min'] <= altitude <= self.CRITICAL_ZONE_1['alt_max'] and
+                self.CRITICAL_ZONE_1['az_min'] <= azimut <= self.CRITICAL_ZONE_1['az_max']
+            )
+        
+        is_high_altitude = altitude >= self.ALTITUDE_CRITICAL
+        is_large_movement = abs(delta) >= self.MOVEMENT_CRITICAL
+        
         return {
             'mode': params.mode.value,
             'mode_description': params.description,
@@ -441,10 +425,18 @@ class AdaptiveTrackingManager:
             'correction_threshold': params.correction_threshold,
             'motor_delay': params.motor_delay,
             'in_critical_zone': in_critical_zone,
-            'is_high_altitude': altitude_level in ("critical", "zenith"),
-            'is_large_movement': movement_level in ("critical", "extreme"),
-            'altitude_level': altitude_level,
-            'movement_level': movement_level
+            'is_high_altitude': is_high_altitude,
+            'is_large_movement': is_large_movement,
+            'altitude_level': (
+                "zenith" if altitude >= self.ALTITUDE_ZENITH else
+                "critical" if altitude >= self.ALTITUDE_CRITICAL else
+                "normal"
+            ),
+            'movement_level': (
+                "extreme" if abs(delta) >= self.MOVEMENT_EXTREME else
+                "critical" if abs(delta) >= self.MOVEMENT_CRITICAL else
+                "normal"
+            )
         }
 
 

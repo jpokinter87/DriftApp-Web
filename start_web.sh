@@ -27,21 +27,13 @@ fi
 # Utilisateur qui a lancé sudo (pour les permissions des fichiers)
 REAL_USER="${SUDO_USER:-$USER}"
 
-# Créer les dossiers et ajuster les permissions pour l'utilisateur
-setup_permissions() {
-    # Dossier logs
+# Créer le dossier logs avec les bonnes permissions
+setup_logs() {
     if [[ ! -d "$PROJECT_DIR/logs" ]]; then
         mkdir -p "$PROJECT_DIR/logs"
     fi
+    # S'assurer que l'utilisateur peut écrire dans logs (pas root)
     chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/logs" 2>/dev/null || true
-
-    # Dossier data et sessions (pour que l'utilisateur puisse modifier config.json)
-    if [[ ! -d "$PROJECT_DIR/data/sessions" ]]; then
-        mkdir -p "$PROJECT_DIR/data/sessions"
-    fi
-    chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/data" 2>/dev/null || true
-
-    log_info "Permissions ajustées pour l'utilisateur $REAL_USER"
 }
 
 # Couleurs
@@ -90,9 +82,7 @@ start_motor_service() {
     if pgrep -f "motor_service.py" > /dev/null; then
         log_info "Motor Service déjà en cours d'exécution"
     else
-        log_info "Démarrage du Motor Service (root requis pour GPIO)..."
-        # Motor Service DOIT tourner en root pour l'accès GPIO sur Raspberry Pi
-        # Les fichiers logs/data sont pré-configurés avec les bonnes permissions dans setup_permissions()
+        log_info "Démarrage du Motor Service..."
         "$PYTHON" services/motor_service.py &
         sleep 2
         if pgrep -f "motor_service.py" > /dev/null; then
@@ -104,37 +94,16 @@ start_motor_service() {
 }
 
 start_django() {
-    # Priorité au service systemd s'il est installé
-    if systemctl list-unit-files driftapp_web.service &>/dev/null; then
-        if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
-            log_info "Django déjà en cours (systemd)"
-        else
-            log_info "Démarrage de Django via systemd..."
-            systemctl start driftapp_web.service
-            sleep 2
-            if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
-                log_info "Django démarré sur http://localhost:8000 (systemd)"
-            else
-                log_error "Échec du démarrage de Django (systemd)"
-                journalctl -u driftapp_web.service -n 5 --no-pager
-            fi
-        fi
+    if pgrep -f "manage.py runserver" > /dev/null; then
+        log_info "Django déjà en cours d'exécution"
     else
-        # Fallback: mode manuel si le service n'est pas installé
+        log_info "Démarrage de Django..."
+        "$PYTHON" web/manage.py runserver 0.0.0.0:8000 &
+        sleep 2
         if pgrep -f "manage.py runserver" > /dev/null; then
-            log_info "Django déjà en cours d'exécution (manuel)"
+            log_info "Django démarré sur http://localhost:8000"
         else
-            log_info "Démarrage de Django (en tant que $REAL_USER)..."
-            log_warn "Service systemd non installé, utilisation du mode manuel"
-            # Lancer en tant qu'utilisateur normal pour que les fichiers créés lui appartiennent
-            sudo -u "$REAL_USER" nohup "$PYTHON" web/manage.py runserver 0.0.0.0:8000 >> "$PROJECT_DIR/logs/django.log" 2>&1 &
-            disown
-            sleep 2
-            if pgrep -f "manage.py runserver" > /dev/null; then
-                log_info "Django démarré sur http://localhost:8000"
-            else
-                log_error "Échec du démarrage de Django"
-            fi
+            log_error "Échec du démarrage de Django"
         fi
     fi
 }
@@ -142,13 +111,9 @@ start_django() {
 stop_all() {
     log_info "Arrêt des services DriftApp Web..."
 
-    # Arrêt Django (systemd ou manuel)
-    if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
-        systemctl stop driftapp_web.service
-        log_info "Django arrêté (systemd)"
-    elif pgrep -f "manage.py runserver" > /dev/null; then
+    if pgrep -f "manage.py runserver" > /dev/null; then
         pkill -f "manage.py runserver"
-        log_info "Django arrêté (manuel)"
+        log_info "Django arrêté"
     fi
 
     if pgrep -f "motor_service.py" > /dev/null; then
@@ -194,18 +159,11 @@ status() {
         echo -e "Motor Service:    ${RED}ARRÊTÉ${NC}"
     fi
 
-    # Status Django (systemd prioritaire)
-    if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
-        echo -e "Django Web:       ${GREEN}EN COURS${NC} (systemd)"
-        echo "  URL: http://localhost:8000"
-    elif pgrep -f "manage.py runserver" > /dev/null; then
-        echo -e "Django Web:       ${YELLOW}EN COURS${NC} (manuel)"
+    if pgrep -f "manage.py runserver" > /dev/null; then
+        echo -e "Django Web:       ${GREEN}EN COURS${NC}"
         echo "  URL: http://localhost:8000"
     else
         echo -e "Django Web:       ${RED}ARRÊTÉ${NC}"
-        if systemctl list-unit-files driftapp_web.service &>/dev/null; then
-            echo "  → sudo systemctl start driftapp_web"
-        fi
     fi
 
     echo
@@ -218,8 +176,8 @@ case "${1:-start}" in
         log_info "Démarrage de DriftApp Web..."
         echo
 
-        # Préparer les dossiers avec les bonnes permissions
-        setup_permissions
+        # Préparer le dossier logs avec les bonnes permissions
+        setup_logs
 
         # Vérifier que le daemon encodeur tourne (géré par systemd)
         check_encoder_daemon
@@ -250,7 +208,7 @@ case "${1:-start}" in
         # Relancer directement (pas via $0 pour garder le contexte sudo)
         log_info "Démarrage de DriftApp Web..."
         echo
-        setup_permissions
+        setup_logs
         check_encoder_daemon
         encoder_ok=$?
         start_motor_service

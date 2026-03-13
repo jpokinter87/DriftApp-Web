@@ -1,24 +1,8 @@
 {
   "_comment": "Configuration complète DriftApp - Toutes les constantes centralisées",
   "_version": "2.3",
-  "_date": "2025-12-24",
-  "_changes": "Ajout section thresholds pour centraliser les seuils de mouvement",
-
-  "thresholds": {
-    "_comment": "Seuils de mouvement centralisés (degrés)",
-
-    "feedback_min_deg": 3.0,
-    "_feedback_comment": "Delta minimum pour utiliser feedback. En-dessous, rotation directe plus fluide.",
-
-    "large_movement_deg": 30.0,
-    "_large_comment": "Au-delà, utilise mode CONTINUOUS/FAST_TRACK pour les corrections.",
-
-    "feedback_protection_deg": 20.0,
-    "_protection_comment": "Protection contre mouvements anormaux dans boucle feedback. Abandon si erreur > seuil.",
-
-    "default_tolerance_deg": 0.5,
-    "_tolerance_comment": "Tolérance par défaut pour rotation avec feedback (précision cible)."
-  },
+  "_date": "2025-12-18",
+  "_changes": "Ajout mode parking automatique (calibration switch + parking fin de session)",
 
   "site": {
     "latitude": 44.15,
@@ -37,6 +21,45 @@
   },
 
   "simulation": false,
+
+  "geometrie": {
+    "deport_tube_cm": 40.0,
+    "rayon_coupole_cm": 120.0
+  },
+
+  "parking": {
+    "_comment": "Mode parking automatique pour calibration et fin de session",
+
+    "enabled": true,
+    "_enabled_comment": "Active le mode parking",
+
+    "switch_position": 45.0,
+    "_switch_comment": "Position du switch de calibration encodeur (référence absolue)",
+
+    "park_position": 44.0,
+    "_park_comment": "Position de parking (juste AVANT le switch)",
+
+    "calibration_position": 46.0,
+    "_calibration_comment": "Position après calibration (juste APRÈS le switch)",
+
+    "auto_park_on_stop": false,
+    "_auto_park_comment": "DÉSACTIVÉ - Pas de parking entre objets (permet multi-objets dans la nuit)",
+
+    "auto_calibrate_on_start": true,
+    "_auto_calibrate_comment": "Calibrer automatiquement si encodeur non calibré au démarrage du suivi",
+
+    "calibration_approach_direction": "cw",
+    "_approach_comment": "Direction d'approche du switch pour calibration (cw = horaire)",
+
+    "sunrise_parking": {
+      "_comment": "Parking automatique au lever du soleil",
+      "enabled": true,
+      "offset_minutes": -15,
+      "_offset_comment": "Minutes avant (-) ou après (+) le lever du soleil. -15 = 15 min avant",
+      "only_if_session_active": true,
+      "_only_if_comment": "Ne parque que si un suivi a eu lieu pendant la nuit"
+    }
+  },
 
   "moteur": {
     "_comment": "Configuration du moteur pas-à-pas",
@@ -129,8 +152,8 @@
         "_comment": "Altitude ≥ 75° ou mouvement extrême - AUSSI UTILISÉ POUR GOTO",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.00014,
-        "_speed": "~44°/min - Vitesse ajustée 01/01/2026 (0.12ms causait encodeur stagnant)",
+        "motor_delay": 0.00015,
+        "_speed": "~41°/min - Vitesse max fluide (calibrée 17/12/2025)",
         "_usage": "Tracking continu + GOTO manuels/automatiques"
       }
     },

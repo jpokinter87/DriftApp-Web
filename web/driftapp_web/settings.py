@@ -6,7 +6,6 @@ Configuration pour l'interface web de contrôle de la coupole.
 
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,8 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 SECRET_KEY = 'django-insecure-driftapp-dev-key-change-in-production'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Utiliser DJANGO_DEBUG=0 ou DJANGO_DEBUG=false en production
-DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() in ('true', '1', 'yes')
+DEBUG = True
 
 # Permettre les connexions depuis le réseau local
 ALLOWED_HOSTS = ['*']
@@ -39,8 +37,6 @@ INSTALLED_APPS = [
     # Apps DriftApp
     'tracking',
     'hardware',
-    'health',
-    'session',
 ]
 
 MIDDLEWARE = [
@@ -118,33 +114,7 @@ MOTOR_SERVICE_IPC = {
 # Configuration DriftApp
 DRIFTAPP_CONFIG = PROJECT_ROOT / 'data' / 'config.json'
 
-# Logging - fichier horodaté par session
-LOGS_DIR = PROJECT_ROOT / 'logs'
-LOGS_DIR.mkdir(exist_ok=True)
-
-# Nombre max de fichiers de log Django à conserver
-MAX_DJANGO_LOG_FILES = 20
-
-# Nettoyage des vieux logs Django au démarrage
-def _cleanup_old_django_logs():
-    """Supprime les vieux fichiers de log Django, garde les N plus récents."""
-    log_files = sorted(
-        LOGS_DIR.glob("django_*.log"),
-        key=lambda f: f.stat().st_mtime,
-        reverse=True
-    )
-    for old_file in log_files[MAX_DJANGO_LOG_FILES:]:
-        try:
-            old_file.unlink()
-        except OSError:
-            pass
-
-_cleanup_old_django_logs()
-
-# Fichier de log horodaté pour cette session Django
-_django_log_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-DJANGO_LOG_FILE = LOGS_DIR / f"django_{_django_log_timestamp}.log"
-
+# Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -161,7 +131,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': DJANGO_LOG_FILE,
+            'filename': PROJECT_ROOT / 'logs' / 'django.log',
             'formatter': 'verbose',
         },
     },

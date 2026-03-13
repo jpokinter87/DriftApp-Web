@@ -9,7 +9,7 @@ class TrackingLogger:
     """Logger formaté pour le suivi et les corrections."""
 
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("CoupoleUPAN.Tracking")
         self.session_start = datetime.now()
 
     def start_tracking(self, object_name: str, ra: str, dec: str):

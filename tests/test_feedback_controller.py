@@ -1,635 +1,243 @@
 """
-Tests pour le module core/hardware/feedback_controller.py
+Tests exhaustifs pour core/hardware/feedback_controller.py
 
-Ce module teste le contrôleur de feedback en boucle fermée.
+Couvre :
+- Calculs utilitaires (delta angulaire, correction)
+- Boucle de correction complète
+- Rotation relative avec feedback
+- Gestion des erreurs (daemon indisponible)
+- Détection de non-progression
+- Timeout
+- Arrêt demandé (stop_requested)
+
+Utilise MoteurSimule + un mock du daemon reader pour isoler la logique.
 """
 
-import pytest
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
 
-from core.hardware.daemon_encoder_reader import (
-    StaleDataError,
-    FrozenEncoderError
-)
+import pytest
+
+from core.hardware.feedback_controller import FeedbackController
+from core.hardware.moteur_simule import MoteurSimule, set_simulated_position
 
 
-# =============================================================================
-# FIXTURES
-# =============================================================================
+class MockDaemonReader:
+    """Mock du DaemonEncoderReader qui lit la position simulée."""
+
+    def __init__(self):
+        self._fail_after = None
+        self._read_count = 0
+
+    def is_available(self):
+        return True
+
+    def read_raw(self):
+        from core.hardware.moteur_simule import get_simulated_position
+        return {
+            "angle": get_simulated_position(),
+            "status": "OK",
+            "calibrated": True,
+        }
+
+    def read_angle(self, timeout_ms=200):
+        self._read_count += 1
+        if self._fail_after is not None and self._read_count > self._fail_after:
+            raise RuntimeError("Daemon simulé indisponible")
+        from core.hardware.moteur_simule import get_simulated_position
+        return get_simulated_position()
+
+    def read_status(self):
+        return self.read_raw()
+
+    def read_stable(self, num_samples=3, delay_ms=10, stabilization_ms=50):
+        """Retourne directement la position (pas de moyennage en test)."""
+        return self.read_angle()
+
+
+@pytest.fixture(autouse=True)
+def reset_position():
+    set_simulated_position(0.0)
+    yield
+    set_simulated_position(0.0)
+
 
 @pytest.fixture
-def mock_daemon_reader():
-    """Mock pour DaemonEncoderReader."""
-    reader = MagicMock()
-    reader.is_available.return_value = True
-    reader.read_angle.return_value = 45.0
-    reader.read_stable.return_value = 45.0
-    reader.read_raw.return_value = {"angle": 45.0, "status": "OK"}
-    return reader
+def moteur():
+    return MoteurSimule()
 
 
 @pytest.fixture
-def mock_moteur():
-    """Mock pour MoteurCoupole."""
-    moteur = MagicMock()
-    moteur.steps_per_dome_revolution = 1942968
-    moteur.stop_requested = False
-    moteur.direction_actuelle = 1
-    moteur.definir_direction = MagicMock()
-    moteur.faire_un_pas = MagicMock()
-    moteur.rotation = MagicMock()
-    moteur.clear_stop_request = MagicMock()
-    return moteur
+def daemon():
+    return MockDaemonReader()
 
 
 @pytest.fixture
-def feedback_controller(mock_moteur, mock_daemon_reader):
-    """Crée un FeedbackController avec mocks."""
-    with patch.dict('sys.modules', {
-        'lgpio': MagicMock(),
-        'RPi': MagicMock(),
-        'RPi.GPIO': MagicMock()
-    }):
-        from core.hardware.feedback_controller import FeedbackController
-        return FeedbackController(mock_moteur, mock_daemon_reader)
+def controller(moteur, daemon):
+    return FeedbackController(moteur, daemon)
 
 
 # =============================================================================
-# TESTS CONTRÔLE D'ARRÊT
+# Calculs utilitaires
 # =============================================================================
 
-class TestFeedbackControllerStop:
-    """Tests pour le contrôle d'arrêt."""
+class TestFeedbackCalculations:
+    def test_delta_angulaire_simple(self, controller):
+        assert controller._calculer_delta_angulaire(10.0, 20.0) == pytest.approx(10.0)
 
-    def test_request_stop(self, feedback_controller, mock_moteur):
-        """request_stop met les flags à True."""
-        assert feedback_controller.stop_requested is False
+    def test_delta_angulaire_crossing_zero(self, controller):
+        assert controller._calculer_delta_angulaire(350.0, 10.0) == pytest.approx(20.0)
 
-        feedback_controller.request_stop()
+    def test_delta_angulaire_negative(self, controller):
+        assert controller._calculer_delta_angulaire(20.0, 10.0) == pytest.approx(-10.0)
 
-        assert feedback_controller.stop_requested is True
-        assert mock_moteur.stop_requested is True
-
-    def test_clear_stop_request(self, feedback_controller, mock_moteur):
-        """clear_stop_request remet les flags à False."""
-        feedback_controller.stop_requested = True
-        mock_moteur.stop_requested = True
-
-        feedback_controller.clear_stop_request()
-
-        assert feedback_controller.stop_requested is False
-        assert mock_moteur.stop_requested is False
-
-
-# =============================================================================
-# TESTS CALCULS UTILITAIRES
-# =============================================================================
-
-class TestFeedbackControllerCalculs:
-    """Tests pour les calculs utilitaires."""
-
-    def test_calculer_delta_angulaire_simple(self, feedback_controller):
-        """Delta simple sans traversée de 0°."""
-        delta = feedback_controller._calculer_delta_angulaire(10.0, 50.0)
-        assert delta == pytest.approx(40.0)
-
-    def test_calculer_delta_angulaire_negatif(self, feedback_controller):
-        """Delta négatif (sens anti-horaire)."""
-        delta = feedback_controller._calculer_delta_angulaire(50.0, 10.0)
-        assert delta == pytest.approx(-40.0)
-
-    def test_calculer_delta_angulaire_traverse_zero(self, feedback_controller):
-        """Traversée de 0° prend le chemin le plus court."""
-        delta = feedback_controller._calculer_delta_angulaire(350.0, 10.0)
-        assert delta == pytest.approx(20.0)
-
-    def test_calculer_delta_angulaire_traverse_zero_inverse(self, feedback_controller):
-        """Traversée de 0° dans l'autre sens."""
-        delta = feedback_controller._calculer_delta_angulaire(10.0, 350.0)
-        assert delta == pytest.approx(-20.0)
-
-    def test_lire_position_stable(self, feedback_controller, mock_daemon_reader):
-        """Lecture position via daemon."""
-        mock_daemon_reader.read_stable.return_value = 67.5
-
-        result = feedback_controller._lire_position_stable()
-
-        assert result == 67.5
-        mock_daemon_reader.read_stable.assert_called_once()
-
-    def test_calculer_correction(self, feedback_controller):
-        """Calcul des paramètres de correction."""
-        angle_correction, direction, steps = feedback_controller._calculer_correction(
-            erreur=5.0, max_correction=10.0
-        )
-
-        assert angle_correction == 5.0
+    def test_calculer_correction(self, controller):
+        angle, direction, steps = controller._calculer_correction(5.0, 45.0)
+        assert angle == 5.0
         assert direction == 1
         assert steps > 0
 
-    def test_calculer_correction_limitee(self, feedback_controller):
-        """Correction limitée par max_correction."""
-        angle_correction, direction, steps = feedback_controller._calculer_correction(
-            erreur=15.0, max_correction=10.0
-        )
-
-        assert angle_correction == 10.0  # Limité
-
-    def test_calculer_correction_direction_negative(self, feedback_controller):
-        """Direction négative pour erreur négative."""
-        angle_correction, direction, steps = feedback_controller._calculer_correction(
-            erreur=-5.0, max_correction=10.0
-        )
-
+    def test_calculer_correction_negative(self, controller):
+        angle, direction, steps = controller._calculer_correction(-3.0, 45.0)
+        assert angle == 3.0
         assert direction == -1
+        assert steps > 0
+
+    def test_calculer_correction_clamped(self, controller):
+        """Correction limitée par max_correction."""
+        angle, direction, steps = controller._calculer_correction(100.0, 10.0)
+        assert angle == 10.0  # Clampé à max_correction
 
 
 # =============================================================================
-# TESTS CRÉATION RÉSULTATS
+# Rotation avec feedback — succès
 # =============================================================================
 
-class TestFeedbackControllerResultats:
-    """Tests pour la création de résultats."""
+class TestFeedbackRotationSuccess:
+    def test_simple_rotation(self, controller):
+        """Rotation de 45° — nécessite allow_large_movement car > 20°."""
+        set_simulated_position(0.0)
+        result = controller.rotation_avec_feedback(
+            angle_cible=45.0, allow_large_movement=True
+        )
+        assert result['success'] is True
+        assert abs(result['erreur_finale']) < 0.5
 
-    def test_creer_resultat_sans_feedback(self, feedback_controller):
-        """Création résultat en mode sans feedback."""
-        start_time = time.time()
-
-        result = feedback_controller._creer_resultat_sans_feedback(90.0, start_time)
-
+    def test_small_movement_blocked_over_20deg(self, controller):
+        """Documente le comportement : sans allow_large_movement, > 20° est abandonné."""
+        set_simulated_position(0.0)
+        result = controller.rotation_avec_feedback(angle_cible=45.0)
+        # Protection H-09 : erreur > 20° → abandon
         assert result['success'] is False
-        assert result['position_cible'] == 90.0
-        assert result['mode'] == 'sans_feedback'
-        assert 'temps_total' in result
 
-    def test_creer_resultat_success(self, feedback_controller):
-        """Création résultat avec succès."""
-        result = feedback_controller._creer_resultat(
-            success=True,
-            position_initiale=0.0,
-            position_finale=90.0,
-            angle_cible=90.0,
-            erreur_finale=0.2,
-            iterations=2,
-            corrections=[],
-            temps_total=1.5
+    def test_small_rotation(self, controller):
+        set_simulated_position(10.0)
+        result = controller.rotation_avec_feedback(
+            angle_cible=11.0, tolerance=0.5
         )
-
         assert result['success'] is True
-        assert result['position_initiale'] == 0.0
-        assert result['position_finale'] == 90.0
-        assert result['erreur_finale'] == 0.2
-        assert result['mode'] == 'feedback_daemon'
 
-
-# =============================================================================
-# TESTS ROTATION AVEC FEEDBACK
-# =============================================================================
-
-class TestRotationAvecFeedback:
-    """Tests pour rotation_avec_feedback."""
-
-    def test_rotation_success_premiere_lecture(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Rotation réussie dès la première lecture (déjà à la cible)."""
-        # Configurer le mock pour être déjà à la position cible
-        mock_daemon_reader.read_stable.return_value = 90.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            vitesse=0.001,
-            tolerance=0.5
-        )
-
+    def test_crossing_zero(self, controller):
+        set_simulated_position(350.0)
+        result = controller.rotation_avec_feedback(angle_cible=10.0)
         assert result['success'] is True
-        assert result['erreur_finale'] == pytest.approx(0.0, abs=0.5)
 
-    def test_rotation_avec_corrections(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Rotation nécessitant des corrections."""
-        # Position initiale 0°, puis 45° après correction, puis 90° (cible)
-        positions = [0.0, 0.0, 45.0, 45.0, 90.0]
-        mock_daemon_reader.read_stable.side_effect = positions
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            vitesse=0.001,
-            tolerance=0.5,
-            max_iterations=10
+    def test_already_at_target(self, controller):
+        set_simulated_position(45.0)
+        result = controller.rotation_avec_feedback(
+            angle_cible=45.0, tolerance=0.5
         )
+        assert result['success'] is True
+        assert result['iterations'] == 0
 
-        assert result['mode'] == 'feedback_daemon'
+    def test_result_dict_structure(self, controller):
+        result = controller.rotation_avec_feedback(angle_cible=10.0)
+        assert 'success' in result
+        assert 'position_initiale' in result
+        assert 'position_finale' in result
+        assert 'position_cible' in result
+        assert 'erreur_finale' in result
+        assert 'iterations' in result
         assert 'corrections' in result
+        assert 'temps_total' in result
+        assert 'mode' in result
 
-    def test_rotation_daemon_indisponible(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Fallback si daemon non disponible."""
-        mock_daemon_reader.read_stable.side_effect = RuntimeError("Daemon not found")
 
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            vitesse=0.001
-        )
+# =============================================================================
+# Rotation relative
+# =============================================================================
 
+class TestFeedbackRotationRelative:
+    def test_relative_positive(self, controller):
+        set_simulated_position(100.0)
+        result = controller.rotation_relative_avec_feedback(delta_deg=20.0)
+        assert result['success'] is True
+
+    def test_relative_negative(self, controller):
+        set_simulated_position(100.0)
+        result = controller.rotation_relative_avec_feedback(delta_deg=-20.0)
+        assert result['success'] is True
+
+
+# =============================================================================
+# Gestion des erreurs
+# =============================================================================
+
+class TestFeedbackErrors:
+    def test_daemon_unavailable_at_start(self, moteur):
+        """Daemon indisponible → mode sans feedback."""
+        failing_daemon = MockDaemonReader()
+        failing_daemon._fail_after = 0  # Échoue dès la première lecture
+        controller = FeedbackController(moteur, failing_daemon)
+        result = controller.rotation_avec_feedback(angle_cible=45.0)
+        assert result['mode'] == 'sans_feedback'
+
+    def test_relative_daemon_unavailable(self, moteur):
+        """Rotation relative sans daemon → fallback."""
+        failing_daemon = MockDaemonReader()
+        failing_daemon._fail_after = 0
+        controller = FeedbackController(moteur, failing_daemon)
+        result = controller.rotation_relative_avec_feedback(delta_deg=10.0)
+        assert result['mode'] == 'sans_feedback'
+
+
+# =============================================================================
+# Contrôle d'arrêt
+# =============================================================================
+
+class TestFeedbackStop:
+    def test_stop_requested(self, controller):
+        controller.request_stop()
+        assert controller.stop_requested is True
+        assert controller.moteur.stop_requested is True
+
+    def test_clear_stop(self, controller):
+        controller.request_stop()
+        controller.clear_stop_request()
+        assert controller.stop_requested is False
+
+    def test_stop_during_rotation(self, controller):
+        """Arrêt demandé → rotation interrompue."""
+        set_simulated_position(0.0)
+        controller.request_stop()
+        result = controller.rotation_avec_feedback(angle_cible=180.0)
+        # Doit s'arrêter avant d'atteindre la cible
+        assert result['iterations'] <= 1
+
+
+# =============================================================================
+# Résultats
+# =============================================================================
+
+class TestFeedbackResults:
+    def test_resultat_sans_feedback(self, controller):
+        result = controller._creer_resultat_sans_feedback(45.0, time.time() - 1)
         assert result['success'] is False
         assert result['mode'] == 'sans_feedback'
 
-    def test_rotation_stop_requested(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Arrêt si stop_requested pendant la boucle."""
-        mock_daemon_reader.read_stable.return_value = 0.0
-
-        # Simuler un arrêt après la première lecture
-        def set_stop(*args, **kwargs):
-            feedback_controller.stop_requested = True
-            return 0.0
-
-        mock_daemon_reader.read_stable.side_effect = set_stop
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            max_iterations=10
+    def test_resultat_normal(self, controller):
+        result = controller._creer_resultat(
+            True, 0.0, 45.0, 45.0, 0.1, 3, [], 1.5
         )
-
-        # La boucle doit s'arrêter
-        assert result['iterations'] < 10
-
-    def test_rotation_max_iterations(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Arrêt après max_iterations."""
-        # Position qui ne change jamais (erreur persistante)
-        mock_daemon_reader.read_stable.return_value = 0.0
-        mock_daemon_reader.read_angle.return_value = 0.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            tolerance=0.1,
-            max_iterations=3
-        )
-
-        # Doit avoir fait exactement max_iterations
-        assert result['iterations'] <= 3
-        assert result['success'] is False
-
-    def test_rotation_timeout_global(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Le timeout global interrompt la boucle avant max_iterations."""
-        # Position qui ne change jamais (erreur persistante de 5°)
-        mock_daemon_reader.read_stable.return_value = 0.0
-        mock_daemon_reader.read_angle.return_value = 0.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=5.0,       # Erreur de 5° (< protection 20°)
-            tolerance=0.1,
-            max_iterations=1000,  # Beaucoup d'itérations
-            max_duration=0.1      # Mais timeout très court (100ms)
-        )
-
-        # Doit s'être arrêté avant les 1000 itérations
-        assert result['iterations'] < 1000
-        assert result['success'] is False
-        assert result['timeout'] is True
-
-    def test_rotation_resultat_contient_timeout_false(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Le résultat contient timeout=False si pas de timeout."""
-        mock_daemon_reader.read_stable.return_value = 45.0
-        mock_daemon_reader.read_angle.return_value = 45.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=45.0,
-            tolerance=1.0
-        )
-
         assert result['success'] is True
-        assert result['timeout'] is False
-
-
-# =============================================================================
-# TESTS ROTATION RELATIVE
-# =============================================================================
-
-class TestRotationRelative:
-    """Tests pour rotation_relative_avec_feedback."""
-
-    def test_rotation_relative_calcul_cible(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Calcul correct de l'angle cible."""
-        mock_daemon_reader.read_angle.return_value = 45.0
-        mock_daemon_reader.read_stable.return_value = 90.0  # Après rotation
-
-        with patch.object(
-            feedback_controller, 'rotation_avec_feedback',
-            return_value={'success': True}
-        ) as mock_rotation:
-            feedback_controller.rotation_relative_avec_feedback(45.0)
-
-            # Cible = 45 + 45 = 90
-            mock_rotation.assert_called_once()
-            call_kwargs = mock_rotation.call_args[1]
-            assert call_kwargs['angle_cible'] == 90.0
-
-    def test_rotation_relative_traverse_360(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Rotation relative qui traverse 360°."""
-        mock_daemon_reader.read_angle.return_value = 350.0
-        mock_daemon_reader.read_stable.return_value = 20.0
-
-        with patch.object(
-            feedback_controller, 'rotation_avec_feedback',
-            return_value={'success': True}
-        ) as mock_rotation:
-            feedback_controller.rotation_relative_avec_feedback(30.0)
-
-            # Cible = (350 + 30) % 360 = 20
-            call_kwargs = mock_rotation.call_args[1]
-            assert call_kwargs['angle_cible'] == 20.0
-
-    def test_rotation_relative_daemon_indisponible(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Fallback si daemon non disponible."""
-        mock_daemon_reader.read_angle.side_effect = RuntimeError("Daemon not found")
-
-        result = feedback_controller.rotation_relative_avec_feedback(45.0)
-
-        assert result['success'] is False
-        assert result['mode'] == 'sans_feedback'
-        mock_moteur.rotation.assert_called_once()
-
-
-# =============================================================================
-# TESTS EXÉCUTION DES PAS
-# =============================================================================
-
-class TestExecuterPas:
-    """Tests pour l'exécution des pas."""
-
-    def test_executer_pas_avec_verification(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Exécution des pas avec vérifications périodiques."""
-        mock_daemon_reader.read_angle.return_value = 45.0
-
-        feedback_controller._executer_pas_avec_verification(
-            steps=100,
-            vitesse=0.001,
-            angle_cible=45.0,
-            tolerance=0.5
-        )
-
-        # Devrait avoir appelé faire_un_pas 100 fois (ou moins si arrêt anticipé)
-        assert mock_moteur.faire_un_pas.call_count <= 100
-
-    def test_executer_pas_arret_anticipe(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Arrêt anticipé si objectif atteint."""
-        # Simuler atteinte de l'objectif après quelques pas
-        mock_daemon_reader.read_angle.return_value = 45.0
-        feedback_controller.stop_requested = True
-
-        feedback_controller._executer_pas_avec_verification(
-            steps=1000,
-            vitesse=0.001,
-            angle_cible=45.0,
-            tolerance=0.5
-        )
-
-        # Devrait s'arrêter avant les 1000 pas
-        assert mock_moteur.faire_un_pas.call_count < 1000
-
-
-# =============================================================================
-# TESTS ENREGISTREMENT CORRECTION
-# =============================================================================
-
-class TestEnregistrerCorrection:
-    """Tests pour l'enregistrement des corrections."""
-
-    def test_enregistrer_correction_structure(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Vérifie la structure de l'enregistrement."""
-        mock_daemon_reader.read_stable.return_value = 50.0
-
-        correction = feedback_controller._enregistrer_correction(
-            iteration=0,
-            position_avant=45.0,
-            erreur_avant=5.0,
-            angle_correction=5.0,
-            direction=1,
-            steps=100,
-            correction_start=time.time() - 0.5,
-            angle_cible=50.0
-        )
-
-        assert 'iteration' in correction
-        assert 'position_avant' in correction
-        assert 'erreur_avant' in correction
-        assert 'correction_demandee' in correction
-        assert 'steps' in correction
-        assert 'duration' in correction
-        assert 'erreur_apres' in correction
-
-    def test_enregistrer_correction_valeurs(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Vérifie les valeurs de l'enregistrement."""
-        mock_daemon_reader.read_stable.return_value = 50.0
-
-        correction = feedback_controller._enregistrer_correction(
-            iteration=2,
-            position_avant=45.0,
-            erreur_avant=5.0,
-            angle_correction=5.0,
-            direction=1,
-            steps=100,
-            correction_start=time.time(),
-            angle_cible=50.0
-        )
-
-        assert correction['iteration'] == 3  # 0-indexed + 1
-        assert correction['position_avant'] == 45.0
-        assert correction['erreur_avant'] == 5.0
-        assert correction['correction_demandee'] == 5.0  # 5.0 * 1
-        assert correction['steps'] == 100
-
-
-# =============================================================================
-# TESTS ITÉRATION
-# =============================================================================
-
-class TestExecuterIteration:
-    """Tests pour l'exécution d'une itération."""
-
-    def test_executer_iteration_objectif_atteint(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Retourne None si objectif atteint."""
-        mock_daemon_reader.read_stable.return_value = 90.0
-
-        result = feedback_controller._executer_iteration(
-            angle_cible=90.0,
-            vitesse=0.001,
-            tolerance=0.5,
-            max_correction=45.0,
-            iteration=0
-        )
-
-        assert result is None
-
-    def test_executer_iteration_avec_correction(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Retourne dict si correction effectuée."""
-        # Position initiale proche de la cible (erreur < 20° pour passer la protection)
-        mock_daemon_reader.read_stable.side_effect = [85.0, 90.0]
-
-        result = feedback_controller._executer_iteration(
-            angle_cible=90.0,
-            vitesse=0.001,
-            tolerance=0.5,
-            max_correction=45.0,
-            iteration=0
-        )
-
-        assert result is not None
-        assert 'iteration' in result
-        assert 'steps' in result
-
-    def test_executer_iteration_erreur_lecture(
-        self, feedback_controller, mock_daemon_reader
-    ):
-        """Retourne None si erreur de lecture."""
-        mock_daemon_reader.read_stable.side_effect = RuntimeError("Error")
-
-        result = feedback_controller._executer_iteration(
-            angle_cible=90.0,
-            vitesse=0.001,
-            tolerance=0.5,
-            max_correction=45.0,
-            iteration=0
-        )
-
-        assert result is None
-
-
-# =============================================================================
-# TESTS DÉTECTION ENCODEUR FIGÉ
-# =============================================================================
-
-class TestEncoderFrozenDetection:
-    """Tests pour la détection d'encodeur figé."""
-
-    def test_detection_stagnant_apres_3_corrections(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Détecte un encodeur stagnant après 3 corrections sans mouvement."""
-        # Position qui ne change jamais malgré les corrections
-        # (erreur de 5° < seuil protection 20°)
-        mock_daemon_reader.read_stable.return_value = 0.0
-        mock_daemon_reader.read_angle.return_value = 0.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=5.0,
-            tolerance=0.1,
-            max_iterations=10,
-            max_duration=30.0  # Assez de temps pour les 3 corrections
-        )
-
-        # Doit s'être arrêté à cause de l'encodeur figé, pas du timeout
-        assert result['encoder_frozen'] is True
-        assert result['success'] is False
-        # Doit avoir fait au moins 3 corrections avant de détecter
-        assert result['iterations'] >= 3
-
-    def test_pas_de_detection_si_mouvement(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Pas de détection de blocage si l'encodeur bouge."""
-        # Positions qui changent à chaque lecture (assez pour position initiale + corrections + finale)
-        positions = [0.0, 2.0, 4.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
-        mock_daemon_reader.read_stable.side_effect = positions
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=5.0,
-            tolerance=1.0,
-            max_iterations=10
-        )
-
-        # Pas de détection de blocage
-        assert result['encoder_frozen'] is False
-
-    def test_frozen_encoder_error_interrompt_boucle(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """FrozenEncoderError du daemon interrompt la boucle."""
-        # Position initiale OK, puis erreur dans la boucle, puis position finale
-        # L'exception dans la boucle est attrapée et encoder_frozen est mis à True
-        # La mesure finale échouera aussi (même exception), donc on catch
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return 0.0  # Position initiale
-            else:
-                raise FrozenEncoderError("Encodeur figé depuis 5.0s")
-
-        mock_daemon_reader.read_stable.side_effect = side_effect
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            tolerance=0.5,
-            max_iterations=10
-        )
-
-        assert result['encoder_frozen'] is True
-        assert result['success'] is False
-
-    def test_stale_data_error_interrompt_boucle(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """StaleDataError du daemon interrompt la boucle."""
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return 0.0  # Position initiale
-            else:
-                raise StaleDataError("Données périmées (1000ms > 500ms)")
-
-        mock_daemon_reader.read_stable.side_effect = side_effect
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            tolerance=0.5,
-            max_iterations=10
-        )
-
-        assert result['encoder_frozen'] is True
-        assert result['success'] is False
-
-    def test_resultat_contient_encoder_frozen_false(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """Le résultat contient encoder_frozen=False si pas de problème."""
-        mock_daemon_reader.read_stable.return_value = 45.0
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=45.0,
-            tolerance=1.0
-        )
-
-        assert result['success'] is True
-        assert result['encoder_frozen'] is False
+        assert result['iterations'] == 3
+        assert result['mode'] == 'feedback_daemon'

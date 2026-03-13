@@ -13,19 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
-# =============================================================================
-# IPC file paths (centralized - single source of truth)
-# =============================================================================
-IPC_BASE = Path("/dev/shm")
-IPC_MOTOR_COMMAND = IPC_BASE / "motor_command.json"
-IPC_MOTOR_STATUS = IPC_BASE / "motor_status.json"
-IPC_ENCODER_POSITION = IPC_BASE / "ems22_position.json"
-
-# =============================================================================
-# Data and configuration paths
-# =============================================================================
-DATA_DIR: Path = Path("data")
-LOGS_DIR: Path = Path("logs")
+# Chemins (absolus basés sur la racine du projet)
+PROJECT_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
+DATA_DIR: Path = PROJECT_ROOT / "data"
+LOGS_DIR: Path = PROJECT_ROOT / "logs"
 CONFIG_FILE: Path = DATA_DIR / "config.json"
 CACHE_FILE: Path = DATA_DIR / "objets_cache.json"
 
@@ -62,7 +53,7 @@ def _load_json(path: Path) -> dict:
     try:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
-    except (json.JSONDecodeError, OSError):
+    except Exception:
         return {}
 
 def _deep_update(base: dict, override: dict) -> dict:

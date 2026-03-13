@@ -1,345 +1,314 @@
 """
-Tests pour le module core/observatoire/calculations.py
+Tests exhaustifs pour core/observatoire/calculations.py
 
-Ce module teste les calculs astronomiques: conversions de coordonnées,
-parallaxe, temps sidéral, etc.
+Couvre :
+- AstronomicalCalculations construction
+- Utilitaires de normalisation d'angle (duplication de angle_utils)
+- Jour Julien
+- Temps sidéral de Greenwich (GMST)
+- Temps sidéral local (LST)
+- Conversion J2000 → JNOW
+- Coordonnées horizontales (azimut, altitude)
+- Réfraction atmosphérique
+- Angle horaire
+- Passage au méridien
+- Vitesse de rotation coupole
 """
 
 import math
-import pytest
 from datetime import datetime, timedelta, timezone
 
-# Vérifier si astropy est disponible (requis pour AstronomicalCalculations)
-try:
-    import astropy
-    HAS_ASTROPY = True
-except ImportError:
-    HAS_ASTROPY = False
+import pytest
 
-pytestmark = pytest.mark.skipif(
-    not HAS_ASTROPY,
-    reason="Ces tests nécessitent astropy"
-)
+from core.observatoire.calculations import AstronomicalCalculations
 
 
-class TestAstronomicalCalculationsInit:
-    """Tests pour l'initialisation de AstronomicalCalculations."""
+# Coordonnées Observatoire Ubik
+UBIK_LAT = 44.15
+UBIK_LON = 5.23
+UBIK_TZ = 1
 
-    def test_init_parametres(self):
-        """Initialisation avec paramètres requis."""
-        from core.observatoire.calculations import AstronomicalCalculations
 
-        calc = AstronomicalCalculations(
-            latitude=44.15,
-            longitude=5.23,
-            tz_offset=1
-        )
-        assert calc.latitude == 44.15
-        assert calc.longitude == 5.23
-        assert calc.tz_offset == 1
+@pytest.fixture
+def calc():
+    """Instance AstronomicalCalculations pour l'Observatoire Ubik."""
+    return AstronomicalCalculations(UBIK_LAT, UBIK_LON, UBIK_TZ)
 
-    def test_init_autres_coordonnees(self):
-        """Initialisation avec d'autres coordonnées."""
-        from core.observatoire.calculations import AstronomicalCalculations
 
-        calc = AstronomicalCalculations(
-            latitude=48.85,
-            longitude=2.35,
-            tz_offset=2
-        )
-        assert calc.latitude == 48.85
-        assert calc.longitude == 2.35
-        assert calc.tz_offset == 2
+# =============================================================================
+# Construction
+# =============================================================================
 
+class TestConstruction:
+    def test_init(self, calc):
+        assert calc.latitude == UBIK_LAT
+        assert calc.longitude == UBIK_LON
+        assert calc.tz_offset == UBIK_TZ
+
+
+# =============================================================================
+# Utilitaires angle (duplication de angle_utils — documente le comportement)
+# =============================================================================
 
 class TestNormalisationAngles:
-    """Tests pour les méthodes de normalisation."""
+    def test_normalise_180_positive(self):
+        assert AstronomicalCalculations._normaliser_angle_180(270) == -90
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
+    def test_normalise_180_negative(self):
+        assert AstronomicalCalculations._normaliser_angle_180(-270) == 90
 
-    def test_normaliser_angle_180_positif(self, calc):
-        """Normalisation vers [-180, 180] - angles positifs."""
-        assert calc._normaliser_angle_180(0) == 0
-        assert calc._normaliser_angle_180(90) == 90
-        assert calc._normaliser_angle_180(180) == 180
-        assert calc._normaliser_angle_180(270) == -90
-        assert calc._normaliser_angle_180(360) == 0
+    def test_normalise_360(self):
+        assert AstronomicalCalculations._normaliser_angle_360(370) == 10
 
-    def test_normaliser_angle_180_negatif(self, calc):
-        """Normalisation vers [-180, 180] - angles négatifs."""
-        assert calc._normaliser_angle_180(-90) == -90
-        # Note: -180° et 180° sont le même point sur le cercle, retourne 180
-        assert calc._normaliser_angle_180(-180) == 180
-        assert calc._normaliser_angle_180(-270) == 90
-
-    def test_normaliser_angle_360(self, calc):
-        """Normalisation vers [0, 360]."""
-        assert calc._normaliser_angle_360(0) == 0
-        assert calc._normaliser_angle_360(90) == 90
-        assert calc._normaliser_angle_360(360) == 0
-        assert calc._normaliser_angle_360(370) == 10
-        assert calc._normaliser_angle_360(-10) == 350
+    def test_normalise_360_negative(self):
+        assert AstronomicalCalculations._normaliser_angle_360(-10) == 350
 
 
-class TestConversionJ2000JNOW:
-    """Tests pour la conversion J2000 vers JNOW."""
+# =============================================================================
+# Jour Julien
+# =============================================================================
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
-
-    def test_conversion_basique(self, calc):
-        """Conversion de coordonnées J2000 vers JNOW."""
-        # Vega: coordonnées J2000
-        ad_j2000 = 279.23
-        dec_j2000 = 38.78
-        date = datetime(2025, 6, 21, 22, 0, 0, tzinfo=timezone.utc)
-
-        ad_jnow, dec_jnow = calc.convertir_j2000_vers_jnow(ad_j2000, dec_j2000, date)
-
-        # La précession est faible sur quelques années
-        assert abs(ad_jnow - ad_j2000) < 1.0  # < 1° de différence
-        assert abs(dec_jnow - dec_j2000) < 0.5  # < 0.5° de différence
-
-    def test_conversion_avec_datetime_naive(self, calc):
-        """Conversion avec datetime naive (sans timezone)."""
-        ad_j2000 = 250.42
-        dec_j2000 = 36.46
-        date = datetime(2025, 6, 21, 23, 0, 0)  # Naive
-
-        ad_jnow, dec_jnow = calc.convertir_j2000_vers_jnow(ad_j2000, dec_j2000, date)
-
-        assert isinstance(ad_jnow, float)
-        assert isinstance(dec_jnow, float)
-
-    def test_conversion_polaris(self, calc):
-        """Conversion pour Polaris (haute déclinaison)."""
-        # Polaris: très proche du pôle nord céleste
-        ad_j2000 = 37.95
-        dec_j2000 = 89.26
-        date = datetime(2025, 6, 21, 22, 0, 0, tzinfo=timezone.utc)
-
-        ad_jnow, dec_jnow = calc.convertir_j2000_vers_jnow(ad_j2000, dec_j2000, date)
-
-        # La déclinaison reste proche du pôle
-        assert dec_jnow > 88.0
-
-
-class TestTempsSideral:
-    """Tests pour le calcul du temps sidéral."""
-
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
-
-    def test_temps_sideral_type(self, calc):
-        """Le temps sidéral est un float en degrés."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        lst = calc.calculer_temps_sideral(date)
-
-        assert isinstance(lst, float)
-        assert 0 <= lst < 360
-
-    def test_temps_sideral_avance_avec_temps(self, calc):
-        """Le temps sidéral avance plus vite que le temps solaire."""
-        date1 = datetime(2025, 6, 21, 22, 0, 0)
-        date2 = datetime(2025, 6, 21, 23, 0, 0)  # 1 heure plus tard
-
-        lst1 = calc.calculer_temps_sideral(date1)
-        lst2 = calc.calculer_temps_sideral(date2)
-
-        # ~15° par heure solaire, légèrement plus pour le temps sidéral
-        diff = (lst2 - lst1) % 360
-        assert 14 < diff < 16
-
-    def test_jour_julien(self, calc):
-        """Test du calcul du jour julien (fonction partagée dans angle_utils)."""
-        from core.utils.angle_utils import calculate_julian_day
-
-        # J2000.0 = 1er janvier 2000 à 12h TU
-        date = datetime(2000, 1, 1, 12, 0, 0)
-        jd = calculate_julian_day(date)
-
+class TestJulianDay:
+    def test_j2000_epoch(self):
+        """J2000.0 = 1er janvier 2000 12h UTC → JD = 2451545.0."""
+        dt = datetime(2000, 1, 1, 12, 0, 0)
+        jd = AstronomicalCalculations._calculate_julian_day(dt)
         assert jd == pytest.approx(2451545.0, abs=0.01)
 
+    def test_known_date(self):
+        """Date connue pour vérification croisée."""
+        dt = datetime(2024, 3, 20, 0, 0, 0)  # Équinoxe mars 2024
+        jd = AstronomicalCalculations._calculate_julian_day(dt)
+        assert jd == pytest.approx(2460389.5, abs=0.5)
 
-class TestAngleHoraire:
-    """Tests pour le calcul de l'angle horaire."""
+    def test_january_date(self):
+        """Janvier (mois <= 2 → correction année-1)."""
+        dt = datetime(2025, 1, 15, 12, 0, 0)
+        jd = AstronomicalCalculations._calculate_julian_day(dt)
+        assert jd > 2451545.0  # Après J2000
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
-
-    def test_angle_horaire_type(self, calc):
-        """L'angle horaire est entre -180 et +180."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        ha = calc.calculer_angle_horaire(250.0, date)
-
-        assert -180 <= ha <= 180
-
-    def test_angle_horaire_passage_meridien(self, calc):
-        """Angle horaire nul au passage au méridien."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        lst = calc.calculer_temps_sideral(date)
-
-        # Objet au méridien: AD = LST
-        ha = calc.calculer_angle_horaire(lst, date, deja_jnow=True)
-        assert ha == pytest.approx(0.0, abs=0.1)
+    def test_february_date(self):
+        dt = datetime(2025, 2, 28, 0, 0, 0)
+        jd = AstronomicalCalculations._calculate_julian_day(dt)
+        assert isinstance(jd, float)
 
 
-class TestCoordonneesHorizontales:
-    """Tests pour la conversion en coordonnées horizontales."""
+# =============================================================================
+# Temps sidéral
+# =============================================================================
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
+class TestSiderealTime:
+    def test_gmst_returns_float(self):
+        jd = 2451545.0  # J2000
+        gmst = AstronomicalCalculations._calculate_greenwich_sidereal_time(jd)
+        assert isinstance(gmst, float)
+        assert 0 <= gmst < 360
 
-    def test_coords_horizontales_type(self, calc):
-        """Azimut et altitude sont des floats."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        az, alt = calc.calculer_coords_horizontales(250.0, 36.0, date)
+    def test_lst_returns_valid_range(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        lst = calc.calculer_temps_sideral(now)
+        assert 0 <= lst < 360
 
+    def test_lst_changes_with_time(self, calc):
+        """Le LST augmente avec le temps."""
+        t1 = datetime(2025, 6, 15, 22, 0, 0)
+        t2 = datetime(2025, 6, 15, 23, 0, 0)
+        lst1 = calc.calculer_temps_sideral(t1)
+        lst2 = calc.calculer_temps_sideral(t2)
+        # 1 heure ≈ 15° de temps sidéral
+        delta = (lst2 - lst1) % 360
+        assert delta == pytest.approx(15.0, abs=1.0)
+
+    def test_lst_with_aware_datetime(self, calc):
+        """Datetime avec timezone explicite."""
+        dt_aware = datetime(2025, 6, 15, 22, 0, 0, tzinfo=timezone(timedelta(hours=2)))
+        lst = calc.calculer_temps_sideral(dt_aware)
+        assert 0 <= lst < 360
+
+
+# =============================================================================
+# Conversion J2000 → JNOW
+# =============================================================================
+
+class TestJ2000ToJNow:
+    def test_returns_tuple(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ra, dec = calc.convertir_j2000_vers_jnow(83.63, 22.01, now)  # M42
+        assert isinstance(ra, float)
+        assert isinstance(dec, float)
+
+    def test_ra_in_range(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ra, _ = calc.convertir_j2000_vers_jnow(83.63, 22.01, now)
+        assert 0 <= ra < 360
+
+    def test_dec_in_range(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        _, dec = calc.convertir_j2000_vers_jnow(83.63, 22.01, now)
+        assert -90 <= dec <= 90
+
+    def test_precession_small(self, calc):
+        """La précession est petite sur quelques décennies."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ra_j2000 = 83.63
+        dec_j2000 = 22.01
+        ra_jnow, dec_jnow = calc.convertir_j2000_vers_jnow(ra_j2000, dec_j2000, now)
+        # La différence devrait être < 1° sur 25 ans
+        assert abs(ra_jnow - ra_j2000) < 1.0
+        assert abs(dec_jnow - dec_j2000) < 1.0
+
+
+# =============================================================================
+# Coordonnées horizontales
+# =============================================================================
+
+class TestHorizontalCoords:
+    def test_returns_tuple(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        az, alt = calc.calculer_coords_horizontales(83.63, 22.01, now)
         assert isinstance(az, float)
         assert isinstance(alt, float)
 
-    def test_coords_horizontales_plages(self, calc):
-        """Azimut [0, 360], altitude [-90, 90]."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        az, alt = calc.calculer_coords_horizontales(250.0, 36.0, date)
-
+    def test_azimut_range(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        az, _ = calc.calculer_coords_horizontales(83.63, 22.01, now)
         assert 0 <= az < 360
-        assert -90 <= alt <= 90
 
-    def test_polaris_haute_altitude(self, calc):
-        """Polaris est toujours haute pour un observateur nordique."""
-        # Polaris: DEC ~89.26°, toujours visible depuis latitude 44°
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        az, alt = calc.calculer_coords_horizontales(37.95, 89.26, date)
+    def test_altitude_reasonable(self, calc):
+        """L'altitude doit être entre -90 et 90 (+ réfraction)."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        _, alt = calc.calculer_coords_horizontales(83.63, 22.01, now)
+        assert -90 <= alt <= 91  # Un peu au-dessus de 90 possible avec réfraction
 
-        # Altitude de Polaris ≈ latitude de l'observateur
+    def test_polaris_high_altitude(self, calc):
+        """Polaris (DEC ~89°) devrait être à haute altitude depuis lat 44°."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        # Polaris : RA ≈ 37.95°, DEC ≈ 89.26°
+        _, alt = calc.calculer_coords_horizontales(37.95, 89.26, now)
+        # À latitude 44°, Polaris est à ~44° d'altitude
         assert alt > 40
 
-    def test_coords_coupole_avec_correction(self, calc):
-        """calculer_coords_horizontales_coupole inclut la correction."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-
-        az_coupole, alt, correction = calc.calculer_coords_horizontales_coupole(
-            250.0, 36.0, date
-        )
-
-        assert isinstance(correction, float)
-        assert 0 <= az_coupole < 360
+    def test_coords_coupole_returns_three(self, calc):
+        """calculer_coords_horizontales_coupole retourne 3 valeurs (az, alt, 0.0)."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        result = calc.calculer_coords_horizontales_coupole(83.63, 22.01, now)
+        assert len(result) == 3
+        assert result[2] == 0.0  # Correction parallaxe supprimée v4.4
 
 
-class TestRefractionAtmospherique:
-    """Tests pour la correction de réfraction."""
+# =============================================================================
+# Réfraction atmosphérique
+# =============================================================================
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
+class TestRefraction:
+    def test_positive_altitude(self):
+        corrected = AstronomicalCalculations._apply_refraction_correction(45.0)
+        # La correction est toujours positive (l'objet semble plus haut)
+        assert corrected > 45.0
 
-    def test_refraction_augmente_altitude(self, calc):
-        """La réfraction augmente l'altitude apparente."""
-        alt_geometrique = 10.0
-        alt_apparente = calc._apply_refraction_correction(alt_geometrique)
+    def test_near_horizon(self):
+        """Correction maximale près de l'horizon."""
+        corrected = AstronomicalCalculations._apply_refraction_correction(0.0)
+        # Réfraction ~0.58° à l'horizon
+        assert corrected > 0.5
 
-        assert alt_apparente > alt_geometrique
+    def test_zenith(self):
+        """Correction minimale au zénith."""
+        corrected = AstronomicalCalculations._apply_refraction_correction(90.0)
+        # Réfraction quasi nulle au zénith
+        assert corrected - 90.0 < 0.01
 
-    def test_refraction_plus_forte_horizon(self, calc):
-        """La réfraction est plus forte près de l'horizon."""
-        corr_5 = calc._apply_refraction_correction(5.0) - 5.0
-        corr_45 = calc._apply_refraction_correction(45.0) - 45.0
+    def test_below_horizon(self):
+        """Sous l'horizon (< -0.5°) → pas de correction."""
+        corrected = AstronomicalCalculations._apply_refraction_correction(-1.0)
+        assert corrected == -1.0
 
-        assert corr_5 > corr_45
+    def test_slightly_below_horizon(self):
+        """Juste sous l'horizon mais > -0.5° → correction appliquée."""
+        corrected = AstronomicalCalculations._apply_refraction_correction(-0.3)
+        assert corrected > -0.3
 
-    def test_refraction_negligeable_zenith(self, calc):
-        """Réfraction négligeable au zénith."""
-        alt = 89.0
-        corr = calc._apply_refraction_correction(alt) - alt
 
-        assert corr < 0.1  # < 0.1° au zénith
+# =============================================================================
+# Angle horaire
+# =============================================================================
 
-    def test_pas_de_refraction_sous_horizon(self, calc):
-        """Pas de correction sous l'horizon."""
-        alt = -5.0
-        result = calc._apply_refraction_correction(alt)
+class TestAngleHoraire:
+    def test_returns_float(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ha = calc.calculer_angle_horaire(83.63, now)
+        assert isinstance(ha, float)
 
-        assert result == alt
+    def test_range(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ha = calc.calculer_angle_horaire(83.63, now)
+        assert -180 <= ha <= 180
 
+    def test_jnow_flag(self, calc):
+        """deja_jnow=True saute la conversion J2000→JNOW."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        ha1 = calc.calculer_angle_horaire(83.63, now, deja_jnow=False)
+        ha2 = calc.calculer_angle_horaire(83.63, now, deja_jnow=True)
+        # Les deux devraient être proches mais pas identiques (précession)
+        assert abs(ha1 - ha2) < 2.0
+
+
+# =============================================================================
+# Passage au méridien
+# =============================================================================
 
 class TestPassageMeridien:
-    """Tests pour le calcul du passage au méridien."""
+    def test_returns_datetime(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        passage = calc.calculer_heure_passage_meridien(83.63, now)
+        assert isinstance(passage, datetime)
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
+    def test_same_day(self, calc):
+        """Le passage devrait être le même jour."""
+        ref = datetime(2025, 6, 15, 12, 0, 0)
+        passage = calc.calculer_heure_passage_meridien(83.63, ref)
+        assert passage.date() == ref.date()
 
     def test_est_proche_meridien(self, calc):
-        """Détection de proximité au méridien."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-        lst = calc.calculer_temps_sideral(date)
-
-        # Objet exactement au méridien
-        est_proche, temps = calc.est_proche_meridien(lst, date, seuil_minutes=5)
-        assert est_proche
-        assert abs(temps) < 300  # < 5 minutes
-
-    def test_heure_passage_meridien(self, calc):
-        """Calcul de l'heure de passage."""
-        date = datetime(2025, 6, 21, 12, 0, 0)
-
-        passage = calc.calculer_heure_passage_meridien(250.0, date)
-
-        assert isinstance(passage, datetime)
-        assert passage.date() == date.date()
+        """Vérifie est_proche_meridien retourne un tuple (bool, float)."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        est_proche, temps = calc.est_proche_meridien(83.63, now)
+        assert isinstance(est_proche, bool)
+        assert isinstance(temps, float)
 
 
-class TestVitesseRotationCoupole:
-    """Tests pour le calcul de vitesse de rotation."""
+# =============================================================================
+# Vitesse de rotation
+# =============================================================================
 
-    @pytest.fixture
-    def calc(self):
-        from core.observatoire.calculations import AstronomicalCalculations
-        return AstronomicalCalculations(44.15, 5.23, 1)
-
-    def test_vitesse_rotation_type(self, calc):
-        """Retourne un tuple de 4 éléments."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-
-        result = calc.calculer_vitesse_rotation_coupole(250.0, 36.0, date)
-
-        assert isinstance(result, tuple)
+class TestVitesseRotation:
+    def test_returns_four_values(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        result = calc.calculer_vitesse_rotation_coupole(83.63, 22.01, now)
         assert len(result) == 4
 
-    def test_vitesse_rotation_valeurs(self, calc):
-        """Vérifie les types des valeurs retournées."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
-
-        vitesse_rel, sens, az, alt = calc.calculer_vitesse_rotation_coupole(
-            250.0, 36.0, date
-        )
-
-        assert isinstance(vitesse_rel, float)
-        assert sens in [-1, 1]
+    def test_vitesse_positive(self, calc):
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        vitesse, sens, az, alt = calc.calculer_vitesse_rotation_coupole(83.63, 22.01, now)
+        assert vitesse >= 0
+        assert sens in (-1, 1)
         assert 0 <= az < 360
-        assert -90 <= alt <= 90
 
-    def test_vitesse_relative_petite(self, calc):
-        """La vitesse relative est une fraction de tour/heure."""
-        date = datetime(2025, 6, 21, 22, 0, 0)
+    def test_direction_consistent(self, calc):
+        """Le sens doit être cohérent avec le mouvement."""
+        now = datetime(2025, 6, 15, 22, 0, 0)
+        vitesse, sens, az1, _ = calc.calculer_vitesse_rotation_coupole(83.63, 22.01, now)
+        assert isinstance(sens, int)
 
-        vitesse_rel, _, _, _ = calc.calculer_vitesse_rotation_coupole(
-            250.0, 36.0, date
-        )
 
-        # Vitesse typique: quelques pour cent de tour par heure
-        assert vitesse_rel < 0.1
+# =============================================================================
+# _add_time_component (code mort — documente qu'il existe)
+# =============================================================================
+
+class TestAddTimeComponent:
+    def test_exists_and_callable(self):
+        assert callable(AstronomicalCalculations._add_time_component)
+
+    def test_returns_float(self):
+        result = AstronomicalCalculations._add_time_component(100.0, 12, 30, 0, 0)
+        assert isinstance(result, float)

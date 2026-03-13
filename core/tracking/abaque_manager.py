@@ -20,8 +20,6 @@ from typing import Dict, Tuple
 import numpy as np
 import openpyxl
 
-from core.utils.angle_utils import normalize_angle_360
-
 
 class AbaqueManager:
     """
@@ -126,7 +124,7 @@ class AbaqueManager:
             
             return True
             
-        except (FileNotFoundError, ValueError, KeyError) as e:
+        except Exception as e:
             self.logger.error(f"Erreur lors du chargement de l'abaque: {e}")
             return False
     
@@ -206,7 +204,7 @@ class AbaqueManager:
                 delta -= 360
             elif delta < -180:
                 delta += 360
-            return normalize_angle_360(angle1 + frac * delta)
+            return (angle1 + frac * delta) % 360
 
         # Interpolation azimut
         frac_az = (az - az1) / (az2 - az1)
@@ -238,7 +236,7 @@ class AbaqueManager:
             raise RuntimeError("Abaque non chargée. Appelez load_abaque() d'abord.")
         
         # Normaliser l'azimut dans [0, 360[
-        azimut_objet = normalize_angle_360(azimut_objet)
+        azimut_objet = azimut_objet % 360
         
         # Vérifier si on est dans les limites de l'abaque
         in_bounds = (
@@ -250,7 +248,7 @@ class AbaqueManager:
         try:
             azimut_coupole = self._interpolate_circular(altitude_objet, azimut_objet)
             method = "interpolation" if in_bounds else "extrapolation"
-        except (ValueError, IndexError) as e:
+        except Exception as e:
             self.logger.error(f"Erreur d'interpolation: {e}")
             # Fallback: trouver le point le plus proche
             azimut_coupole = self._nearest_neighbor(altitude_objet, azimut_objet)
@@ -350,6 +348,6 @@ class AbaqueManager:
             self.logger.info(f"Abaque exportée vers {output_file}")
             return True
             
-        except OSError as e:
+        except Exception as e:
             self.logger.error(f"Erreur lors de l'export: {e}")
             return False
