@@ -168,7 +168,9 @@ class MoteurSimule:
         vitesse: float = 0.001,
         tolerance: float = 0.5,
         max_iterations: int = 10,
-        max_correction_par_iteration: float = 45.0
+        max_correction_par_iteration: float = 45.0,
+        allow_large_movement: bool = False,
+        timeout_seconds: float = 120.0
     ) -> Dict[str, Any]:
         """
         Simule une rotation avec feedback.
