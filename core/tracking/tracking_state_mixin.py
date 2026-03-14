@@ -75,14 +75,14 @@ class TrackingStateMixin:
         self._last_position_log_time = None
         self._position_log_interval = 30  # secondes
 
-        # Distribution du temps par mode
-        self._mode_time_tracker = {
+        # Distribution du temps par mode (compteurs séparés des métadonnées)
+        self._mode_time_counters = {
             'normal': 0,
             'critical': 0,
             'continuous': 0,
-            'last_mode': None,
-            'last_mode_time': None
         }
+        self._mode_time_last_mode = None
+        self._mode_time_last_time = None
 
         self.drift_tracking = {
             'start_time': datetime.now(),
@@ -239,21 +239,21 @@ class TrackingStateMixin:
         mode_key = current_mode.lower() if current_mode else 'normal'
 
         # Si c'est le premier appel, initialiser
-        if self._mode_time_tracker['last_mode_time'] is None:
-            self._mode_time_tracker['last_mode'] = mode_key
-            self._mode_time_tracker['last_mode_time'] = now
+        if self._mode_time_last_time is None:
+            self._mode_time_last_mode = mode_key
+            self._mode_time_last_time = now
             return
 
         # Calculer le temps écoulé dans le mode précédent
-        elapsed = (now - self._mode_time_tracker['last_mode_time']).total_seconds()
-        prev_mode = self._mode_time_tracker['last_mode']
+        elapsed = (now - self._mode_time_last_time).total_seconds()
+        prev_mode = self._mode_time_last_mode
 
-        if prev_mode and prev_mode in self._mode_time_tracker:
-            self._mode_time_tracker[prev_mode] += elapsed
+        if prev_mode and prev_mode in self._mode_time_counters:
+            self._mode_time_counters[prev_mode] += elapsed
 
         # Mettre à jour pour le prochain appel
-        self._mode_time_tracker['last_mode'] = mode_key
-        self._mode_time_tracker['last_mode_time'] = now
+        self._mode_time_last_mode = mode_key
+        self._mode_time_last_time = now
 
     def _track_correction_direction(self, correction_deg: float):
         """
@@ -297,9 +297,9 @@ class TrackingStateMixin:
                     self.total_movement / max(1, self.total_corrections), 2
                 ),
                 'mode_distribution': {
-                    'normal': int(self._mode_time_tracker.get('normal', 0)),
-                    'critical': int(self._mode_time_tracker.get('critical', 0)),
-                    'continuous': int(self._mode_time_tracker.get('continuous', 0)),
+                    'normal': int(self._mode_time_counters.get('normal', 0)),
+                    'critical': int(self._mode_time_counters.get('critical', 0)),
+                    'continuous': int(self._mode_time_counters.get('continuous', 0)),
                 }
             },
             'corrections_log': self.drift_tracking.get('corrections_log', []),

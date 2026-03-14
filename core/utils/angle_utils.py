@@ -80,13 +80,9 @@ def shortest_angular_distance(current: float, target: float) -> float:
         >>> shortest_angular_distance(0, 180)
         180.0
     """
-    delta = target - current
-
-    # Normaliser dans [-180, 180]
-    while delta > 180:
+    delta = (target - current) % 360
+    if delta > 180:
         delta -= 360
-    while delta < -180:
-        delta += 360
 
     return delta
 

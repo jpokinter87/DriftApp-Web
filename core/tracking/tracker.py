@@ -18,7 +18,6 @@ from typing import Tuple, Optional
 from core.hardware.moteur import MoteurCoupole
 from core.hardware.moteur_simule import MoteurSimule
 from core.observatoire import AstronomicalCalculations
-from core.observatoire import PlanetaryEphemerides
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 from core.tracking.tracking_logger import TrackingLogger
 
@@ -84,6 +83,10 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         self.intervalle = intervalle
         self.logger = logging.getLogger(__name__)  # Logger standard Python
         self.goto_callback = goto_callback
+
+        # Instance unique de PlanetaryEphemerides (évite de recréer à chaque correction)
+        from core.observatoire import PlanetaryEphemerides
+        self._ephemerides = PlanetaryEphemerides()
 
         # Initialisation par étapes
         self._init_encoder(encoder_config)
@@ -156,8 +159,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             Tuple (azimut, altitude) en degrés
         """
         if self.is_planet:
-            ephemerides = PlanetaryEphemerides()
-            planet_pos = ephemerides.get_planet_position(
+            planet_pos = self._ephemerides.get_planet_position(
                 self.objet.capitalize(),
                 now,
                 self.calc.latitude,
@@ -398,6 +400,10 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         Sauvegarde la session de tracking dans un fichier JSON.
 
         Appelée automatiquement à l'arrêt du tracking.
+
+        Note: Couplage inverse avec web.session.session_storage — ce module core/
+        importe un composant web/ pour la persistance. Acceptable car la sauvegarde
+        est optionnelle (protégée par try/except ImportError).
         """
         try:
             from web.session import session_storage

@@ -442,31 +442,5 @@ class TestMoteurCoupoleAbsolute:
 
 
 # =============================================================================
-# TESTS MOTEURCOUPOLE - DÉLAI RAMPE
+# (TestMoteurCoupoleRampe supprimé — _calculer_delai_rampe était du code mort)
 # =============================================================================
-
-class TestMoteurCoupoleRampe:
-    """Tests pour le calcul de délai (rampe désactivée)."""
-
-    @pytest.fixture
-    def mock_moteur(self, motor_config_dict, mock_lgpio):
-        with patch.dict('sys.modules', {'lgpio': mock_lgpio}):
-            with patch('core.hardware.moteur.GPIO_LIB', 'lgpio'):
-                from core.hardware.moteur import MoteurCoupole
-
-                moteur = object.__new__(MoteurCoupole)
-                moteur.logger = MagicMock()
-                return moteur
-
-    def test_calculer_delai_rampe_constant(self, mock_moteur):
-        """Délai constant (pas de rampe)."""
-        vitesse_nominale = 0.001
-
-        # Début, milieu, fin - tous doivent être constants
-        delai_debut = mock_moteur._calculer_delai_rampe(0, 1000, vitesse_nominale)
-        delai_milieu = mock_moteur._calculer_delai_rampe(500, 1000, vitesse_nominale)
-        delai_fin = mock_moteur._calculer_delai_rampe(999, 1000, vitesse_nominale)
-
-        assert delai_debut == vitesse_nominale
-        assert delai_milieu == vitesse_nominale
-        assert delai_fin == vitesse_nominale

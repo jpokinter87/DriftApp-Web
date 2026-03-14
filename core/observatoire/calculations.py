@@ -44,19 +44,14 @@ class AstronomicalCalculations:
     @staticmethod
     def _normaliser_angle_180(angle: float) -> float:
         """Normalise un angle entre -180° et +180°."""
-        while angle > 180:
-            angle -= 360
-        while angle < -180:
-            angle += 360
-        return angle
+        from core.utils.angle_utils import normalize_angle_180
+        return normalize_angle_180(angle)
 
     @staticmethod
     def _normaliser_angle_360(angle: float) -> float:
         """Normalise un angle entre 0° et 360°."""
-        angle = angle % 360
-        if angle < 0:
-            angle += 360
-        return angle
+        from core.utils.angle_utils import normalize_angle_360
+        return normalize_angle_360(angle)
 
     # =========================================================================
     # CONVERSION DE COORDONNÉES
@@ -218,6 +213,7 @@ class AstronomicalCalculations:
         diff_heures = diff_deg / 15.0
         diff_heures_solaires = diff_heures * (24.0 / 23.934469444)
 
+        diff_heures_solaires = diff_heures_solaires % 24
         heures = int(diff_heures_solaires)
         minutes_reste = (diff_heures_solaires - heures) * 60
         minutes = int(minutes_reste)

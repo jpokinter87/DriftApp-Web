@@ -39,7 +39,6 @@ from core.hardware.daemon_encoder_reader import (
 
 # Tentative d'import des bibliothèques GPIO
 GPIO_LIB = None
-gpio_handle = None
 
 try:
     import lgpio
@@ -76,9 +75,7 @@ class MoteurCoupole:
 
         self._verifier_gpio_disponible()
         self._charger_config(config_moteur)
-        self._valider_config()
         self._calculer_steps_par_tour()
-        self._init_parametres_rampe()
         self._init_gpio()
 
         self.logger.info(
@@ -113,10 +110,6 @@ class MoteurCoupole:
         self.gear_ratio = params.gear_ratio
         self.steps_correction_factor = params.steps_correction_factor
 
-    def _valider_config(self):
-        """Validation déjà effectuée par motor_config_parser."""
-        pass  # Conservé pour compatibilité API, validation dans _charger_config
-
     def _calculer_steps_par_tour(self):
         """Calcule le nombre de pas par tour de coupole."""
         self.steps_per_dome_revolution = int(
@@ -125,20 +118,6 @@ class MoteurCoupole:
             self.gear_ratio *
             self.steps_correction_factor
         )
-
-    def _init_parametres_rampe(self):
-        """
-        Initialisation des paramètres de rampe.
-
-        VERSION 4.5 : La rampe est maintenant gérée par le module
-        acceleration_ramp.py qui fournit une S-curve pour des transitions
-        douces. Voir AccelerationRamp pour les paramètres.
-
-        La rampe est activée par défaut dans rotation() via use_ramp=True.
-        """
-        # Les paramètres de rampe sont maintenant dans acceleration_ramp.py
-        # Pas de configuration ici pour ne pas modifier les réglages moteur
-        pass
 
     # =========================================================================
     # ABSTRACTION GPIO (méthodes unifiées)
@@ -199,8 +178,6 @@ class MoteurCoupole:
 
     def _init_gpio(self):
         """Initialise les GPIO selon la bibliothèque disponible."""
-        global gpio_handle
-
         if self.gpio_lib == "lgpio":
             # Raspberry Pi 5 avec lgpio
             try:
@@ -210,8 +187,6 @@ class MoteurCoupole:
                     self.gpio_handle = lgpio.gpiochip_open(4)  # Pi 5
                 except OSError:
                     self.gpio_handle = lgpio.gpiochip_open(0)  # Fallback Pi 1-4
-
-                gpio_handle = self.gpio_handle
 
                 # Configurer les pins en sortie
                 lgpio.gpio_claim_output(self.gpio_handle, self.DIR)
@@ -346,31 +321,6 @@ class MoteurCoupole:
             time.sleep(delai / 2)
             self.gpio_handle.output(self.STEP, self.gpio_handle.LOW)
             time.sleep(delai / 2)
-
-    def _calculer_delai_rampe(self, step_index: int, total_steps: int,
-                               vitesse_nominale: float) -> float:
-        """
-        Retourne le délai constant - PAS DE RAMPE.
-
-        ALIGNEMENT SUR calibration_moteur.py qui fonctionne parfaitement.
-
-        La rampe a été supprimée car elle causait des problèmes :
-        - Démarrage brutal pour vitesses rapides (rampe désactivée à tort)
-        - Délai forcé à 0.0015s pour petits mouvements (<50 pas)
-        - Comportement différent de calibration_moteur.py
-
-        Les vitesses testées sur site (0.00012s à 0.0011s) fonctionnent
-        en délai constant. Voir capture_Vitesses.png pour les mesures.
-
-        Args:
-            step_index: Index du pas actuel (ignoré)
-            total_steps: Nombre total de pas (ignoré)
-            vitesse_nominale: Délai cible en secondes
-
-        Returns:
-            Délai constant = vitesse_nominale
-        """
-        return vitesse_nominale
 
     def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
         """

@@ -99,7 +99,11 @@ class PlanetaryEphemerides:
 
             return ra_deg, dec_deg
 
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Erreur calcul position planète {name}: {e}"
+            )
             return None
 
     @staticmethod

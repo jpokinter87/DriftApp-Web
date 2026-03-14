@@ -353,6 +353,9 @@ class AdaptiveTrackingManager:
         """
         Vérifie et retourne le chemin le plus court.
 
+        Délègue le calcul à angle_utils.shortest_angular_distance
+        et ajoute le logging pour les grands mouvements.
+
         Args:
             current_position: Position actuelle (degrés)
             target_position: Position coupole (degrés)
@@ -364,49 +367,23 @@ class AdaptiveTrackingManager:
             - delta: Déplacement à effectuer (+ = horaire, - = anti-horaire)
             - direction_description: Description du chemin
         """
-        # Normaliser les positions dans [0, 360[
-        current = current_position % 360
-        target = target_position % 360
-        
-        # Calculer les deux chemins possibles
-        delta_direct = target - current
-        
-        # Chemin 1 : Direct
-        if delta_direct >= 0:
-            path1_angle = delta_direct
-            path1_direction = "horaire"
-        else:
-            path1_angle = abs(delta_direct)
-            path1_direction = "anti-horaire"
-        
-        # Chemin 2 : Par l'autre côté
-        if delta_direct >= 0:
-            path2_angle = 360 - delta_direct
-            path2_direction = "anti-horaire"
-        else:
-            path2_angle = 360 - abs(delta_direct)
-            path2_direction = "horaire"
-        
-        # Choisir le chemin le plus court
-        if path1_angle <= path2_angle:
-            chosen_angle = path1_angle if path1_direction == "horaire" else -path1_angle
-            chosen_description = f"{path1_direction} ({path1_angle:.1f}°)"
-            verification = f"Chemin le plus court: {chosen_description}"
-        else:
-            chosen_angle = path2_angle if path2_direction == "horaire" else -path2_angle
-            chosen_description = f"{path2_direction} ({path2_angle:.1f}°)"
-            verification = f"Chemin le plus court: {chosen_description}"
-        
+        from core.utils.angle_utils import shortest_angular_distance
+
+        delta = shortest_angular_distance(current_position, target_position)
+        direction = "horaire" if delta >= 0 else "anti-horaire"
+        description = f"{direction} ({abs(delta):.1f}°)"
+        verification = f"Chemin le plus court: {description}"
+
         # Logger la vérification pour les grands mouvements (sauf si désactivé)
-        if log_large_movements and abs(chosen_angle) > 30:
+        if log_large_movements and abs(delta) > 30:
+            current = current_position % 360
+            target = target_position % 360
             self.logger.info(f"🔍 Vérification chemin:")
             self.logger.info(f"   Position actuelle: {current:.1f}°")
             self.logger.info(f"   Position coupole: {target:.1f}°")
-            self.logger.info(f"   Chemin 1: {path1_direction} {path1_angle:.1f}°")
-            self.logger.info(f"   Chemin 2: {path2_direction} {path2_angle:.1f}°")
-            self.logger.info(f"   ✓ Choisi: {chosen_description}")
-        
-        return chosen_angle, verification
+            self.logger.info(f"   ✓ Choisi: {description}")
+
+        return delta, verification
     
     def get_diagnostic_info(
         self,

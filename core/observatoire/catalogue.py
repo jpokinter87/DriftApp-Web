@@ -112,11 +112,8 @@ class GestionnaireCatalogue:
                     if objet:
                     ...     print(f"Objet trouvé: {objet['nom']}, AD={objet['ad']}, DEC={objet['dec']}")
         """
-        # BYPASS TEMPORAIRE - forcer la vérification
-        try:
-            from astroquery.simbad import Simbad
-        except ImportError as e:
-            logger.warning(f"Cette fonctionnalité nécessite astropy et astroquery: {e}")
+        if not ASTROPY_AVAILABLE or self.simbad is None:
+            logger.warning("Cette fonctionnalité nécessite astropy et astroquery")
             return None
 
         # Vérifier si l'objet est déjà dans le cache
@@ -125,14 +122,8 @@ class GestionnaireCatalogue:
             return self.objets[cache_key]
 
         try:
-
-            # Configuration SIMPLE de Simbad (sans champs supplémentaires)
-            from astroquery.simbad import Simbad
-            simple_simbad = Simbad()
-
-
-            # Exécuter la requête
-            result_table = simple_simbad.query_object(identifiant)
+            # Exécuter la requête avec l'instance Simbad existante
+            result_table = self.simbad.query_object(identifiant)
 
             if result_table is None or len(result_table) == 0:
                 logger.debug(f"Objet non trouvé via SIMBAD: {identifiant}")
@@ -264,19 +255,14 @@ class GestionnaireCatalogue:
         """
 
         from core.observatoire import PlanetaryEphemerides
+        from core.config.config import SITE_LATITUDE, SITE_LONGITUDE
 
         # D'abord vérifier si c'est une planète
         if PlanetaryEphemerides.is_planet(identifiant):
             # Pour les planètes, on a besoin de la position de l'observateur
-            # On utilise les coordonnées par défaut du config.json
             try:
-                import json
-                from pathlib import Path
-                cfg_path = Path("data") / "config.json"
-                with open(cfg_path, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-                lat = cfg["site"]["latitude"]
-                lon = cfg["site"]["longitude"]
+                lat = SITE_LATITUDE
+                lon = SITE_LONGITUDE
 
                 # Calculer la position actuelle de la planète
                 pos = PlanetaryEphemerides.get_planet_position(

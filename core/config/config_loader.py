@@ -228,9 +228,8 @@ class DriftAppConfig:
     
     def to_dict(self) -> dict:
         """Convertit la config en dictionnaire (pour sauvegarde JSON)."""
-        # Implémentation simplifiée - pourrait utiliser asdict() de dataclasses
-        # avec un post-processing pour gérer les types personnalisés
-        raise NotImplementedError("À implémenter si besoin de sauvegarder la config")
+        from dataclasses import asdict
+        return asdict(self)
 
 
 # ============================================================================
