@@ -5,26 +5,26 @@
 See: .paul/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescope pendant toute la duree d'une session d'astrophotographie.
-**Current focus:** v5.1 Synchronisation & Qualité — Phase 6: Validation
+**Current focus:** v5.1 Synchronisation & Qualité — Complete
 
 ## Current Position
 
-Milestone: v5.1 Synchronisation & Qualité
-Phase: 6 of 6 (Validation)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-14 — Phase 5 complete, transitioned to Phase 6
+Milestone: v5.1 Synchronisation & Qualité — COMPLETE
+Phase: 6 of 6 (Validation) — Complete
+Plan: 06-01 complete
+Status: Milestone complete, ready for /paul:complete-milestone
+Last activity: 2026-03-14 — Phase 6 complete, milestone v5.1 complete
 
 Progress:
-- v5.1 Synchronisation & Qualité: [█████████░] 83%
-- Phase 6: [░░░░░░░░░░] 0%
+- v5.1 Synchronisation & Qualité: [██████████] 100%
+- Phase 6: [██████████] 100%
 
 ## Loop Position
 
 Current loop state:
 ```
 PLAN ──▶ APPLY ──▶ UNIFY
-  ○        ○        ○     [New loop — ready to plan Phase 6]
+  ✓        ✓        ✓     [Loop complete — milestone complete]
 ```
 
 ## Accumulated Context
@@ -38,6 +38,7 @@ PLAN ──▶ APPLY ──▶ UNIFY
 - Phase 5 Plan 02: 3 nouveaux fichiers tests (health, session, storage), 738 tests verts
 - Tests alignés sur API production (pas de modification code prod)
 - APIRequestFactory pour contourner dispatch Django dans les mocks
+- Phase 6: 8 tests cross-couche (Django ↔ IPC ↔ MotorService), 746 tests verts
 
 ### Deferred Issues
 - ObjectListView.get_objets_disponibles() bug production (web/tracking/views.py:100)
@@ -47,15 +48,16 @@ PLAN ──▶ APPLY ──▶ UNIFY
 None.
 
 ### Git State
+Last commit: 316d900
 Branch: main
 
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Phase 5 complete, ready to plan Phase 6
-Next action: /paul:plan for Phase 6
+Stopped at: Milestone v5.1 complete
+Next action: /paul:complete-milestone
 Resume file: .paul/ROADMAP.md
-Resume context: Phase 6 = Validation fonctionnelle complète (tests d'intégration, vérification E2E)
+Resume context: All 6 phases complete, 746 tests verts, milestone ready to archive
 
 ---
 *STATE.md — Updated after every significant action*

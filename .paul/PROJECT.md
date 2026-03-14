@@ -9,7 +9,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- Validation fonctionnelle complète
+(none)
 
 ### Validated
 - ✓ core/ et services/ synchronisés sur production DriftApp_v4_6 — v5.1 Phase 1
@@ -17,6 +17,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Refactoring core : 27 issues corrigées, code mort supprimé, angle_utils centralisé — v5.1 Phase 3
 - ✓ Refactoring services : 11 issues corrigées (thread safety, validation, IPC, zombie detection, simulation) — v5.1 Phase 4
 - ✓ Suite de tests alignée (738 tests, 0 échecs) et couverture étendue (health, session, storage) — v5.1 Phase 5
+- ✓ Validation cross-couche (Django ↔ IPC ↔ MotorService), 746 tests verts — v5.1 Phase 6
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1
@@ -62,6 +63,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Simulation fidèle au matériel | v5.1 P4 | Délais I2C simulés pour réduire allers-retours dev/terrain |
 | Tests alignés sur API production | v5.1 P5 | Corriger tests plutôt que production — tests reflètent la réalité |
 | APIRequestFactory pour mocks vues | v5.1 P5 | Contourne dispatch Django pour injecter mocks motor_client |
+| Patch double IPC pour tests cross-couche | v5.1 P6 | ipc_manager + Django settings vers memes fichiers tmp_path |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -85,8 +87,8 @@ Quick Reference:
 | Version | 5.0.0 |
 | Last milestone | v5.0 Interface Moderne (2026-02-22) |
 | Current milestone | v5.1 Synchronisation & Qualité |
-| Status | In progress |
+| Status | Complete |
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-03-14 — Phase 5 complete*
+*Last updated: 2026-03-14 — Phase 6 complete, milestone v5.1 complete*
