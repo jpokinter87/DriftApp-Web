@@ -7,8 +7,11 @@ Ce module gère la communication avec le démon encodeur via fichier JSON partag
 Date: 24 décembre 2025
 """
 
+import fcntl
 import json
 import logging
+import math
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -65,9 +68,12 @@ class DaemonEncoderReader:
             dict: Données complètes du démon ou None si erreur
         """
         try:
-            text = self.daemon_path.read_text()
+            with open(self.daemon_path, 'r') as f:
+                fcntl.flock(f, fcntl.LOCK_SH)
+                text = f.read()
+                fcntl.flock(f, fcntl.LOCK_UN)
             return json.loads(text)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
             return None
 
     # Seuil par défaut pour détecter données périmées (ms)
@@ -186,30 +192,36 @@ class DaemonEncoderReader:
         if not positions:
             raise RuntimeError("Impossible de lire la position du démon")
 
-        return sum(positions) / len(positions)
+        # Moyenne circulaire (correcte au passage 0°/360°)
+        sin_sum = sum(math.sin(math.radians(p)) for p in positions)
+        cos_sum = sum(math.cos(math.radians(p)) for p in positions)
+        return math.degrees(math.atan2(sin_sum, cos_sum)) % 360
 
 
 # =============================================================================
 # GESTION INSTANCE GLOBALE
 # =============================================================================
 
-# Instance globale du lecteur daemon (lazy initialization)
+# Instance globale du lecteur daemon (lazy initialization, thread-safe)
 _daemon_reader: Optional[DaemonEncoderReader] = None
+_daemon_reader_lock = threading.Lock()
 
 
 def get_daemon_reader() -> DaemonEncoderReader:
     """
     Retourne l'instance globale du lecteur daemon.
 
-    Utilise lazy initialization pour créer l'instance à la première utilisation.
-    Permet de partager une seule instance entre tous les composants.
+    Utilise lazy initialization thread-safe pour créer l'instance
+    à la première utilisation.
 
     Returns:
         DaemonEncoderReader: Instance partagée du lecteur
     """
     global _daemon_reader
     if _daemon_reader is None:
-        _daemon_reader = DaemonEncoderReader()
+        with _daemon_reader_lock:
+            if _daemon_reader is None:
+                _daemon_reader = DaemonEncoderReader()
     return _daemon_reader
 
 

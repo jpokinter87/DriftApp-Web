@@ -240,7 +240,7 @@ class DriftAppConfig:
 class ConfigLoader:
     """Chargeur de configuration modulaire."""
 
-    def __init__(self, config_path: Path = Path("data/config.json")):
+    def __init__(self, config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json"):
         self.logger = logging.getLogger(__name__)
         self.config_path = config_path
         self.cfg: dict = {}
@@ -413,7 +413,7 @@ class ConfigLoader:
         self.logger.info(f"  Mode: {'SIMULATION' if config.simulation else 'PRODUCTION'}")
 
 
-def load_config(config_path: Path = Path("data/config.json")) -> DriftAppConfig:
+def load_config(config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json") -> DriftAppConfig:
     """
     Charge la configuration complète depuis config.json.
 

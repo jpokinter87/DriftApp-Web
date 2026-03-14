@@ -208,7 +208,7 @@ class MoteurCoupole:
                 # Ouvrir le chip GPIO (chip 4 sur Pi 5, chip 0 sur Pi 1-4)
                 try:
                     self.gpio_handle = lgpio.gpiochip_open(4)  # Pi 5
-                except:
+                except OSError:
                     self.gpio_handle = lgpio.gpiochip_open(0)  # Fallback Pi 1-4
 
                 gpio_handle = self.gpio_handle
@@ -220,6 +220,9 @@ class MoteurCoupole:
                 # État initial
                 lgpio.gpio_write(self.gpio_handle, self.DIR, 0)
                 lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+
+                # Cache la référence pour éviter l'import dans faire_un_pas()
+                self._lgpio_write = lgpio.gpio_write
 
                 self.logger.info(f"GPIO initialisé avec lgpio")
 
@@ -334,10 +337,9 @@ class MoteurCoupole:
 
         # GPIO inline (comme Dome_v4) - PAS d'appels de méthodes
         if self.gpio_lib == "lgpio":
-            import lgpio
-            lgpio.gpio_write(self.gpio_handle, self.STEP, 1)
+            self._lgpio_write(self.gpio_handle, self.STEP, 1)
             time.sleep(delai / 2)
-            lgpio.gpio_write(self.gpio_handle, self.STEP, 0)
+            self._lgpio_write(self.gpio_handle, self.STEP, 0)
             time.sleep(delai / 2)
         else:  # RPi.GPIO
             self.gpio_handle.output(self.STEP, self.gpio_handle.HIGH)
@@ -528,12 +530,12 @@ class MoteurCoupole:
                 try:
                     lgpio.gpio_free(self.gpio_handle, self.DIR)
                     lgpio.gpio_free(self.gpio_handle, self.STEP)
-                except:
+                except Exception:
                     pass
 
                 try:
                     lgpio.gpiochip_close(self.gpio_handle)
-                except:
+                except Exception:
                     pass
 
                 self.logger.info("GPIO nettoyé (lgpio)")

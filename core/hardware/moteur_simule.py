@@ -182,9 +182,16 @@ class MoteurSimule:
                 f"(~{movement_time:.1f}s simulé, {movement_time * SIMULATION_SPEED_MULTIPLIER:.0f}s réel)"
             )
 
-        # Simuler le délai (permet au popup GOTO d'apparaître)
+        # Simuler le délai avec vérification stop_requested
         if movement_time > 0.1:
-            time.sleep(movement_time)
+            elapsed = 0.0
+            step = 0.05  # 50ms intervals
+            while elapsed < movement_time:
+                if self.stop_requested:
+                    self.logger.info("Rotation simulée interrompue par stop_requested")
+                    break
+                time.sleep(min(step, movement_time - elapsed))
+                elapsed += step
 
         # Mettre à jour la position de cette instance
         new_pos = (_get_instance_position(self._instance_id) + angle_deg) % 360

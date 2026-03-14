@@ -13,9 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
 
-# Chemins
-DATA_DIR: Path = Path("data")
-LOGS_DIR: Path = Path("logs")
+# Chemins (absolus depuis la racine du projet)
+_PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
+DATA_DIR: Path = _PROJECT_ROOT / "data"
+LOGS_DIR: Path = _PROJECT_ROOT / "logs"
 CONFIG_FILE: Path = DATA_DIR / "config.json"
 CACHE_FILE: Path = DATA_DIR / "objets_cache.json"
 
@@ -52,7 +53,9 @@ def _load_json(path: Path) -> dict:
     try:
         with path.open("r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Erreur chargement config {path}: {e}")
         return {}
 
 def _deep_update(base: dict, override: dict) -> dict:

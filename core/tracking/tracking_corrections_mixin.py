@@ -177,9 +177,8 @@ class TrackingCorrectionsMixin:
             self._degraded_mode_notified = False
 
         if not self._degraded_mode_notified:
-            self.log_to_web(
-                "Mode dégradé: correction sans feedback encodeur",
-                "warning"
+            self.logger.warning(
+                "Mode dégradé: correction sans feedback encodeur"
             )
             self._degraded_mode_notified = True
 

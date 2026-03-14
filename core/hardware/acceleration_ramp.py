@@ -174,6 +174,8 @@ class AccelerationRamp:
 
         # Phase d'accélération (départ lent → vitesse nominale)
         if step_index < self.accel_end:
+            if self.accel_end == 0:
+                return self.target_delay
             t = step_index / self.accel_end
             progress = self._interpolate(t)
             # Interpoler de start_delay vers target_delay
