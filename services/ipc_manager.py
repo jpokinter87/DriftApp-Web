@@ -80,7 +80,7 @@ class IpcManager:
             return None
 
         try:
-            with open(COMMAND_FILE, 'r') as f:
+            with open(COMMAND_FILE, "r") as f:
                 # Verrou partagé : plusieurs lecteurs OK, bloque si écriture en cours
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
                 try:
@@ -94,7 +94,7 @@ class IpcManager:
             command = json.loads(text)
 
             # Vérifier si c'est une nouvelle commande
-            cmd_id = command.get('id')
+            cmd_id = command.get("id")
             if cmd_id is None:
                 logger.warning(f"Commande reçue sans ID, ignorée: {command.get('type', 'unknown')}")
                 return None
@@ -121,19 +121,19 @@ class IpcManager:
         Args:
             status: Dictionnaire d'état à écrire
         """
-        status['last_update'] = datetime.now().isoformat()
+        status["last_update"] = datetime.now().isoformat()
 
         try:
-            tmp_file = STATUS_FILE.with_suffix('.tmp')
+            tmp_file = STATUS_FILE.with_suffix(".tmp")
             content = json.dumps(status, indent=2)
 
-            with open(tmp_file, 'w') as f:
+            with open(tmp_file, "w") as f:
                 # Verrou exclusif pendant l'écriture
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
                     f.write(content)
                     f.flush()
-                    os.fsync(f.fileno())  # Force l'écriture sur disque
+                    # Pas de fsync() : /dev/shm est un tmpfs en RAM, fsync est un no-op coûteux
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
@@ -151,10 +151,10 @@ class IpcManager:
         """
         try:
             if COMMAND_FILE.exists():
-                with open(COMMAND_FILE, 'w') as f:
+                with open(COMMAND_FILE, "w") as f:
+                    # 'w' mode tronque déjà le fichier, pas besoin de write('')
                     fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                     try:
-                        f.write('')
                         f.flush()
                     finally:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
@@ -175,7 +175,7 @@ class IpcManager:
             return None
 
         try:
-            with open(ENCODER_FILE, 'r') as f:
+            with open(ENCODER_FILE, "r") as f:
                 # Verrou partagé non-bloquant
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
                 try:

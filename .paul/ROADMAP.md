@@ -6,14 +6,14 @@ Application web Django embarquee sur Raspberry Pi pour le controle d'une coupole
 ## Current Milestone
 **v5.1 Synchronisation & Qualité**
 Status: In Progress
-Phases: 3 of 6 complete
+Phases: 4 of 6 complete
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Sync Production | 2 | Complete ✓ | 2026-03-14 |
 | 2 | Audit Code | 2 | Complete ✓ | 2026-03-14 |
 | 3 | Refactoring Core | 2 | Complete ✓ | 2026-03-14 |
-| 4 | Refactoring Services | TBD | Not started | - |
+| 4 | Refactoring Services | 2 | Complete ✓ | 2026-03-14 |
 | 5 | Tests | TBD | Not started | - |
 | 6 | Validation | TBD | Not started | - |
 
@@ -64,4 +64,4 @@ Plans: TBD (defined during /paul:plan)
 
 ---
 *Roadmap created: 2026-02-22*
-*Last updated: 2026-03-14 — Phase 3 complete*
+*Last updated: 2026-03-14 — Phase 4 complete*

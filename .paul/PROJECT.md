@@ -9,7 +9,6 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- Refactoring services (motor_service, command_handlers, ipc_manager)
 - Suite de tests alignée et couverture étendue
 - Validation fonctionnelle complète
 
@@ -17,6 +16,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ core/ et services/ synchronisés sur production DriftApp_v4_6 — v5.1 Phase 1
 - ✓ Code review complète : 54 issues identifiées (7C, 15H, 20M, 12L) — v5.1 Phase 2
 - ✓ Refactoring core : 27 issues corrigées, code mort supprimé, angle_utils centralisé — v5.1 Phase 3
+- ✓ Refactoring services : 11 issues corrigées (thread safety, validation, IPC, zombie detection, simulation) — v5.1 Phase 4
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1
@@ -57,6 +57,9 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | focus-visible amber outline | 5 | Navigation clavier avec theme observatory |
 | Délégation angle_utils pour normalisation | v5.1 P3 | Centralise toute logique angulaire, évite duplication |
 | PlanetaryEphemerides singleton par session | v5.1 P3 | Évite instanciation répétée à chaque correction |
+| status_lock pour accès concurrent | v5.1 P4 | Protège current_status entre main thread et ContinuousHandler |
+| Pas de threading GOTO/JOG | v5.1 P4 | Trop risqué pour refactoring, à évaluer dans milestone dédié |
+| Simulation fidèle au matériel | v5.1 P4 | Délais I2C simulés pour réduire allers-retours dev/terrain |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -84,4 +87,4 @@ Quick Reference:
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-03-14 — Phase 3 complete*
+*Last updated: 2026-03-14 — Phase 4 complete*

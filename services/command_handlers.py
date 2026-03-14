@@ -13,11 +13,11 @@ Version: 4.4 - Optimisation GOTO/JOG sans feedback pour fluidité
 """
 
 import logging
+import math
 import threading
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict, Any, Tuple
 
 from core.hardware.moteur_simule import set_simulated_position, get_simulated_position
 from core.tracking.tracker import TrackingSession
@@ -30,11 +30,13 @@ logger = logging.getLogger(__name__)
 # Import différé pour éviter import circulaire
 _rotate_log_func = None
 
+
 def _get_rotate_log_func():
     """Importe la fonction de rotation de log de manière différée."""
     global _rotate_log_func
     if _rotate_log_func is None:
         from services.motor_service import rotate_log_for_tracking
+
         _rotate_log_func = rotate_log_for_tracking
     return _rotate_log_func
 
@@ -42,6 +44,7 @@ def _get_rotate_log_func():
 # =============================================================================
 # FONCTIONS UTILITAIRES COMMUNES (DRY)
 # =============================================================================
+
 
 def _get_motor_speed(config, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
     """
@@ -70,11 +73,11 @@ def _get_motor_speed(config, speed: Optional[float] = None, delta: Optional[floa
     if config.adaptive and config.adaptive.modes:
         # Pour les petits déplacements, utiliser CRITICAL (plus doux)
         if delta is not None and abs(delta) <= SMALL_MOVEMENT_THRESHOLD:
-            critical = config.adaptive.modes.get('critical')
+            critical = config.adaptive.modes.get("critical")
             if critical:
                 return critical.motor_delay
         # Pour les grands déplacements, utiliser CONTINUOUS (rapide)
-        continuous = config.adaptive.modes.get('continuous')
+        continuous = config.adaptive.modes.get("continuous")
         if continuous:
             return continuous.motor_delay
 
@@ -93,15 +96,39 @@ def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, A
         current_status: Status actuel contenant 'position'
     """
     if simulation_mode:
-        current_pos = current_status.get('position', 0)
+        current_pos = current_status.get("position", 0)
         set_simulated_position(current_pos)
+
+
+def _validate_angle(angle) -> Tuple[bool, str]:
+    """
+    Valide qu'un angle est utilisable pour une commande moteur.
+
+    Args:
+        angle: Valeur à valider
+
+    Returns:
+        (True, "") si valide, (False, message_erreur) sinon
+    """
+    if not isinstance(angle, (int, float)):
+        return False, f"Angle invalide: type {type(angle).__name__}, attendu int/float"
+    if not math.isfinite(angle):
+        return False, f"Angle invalide: {angle} (NaN ou infini)"
+    return True, ""
 
 
 class GotoHandler:
     """Handler pour les commandes GOTO (déplacement absolu)."""
 
-    def __init__(self, moteur, daemon_reader, feedback_controller,
-                 config, simulation_mode: bool, status_callback: Callable):
+    def __init__(
+        self,
+        moteur,
+        daemon_reader,
+        feedback_controller,
+        config,
+        simulation_mode: bool,
+        status_callback: Callable,
+    ):
         """
         Args:
             moteur: Instance du moteur (réel ou simulé)
@@ -118,8 +145,9 @@ class GotoHandler:
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
 
-    def execute(self, angle: float, current_status: Dict[str, Any],
-                speed: Optional[float] = None) -> Dict[str, Any]:
+    def execute(
+        self, angle: float, current_status: Dict[str, Any], speed: Optional[float] = None
+    ) -> Dict[str, Any]:
         """
         Exécute un GOTO vers une position absolue.
 
@@ -127,12 +155,21 @@ class GotoHandler:
         - Grands déplacements (> 3°): Rotation directe FLUIDE, puis correction finale
         - Petits déplacements (≤ 3°): Feedback classique pour précision
         """
-        speed = _get_motor_speed(self.config, speed)
-        logger.info(f"GOTO vers {angle:.1f}° (vitesse={speed*1000:.3f}ms)")
+        valid, error_msg = _validate_angle(angle)
+        if not valid:
+            logger.error(f"GOTO rejeté: {error_msg}")
+            current_status["status"] = "error"
+            current_status["error"] = error_msg
+            current_status["error_timestamp"] = time.time()
+            self.status_callback(current_status)
+            return current_status
 
-        current_status['status'] = 'moving'
-        current_status['target'] = angle
-        current_status['progress'] = 0
+        speed = _get_motor_speed(self.config, speed)
+        logger.info(f"GOTO vers {angle:.1f}° (vitesse={speed * 1000:.3f}ms)")
+
+        current_status["status"] = "moving"
+        current_status["target"] = angle
+        current_status["progress"] = 0
         self.status_callback(current_status)
 
         try:
@@ -143,7 +180,7 @@ class GotoHandler:
             if self.daemon_reader.is_available():
                 current_pos = self.daemon_reader.read_angle(timeout_ms=200)
             else:
-                current_pos = current_status.get('position', 0)
+                current_pos = current_status.get("position", 0)
 
             delta = shortest_angular_distance(current_pos, angle)
 
@@ -152,27 +189,24 @@ class GotoHandler:
 
             if abs(delta) > seuil_feedback:
                 # GRAND DÉPLACEMENT: Rotation directe + correction finale
-                current_status = self._execute_large_goto(
-                    angle, delta, speed, current_status
-                )
+                current_status = self._execute_large_goto(angle, delta, speed, current_status)
             else:
                 # PETIT DÉPLACEMENT: Feedback classique
-                current_status = self._execute_small_goto(
-                    angle, delta, speed, current_status
-                )
+                current_status = self._execute_small_goto(angle, delta, speed, current_status)
 
         except Exception as e:
             logger.error(f"Erreur GOTO: {e}")
-            current_status['status'] = 'error'
-            current_status['error'] = str(e)
-            current_status['error_timestamp'] = time.time()
+            current_status["status"] = "error"
+            current_status["error"] = str(e)
+            current_status["error_timestamp"] = time.time()
 
-        current_status['target'] = None
+        current_status["target"] = None
         self.status_callback(current_status)
         return current_status
 
-    def _execute_large_goto(self, angle: float, delta: float, speed: float,
-                            status: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_large_goto(
+        self, angle: float, delta: float, speed: float, status: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Exécute un grand déplacement (> 3°)."""
         logger.info(f"GOTO optimisé: rotation directe de {delta:+.1f}°")
 
@@ -189,29 +223,29 @@ class GotoHandler:
             if abs(erreur) > tolerance:
                 logger.info(f"Correction finale: erreur={erreur:+.2f}°")
                 result = self.feedback_controller.rotation_avec_feedback(
-                    angle_cible=angle,
-                    vitesse=speed,
-                    tolerance=tolerance,
-                    max_iterations=3
+                    angle_cible=angle, vitesse=speed, tolerance=tolerance, max_iterations=3
                 )
-                status['position'] = result['position_finale']
+                status["position"] = result["position_finale"]
 
-                if result['success']:
+                if result["success"]:
                     logger.info(f"GOTO terminé: erreur finale={result['erreur_finale']:.2f}°")
                 else:
-                    logger.warning(f"GOTO: correction imparfaite, erreur={result['erreur_finale']:.2f}°")
+                    logger.warning(
+                        f"GOTO: correction imparfaite, erreur={result['erreur_finale']:.2f}°"
+                    )
             else:
                 logger.info(f"GOTO précis du premier coup: erreur={erreur:+.2f}°")
-                status['position'] = pos_apres_rotation
+                status["position"] = pos_apres_rotation
         else:
-            status['position'] = angle
+            status["position"] = angle
 
-        status['status'] = 'idle'
-        status['progress'] = 100
+        status["status"] = "idle"
+        status["progress"] = 100
         return status
 
-    def _execute_small_goto(self, angle: float, delta: float, speed: float,
-                            status: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_small_goto(
+        self, angle: float, delta: float, speed: float, status: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Exécute un petit déplacement (≤ seuil feedback)."""
         tolerance = self.config.thresholds.default_tolerance_deg
         if self.daemon_reader.is_available():
@@ -220,15 +254,15 @@ class GotoHandler:
                 vitesse=speed,
                 tolerance=tolerance,
                 max_iterations=10,
-                max_correction_par_iteration=180.0
+                max_correction_par_iteration=180.0,
             )
 
-            status['status'] = 'idle' if result['success'] else 'error'
-            status['position'] = result['position_finale']
-            status['progress'] = 100
+            status["status"] = "idle" if result["success"] else "error"
+            status["position"] = result["position_finale"]
+            status["progress"] = 100
 
-            if not result['success']:
-                status['error'] = f"Erreur finale: {result['erreur_finale']:.2f}°"
+            if not result["success"]:
+                status["error"] = f"Erreur finale: {result['erreur_finale']:.2f}°"
 
             logger.info(
                 f"GOTO terminé: {result['position_initiale']:.1f}° -> "
@@ -236,9 +270,9 @@ class GotoHandler:
             )
         else:
             self.moteur.rotation(delta, speed)
-            status['status'] = 'idle'
-            status['position'] = angle
-            status['progress'] = 100
+            status["status"] = "idle"
+            status["position"] = angle
+            status["progress"] = 100
             logger.info(f"GOTO (sans feedback) terminé: delta={delta:.1f}°")
 
         return status
@@ -247,26 +281,37 @@ class GotoHandler:
 class JogHandler:
     """Handler pour les commandes JOG (déplacement relatif)."""
 
-    def __init__(self, moteur, daemon_reader, config,
-                 simulation_mode: bool, status_callback: Callable):
+    def __init__(
+        self, moteur, daemon_reader, config, simulation_mode: bool, status_callback: Callable
+    ):
         self.moteur = moteur
         self.daemon_reader = daemon_reader
         self.config = config
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
 
-    def execute(self, delta: float, current_status: Dict[str, Any],
-                speed: Optional[float] = None) -> Dict[str, Any]:
+    def execute(
+        self, delta: float, current_status: Dict[str, Any], speed: Optional[float] = None
+    ) -> Dict[str, Any]:
         """
         Exécute une rotation relative (jog).
 
         OPTIMISATION v4.4: Rotation directe SANS feedback (fluidité maximale).
         Note v2.3: Petits JOG (≤ 3°) utilisent CRITICAL, grands JOG utilisent CONTINUOUS.
         """
+        valid, error_msg = _validate_angle(delta)
+        if not valid:
+            logger.error(f"JOG rejeté: {error_msg}")
+            current_status["status"] = "error"
+            current_status["error"] = error_msg
+            current_status["error_timestamp"] = time.time()
+            self.status_callback(current_status)
+            return current_status
+
         logger.info(f"JOG de {delta:+.1f}° (sans feedback)")
         speed = _get_motor_speed(self.config, speed, delta=delta)
 
-        current_status['status'] = 'moving'
+        current_status["status"] = "moving"
         self.status_callback(current_status)
 
         try:
@@ -280,19 +325,19 @@ class JogHandler:
             # Lire la position réelle après rotation
             if self.daemon_reader.is_available():
                 pos_finale = self.daemon_reader.read_angle(timeout_ms=200)
-                current_status['position'] = pos_finale
+                current_status["position"] = pos_finale
             else:
-                current = current_status.get('position', 0)
-                current_status['position'] = (current + delta) % 360
+                current = current_status.get("position", 0)
+                current_status["position"] = (current + delta) % 360
 
-            current_status['status'] = 'idle'
+            current_status["status"] = "idle"
             logger.info(f"JOG terminé: position={current_status['position']:.1f}°")
 
         except Exception as e:
             logger.error(f"Erreur JOG: {e}")
-            current_status['status'] = 'error'
-            current_status['error'] = str(e)
-            current_status['error_timestamp'] = time.time()
+            current_status["status"] = "error"
+            current_status["error"] = str(e)
+            current_status["error_timestamp"] = time.time()
 
         self.status_callback(current_status)
         return current_status
@@ -301,13 +346,21 @@ class JogHandler:
 class ContinuousHandler:
     """Handler pour les mouvements continus."""
 
-    def __init__(self, moteur, daemon_reader, config,
-                 simulation_mode: bool, status_callback: Callable):
+    def __init__(
+        self,
+        moteur,
+        daemon_reader,
+        config,
+        simulation_mode: bool,
+        status_callback: Callable,
+        status_lock: Optional[threading.Lock] = None,
+    ):
         self.moteur = moteur
         self.daemon_reader = daemon_reader
         self.config = config
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
+        self.status_lock = status_lock or threading.Lock()
         self.thread: Optional[threading.Thread] = None
         self.stop_flag = threading.Event()
 
@@ -317,8 +370,13 @@ class ContinuousHandler:
 
         self.stop()  # Arrêter tout mouvement précédent
 
-        current_status['status'] = 'moving'
-        current_status['target'] = None
+        # Vérifier qu'aucun thread précédent n'est encore actif
+        if self.thread and self.thread.is_alive():
+            logger.error("Thread continu précédent toujours actif, démarrage refusé")
+            return
+
+        current_status["status"] = "moving"
+        current_status["target"] = None
         self.status_callback(current_status)
 
         # Synchroniser la position simulée avant toute commande
@@ -326,9 +384,7 @@ class ContinuousHandler:
 
         self.stop_flag.clear()
         self.thread = threading.Thread(
-            target=self._movement_loop,
-            args=(direction, current_status),
-            daemon=True
+            target=self._movement_loop, args=(direction, current_status), daemon=True
         )
         self.thread.start()
 
@@ -340,14 +396,14 @@ class ContinuousHandler:
             self.thread.join(timeout=2.0)
 
             if self.thread.is_alive():
-                logger.warning("Thread continu n'a pas répondu, forçage arrêt moteur")
+                logger.warning("ContinuousHandler thread did not stop within timeout (2s)")
                 self.moteur.request_stop()
 
             self.thread = None
 
     def _movement_loop(self, direction: str, current_status: Dict[str, Any]):
-        """Boucle de mouvement continu."""
-        delta_per_step = 1.0 if direction == 'cw' else -1.0
+        """Boucle de mouvement continu (daemon thread)."""
+        delta_per_step = 1.0 if direction == "cw" else -1.0
         step_interval = 0.1
         speed = _get_motor_speed(self.config)
 
@@ -363,7 +419,8 @@ class ContinuousHandler:
                     current = get_simulated_position()
                     new_pos = (current + delta_per_step) % 360
                     set_simulated_position(new_pos)
-                    current_status['position'] = new_pos
+                    with self.status_lock:
+                        current_status["position"] = new_pos
                 else:
                     self.moteur.clear_stop_request()
                     self.moteur.rotation(delta_per_step, vitesse=speed)
@@ -373,7 +430,8 @@ class ContinuousHandler:
 
                     pos = self.daemon_reader.read_angle(timeout_ms=100)
                     if pos is not None:
-                        current_status['position'] = pos
+                        with self.status_lock:
+                            current_status["position"] = pos
 
                 self.status_callback(current_status)
                 time.sleep(step_interval)
@@ -383,16 +441,26 @@ class ContinuousHandler:
                 break
 
         logger.debug("Thread mouvement continu terminé")
-        current_status['status'] = 'idle'
+        with self.status_lock:
+            current_status["status"] = "idle"
         self.status_callback(current_status)
 
 
 class TrackingHandler:
     """Handler pour le suivi d'objets célestes."""
 
-    def __init__(self, feedback_controller, config,
-                 simulation_mode: bool, status_callback: Callable,
-                 log_callback: Callable):
+    MAX_CONSECUTIVE_ERRORS = 5
+    # Limites pour le trimming des logs de session sérialisés via IPC
+    MAX_SESSION_LOG_ENTRIES = 100
+
+    def __init__(
+        self,
+        feedback_controller,
+        config,
+        simulation_mode: bool,
+        status_callback: Callable,
+        log_callback: Callable,
+    ):
         self.feedback_controller = feedback_controller
         self.config = config
         self.simulation_mode = simulation_mode
@@ -400,6 +468,7 @@ class TrackingHandler:
         self.log_callback = log_callback
         self.session: Optional[TrackingSession] = None
         self.active = False
+        self._consecutive_errors = 0
 
     def start(self, object_name: str, current_status: Dict[str, Any], skip_goto: bool = False):
         """
@@ -424,29 +493,29 @@ class TrackingHandler:
 
         # IMPORTANT: Signaler immédiatement que le tracking est en cours d'initialisation
         # Cela permet à l'UI d'afficher un message pendant le GOTO initial
-        current_status['status'] = 'initializing'
-        current_status['tracking_object'] = object_name
-        current_status['tracking_pending'] = True
-        current_status['goto_info'] = None  # Sera rempli par le callback
+        current_status["status"] = "initializing"
+        current_status["tracking_object"] = object_name
+        current_status["tracking_pending"] = True
+        current_status["goto_info"] = None  # Sera rempli par le callback
         self.status_callback(current_status)
-        self.log_callback(f"Initialisation du suivi de {object_name}...", 'info')
+        self.log_callback(f"Initialisation du suivi de {object_name}...", "info")
 
         # Callback pour recevoir les infos du GOTO initial
         def on_goto_info(goto_info: Dict[str, Any]):
             """Callback appelé avec les infos du GOTO initial."""
-            current_status['goto_info'] = goto_info
+            current_status["goto_info"] = goto_info
             self.status_callback(current_status)
             self.log_callback(
                 f"GOTO: {goto_info['current_position']:.1f}° → "
                 f"{goto_info['target_position']:.1f}° (delta={goto_info['delta']:+.1f}°)",
-                'info'
+                "info",
             )
 
         try:
             calc = AstronomicalCalculations(
                 latitude=self.config.site.latitude,
                 longitude=self.config.site.longitude,
-                tz_offset=self.config.site.tz_offset
+                tz_offset=self.config.site.tz_offset,
             )
 
             tracking_logger = TrackingLogger()
@@ -461,39 +530,39 @@ class TrackingHandler:
                 adaptive_config=self.config.adaptive,
                 motor_config=self.config.motor,
                 encoder_config=self.config.encoder,
-                goto_callback=on_goto_info
+                goto_callback=on_goto_info,
             )
 
             success = self.session.start(object_name, skip_goto=skip_goto)
 
             if success:
                 self.active = True
-                current_status['status'] = 'tracking'
-                current_status['tracking_object'] = object_name
-                current_status['tracking_pending'] = False  # GOTO initial terminé
-                current_status['goto_info'] = None  # GOTO terminé
-                current_status['mode'] = 'normal'
+                current_status["status"] = "tracking"
+                current_status["tracking_object"] = object_name
+                current_status["tracking_pending"] = False  # GOTO initial terminé
+                current_status["goto_info"] = None  # GOTO terminé
+                current_status["mode"] = "normal"
 
                 status = self.session.get_status()
-                encoder_offset = status.get('encoder_offset', 0)
+                encoder_offset = status.get("encoder_offset", 0)
                 logger.info(f"Suivi démarré - Offset encodeur: {encoder_offset:.2f}°")
 
-                self.log_callback(f"Suivi actif: {object_name}", 'success')
+                self.log_callback(f"Suivi actif: {object_name}", "success")
             else:
                 logger.error(f"Échec démarrage suivi de {object_name}")
-                current_status['status'] = 'idle'
-                current_status['tracking_object'] = None
-                current_status['tracking_pending'] = False
-                current_status['goto_info'] = None
-                current_status['error'] = "Échec démarrage suivi"
+                current_status["status"] = "idle"
+                current_status["tracking_object"] = None
+                current_status["tracking_pending"] = False
+                current_status["goto_info"] = None
+                current_status["error"] = "Échec démarrage suivi"
 
         except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
-            current_status['status'] = 'error'
-            current_status['tracking_object'] = None
-            current_status['tracking_pending'] = False
-            current_status['goto_info'] = None
-            current_status['error'] = str(e)
+            current_status["status"] = "error"
+            current_status["tracking_object"] = None
+            current_status["tracking_pending"] = False
+            current_status["goto_info"] = None
+            current_status["error"] = str(e)
 
         self.status_callback(current_status)
 
@@ -504,19 +573,19 @@ class TrackingHandler:
         if self.session:
             if self.simulation_mode:
                 status = self.session.get_status()
-                final_pos = status.get('position_relative', 0) % 360
+                final_pos = status.get("position_relative", 0) % 360
                 set_simulated_position(final_pos)
-                current_status['position'] = final_pos
+                current_status["position"] = final_pos
 
             self.session.stop()
             self.session = None
 
         self.active = False
-        current_status['status'] = 'idle'
-        current_status['tracking_object'] = None
-        current_status['tracking_pending'] = False
-        current_status['goto_info'] = None
-        current_status['mode'] = 'idle'
+        current_status["status"] = "idle"
+        current_status["tracking_object"] = None
+        current_status["tracking_pending"] = False
+        current_status["goto_info"] = None
+        current_status["mode"] = "idle"
         self.status_callback(current_status)
 
     def update(self, current_status: Dict[str, Any]):
@@ -530,40 +599,60 @@ class TrackingHandler:
             if correction_applied:
                 logger.info(message)
                 log_msg = message
-                if message.startswith('[') and '] ' in message:
-                    log_msg = message.split('] ', 1)[1]
-                self.log_callback(log_msg, 'correction')
+                if message.startswith("[") and "] " in message:
+                    log_msg = message.split("] ", 1)[1]
+                self.log_callback(log_msg, "correction")
 
             status = self.session.get_status()
-            if status.get('running'):
-                current_status['position'] = status.get('position_relative', 0)
-                current_status['mode'] = status.get('adaptive_mode', 'normal')
+            if status.get("running"):
+                current_status["position"] = status.get("position_relative", 0)
+                current_status["mode"] = status.get("adaptive_mode", "normal")
 
-                current_status['tracking_info'] = {
-                    'azimut': status.get('obj_az_raw', 0),
-                    'altitude': status.get('obj_alt', 0),
-                    'position_cible': status.get('position_cible', 0),
-                    'remaining_seconds': status.get('remaining_seconds', 0),
-                    'interval_sec': status.get('adaptive_interval', 60),
-                    'total_corrections': status.get('total_corrections', 0),
-                    'total_correction_degrees': status.get('total_movement', 0.0),
-                    'mode_icon': status.get('mode_icon', ''),
-                    # Offset encodeur (écart entre position logique et encodeur)
-                    'encoder_offset': status.get('encoder_offset', 0.0),
-                    # Données pour la page session
-                    'ra_deg': getattr(self.session, 'ra_deg', None),
-                    'dec_deg': getattr(self.session, 'dec_deg', None),
+                current_status["tracking_info"] = {
+                    "azimut": status.get("obj_az_raw", 0),
+                    "altitude": status.get("obj_alt", 0),
+                    "position_cible": status.get("position_cible", 0),
+                    "remaining_seconds": status.get("remaining_seconds", 0),
+                    "interval_sec": status.get("adaptive_interval", 60),
+                    "total_corrections": status.get("total_corrections", 0),
+                    "total_correction_degrees": status.get("total_movement", 0.0),
+                    "mode_icon": status.get("mode_icon", ""),
+                    "encoder_offset": status.get("encoder_offset", 0.0),
+                    "ra_deg": getattr(self.session, "ra_deg", None),
+                    "dec_deg": getattr(self.session, "dec_deg", None),
                 }
 
-                # Données complètes de session pour l'API /api/session/
-                current_status['session_data'] = self.session.get_session_data()
+                # Données de session pour l'API /api/session/
+                # Tronquer les logs pour éviter la fuite mémoire sur sessions longues
+                session_data = self.session.get_session_data()
+                limit = self.MAX_SESSION_LOG_ENTRIES
+                for key in ("corrections_log", "position_log", "goto_log"):
+                    if key in session_data and len(session_data[key]) > limit:
+                        session_data[key] = session_data[key][-limit:]
+                current_status["session_data"] = session_data
             else:
                 self.active = False
-                current_status['status'] = 'idle'
-                current_status['tracking_object'] = None
+                current_status["status"] = "idle"
+                current_status["tracking_object"] = None
+
+            # Réinitialiser le compteur d'erreurs après un update réussi
+            self._consecutive_errors = 0
 
         except Exception as e:
-            logger.error(f"Erreur mise à jour suivi: {e}")
+            self._consecutive_errors += 1
+            logger.error(f"Erreur mise à jour suivi: {e}", exc_info=True)
+
+            if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                logger.error(
+                    f"Tracking stoppé après {self._consecutive_errors} erreurs consécutives"
+                )
+                self.stop(current_status)
+                current_status["status"] = "error"
+                current_status["error"] = (
+                    f"Tracking stoppé: {self._consecutive_errors} erreurs consécutives"
+                )
+                current_status["error_timestamp"] = time.time()
+                self.status_callback(current_status)
 
     @property
     def is_active(self) -> bool:

@@ -5,26 +5,26 @@
 See: .paul/PROJECT.md (updated 2026-03-14)
 
 **Core value:** Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescope pendant toute la duree d'une session d'astrophotographie.
-**Current focus:** v5.1 Synchronisation & Qualité — Phase 4: Refactoring Services
+**Current focus:** v5.1 Synchronisation & Qualité — Phase 5: Tests
 
 ## Current Position
 
 Milestone: v5.1 Synchronisation & Qualité
-Phase: 4 of 6 (Refactoring Services)
+Phase: 5 of 6 (Tests)
 Plan: Not started
 Status: Ready to plan
-Last activity: 2026-03-14 — Phase 3 complete, transitioned to Phase 4
+Last activity: 2026-03-14 — Phase 4 complete, transitioned to Phase 5
 
 Progress:
-- v5.1 Synchronisation & Qualité: [█████░░░░░] 50%
-- Phase 4: [░░░░░░░░░░] 0%
+- v5.1 Synchronisation & Qualité: [███████░░░] 67%
+- Phase 5: [░░░░░░░░░░] 0%
 
 ## Loop Position
 
 Current loop state:
 ```
 PLAN ──▶ APPLY ──▶ UNIFY
-  ○        ○        ○     [New loop — ready to plan Phase 4]
+  ○        ○        ○     [New loop — ready to plan Phase 5]
 ```
 
 ## Accumulated Context
@@ -37,10 +37,12 @@ PLAN ──▶ APPLY ──▶ UNIFY
 - Phase 3 Plan 02: ~16 issues corrigées (Medium/Low), 406 tests verts
 - Délégation angle_utils pour toute normalisation angulaire
 - PlanetaryEphemerides instanciée 1x par session tracking
+- Phase 4 Plan 01: 7 issues Critical+High corrigées (thread safety, validation, IPC, error recovery), 465 tests verts
+- Pas de threading GOTO/JOG (trop risqué, à évaluer dans milestone futur)
 
 ### Deferred Issues
 - 12 fichiers tests extra avec erreurs d'import → Phase 5
-- Issues services/ non traitées → Phase 4
+- 18+2 fichiers tests "extra" avec erreurs d'import/API → Phase 5
 
 ### Blockers/Concerns
 None.
@@ -51,10 +53,10 @@ Branch: main (pending commit for Phase 3)
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Phase 3 complete, ready to plan Phase 4
-Next action: /paul:plan for Phase 4
+Stopped at: Phase 4 complete, ready to plan Phase 5
+Next action: /paul:plan for Phase 5
 Resume file: .paul/ROADMAP.md
-Resume context: Phase 4 traite services/ (motor_service, command_handlers, ipc_manager, simulation)
+Resume context: Phase 5 traite les tests (alignement, couverture étendue, fichiers extra à corriger)
 
 ---
 *STATE.md — Updated after every significant action*

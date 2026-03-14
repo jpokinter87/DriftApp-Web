@@ -23,6 +23,7 @@ import logging
 import os
 import signal
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from typing import Dict, Any, Optional
 # Import conditionnel pour sdnotify (Raspberry Pi uniquement)
 try:
     import sdnotify
+
     SDNOTIFY_AVAILABLE = True
 except ImportError:
     SDNOTIFY_AVAILABLE = False
@@ -39,7 +41,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
-from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader, get_daemon_reader, set_daemon_reader
+from core.hardware.moteur import MoteurCoupole, get_daemon_reader, set_daemon_reader
 from core.hardware.moteur_simule import MoteurSimule
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
@@ -47,12 +49,10 @@ from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 
 from services.ipc_manager import IpcManager
 from services.simulation import SimulatedDaemonReader
-from services.command_handlers import (
-    GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
-)
+from services.command_handlers import GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
 
 # Configuration logging - fichier horodaté par session (cycle démarrage du service)
-LOGS_DIR = Path(__file__).parent.parent / 'logs'
+LOGS_DIR = Path(__file__).parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
 # Nombre max de fichiers de log à conserver
@@ -62,9 +62,7 @@ MAX_LOG_FILES = 20
 def cleanup_old_logs(prefix: str = "motor_service_", keep: int = MAX_LOG_FILES):
     """Supprime les vieux fichiers de log, garde les N plus récents."""
     log_files = sorted(
-        LOGS_DIR.glob(f"{prefix}*.log"),
-        key=lambda f: f.stat().st_mtime,
-        reverse=True
+        LOGS_DIR.glob(f"{prefix}*.log"), key=lambda f: f.stat().st_mtime, reverse=True
     )
     for old_file in log_files[keep:]:
         try:
@@ -77,22 +75,19 @@ def cleanup_old_logs(prefix: str = "motor_service_", keep: int = MAX_LOG_FILES):
 cleanup_old_logs()
 
 # Créer un fichier de log horodaté pour cette session
-_startup_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+_startup_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 _startup_log_path = LOGS_DIR / f"motor_service_{_startup_timestamp}.log"
 
 # Handler de fichier pour cette session
-_current_file_handler = logging.FileHandler(_startup_log_path, mode='w')
+_current_file_handler = logging.FileHandler(_startup_log_path, mode="w")
 _current_file_handler.setFormatter(
-    logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 )
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        _current_file_handler
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), _current_file_handler],
 )
 logger = logging.getLogger(__name__)
 
@@ -113,14 +108,14 @@ def rotate_log_for_tracking(object_name: str) -> str:
     # Remplacer tous les caractères problématiques pour les systèmes de fichiers
     safe_name = object_name
     for char in ' /\\*?:"<>|':
-        safe_name = safe_name.replace(char, '_')
+        safe_name = safe_name.replace(char, "_")
     # Supprimer les underscores multiples et en début/fin
-    while '__' in safe_name:
-        safe_name = safe_name.replace('__', '_')
-    safe_name = safe_name.strip('_')
+    while "__" in safe_name:
+        safe_name = safe_name.replace("__", "_")
+    safe_name = safe_name.strip("_")
 
     # Générer le nouveau nom de fichier avec horodatage
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     new_log_filename = f"motor_service_{timestamp}_{safe_name}.log"
     new_log_path = LOGS_DIR / new_log_filename
 
@@ -134,9 +129,9 @@ def rotate_log_for_tracking(object_name: str) -> str:
         root_logger.removeHandler(_current_file_handler)
 
     # Créer le nouveau handler
-    _current_file_handler = logging.FileHandler(new_log_path, mode='w')
+    _current_file_handler = logging.FileHandler(new_log_path, mode="w")
     _current_file_handler.setFormatter(
-        logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     )
     _current_file_handler.setLevel(logging.INFO)
     root_logger.addHandler(_current_file_handler)
@@ -166,6 +161,10 @@ class MotorService:
     ERROR_RECOVERY_TIMEOUT = 10.0  # secondes
 
     # Intervalle watchdog (en secondes) - doit être < WatchdogSec/2 dans systemd
+    # Avec WatchdogSec=30 dans le .service, 10s laisse 2 heartbeats manqués avant kill.
+    # NB: les commandes GOTO/JOG bloquent la boucle principale pendant leur exécution,
+    # ce qui peut retarder le heartbeat. Un GOTO de 180° dure ~15-20s, ce qui reste
+    # dans la marge du watchdog 30s.
     WATCHDOG_INTERVAL = 10.0
 
     def __init__(self):
@@ -189,6 +188,10 @@ class MotorService:
 
         # Initialiser les gestionnaires
         self._init_managers()
+
+        # Lock pour protéger current_status des accès concurrents
+        # (main thread + ContinuousHandler daemon thread)
+        self.status_lock = threading.Lock()
 
         # Initialiser les handlers de commandes
         self._init_handlers()
@@ -219,8 +222,9 @@ class MotorService:
             # Réutiliser l'instance globale du lecteur daemon
             self.daemon_reader = get_daemon_reader()
             self.feedback_controller = FeedbackController(
-                self.moteur, self.daemon_reader,
-                protection_threshold=self.config.thresholds.feedback_protection_deg
+                self.moteur,
+                self.daemon_reader,
+                protection_threshold=self.config.thresholds.feedback_protection_deg,
             )
 
     def _init_managers(self):
@@ -229,26 +233,36 @@ class MotorService:
         self.adaptive_manager = AdaptiveTrackingManager(
             base_interval=self.config.tracking.intervalle_verification_sec,
             base_threshold=self.config.tracking.seuil_correction_deg,
-            adaptive_config=self.config.adaptive
+            adaptive_config=self.config.adaptive,
         )
 
     def _init_handlers(self):
         """Initialise les handlers de commandes."""
         self.goto_handler = GotoHandler(
-            self.moteur, self.daemon_reader, self.feedback_controller,
-            self.config, self.simulation_mode, self._write_status
+            self.moteur,
+            self.daemon_reader,
+            self.feedback_controller,
+            self.config,
+            self.simulation_mode,
+            self._write_status,
         )
         self.jog_handler = JogHandler(
-            self.moteur, self.daemon_reader, self.config,
-            self.simulation_mode, self._write_status
+            self.moteur, self.daemon_reader, self.config, self.simulation_mode, self._write_status
         )
         self.continuous_handler = ContinuousHandler(
-            self.moteur, self.daemon_reader, self.config,
-            self.simulation_mode, self._write_status
+            self.moteur,
+            self.daemon_reader,
+            self.config,
+            self.simulation_mode,
+            self._write_status,
+            status_lock=self.status_lock,
         )
         self.tracking_handler = TrackingHandler(
-            self.feedback_controller, self.config,
-            self.simulation_mode, self._write_status, self._add_tracking_log
+            self.feedback_controller,
+            self.config,
+            self.simulation_mode,
+            self._write_status,
+            self._add_tracking_log,
         )
 
     def _cleanup_on_startup(self):
@@ -300,16 +314,16 @@ class MotorService:
     def _create_initial_status(self) -> Dict[str, Any]:
         """Crée l'état initial."""
         return {
-            'status': 'idle',
-            'position': 0.0,
-            'target': None,
-            'progress': 0,
-            'mode': 'idle',
-            'tracking_object': None,
-            'error': None,
-            'simulation': self.simulation_mode,
-            'last_update': datetime.now().isoformat(),
-            'tracking_logs': []
+            "status": "idle",
+            "position": 0.0,
+            "target": None,
+            "progress": 0,
+            "mode": "idle",
+            "tracking_object": None,
+            "error": None,
+            "simulation": self.simulation_mode,
+            "last_update": datetime.now().isoformat(),
+            "tracking_logs": [],
         }
 
     def _write_status(self, status: Optional[Dict[str, Any]] = None):
@@ -318,16 +332,12 @@ class MotorService:
             status = self.current_status
         self.ipc.write_status(status)
 
-    def _add_tracking_log(self, message: str, log_type: str = 'info'):
+    def _add_tracking_log(self, message: str, log_type: str = "info"):
         """Ajoute un log de suivi pour l'interface web."""
-        log_entry = {
-            'time': datetime.now().isoformat(),
-            'message': message,
-            'type': log_type
-        }
+        log_entry = {"time": datetime.now().isoformat(), "message": message, "type": log_type}
         self.recent_tracking_logs.append(log_entry)
         # deque avec maxlen gère automatiquement la taille
-        self.current_status['tracking_logs'] = list(self.recent_tracking_logs)[-10:]
+        self.current_status["tracking_logs"] = list(self.recent_tracking_logs)[-10:]
 
     def read_encoder_position(self) -> Optional[float]:
         """Lit la position de l'encodeur."""
@@ -343,10 +353,10 @@ class MotorService:
         Si le statut est 'error' depuis plus de ERROR_RECOVERY_TIMEOUT secondes,
         remet automatiquement le statut à 'idle' pour permettre de nouvelles commandes.
         """
-        if self.current_status.get('status') != 'error':
+        if self.current_status.get("status") != "error":
             return
 
-        error_timestamp = self.current_status.get('error_timestamp')
+        error_timestamp = self.current_status.get("error_timestamp")
         if error_timestamp is None:
             return
 
@@ -356,9 +366,9 @@ class MotorService:
                 f"Recovery automatique après erreur "
                 f"({elapsed:.1f}s > {self.ERROR_RECOVERY_TIMEOUT}s)"
             )
-            self.current_status['status'] = 'idle'
-            self.current_status['error'] = None
-            self.current_status['error_timestamp'] = None
+            self.current_status["status"] = "idle"
+            self.current_status["error"] = None
+            self.current_status["error_timestamp"] = None
             self._write_status()
 
     # =========================================================================
@@ -376,13 +386,13 @@ class MotorService:
         if self.tracking_handler.is_active:
             self.tracking_handler.stop(self.current_status)
 
-        self.current_status['status'] = 'idle'
-        self.current_status['tracking_object'] = None
+        self.current_status["status"] = "idle"
+        self.current_status["tracking_object"] = None
         self._write_status()
 
     def process_command(self, command: Dict[str, Any]):
         """Traite une commande reçue."""
-        cmd_type = command.get('command', command.get('type'))
+        cmd_type = command.get("command", command.get("type"))
 
         if not cmd_type:
             logger.warning(f"Commande invalide: {command}")
@@ -390,41 +400,37 @@ class MotorService:
 
         logger.info(f"Traitement commande: {cmd_type}")
 
-        if cmd_type == 'goto':
-            angle = command.get('angle', 0)
-            speed = command.get('speed')
-            self.current_status = self.goto_handler.execute(
-                angle, self.current_status, speed
-            )
+        if cmd_type == "goto":
+            angle = command.get("angle", 0)
+            speed = command.get("speed")
+            self.current_status = self.goto_handler.execute(angle, self.current_status, speed)
 
-        elif cmd_type == 'jog':
-            delta = command.get('delta', 0)
-            speed = command.get('speed')
-            self.current_status = self.jog_handler.execute(
-                delta, self.current_status, speed
-            )
+        elif cmd_type == "jog":
+            delta = command.get("delta", 0)
+            speed = command.get("speed")
+            self.current_status = self.jog_handler.execute(delta, self.current_status, speed)
 
-        elif cmd_type == 'stop':
+        elif cmd_type == "stop":
             self.handle_stop()
 
-        elif cmd_type == 'continuous':
-            direction = command.get('direction', 'cw')
+        elif cmd_type == "continuous":
+            direction = command.get("direction", "cw")
             if self.tracking_handler.is_active:
                 self.handle_stop()
             self.continuous_handler.start(direction, self.current_status)
 
-        elif cmd_type == 'tracking_start':
-            object_name = command.get('object', command.get('name'))
-            skip_goto = command.get('skip_goto', False)
+        elif cmd_type == "tracking_start":
+            object_name = command.get("object", command.get("name"))
+            skip_goto = command.get("skip_goto", False)
             if object_name:
                 self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
             else:
                 logger.warning("tracking_start sans nom d'objet")
 
-        elif cmd_type == 'tracking_stop':
+        elif cmd_type == "tracking_stop":
             self.tracking_handler.stop(self.current_status)
 
-        elif cmd_type == 'status':
+        elif cmd_type == "status":
             pass  # Juste mettre à jour
 
         else:
@@ -444,7 +450,7 @@ class MotorService:
         # Lire la position initiale
         pos = self.read_encoder_position()
         if pos is not None:
-            self.current_status['position'] = pos
+            self.current_status["position"] = pos
             logger.info(f"Position initiale: {pos:.1f}°")
 
         self._write_status()
@@ -469,7 +475,10 @@ class MotorService:
 
                 # Mettre à jour le suivi si actif
                 now = time.time()
-                if self.tracking_handler.is_active and (now - last_tracking_update) >= tracking_interval:
+                if (
+                    self.tracking_handler.is_active
+                    and (now - last_tracking_update) >= tracking_interval
+                ):
                     self.tracking_handler.update(self.current_status)
                     last_tracking_update = now
                     self._write_status()
@@ -477,7 +486,7 @@ class MotorService:
                 # Mettre à jour la position depuis l'encodeur
                 pos = self.read_encoder_position()
                 if pos is not None and not self.tracking_handler.is_active:
-                    self.current_status['position'] = pos
+                    self.current_status["position"] = pos
 
                 # Envoyer heartbeat watchdog périodiquement
                 if now - last_watchdog_ping >= self.WATCHDOG_INTERVAL:
@@ -491,12 +500,17 @@ class MotorService:
                 break
             except Exception as e:
                 logger.error(f"Erreur boucle principale: {e}")
+                self.current_status["status"] = "error"
+                self.current_status["error"] = str(e)
+                self.current_status["error_timestamp"] = time.time()
+                self._write_status()
                 time.sleep(1)
 
         self.cleanup()
 
     def cleanup(self):
         """Nettoie les ressources à l'arrêt."""
+        self.running = False
         logger.info("Nettoyage des ressources...")
 
         # Notifier systemd que le service s'arrête
@@ -509,7 +523,7 @@ class MotorService:
         if self.moteur:
             self.moteur.nettoyer()
 
-        self.current_status['status'] = 'stopped'
+        self.current_status["status"] = "stopped"
         self._write_status()
 
         logger.info("Motor Service arrêté proprement")
@@ -523,7 +537,7 @@ class MotorService:
 def main():
     """Point d'entrée principal."""
     # Créer le répertoire de logs si nécessaire
-    logs_dir = Path(__file__).parent.parent / 'logs'
+    logs_dir = Path(__file__).parent.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
 
     # Détection automatique du matériel
@@ -546,5 +560,5 @@ def main():
     service.run()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
