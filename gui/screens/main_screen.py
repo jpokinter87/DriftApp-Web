@@ -352,10 +352,10 @@ class MainScreen(Screen):
 
         self._manual_control_active = True
 
-        # Utiliser la vitesse FAST_TRACK depuis config.json pour le contrôle manuel
+        # Utiliser la vitesse CONTINUOUS pour le contrôle manuel
         if hasattr(self, 'moteur') and self.moteur:
-            fast_track_mode = self.config.adaptive.modes.get('fast_track')
-            fast_track_delay = fast_track_mode.motor_delay
+            continuous_mode = self.config.adaptive.modes.get('continuous')
+            motor_delay = continuous_mode.motor_delay if continuous_mode else 0.00015
 
             # Définir la direction une seule fois
             self.moteur.definir_direction(direction)
@@ -363,7 +363,7 @@ class MainScreen(Screen):
             # Lancer le thread de rotation continue
             self._manual_rotation_thread = threading.Thread(
                 target=self._manual_rotation_loop,
-                args=(direction, fast_track_delay),
+                args=(direction, motor_delay),
                 daemon=True
             )
             self._manual_rotation_thread.start()
@@ -805,8 +805,7 @@ class MainScreen(Screen):
 
         # Mettre à jour l'indicateur MERIDIEN (grands déplacements >30°)
         is_large_movement = status.get('is_large_movement', False)
-        is_fast_track = params.mode.value == 'fast_track'
-        self.unified_banner.set_meridien_flip(is_large_movement or is_fast_track)
+        self.unified_banner.set_meridien_flip(is_large_movement)
 
         # Mettre à jour le timer circulaire avec intervalle actuel
         self.unified_banner.update_timer(

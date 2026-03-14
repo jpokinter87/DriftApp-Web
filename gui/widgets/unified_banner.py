@@ -363,8 +363,6 @@ class UnifiedBanner(BoxLayout):
                 self.mode_color.rgba = (0.6, 0.4, 0.2, 0.5)  # Orange
             elif mode_upper in ["CONTINU", "CONTINUOUS"]:
                 self.mode_color.rgba = (0.9, 0.15, 0.15, 0.9)  # Rouge vif (attire l'attention)
-            elif mode_upper == "FAST_TRACK":
-                self.mode_color.rgba = (0.8, 0.2, 0.8, 0.9)  # Violet vif (vitesse max)
             else:
                 self.mode_color.rgba = (0.4, 0.4, 0.4, 0.5)  # Gris
 

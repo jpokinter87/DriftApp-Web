@@ -21,6 +21,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
+# ============================================================================
+# CHEMINS PROJET (absolus, basés sur la racine du projet)
+# ============================================================================
+
+PROJECT_ROOT: Path = Path(__file__).parent.parent.parent.resolve()
+DATA_DIR: Path = PROJECT_ROOT / "data"
+CACHE_FILE: Path = DATA_DIR / "objets_cache.json"
+
+
+def get_version() -> str:
+    """Lit la version depuis pyproject.toml."""
+    try:
+        toml_path = PROJECT_ROOT / "pyproject.toml"
+        for line in toml_path.read_text().splitlines():
+            if line.startswith("version"):
+                return line.split('"')[1]
+    except Exception:
+        pass
+    return "unknown"
+
 
 # ============================================================================
 # DATACLASSES POUR LA CONFIGURATION
@@ -184,10 +204,7 @@ class EncoderConfig:
 class DriftAppConfig:
     """
     Configuration complète de DriftApp.
-    
-    Cette classe unique remplace le tuple de 12 valeurs retourné par
-    l'ancienne fonction load_site_config().
-    
+
     Usage:
         config = load_config()
         moteur = MoteurCoupole(config.motor)
@@ -215,12 +232,6 @@ class DriftAppConfig:
     def is_production(self) -> bool:
         """True si mode production (pas simulation)."""
         return not self.simulation
-    
-    def to_dict(self) -> dict:
-        """Convertit la config en dictionnaire (pour sauvegarde JSON)."""
-        # Implémentation simplifiée - pourrait utiliser asdict() de dataclasses
-        # avec un post-processing pour gérer les types personnalisés
-        raise NotImplementedError("À implémenter si besoin de sauvegarder la config")
 
 
 # ============================================================================
@@ -230,7 +241,7 @@ class DriftAppConfig:
 class ConfigLoader:
     """Chargeur de configuration modulaire."""
 
-    def __init__(self, config_path: Path = Path("data/config.json")):
+    def __init__(self, config_path: Path = DATA_DIR / "config.json"):
         self.logger = logging.getLogger("config_loader")
         self.config_path = config_path
         self.cfg: dict = {}
@@ -336,7 +347,7 @@ class ConfigLoader:
     def _parse_modes(self, modes_cfg: dict) -> Dict[str, TrackingModeParams]:
         """Parse les modes de tracking."""
         modes = {}
-        for mode_name in ["normal", "critical", "continuous", "fast_track"]:
+        for mode_name in ["normal", "critical", "continuous"]:
             c = modes_cfg.get(mode_name, {})
             modes[mode_name] = TrackingModeParams(
                 interval_sec=int(c.get("interval_sec", 60)),
@@ -392,7 +403,7 @@ class ConfigLoader:
         self.logger.info(f"  Mode: {'SIMULATION' if config.simulation else 'PRODUCTION'}")
 
 
-def load_config(config_path: Path = Path("data/config.json")) -> DriftAppConfig:
+def load_config(config_path: Path = DATA_DIR / "config.json") -> DriftAppConfig:
     """
     Charge la configuration complète depuis config.json.
 
@@ -411,106 +422,3 @@ def load_config(config_path: Path = Path("data/config.json")) -> DriftAppConfig:
         print(f"Site: {config.site.nom}")
     """
     return ConfigLoader(config_path).load()
-
-
-# ============================================================================
-# COMPATIBILITÉ AVEC L'ANCIEN CODE
-# ============================================================================
-
-def load_site_config() -> tuple:
-    """
-    Fonction de compatibilité pour l'ancien code.
-    
-    DEPRECATED: Utilisez load_config() à la place.
-    
-    Returns:
-        Tuple de 12 valeurs (pour compatibilité ascendante)
-    """
-    import warnings
-    warnings.warn(
-        "load_site_config() est déprécié. Utilisez load_config() à la place.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    
-    config = load_config()
-    
-    # Conversion de l'objet en tuple pour compatibilité
-    motor_dict = {
-        'gpio_pins': {'dir': config.motor.gpio_pins.dir, 'step': config.motor.gpio_pins.step},
-        'steps_per_revolution': config.motor.steps_per_revolution,
-        'microsteps': config.motor.microsteps,
-        'gear_ratio': config.motor.gear_ratio,
-        'steps_correction_factor': config.motor.steps_correction_factor,
-        'motor_delay_base': config.motor.motor_delay_base,
-        'motor_delay_min': config.motor.motor_delay_min,
-        'motor_delay_max': config.motor.motor_delay_max,
-        'max_speed_steps_per_sec': config.motor.max_speed_steps_per_sec,
-        'acceleration_steps_per_sec2': config.motor.acceleration_steps_per_sec2
-    }
-    
-    tracking_dict = {
-        'seuil_correction_deg': config.tracking.seuil_correction_deg,
-        'intervalle_verification_sec': config.tracking.intervalle_verification_sec,
-        'abaque_file': config.tracking.abaque_file
-    }
-
-    # Conversion adaptive en dict
-    adaptive_dict = {
-        'altitudes': {
-            'critical': config.adaptive.altitudes.critical,
-            'zenith': config.adaptive.altitudes.zenith
-        },
-        'movements': {
-            'critical': config.adaptive.movements.critical,
-            'extreme': config.adaptive.movements.extreme
-        },
-        'modes': {
-            name: {
-                'interval_sec': params.interval_sec,
-                'threshold_deg': params.threshold_deg,
-                'motor_delay': params.motor_delay
-            }
-            for name, params in config.adaptive.modes.items()
-        },
-        'critical_zones': [
-            {
-                'name': zone.name,
-                'alt_min': zone.alt_min,
-                'alt_max': zone.alt_max,
-                'az_min': zone.az_min,
-                'az_max': zone.az_max,
-                'enabled': zone.enabled
-            }
-            for zone in config.adaptive.critical_zones
-        ]
-    }
-
-    # Conversion encodeur en dict
-    encoder_dict = {
-        'enabled': config.encoder.enabled,
-        'spi': {
-            'bus': config.encoder.spi.bus,
-            'device': config.encoder.spi.device,
-            'speed_hz': config.encoder.spi.speed_hz,
-            'mode': config.encoder.spi.mode
-        },
-        'mecanique': {
-            'wheel_diameter_mm': config.encoder.mecanique.wheel_diameter_mm,
-            'ring_diameter_mm': config.encoder.mecanique.ring_diameter_mm,
-            'counts_per_rev': config.encoder.mecanique.counts_per_rev
-        },
-        'calibration_factor': config.encoder.calibration_factor
-    }
-    
-    return (
-        config.site.latitude,
-        config.site.longitude,
-        config.site.tz_offset,
-        config.simulation,
-        config.tracking.abaque_file,
-        motor_dict,
-        tracking_dict,
-        adaptive_dict,
-        encoder_dict
-    )

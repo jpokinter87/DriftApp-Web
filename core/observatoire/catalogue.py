@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional, Any
 
-from core.config.config import CACHE_FILE
+from core.config.config_loader import CACHE_FILE
 
 logger = logging.getLogger(__name__)
 
@@ -263,8 +263,8 @@ class GestionnaireCatalogue:
             # On utilise les coordonnées par défaut du config.json
             try:
                 import json
-                from pathlib import Path
-                cfg_path = Path("data") / "config.json"
+                from core.config.config_loader import DATA_DIR
+                cfg_path = DATA_DIR / "config.json"
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
                 lat = cfg["site"]["latitude"]
@@ -278,10 +278,12 @@ class GestionnaireCatalogue:
                 if pos:
                     ra_deg, dec_deg = pos
                     return {
-                        "name": identifiant.capitalize(),
+                        "nom": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet"
+                        "type": "planet",
+                        "is_planet": True,
+                        "source": "ephemerides",
                     }
             except Exception:
                 pass

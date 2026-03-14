@@ -7,7 +7,8 @@ Couvre :
 - Gestion fichier manquant, JSON corrompu, données périmées
 - read_angle() avec timeout et retry
 - read_stable() avec moyenne
-- Bug connu H-01 : moyenne incorrecte près de 0°/360°
+- H-01 corrigé : moyenne circulaire pour 0°/360°
+- H-04 corrigé : timeout sur statut inconnu
 """
 
 import json
@@ -105,17 +106,18 @@ class TestDaemonReadAngle:
         with pytest.raises(RuntimeError, match="Démon encodeur non trouvé"):
             reader.read_angle(timeout_ms=50)
 
-    def test_status_unknown_loops_forever_bug(self, reader, daemon_file):
-        """Bug connu H-04 : status inconnu → timeout devrait s'appliquer.
-        Ce test documente le comportement ACTUEL : boucle infinie.
-        On utilise un timeout court pour éviter de bloquer."""
-        write_daemon_data(daemon_file, angle=90.0, status="ERROR something")
-        # Le bug : la boucle continue indéfiniment car le timeout check
-        # ne se déclenche que quand data is None
-        # On ne peut pas tester la boucle infinie directement,
-        # mais on peut vérifier que ça ne retourne pas rapidement
-        # Pour le moment, skip ce test car il bloquerait
-        pytest.skip("Bug H-04 : read_angle boucle infinie sur status inconnu - à corriger en Phase 2")
+    def test_status_unknown_returns_after_timeout(self, reader, daemon_file):
+        """H-04 corrigé : statut inconnu → retourne l'angle après timeout."""
+        write_daemon_data(daemon_file, angle=90.0, status="CALIBRATING")
+        # Doit retourner l'angle au lieu de boucler indéfiniment
+        result = reader.read_angle(timeout_ms=50)
+        assert result == pytest.approx(90.0)
+
+    def test_status_error_returns_after_timeout(self, reader, daemon_file):
+        """H-04 : statut ERROR → retourne l'angle après timeout."""
+        write_daemon_data(daemon_file, angle=45.0, status="ERROR something")
+        result = reader.read_angle(timeout_ms=50)
+        assert result == pytest.approx(45.0)
 
 
 # =============================================================================
@@ -132,19 +134,40 @@ class TestDaemonReadStable:
         with pytest.raises(RuntimeError):
             reader.read_stable(num_samples=3, delay_ms=1, stabilization_ms=1)
 
-    def test_average_near_zero_bug(self, reader, daemon_file):
-        """Bug connu H-01 : la moyenne simple échoue près de 0°/360°.
-        Ce test DOCUMENTE le bug actuel.
-        Avec des lectures [359.5, 0.0, 0.5], la moyenne devrait être ~0.0
-        mais la moyenne arithmétique donne ~120°."""
-        # On ne peut pas facilement simuler des lectures changeantes
-        # avec un fichier statique, mais on documente le problème
-        write_daemon_data(daemon_file, angle=359.9)
+    def test_circular_mean_near_zero(self, reader, daemon_file, monkeypatch):
+        """H-01 corrigé : moyenne circulaire correcte près de 0°/360°.
+        [359.5, 0.2, 0.5] → ~0.07° (pas ~120°)."""
+        readings = iter([359.5, 0.2, 0.5])
+
+        def mock_read_angle(timeout_ms=200):
+            return next(readings)
+
+        monkeypatch.setattr(reader, "read_angle", mock_read_angle)
         result = reader.read_stable(num_samples=3, delay_ms=1, stabilization_ms=1)
-        # Avec un fichier fixe à 359.9, toutes les lectures sont 359.9
-        # donc la moyenne est correcte. Le bug apparaît seulement quand
-        # les lectures oscillent autour de 0°/360°.
-        assert result == pytest.approx(359.9, abs=0.5)
+        # Moyenne circulaire : doit être proche de 0° (pas 120°)
+        assert result == pytest.approx(0.07, abs=0.5)
+
+    def test_circular_mean_normal_range(self, reader, daemon_file, monkeypatch):
+        """H-01 : moyenne circulaire fonctionne aussi pour les cas normaux."""
+        readings = iter([10.0, 11.0, 12.0])
+
+        def mock_read_angle(timeout_ms=200):
+            return next(readings)
+
+        monkeypatch.setattr(reader, "read_angle", mock_read_angle)
+        result = reader.read_stable(num_samples=3, delay_ms=1, stabilization_ms=1)
+        assert result == pytest.approx(11.0, abs=0.1)
+
+    def test_stable_reading_near_180(self, reader, daemon_file, monkeypatch):
+        """Moyenne circulaire correcte aussi autour de 180°."""
+        readings = iter([179.0, 180.0, 181.0])
+
+        def mock_read_angle(timeout_ms=200):
+            return next(readings)
+
+        monkeypatch.setattr(reader, "read_angle", mock_read_angle)
+        result = reader.read_stable(num_samples=3, delay_ms=1, stabilization_ms=1)
+        assert result == pytest.approx(180.0, abs=0.1)
 
 
 # =============================================================================

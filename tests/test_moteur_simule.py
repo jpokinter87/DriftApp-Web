@@ -190,6 +190,18 @@ class TestMoteurSimuleFeedback:
         assert result['success'] is True
         assert get_simulated_position() == pytest.approx(10.0)
 
+    def test_rotation_avec_feedback_extra_kwargs(self):
+        """H-09 corrigé : accept allow_large_movement et timeout_seconds."""
+        set_simulated_position(0.0)
+        m = MoteurSimule()
+        result = m.rotation_avec_feedback(
+            angle_cible=90.0,
+            allow_large_movement=True,
+            timeout_seconds=60.0
+        )
+        assert result['success'] is True
+        assert get_simulated_position() == pytest.approx(90.0)
+
     def test_rotation_relative_avec_feedback(self):
         set_simulated_position(100.0)
         m = MoteurSimule()

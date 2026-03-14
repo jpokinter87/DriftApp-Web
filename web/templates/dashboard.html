@@ -16,12 +16,15 @@
     <div class="container">
         <!-- En-tête -->
         <header class="header">
-            <h1>DriftApp</h1>
+            <h1>DriftApp <small id="app-version" style="font-size:0.5em;opacity:0.6"></small></h1>
             <span class="subtitle">Contrôle de Coupole - Observatoire Ubik</span>
             <div class="status-indicator" id="service-status">
                 <span class="status-dot"></span>
                 <span class="status-text">Connexion...</span>
             </div>
+            <button id="btn-update" class="btn btn-small" style="display:none;margin-left:10px;background:#2196F3;color:white;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.8em" title="Mise à jour disponible">
+                Mettre à jour
+            </button>
         </header>
 
         <!-- Zone principale -->
@@ -163,7 +166,7 @@
 
         <!-- Pied de page -->
         <footer class="footer">
-            <span>DriftApp v4.3 - Interface Web</span>
+            <span>DriftApp <span id="footer-version"></span> - Interface Web</span>
             <span id="last-update">Dernière mise à jour: --</span>
         </footer>
     </div>

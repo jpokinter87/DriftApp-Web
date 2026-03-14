@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "web"))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
+os.environ.setdefault("DRIFTAPP_DEBUG", "1")  # Tests en mode debug pour ALLOWED_HOSTS
 
 import django
 django.setup()
@@ -78,9 +79,11 @@ def mock_ipc(tmp_path):
         import web.hardware.views as hw_views
         import web.tracking.views as tr_views
 
-        # Patcher les instances globales
-        hw_views.motor_client = hw_views.MotorServiceClient()
-        tr_views.motor_client = tr_views.MotorServiceClient()
+        # Patcher les instances globales depuis le module partagé
+        import web.common.ipc_client as ipc_module
+        importlib.reload(ipc_module)
+        hw_views.motor_client = ipc_module.motor_client
+        tr_views.motor_client = ipc_module.motor_client
 
         yield {
             "cmd_file": cmd_file,
@@ -95,7 +98,7 @@ def mock_ipc(tmp_path):
 
 class TestMotorServiceClientHardware:
     def test_send_command(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         result = motor_client.send_command("stop")
         assert result is True
         # Vérifier que le fichier a été écrit
@@ -104,20 +107,20 @@ class TestMotorServiceClientHardware:
         assert "id" in data
 
     def test_send_command_with_params(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         result = motor_client.send_command("goto", angle=90.0)
         assert result is True
         data = json.loads(mock_ipc["cmd_file"].read_text())
         assert data["angle"] == 90.0
 
     def test_get_motor_status(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         status = motor_client.get_motor_status()
         assert status["status"] == "idle"
         assert status["position"] == 45.0
 
     def test_get_motor_status_missing_file(self, tmp_path):
-        from web.hardware.views import MotorServiceClient
+        from web.common.ipc_client import MotorServiceClient
         with patch("django.conf.settings.MOTOR_SERVICE_IPC", {
             "COMMAND_FILE": str(tmp_path / "cmd.json"),
             "STATUS_FILE": str(tmp_path / "nonexistent.json"),
@@ -128,7 +131,7 @@ class TestMotorServiceClientHardware:
             assert "error" in status
 
     def test_get_encoder_status(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         status = motor_client.get_encoder_status()
         assert status["angle"] == 45.0
         assert status["calibrated"] is True
@@ -163,6 +166,20 @@ class TestGotoView:
         )
         assert response.status_code == 200
 
+    def test_goto_invalid_speed(self, api_client, mock_ipc):
+        """H-19 : speed invalide → 400."""
+        response = api_client.post(
+            "/api/hardware/goto/", {"angle": 90.0, "speed": "abc"}, format="json"
+        )
+        assert response.status_code == 400
+
+    def test_goto_speed_too_low(self, api_client, mock_ipc):
+        """H-19 : speed=0 → 400 (hors limites)."""
+        response = api_client.post(
+            "/api/hardware/goto/", {"angle": 90.0, "speed": 0}, format="json"
+        )
+        assert response.status_code == 400
+
 
 class TestJogView:
     def test_jog_success(self, api_client, mock_ipc):
@@ -179,6 +196,13 @@ class TestJogView:
 
     def test_jog_invalid_delta(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/jog/", {"delta": "abc"}, format="json")
+        assert response.status_code == 400
+
+    def test_jog_invalid_speed(self, api_client, mock_ipc):
+        """H-19 : speed invalide → 400."""
+        response = api_client.post(
+            "/api/hardware/jog/", {"delta": 10.0, "speed": "xyz"}, format="json"
+        )
         assert response.status_code == 400
 
 
@@ -283,6 +307,15 @@ class TestTrackingStatusView:
     def test_status(self, api_client, mock_ipc):
         response = api_client.get("/api/tracking/status/")
         assert response.status_code == 200
+
+
+class TestObjectListView:
+    def test_list_objects(self, api_client, mock_ipc):
+        """M-27 corrigé : ObjectListView ne crashe plus."""
+        response = api_client.get("/api/tracking/objects/")
+        assert response.status_code == 200
+        assert "count" in response.data
+        assert "objects" in response.data
 
 
 class TestObjectSearchView:

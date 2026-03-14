@@ -226,7 +226,8 @@ class FeedbackController:
     def _executer_iteration(self, angle_cible: float, vitesse: float,
                             tolerance: float, max_correction: float,
                             iteration: int, position_initiale: float = None,
-                            allow_large_movement: bool = False) -> Optional[dict]:
+                            allow_large_movement: bool = False,
+                            current_position: float = None) -> Optional[dict]:
         """
         Exécute une itération de la boucle de correction.
 
@@ -234,16 +235,20 @@ class FeedbackController:
             position_initiale: Position de départ (pour détecter recalibration switch)
             allow_large_movement: Si True, désactive la protection contre les grands mouvements
                                   (utilisé pour GOTO initial)
+            current_position: Position déjà lue par l'appelant (évite double lecture H-02)
 
         Returns:
             dict avec les stats de correction, ou None si objectif atteint/erreur
         """
-        # Lecture position et calcul erreur
-        try:
-            position_actuelle = self._lire_position_stable()
-        except RuntimeError:
-            self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
-            return None
+        # Réutiliser la position lue par l'appelant si fournie (H-02)
+        if current_position is not None:
+            position_actuelle = current_position
+        else:
+            try:
+                position_actuelle = self._lire_position_stable()
+            except RuntimeError:
+                self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
+                return None
 
         # PROTECTION SWITCH: Détecter si la position a sauté de façon incohérente
         # Cette protection ne s'applique qu'aux petits mouvements (JOG ±1°, ±10°)
@@ -394,7 +399,8 @@ class FeedbackController:
                 angle_cible, vitesse, tolerance,
                 max_correction_par_iteration, iteration,
                 position_initiale=position_initiale,  # Pour détecter recalibration switch
-                allow_large_movement=allow_large_movement  # Pour GOTO initial
+                allow_large_movement=allow_large_movement,  # Pour GOTO initial
+                current_position=current_pos  # H-02: réutiliser la lecture (évite double ~80ms)
             )
 
             if correction is None:

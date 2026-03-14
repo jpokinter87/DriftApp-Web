@@ -559,11 +559,7 @@ class TrackingSession:
         'normal': '🟢',
         'critical': '🟠',
         'continuous': '🔴',
-        'fast_track': '🟣'
     }
-
-    # Seuil pour déclencher le mode FAST_TRACK (grands déplacements)
-    LARGE_MOVEMENT_THRESHOLD = 30.0  # degrés - au-delà, on utilise FAST_TRACK
 
     def get_status(self) -> dict:
         """

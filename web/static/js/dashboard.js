@@ -336,6 +336,50 @@ async function gotoPosition() {
 function startPolling() {
     updateStatus();
     setInterval(updateStatus, POLL_INTERVAL);
+    // Vérifier les mises à jour toutes les 5 minutes
+    checkForUpdates();
+    setInterval(checkForUpdates, 300000);
+}
+
+async function checkForUpdates() {
+    try {
+        const resp = await fetch('/api/health/update/check/');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const btn = document.getElementById('btn-update');
+        if (!btn) return;
+        if (data.update_available) {
+            btn.style.display = 'inline-block';
+            btn.title = `${data.commits_behind} commit(s) disponible(s) — v${data.remote_version}`;
+            btn.onclick = applyUpdate;
+        } else {
+            btn.style.display = 'none';
+        }
+    } catch (e) { /* silencieux */ }
+}
+
+async function applyUpdate() {
+    const btn = document.getElementById('btn-update');
+    if (!btn) return;
+    btn.textContent = 'Mise à jour...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/health/update/apply/', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            btn.textContent = 'Redémarrage...';
+            // Attendre le redémarrage puis recharger
+            setTimeout(() => location.reload(), 10000);
+        } else {
+            btn.textContent = 'Erreur';
+            alert('Erreur mise à jour: ' + (data.error || 'inconnue'));
+            setTimeout(() => { btn.textContent = 'Mettre à jour'; btn.disabled = false; }, 3000);
+        }
+    } catch (e) {
+        // Timeout attendu si les services redémarrent
+        btn.textContent = 'Redémarrage...';
+        setTimeout(() => location.reload(), 10000);
+    }
 }
 
 async function updateStatus() {
@@ -347,6 +391,15 @@ async function updateStatus() {
     state.target = motor.target;
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
+
+    // Version (une seule fois)
+    if (motor.version && !state.versionSet) {
+        const verEl = document.getElementById('app-version');
+        const footerEl = document.getElementById('footer-version');
+        if (verEl) verEl.textContent = 'v' + motor.version;
+        if (footerEl) footerEl.textContent = 'v' + motor.version;
+        state.versionSet = true;
+    }
 
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);

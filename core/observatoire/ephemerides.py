@@ -119,7 +119,8 @@ class PlanetaryEphemerides:
         l0, l1, _, eccentricity, inclination, _, omega_perihelion = elem
 
         # Siècles juliens depuis J2000
-        jd = PlanetaryEphemerides._julian_date(date_heure)
+        from core.observatoire.calculations import AstronomicalCalculations
+        jd = AstronomicalCalculations._calculate_julian_day(date_heure)
         t_centuries = (jd - 2451545.0) / 36525.0
 
         # Calcul des anomalies
@@ -139,21 +140,6 @@ class PlanetaryEphemerides:
 
         return ra_approx, dec_approx
 
-    @staticmethod
-    def _julian_date(dt: datetime) -> float:
-        """Calcule le jour Julien pour une date donnée."""
-        year, month = dt.year, dt.month
-        day = dt.day + (dt.hour + (dt.minute + dt.second / 60.0) / 60.0) / 24.0
-
-        if month <= 2:
-            year -= 1
-            month += 12
-
-        century = year // 100
-        leap_correction = 2 - century + century // 4
-
-        jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + leap_correction - 1524.5
-        return jd
 
 
 # Test si exécuté directement
