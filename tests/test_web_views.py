@@ -78,9 +78,11 @@ def mock_ipc(tmp_path):
         import web.hardware.views as hw_views
         import web.tracking.views as tr_views
 
-        # Patcher les instances globales
-        hw_views.motor_client = hw_views.MotorServiceClient()
-        tr_views.motor_client = tr_views.MotorServiceClient()
+        # Patcher les instances globales depuis le module partagé
+        import web.common.ipc_client as ipc_module
+        importlib.reload(ipc_module)
+        hw_views.motor_client = ipc_module.motor_client
+        tr_views.motor_client = ipc_module.motor_client
 
         yield {
             "cmd_file": cmd_file,
@@ -95,7 +97,7 @@ def mock_ipc(tmp_path):
 
 class TestMotorServiceClientHardware:
     def test_send_command(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         result = motor_client.send_command("stop")
         assert result is True
         # Vérifier que le fichier a été écrit
@@ -104,20 +106,20 @@ class TestMotorServiceClientHardware:
         assert "id" in data
 
     def test_send_command_with_params(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         result = motor_client.send_command("goto", angle=90.0)
         assert result is True
         data = json.loads(mock_ipc["cmd_file"].read_text())
         assert data["angle"] == 90.0
 
     def test_get_motor_status(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         status = motor_client.get_motor_status()
         assert status["status"] == "idle"
         assert status["position"] == 45.0
 
     def test_get_motor_status_missing_file(self, tmp_path):
-        from web.hardware.views import MotorServiceClient
+        from web.common.ipc_client import MotorServiceClient
         with patch("django.conf.settings.MOTOR_SERVICE_IPC", {
             "COMMAND_FILE": str(tmp_path / "cmd.json"),
             "STATUS_FILE": str(tmp_path / "nonexistent.json"),
@@ -128,7 +130,7 @@ class TestMotorServiceClientHardware:
             assert "error" in status
 
     def test_get_encoder_status(self, mock_ipc):
-        from web.hardware.views import motor_client
+        from web.common.ipc_client import motor_client
         status = motor_client.get_encoder_status()
         assert status["angle"] == 45.0
         assert status["calibrated"] is True

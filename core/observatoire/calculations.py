@@ -38,27 +38,6 @@ class AstronomicalCalculations:
         self.tz_offset = tz_offset
 
     # =========================================================================
-    # UTILITAIRES
-    # =========================================================================
-
-    @staticmethod
-    def _normaliser_angle_180(angle: float) -> float:
-        """Normalise un angle entre -180° et +180°."""
-        while angle > 180:
-            angle -= 360
-        while angle < -180:
-            angle += 360
-        return angle
-
-    @staticmethod
-    def _normaliser_angle_360(angle: float) -> float:
-        """Normalise un angle entre 0° et 360°."""
-        angle = angle % 360
-        if angle < 0:
-            angle += 360
-        return angle
-
-    # =========================================================================
     # CONVERSION DE COORDONNÉES
     # =========================================================================
 
@@ -132,13 +111,6 @@ class AstronomicalCalculations:
         if GMST_sec < 0:
             GMST_sec += 86400.0
         return GMST_sec / 240.0  # 86400 s -> 360°, donc 1° = 240 s
-
-    @staticmethod
-    def _add_time_component(theta_G0: float, hour: int, minute: int,
-                            second: int, microsecond: int) -> float:
-        """Ajoute la composante temporelle au temps sidéral."""
-        time_seconds = hour * 3600 + minute * 60 + second + microsecond / 1000000.0
-        return theta_G0 + 15.04106728 * (time_seconds / 3600.0)
 
     def calculer_angle_horaire(self, ascension_droite: float, date_heure: datetime,
                                deja_jnow: bool = False) -> float:

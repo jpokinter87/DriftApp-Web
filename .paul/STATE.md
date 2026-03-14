@@ -11,9 +11,9 @@ See: .paul/PROJECT.md (updated 2026-03-13)
 
 Milestone: v5.0 Qualité & Infrastructure
 Phase: 2 of 6 (Refactoring & Corrections) — In Progress
-Plan: 02-02 complete (Bugs latents H-01, H-04, H-14, M-27)
+Plan: 02-03 complete (Duplication + code mort — C-06, M-14, M-15, M-16)
 Status: Loop closed, ready for next PLAN
-Last activity: 2026-03-14 — Plan 02-02 unified
+Last activity: 2026-03-14 — Plan 02-03 unified
 
 Progress:
 - Milestone: [████░░░░░░] 40%
@@ -30,7 +30,7 @@ PLAN ──▶ APPLY ──▶ UNIFY
 ## Performance Metrics
 
 **Tests:**
-- Total: 416 passent, 0 skippé
+- Total: 409 passent, 0 skippé (7 tests de code mort supprimés)
 - Couverture globale: 53%
 - Modules >80%: angle_utils 100%, config_loader 95%, calculations 94%, moteur_simule 94%, tracking_logger 94%, abaque 88%, catalogue 85%, adaptive_tracking 85%, hardware/views 83%
 
@@ -55,9 +55,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-03-14
-Stopped at: Plan 02-02 loop closed
-Next action: /paul:plan pour Plan 02-03 (Duplication + code mort restant)
-Resume file: .paul/phases/02-refactoring-corrections/02-02-SUMMARY.md
+Stopped at: Plan 02-03 loop closed
+Next action: /paul:plan pour Plan 02-04 (Sécurité Django — C-05, H-19)
+Resume file: .paul/phases/02-refactoring-corrections/02-03-SUMMARY.md
 
 ---
 *STATE.md — Updated after every significant action*

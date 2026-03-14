@@ -50,20 +50,6 @@ class TestConstruction:
 # Utilitaires angle (duplication de angle_utils — documente le comportement)
 # =============================================================================
 
-class TestNormalisationAngles:
-    def test_normalise_180_positive(self):
-        assert AstronomicalCalculations._normaliser_angle_180(270) == -90
-
-    def test_normalise_180_negative(self):
-        assert AstronomicalCalculations._normaliser_angle_180(-270) == 90
-
-    def test_normalise_360(self):
-        assert AstronomicalCalculations._normaliser_angle_360(370) == 10
-
-    def test_normalise_360_negative(self):
-        assert AstronomicalCalculations._normaliser_angle_360(-10) == 350
-
-
 # =============================================================================
 # Jour Julien
 # =============================================================================
@@ -305,10 +291,3 @@ class TestVitesseRotation:
 # _add_time_component (code mort — documente qu'il existe)
 # =============================================================================
 
-class TestAddTimeComponent:
-    def test_exists_and_callable(self):
-        assert callable(AstronomicalCalculations._add_time_component)
-
-    def test_returns_float(self):
-        result = AstronomicalCalculations._add_time_component(100.0, 12, 30, 0, 0)
-        assert isinstance(result, float)
