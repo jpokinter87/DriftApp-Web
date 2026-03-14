@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "web"))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
+os.environ.setdefault("DRIFTAPP_DEBUG", "1")  # Tests en mode debug pour ALLOWED_HOSTS
 
 import django
 django.setup()
@@ -165,6 +166,20 @@ class TestGotoView:
         )
         assert response.status_code == 200
 
+    def test_goto_invalid_speed(self, api_client, mock_ipc):
+        """H-19 : speed invalide → 400."""
+        response = api_client.post(
+            "/api/hardware/goto/", {"angle": 90.0, "speed": "abc"}, format="json"
+        )
+        assert response.status_code == 400
+
+    def test_goto_speed_too_low(self, api_client, mock_ipc):
+        """H-19 : speed=0 → 400 (hors limites)."""
+        response = api_client.post(
+            "/api/hardware/goto/", {"angle": 90.0, "speed": 0}, format="json"
+        )
+        assert response.status_code == 400
+
 
 class TestJogView:
     def test_jog_success(self, api_client, mock_ipc):
@@ -181,6 +196,13 @@ class TestJogView:
 
     def test_jog_invalid_delta(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/jog/", {"delta": "abc"}, format="json")
+        assert response.status_code == 400
+
+    def test_jog_invalid_speed(self, api_client, mock_ipc):
+        """H-19 : speed invalide → 400."""
+        response = api_client.post(
+            "/api/hardware/jog/", {"delta": 10.0, "speed": "xyz"}, format="json"
+        )
         assert response.status_code == 400
 
 

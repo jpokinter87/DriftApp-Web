@@ -1,13 +1,10 @@
 """
 URL configuration for DriftApp Web.
 """
-from django.contrib import admin
 from django.urls import path, include
 from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-
     # API REST
     path('api/tracking/', include('tracking.urls')),
     path('api/hardware/', include('hardware.urls')),

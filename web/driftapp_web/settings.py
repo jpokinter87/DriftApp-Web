@@ -15,14 +15,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-driftapp-dev-key-change-in-production'
+# SECRET_KEY : via variable d'environnement en production
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-driftapp-dev-key-change-in-production'
+)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG : désactivé par défaut (sécurité), activer avec DRIFTAPP_DEBUG=1
+DEBUG = os.environ.get('DRIFTAPP_DEBUG', '0') == '1'
 
-# Permettre les connexions depuis le réseau local
-ALLOWED_HOSTS = ['*']
+# ALLOWED_HOSTS : réseau local par défaut
+# Django accepte les sous-domaines (.example.com) mais pas les wildcards IP
+# Pour le réseau local, on utilise '*' en dev et on restreint en production
+_default_hosts = 'localhost,127.0.0.1,*' if DEBUG else 'localhost,127.0.0.1'
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', _default_hosts).split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -113,6 +119,9 @@ MOTOR_SERVICE_IPC = {
 
 # Configuration DriftApp
 DRIFTAPP_CONFIG = PROJECT_ROOT / 'data' / 'config.json'
+
+# Créer le répertoire logs s'il n'existe pas
+(PROJECT_ROOT / 'logs').mkdir(parents=True, exist_ok=True)
 
 # Logging
 LOGGING = {
