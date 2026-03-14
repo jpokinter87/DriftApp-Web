@@ -33,7 +33,7 @@ from typing import Dict, Any, Optional
 # Ajouter le répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config.config_loader import ConfigLoader
+from core.config.config_loader import ConfigLoader, get_version
 from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
 from core.hardware.moteur_simule import MoteurSimule, set_simulated_position
 from core.hardware.hardware_detector import HardwareDetector
@@ -329,7 +329,8 @@ class MotorService:
             'last_update': datetime.now().isoformat(),
             'tracking_logs': [],  # Correction 3: Logs de suivi pour l'interface web
             'encoder_calibrated': False,
-            'parking_enabled': self.parking_config.get('enabled', True)
+            'parking_enabled': self.parking_config.get('enabled', True),
+            'version': get_version()
         }
 
         # Liste des logs récents (max 20)

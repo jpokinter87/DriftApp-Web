@@ -348,6 +348,15 @@ async function updateStatus() {
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
 
+    // Version (une seule fois)
+    if (motor.version && !state.versionSet) {
+        const verEl = document.getElementById('app-version');
+        const footerEl = document.getElementById('footer-version');
+        if (verEl) verEl.textContent = 'v' + motor.version;
+        if (footerEl) footerEl.textContent = 'v' + motor.version;
+        state.versionSet = true;
+    }
+
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);
     updatePositionDisplay(encoder);

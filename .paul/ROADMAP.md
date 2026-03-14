@@ -17,7 +17,7 @@ Phases: 1 of 6 complete
 | 2 | Refactoring & Corrections | 5 | Complete | 2026-03-14 |
 | 2.1 | Bug Fixes Terrain | TBD | Not started | - |
 | 3 | Tests Complémentaires | 2 | Complete | 2026-03-14 |
-| 4 | CI/CD & Versioning | TBD | Not started | - |
+| 4 | CI/CD & Versioning | 1 | Complete | 2026-03-14 |
 
 ## Phase Details
 

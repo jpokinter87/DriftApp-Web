@@ -30,6 +30,18 @@ DATA_DIR: Path = PROJECT_ROOT / "data"
 CACHE_FILE: Path = DATA_DIR / "objets_cache.json"
 
 
+def get_version() -> str:
+    """Lit la version depuis pyproject.toml."""
+    try:
+        toml_path = PROJECT_ROOT / "pyproject.toml"
+        for line in toml_path.read_text().splitlines():
+            if line.startswith("version"):
+                return line.split('"')[1]
+    except Exception:
+        pass
+    return "unknown"
+
+
 # ============================================================================
 # DATACLASSES POUR LA CONFIGURATION
 # ============================================================================
