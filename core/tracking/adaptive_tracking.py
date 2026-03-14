@@ -21,8 +21,6 @@ from enum import Enum
 from typing import Tuple, Dict
 import logging
 
-from core.utils.angle_utils import normalize_angle_360
-
 
 class TrackingMode(Enum):
     """Modes de suivi selon la zone du ciel."""
@@ -367,8 +365,8 @@ class AdaptiveTrackingManager:
             - direction_description: Description du chemin
         """
         # Normaliser les positions dans [0, 360[
-        current = normalize_angle_360(current_position)
-        target = normalize_angle_360(target_position)
+        current = current_position % 360
+        target = target_position % 360
         
         # Calculer les deux chemins possibles
         delta_direct = target - current
@@ -428,12 +426,18 @@ class AdaptiveTrackingManager:
             Dictionnaire d'informations
         """
         params = self.current_params
-
-        # Réutiliser les méthodes existantes (DRY)
-        in_critical_zone = self._is_in_critical_zone(altitude, azimut)
-        altitude_level = self._get_altitude_level(altitude)
-        movement_level = self._get_movement_level(delta)
-
+        
+        # Déterminer les drapeaux d'alerte
+        in_critical_zone = False
+        if self.CRITICAL_ZONE_1:
+            in_critical_zone = (
+                self.CRITICAL_ZONE_1['alt_min'] <= altitude <= self.CRITICAL_ZONE_1['alt_max'] and
+                self.CRITICAL_ZONE_1['az_min'] <= azimut <= self.CRITICAL_ZONE_1['az_max']
+            )
+        
+        is_high_altitude = altitude >= self.ALTITUDE_CRITICAL
+        is_large_movement = abs(delta) >= self.MOVEMENT_CRITICAL
+        
         return {
             'mode': params.mode.value,
             'mode_description': params.description,
@@ -441,10 +445,18 @@ class AdaptiveTrackingManager:
             'correction_threshold': params.correction_threshold,
             'motor_delay': params.motor_delay,
             'in_critical_zone': in_critical_zone,
-            'is_high_altitude': altitude_level in ("critical", "zenith"),
-            'is_large_movement': movement_level in ("critical", "extreme"),
-            'altitude_level': altitude_level,
-            'movement_level': movement_level
+            'is_high_altitude': is_high_altitude,
+            'is_large_movement': is_large_movement,
+            'altitude_level': (
+                "zenith" if altitude >= self.ALTITUDE_ZENITH else
+                "critical" if altitude >= self.ALTITUDE_CRITICAL else
+                "normal"
+            ),
+            'movement_level': (
+                "extreme" if abs(delta) >= self.MOVEMENT_EXTREME else
+                "critical" if abs(delta) >= self.MOVEMENT_CRITICAL else
+                "normal"
+            )
         }
 
 

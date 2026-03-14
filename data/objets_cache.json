@@ -308,5 +308,185 @@
     "type": "Unknown",
     "source": "SIMBAD",
     "date_ajout": "2025-12-25 18:19:20"
+  },
+  "VDB14": {
+    "nom": "HD  21291",
+    "ad": "03h29m04.13s",
+    "dec": "59°56'25.20\"",
+    "ra_deg": 52.267220373399994,
+    "dec_deg": 59.940333656830006,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-29 16:42:09"
+  },
+  "NGC2146": {
+    "nom": "NGC  2146",
+    "ad": "06h18m37.71s",
+    "dec": "78°21'25.27\"",
+    "ra_deg": 94.657125,
+    "dec_deg": 78.35701944444443,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-29 18:39:16"
+  },
+  "NGC3079": {
+    "nom": "NGC  3079",
+    "ad": "10h01m57.88s",
+    "dec": "55°40'47.45\"",
+    "ra_deg": 150.49116244333,
+    "dec_deg": 55.67984715509,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 00:42:50"
+  },
+  "ALTAIR": {
+    "nom": "* alf Aql",
+    "ad": "19h50m47.00s",
+    "dec": "08°52'05.96\"",
+    "ra_deg": 297.69582729638694,
+    "dec_deg": 8.868321196436963,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 13:30:03"
+  },
+  "MATAR": {
+    "nom": "* eta Peg",
+    "ad": "22h43m00.13s",
+    "dec": "30°13'16.37\"",
+    "ra_deg": 340.75053685395,
+    "dec_deg": 30.221214713719995,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 16:37:05"
+  },
+  "ALGENIB": {
+    "nom": "* gam Peg",
+    "ad": "00h13m14.15s",
+    "dec": "15°11'00.95\"",
+    "ra_deg": 3.3089681209050004,
+    "dec_deg": 15.18359842959389,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 18:26:02"
+  },
+  "NGC2336": {
+    "nom": "NGC  2336",
+    "ad": "07h27m04.05s",
+    "dec": "80°10'41.05\"",
+    "ra_deg": 111.76687500000001,
+    "dec_deg": 80.17806944444445,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 18:28:59"
+  },
+  "M76": {
+    "nom": "M  76",
+    "ad": "01h42m19.66s",
+    "dec": "51°34'31.53\"",
+    "ra_deg": 25.58189905342,
+    "dec_deg": 51.57542638057,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-30 19:11:02"
+  },
+  "NGC 3718": {
+    "nom": "NGC  3718",
+    "ad": "11h32m34.86s",
+    "dec": "53°04'04.52\"",
+    "ra_deg": 173.14523824612,
+    "dec_deg": 53.0679222839,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2025-12-31 01:06:53"
+  },
+  "NU DRAGON": {
+    "nom": "* nu. Dra",
+    "ad": "17h32m13.00s",
+    "dec": "55°10'42.00\"",
+    "ra_deg": 263.0541666666667,
+    "dec_deg": 55.17833333333333,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-01 12:28:57"
+  },
+  "ZETA LYRA": {
+    "nom": "* zet Lyr",
+    "ad": "18h44m46.36s",
+    "dec": "37°36'18.40\"",
+    "ra_deg": 281.1931666666667,
+    "dec_deg": 37.605111111111114,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-01 12:34:26"
+  },
+  "ZET LYRA": {
+    "nom": "* zet Lyr",
+    "ad": "18h44m46.36s",
+    "dec": "37°36'18.40\"",
+    "ra_deg": 281.1931666666667,
+    "dec_deg": 37.605111111111114,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-01 12:44:42"
+  },
+  "M57": {
+    "nom": "M  57",
+    "ad": "18h53m35.10s",
+    "dec": "33°01'44.88\"",
+    "ra_deg": 283.39623652463,
+    "dec_deg": 33.029134246539996,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-01 12:47:28"
+  },
+  "SADALBARI": {
+    "nom": "* mu. Peg",
+    "ad": "22h50m00.19s",
+    "dec": "24°36'05.69\"",
+    "ra_deg": 342.50080447836956,
+    "dec_deg": 24.601581283481668,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-02 16:26:07"
+  },
+  "SCHEAT": {
+    "nom": "* bet Peg",
+    "ad": "23h03m46.46s",
+    "dec": "28°04'58.03\"",
+    "ra_deg": 345.9435727452067,
+    "dec_deg": 28.082787124606668,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-02 16:27:05"
+  },
+  "ALGOL": {
+    "nom": "* bet Per",
+    "ad": "03h08m10.13s",
+    "dec": "40°57'20.33\"",
+    "ra_deg": 47.04221855625,
+    "dec_deg": 40.95564667027778,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-02 16:33:54"
+  },
+  "ABELL 370": {
+    "nom": "ACO   370",
+    "ad": "02h39m50.50s",
+    "dec": "-01°35'08.00\"",
+    "ra_deg": 39.96041666666667,
+    "dec_deg": -1.5855555555555556,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-06 15:11:29"
+  },
+  "IC 434": {
+    "nom": "IC  434",
+    "ad": "05h41m00.00s",
+    "dec": "-02°30'00.00\"",
+    "ra_deg": 85.25,
+    "dec_deg": -2.5,
+    "type": "Unknown",
+    "source": "SIMBAD",
+    "date_ajout": "2026-01-06 22:09:26"
   }
 }

@@ -9,7 +9,12 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-None — all requirements validated for v5.0
+- Synchroniser core/ et services/ sur le code production DriftApp_v4_6
+- Code review complète sur la bonne base de code
+- Refactoring core (config, hardware, tracking, observatoire, utils)
+- Refactoring services (motor_service, command_handlers, ipc_manager)
+- Suite de tests alignée et couverture étendue
+- Validation fonctionnelle complète
 
 ### Validated
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
@@ -72,8 +77,9 @@ Quick Reference:
 |-------|-------|
 | Version | 5.0.0 |
 | Last milestone | v5.0 Interface Moderne (2026-02-22) |
-| Status | Stable — ready for next milestone |
+| Current milestone | v5.1 Synchronisation & Qualité |
+| Status | In progress |
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-02-22 after v5.0 Interface Moderne complete*
+*Last updated: 2026-03-14 — Milestone v5.1 created*

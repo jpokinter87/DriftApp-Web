@@ -13,12 +13,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from core.config.config import IPC_ENCODER_POSITION
-from core.exceptions import EncoderError
-from core.utils.angle_utils import normalize_angle_360
-
-# Alias for backward compatibility (re-exported in moteur.py)
-DAEMON_JSON = IPC_ENCODER_POSITION
+DAEMON_JSON = Path("/dev/shm/ems22_position.json")
 
 
 class StaleDataError(RuntimeError):
@@ -125,7 +120,7 @@ class DaemonEncoderReader:
                             f"Données encodeur périmées ({age_ms:.0f}ms > {max_age_ms:.0f}ms)"
                         )
 
-                angle = normalize_angle_360(float(data.get("angle", 0.0)))
+                angle = float(data.get("angle", 0.0)) % 360.0
                 status = data.get("status", "OK")
 
                 if status.startswith("OK"):
@@ -144,10 +139,7 @@ class DaemonEncoderReader:
 
             except json.JSONDecodeError as e:
                 if elapsed_ms > timeout_ms:
-                    raise EncoderError(
-                        f"Erreur lecture démon: {e}",
-                        daemon_path=str(self.daemon_path)
-                    ) from e
+                    raise RuntimeError(f"Erreur lecture démon: {e}")
                 time.sleep(0.01)
 
     def read_status(self) -> Optional[dict]:

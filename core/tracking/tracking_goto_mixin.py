@@ -15,7 +15,7 @@ Version: 4.5
 from datetime import datetime
 from typing import Tuple
 
-from core.exceptions import EncoderError, MotorError
+from core.hardware.moteur import MoteurCoupole
 from core.observatoire import PlanetaryEphemerides
 from core.observatoire.catalogue import GestionnaireCatalogue
 
@@ -50,7 +50,7 @@ class TrackingGotoMixin:
             # Vérifier si le daemon est disponible et si l'encodeur est calibré
             # NOTE: On ne vérifie PAS encoder_available car le GOTO initial
             # est une fonctionnalité distincte du feedback boucle fermée
-            encoder_status = self._get_encoder_status()
+            encoder_status = MoteurCoupole.get_daemon_status()
             if not encoder_status:
                 self.logger.debug("Daemon encodeur non disponible")
                 return False, 0.0
@@ -64,7 +64,7 @@ class TrackingGotoMixin:
                 return False, 0.0
 
             # Lire la position réelle
-            real_position = self._get_encoder_angle()
+            real_position = MoteurCoupole.get_daemon_angle()
 
             # Calculer le delta via le chemin le plus court
             delta, path_info = self.adaptive_manager.verify_shortest_path(
@@ -97,7 +97,7 @@ class TrackingGotoMixin:
             )
             return False, 0.0
 
-        except (EncoderError, RuntimeError) as e:
+        except Exception as e:
             self.logger.debug(f"Daemon non accessible: {e}")
             return False, 0.0
 
@@ -141,7 +141,7 @@ class TrackingGotoMixin:
             return
 
         try:
-            encoder_status = self._get_encoder_status()
+            encoder_status = MoteurCoupole.get_daemon_status()
             if encoder_status:
                 is_calibrated = encoder_status.get('calibrated', False)
                 if is_calibrated:
@@ -152,13 +152,13 @@ class TrackingGotoMixin:
                         "Passez par le switch (45°) pour le mode absolu."
                     )
 
-            real_position = self._get_encoder_angle()
+            real_position = MoteurCoupole.get_daemon_angle()
             self.encoder_offset = position_cible - real_position
             self.logger.info(
                 f"SYNC: Coupole={position_cible:.1f}° | "
                 f"Encodeur={real_position:.1f}° | Offset={self.encoder_offset:.1f}°"
             )
-        except (EncoderError, RuntimeError) as e:
+        except Exception as e:
             self.logger.warning(f"Encodeur: {e}")
             self.encoder_available = False
 
@@ -178,7 +178,7 @@ class TrackingGotoMixin:
         """
         try:
             # Lire la position actuelle de l'encodeur
-            position_actuelle = self._get_encoder_angle()
+            position_actuelle = MoteurCoupole.get_daemon_angle()
 
             self.logger.info(
                 f"GOTO initial: {position_actuelle:.1f}° → {position_cible:.1f}° "
@@ -211,12 +211,12 @@ class TrackingGotoMixin:
 
                 # Mettre à jour l'offset encodeur après le GOTO
                 try:
-                    position_finale = self._get_encoder_angle()
+                    position_finale = MoteurCoupole.get_daemon_angle()
                     self.encoder_offset = position_cible - position_finale
                     self.logger.info(
                         f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
                     )
-                except (EncoderError, RuntimeError) as e:
+                except Exception as e:
                     self.logger.debug(f"Erreur recalcul offset encodeur (non critique): {e}")
 
             else:
@@ -230,7 +230,7 @@ class TrackingGotoMixin:
             # NE PAS modifier position_relative - elle est déjà correcte !
             # position_relative = position_cible (mise par _setup_initial_position)
 
-        except (EncoderError, MotorError, RuntimeError) as e:
+        except Exception as e:
             self.logger.error(f"Erreur GOTO initial: {e}")
             # En cas d'erreur, position_relative reste à position_cible
             # ce qui est l'hypothèse de départ

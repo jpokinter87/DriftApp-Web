@@ -15,14 +15,12 @@ import logging
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
-from core.exceptions import EncoderError
 from core.hardware.moteur import MoteurCoupole
 from core.hardware.moteur_simule import MoteurSimule
 from core.observatoire import AstronomicalCalculations
 from core.observatoire import PlanetaryEphemerides
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 from core.tracking.tracking_logger import TrackingLogger
-from core.utils.angle_utils import normalize_angle_360
 
 # Mixins
 from core.tracking.tracking_state_mixin import TrackingStateMixin
@@ -116,10 +114,10 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             return
 
         try:
-            pos = self._get_encoder_angle(timeout_ms=200)
+            pos = MoteurCoupole.get_daemon_angle(timeout_ms=200)
             self.encoder_available = True
             self.logger.info(f"Encodeur actif - Position: {pos:.1f}°")
-        except (EncoderError, RuntimeError) as e:
+        except Exception as e:
             self.logger.warning(f"Encodeur config activé mais démon inaccessible: {e}")
 
         if not self.encoder_available:
@@ -253,11 +251,11 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         if skip_goto:
             # Utiliser la position réelle comme point de départ
             try:
-                real_position = self._get_encoder_angle()
+                real_position = MoteurCoupole.get_daemon_angle()
                 self._setup_initial_position(azimut, altitude, real_position)
                 self._sync_encoder(real_position)
                 self.logger.info(f"Position initiale depuis encodeur: {real_position:.1f}°")
-            except (EncoderError, RuntimeError):
+            except Exception:
                 # Fallback: utiliser la position cible calculée
                 self._setup_initial_position(azimut, altitude, position_cible_init)
                 self._sync_encoder(position_cible_init)
@@ -301,7 +299,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         """Log le démarrage du suivi."""
         self.logger.info(
             f"Méthode: ABAQUE | Az={azimut:.1f}° Alt={altitude:.1f}° | "
-            f"Position cible={normalize_angle_360(position_cible):.1f}°"
+            f"Position cible={position_cible % 360:.1f}°"
         )
 
     def _format_start_message(self, objet_name: str, azimut: float,
@@ -311,7 +309,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             f"Suivi démarré : {objet_name}\n"
             f"  RA={self.ra_deg:.2f}° DEC={self.dec_deg:.2f}°\n"
             f"  Azimut: {azimut:.1f}° | Altitude: {altitude:.1f}°\n"
-            f"  Position coupole: {normalize_angle_360(position_cible):.1f}°\n"
+            f"  Position coupole: {position_cible % 360:.1f}°\n"
             f"  Méthode: ABAQUE"
         )
 
@@ -362,7 +360,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             'obj_az_raw': azimut,
             'obj_alt': altitude,
             'position_cible': position_cible_lissee,
-            'position_relative': normalize_angle_360(self.position_relative),
+            'position_relative': self.position_relative % 360,
             'remaining_seconds': remaining,
             'total_corrections': self.total_corrections,
             'total_movement': self.total_movement,
@@ -431,7 +429,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         except ImportError:
             # Module session non disponible (ex: tests sans Django)
             self.logger.debug("Module session non disponible - sauvegarde ignorée")
-        except (ImportError, OSError) as e:
+        except Exception as e:
             self.logger.warning(f"Erreur sauvegarde session: {e}")
 
     def _finalize_stop(self):

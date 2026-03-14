@@ -16,8 +16,6 @@ import logging
 import time
 from typing import Dict, Any, Optional
 
-from core.utils.angle_utils import normalize_angle_360, shortest_angular_distance
-
 
 # Position simulée par instance (isolation des tests)
 # Le module maintient un registre des positions par ID d'instance
@@ -39,7 +37,7 @@ def set_simulated_position(position: float):
     la position avant une commande en mode simulation.
     """
     global _global_position
-    _global_position = normalize_angle_360(position)
+    _global_position = position % 360
 
 
 def get_simulated_position() -> float:
@@ -58,7 +56,7 @@ def _get_instance_position(instance_id: int) -> float:
 
 def _set_instance_position(instance_id: int, position: float):
     """Définit la position d'une instance spécifique."""
-    _instance_positions[instance_id] = normalize_angle_360(position)
+    _instance_positions[instance_id] = position % 360
 
 
 def reset_all_simulated_positions():
@@ -129,7 +127,7 @@ class MoteurSimule:
         delta = self.degrees_per_step * self.direction
 
         # Mettre à jour la position de cette instance
-        new_pos = normalize_angle_360(_get_instance_position(self._instance_id) + delta)
+        new_pos = (_get_instance_position(self._instance_id) + delta) % 360
         _set_instance_position(self._instance_id, new_pos)
 
         # Synchroniser la position globale pour les handlers
@@ -189,7 +187,7 @@ class MoteurSimule:
             time.sleep(movement_time)
 
         # Mettre à jour la position de cette instance
-        new_pos = normalize_angle_360(_get_instance_position(self._instance_id) + angle_deg)
+        new_pos = (_get_instance_position(self._instance_id) + angle_deg) % 360
         _set_instance_position(self._instance_id, new_pos)
 
         # Synchroniser la position globale pour les handlers
@@ -207,8 +205,8 @@ class MoteurSimule:
             vitesse: Délai nominal (ignoré en simulation)
             use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
         """
-        position_cible = normalize_angle_360(position_cible_deg)
-        position_actuelle = normalize_angle_360(position_actuelle_deg)
+        position_cible = position_cible_deg % 360
+        position_actuelle = position_actuelle_deg % 360
 
         diff = position_cible - position_actuelle
         if diff > 180:
@@ -275,8 +273,12 @@ class MoteurSimule:
         # Utiliser la position de cette instance
         position_initiale = _get_instance_position(self._instance_id)
 
-        # Calculer le delta (chemin le plus court)
-        delta = shortest_angular_distance(position_initiale, angle_cible)
+        # Calculer le delta
+        delta = angle_cible - position_initiale
+        while delta > 180:
+            delta -= 360
+        while delta < -180:
+            delta += 360
 
         # Appliquer le mouvement (inclut le délai simulé)
         self.rotation(delta, vitesse)
@@ -305,7 +307,7 @@ class MoteurSimule:
         """
         # Utiliser la position de cette instance
         current_pos = _get_instance_position(self._instance_id)
-        angle_cible = normalize_angle_360(current_pos + delta_deg)
+        angle_cible = (current_pos + delta_deg) % 360
         return self.rotation_avec_feedback(angle_cible=angle_cible, **kwargs)
 
     # =========================================================================

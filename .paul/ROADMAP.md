@@ -4,10 +4,48 @@
 Application web Django embarquee sur Raspberry Pi pour le controle d'une coupole astronomique.
 
 ## Current Milestone
-None active.
+**v5.1 Synchronisation & Qualité**
+Status: In Progress
+Phases: 0 of 6 complete
 
-## Next Milestone
-Run /paul:discuss-milestone or /paul:milestone to define.
+| Phase | Name | Plans | Status | Completed |
+|-------|------|-------|--------|-----------|
+| 1 | Sync Production | 2 | Complete ✓ | 2026-03-14 |
+| 2 | Audit Code | TBD | Not started | - |
+| 3 | Refactoring Core | TBD | Not started | - |
+| 4 | Refactoring Services | TBD | Not started | - |
+| 5 | Tests | TBD | Not started | - |
+| 6 | Validation | TBD | Not started | - |
+
+### Phase 1: Sync Production
+
+Focus: Aligner core/ et services/ sur le code production DriftApp_v4_6, adapter web/ (views, urls) sans toucher templates/static v5.0
+Plans: TBD (defined during /paul:plan)
+
+### Phase 2: Audit Code
+
+Focus: Code review complète sur la bonne base, identifier les vrais problèmes de qualité
+Plans: TBD (defined during /paul:plan)
+
+### Phase 3: Refactoring Core
+
+Focus: Config, hardware, tracking, observatoire, utils — améliorations qualité
+Plans: TBD (defined during /paul:plan)
+
+### Phase 4: Refactoring Services
+
+Focus: motor_service, command_handlers, ipc_manager, simulation
+Plans: TBD (defined during /paul:plan)
+
+### Phase 5: Tests
+
+Focus: Suite de tests alignée sur le vrai code, couverture étendue, nouveaux tests
+Plans: TBD (defined during /paul:plan)
+
+### Phase 6: Validation
+
+Focus: Tests d'intégration, vérification fonctionnelle complète
+Plans: TBD (defined during /paul:plan)
 
 ## Completed Milestones
 
@@ -26,4 +64,4 @@ Run /paul:discuss-milestone or /paul:milestone to define.
 
 ---
 *Roadmap created: 2026-02-22*
-*Last updated: 2026-02-22 — Milestone v5.0 archived*
+*Last updated: 2026-03-14 — Milestone v5.1 created*

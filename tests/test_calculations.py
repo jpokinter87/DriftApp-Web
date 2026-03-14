@@ -71,8 +71,8 @@ class TestNormalisationAngles:
     def test_normaliser_angle_180_negatif(self, calc):
         """Normalisation vers [-180, 180] - angles négatifs."""
         assert calc._normaliser_angle_180(-90) == -90
-        # Note: -180° et 180° sont le même point sur le cercle, retourne 180
-        assert calc._normaliser_angle_180(-180) == 180
+        # Note: -180 reste -180 (bord de l'intervalle [-180, 180])
+        assert calc._normaliser_angle_180(-180) == -180
         assert calc._normaliser_angle_180(-270) == 90
 
     def test_normaliser_angle_360(self, calc):
@@ -158,12 +158,10 @@ class TestTempsSideral:
         assert 14 < diff < 16
 
     def test_jour_julien(self, calc):
-        """Test du calcul du jour julien (fonction partagée dans angle_utils)."""
-        from core.utils.angle_utils import calculate_julian_day
-
+        """Test du calcul du jour julien."""
         # J2000.0 = 1er janvier 2000 à 12h TU
         date = datetime(2000, 1, 1, 12, 0, 0)
-        jd = calculate_julian_day(date)
+        jd = calc._calculate_julian_day(date)
 
         assert jd == pytest.approx(2451545.0, abs=0.01)
 

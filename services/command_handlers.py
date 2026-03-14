@@ -23,7 +23,7 @@ from core.hardware.moteur_simule import set_simulated_position, get_simulated_po
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
-from core.utils.angle_utils import normalize_angle_360, shortest_angular_distance
+from core.utils.angle_utils import shortest_angular_distance
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +161,7 @@ class GotoHandler:
                     angle, delta, speed, current_status
                 )
 
-        except (RuntimeError, ValueError, OSError) as e:
+        except Exception as e:
             logger.error(f"Erreur GOTO: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
@@ -283,12 +283,12 @@ class JogHandler:
                 current_status['position'] = pos_finale
             else:
                 current = current_status.get('position', 0)
-                current_status['position'] = normalize_angle_360(current + delta)
+                current_status['position'] = (current + delta) % 360
 
             current_status['status'] = 'idle'
             logger.info(f"JOG terminé: position={current_status['position']:.1f}°")
 
-        except (RuntimeError, ValueError, OSError) as e:
+        except Exception as e:
             logger.error(f"Erreur JOG: {e}")
             current_status['status'] = 'error'
             current_status['error'] = str(e)
@@ -361,7 +361,7 @@ class ContinuousHandler:
 
                 if self.simulation_mode:
                     current = get_simulated_position()
-                    new_pos = normalize_angle_360(current + delta_per_step)
+                    new_pos = (current + delta_per_step) % 360
                     set_simulated_position(new_pos)
                     current_status['position'] = new_pos
                 else:
@@ -378,7 +378,7 @@ class ContinuousHandler:
                 self.status_callback(current_status)
                 time.sleep(step_interval)
 
-            except (RuntimeError, OSError) as e:
+            except Exception as e:
                 logger.error(f"Erreur mouvement continu: {e}")
                 break
 
@@ -414,7 +414,7 @@ class TrackingHandler:
         try:
             rotate_log = _get_rotate_log_func()
             rotate_log(object_name)
-        except (OSError, IOError) as e:
+        except Exception as e:
             logger.warning(f"Impossible de créer le fichier de log dédié: {e}")
 
         logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
@@ -487,7 +487,7 @@ class TrackingHandler:
                 current_status['goto_info'] = None
                 current_status['error'] = "Échec démarrage suivi"
 
-        except (RuntimeError, ValueError, OSError, FileNotFoundError) as e:
+        except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
             current_status['status'] = 'error'
             current_status['tracking_object'] = None
@@ -504,7 +504,7 @@ class TrackingHandler:
         if self.session:
             if self.simulation_mode:
                 status = self.session.get_status()
-                final_pos = normalize_angle_360(status.get('position_relative', 0))
+                final_pos = status.get('position_relative', 0) % 360
                 set_simulated_position(final_pos)
                 current_status['position'] = final_pos
 
@@ -562,7 +562,7 @@ class TrackingHandler:
                 current_status['status'] = 'idle'
                 current_status['tracking_object'] = None
 
-        except (RuntimeError, ValueError) as e:
+        except Exception as e:
             logger.error(f"Erreur mise à jour suivi: {e}")
 
     @property

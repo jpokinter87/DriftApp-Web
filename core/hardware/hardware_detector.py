@@ -12,8 +12,6 @@ import time
 from pathlib import Path
 from typing import Tuple, Optional
 
-from core.config.config import IPC_ENCODER_POSITION
-
 logger = logging.getLogger(__name__)
 
 
@@ -119,13 +117,15 @@ class HardwareDetector:
         Returns:
             Tuple (is_available, error_message, test_position)
         """
+        daemon_json = Path("/dev/shm/ems22_position.json")
+        
         # Vérifier si le fichier existe
-        if not IPC_ENCODER_POSITION.exists():
+        if not daemon_json.exists():
             return False, "Démon encodeur non actif (fichier JSON absent)", None
         
         try:
             # Lire le fichier JSON avec verrou fcntl
-            with open(IPC_ENCODER_POSITION, "r") as f:
+            with open(daemon_json, "r") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
                 try:
                     data = json.load(f)
@@ -184,7 +184,7 @@ class HardwareDetector:
                 spi_info["spi_module"] = "loaded"
             else:
                 spi_info["spi_module"] = "not loaded"
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        except:
             spi_info["spi_module"] = "unknown"
 
         return spi_info
@@ -199,13 +199,13 @@ class HardwareDetector:
         """
         try:
             result = subprocess.run(
-                ["ps", "aux"],
-                capture_output=True,
-                text=True,
+                ["ps", "aux"], 
+                capture_output=True, 
+                text=True, 
                 timeout=2
             )
             return "ems22d_calibrated" in result.stdout
-        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+        except:
             return False
 
     @staticmethod

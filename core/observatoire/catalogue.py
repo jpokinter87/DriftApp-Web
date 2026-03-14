@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 try:
     import astropy  # noqa: F401
     ASTROPY_AVAILABLE = True
-except ImportError:
+except Exception:
     ASTROPY_AVAILABLE = False
 
 class GestionnaireCatalogue:
@@ -71,7 +71,7 @@ class GestionnaireCatalogue:
             try:
                 with open(self.cache_file, 'r', encoding='utf-8') as f:
                     self.objets = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
+            except Exception as e:
                 logger.warning(f"Erreur lors du chargement du cache: {e}")
                 self.objets = {}
     
@@ -88,7 +88,7 @@ class GestionnaireCatalogue:
             
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(self.objets, f, indent=2, ensure_ascii=False)
-        except OSError as e:
+        except Exception as e:
             logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
 
 
@@ -178,7 +178,7 @@ class GestionnaireCatalogue:
 
             return objet
 
-        except (ConnectionError, TimeoutError, OSError) as e:
+        except Exception as e:
             logger.warning(f"Erreur lors de la recherche de {identifiant}: {e}")
             return None
 
@@ -270,6 +270,8 @@ class GestionnaireCatalogue:
             # Pour les planètes, on a besoin de la position de l'observateur
             # On utilise les coordonnées par défaut du config.json
             try:
+                import json
+                from pathlib import Path
                 cfg_path = Path("data") / "config.json"
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
@@ -287,11 +289,10 @@ class GestionnaireCatalogue:
                         "name": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet",
-                        "is_planet": True
+                        "type": "planet"
                     }
-            except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-                logger.debug(f"Impossible de calculer la position de {identifiant}: {e}")
+            except Exception:
+                pass
 
         objet = self.rechercher_catalogue_local(identifiant)
 
