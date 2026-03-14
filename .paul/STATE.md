@@ -5,19 +5,19 @@
 See: .paul/PROJECT.md (updated 2026-03-13)
 
 **Core value:** L'astrophotographe indique l'astre visé et la coupole se positionne puis suit automatiquement le mouvement apparent du ciel, maintenant le cimier aligné avec le télescope.
-**Current focus:** v5.0 — Phase 2 Refactoring & Corrections (Plan 02-01 COMPLETE)
+**Current focus:** v5.0 — Phase 2 Refactoring & Corrections (Plan 02-02 COMPLETE)
 
 ## Current Position
 
 Milestone: v5.0 Qualité & Infrastructure
 Phase: 2 of 6 (Refactoring & Corrections) — In Progress
-Plan: 02-01 complete (Config unification + FAST_TRACK cleanup)
+Plan: 02-02 complete (Bugs latents H-01, H-04, H-14, M-27)
 Status: Loop closed, ready for next PLAN
-Last activity: 2026-03-13 — Plan 02-01 unified
+Last activity: 2026-03-14 — Plan 02-02 unified
 
 Progress:
-- Milestone: [████░░░░░░] 38%
-- Phase 2: [██░░░░░░░░] 15%
+- Milestone: [████░░░░░░] 40%
+- Phase 2: [████░░░░░░] 30%
 
 ## Loop Position
 
@@ -30,7 +30,7 @@ PLAN ──▶ APPLY ──▶ UNIFY
 ## Performance Metrics
 
 **Tests:**
-- Total: 411 passent, 1 skippé
+- Total: 416 passent, 0 skippé
 - Couverture globale: 53%
 - Modules >80%: angle_utils 100%, config_loader 95%, calculations 94%, moteur_simule 94%, tracking_logger 94%, abaque 88%, catalogue 85%, adaptive_tracking 85%, hardware/views 83%
 
@@ -54,10 +54,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-13
-Stopped at: Plan 02-01 loop closed
-Next action: /paul:plan pour Plan 02-02 (Bugs latents : H-01, H-04, H-14, etc.)
-Resume file: .paul/phases/02-refactoring-corrections/02-01-SUMMARY.md
+Last session: 2026-03-14
+Stopped at: Plan 02-02 loop closed
+Next action: /paul:plan pour Plan 02-03 (Duplication + code mort restant)
+Resume file: .paul/phases/02-refactoring-corrections/02-02-SUMMARY.md
 
 ---
 *STATE.md — Updated after every significant action*

@@ -145,7 +145,7 @@ class ObjectListView(APIView):
 
     def get(self, request):
         catalogue = GestionnaireCatalogue()
-        objects = catalogue.get_objets_disponibles()
+        objects = catalogue.objets
 
         return Response({
             'count': len(objects),

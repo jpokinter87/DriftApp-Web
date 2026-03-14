@@ -278,10 +278,12 @@ class GestionnaireCatalogue:
                 if pos:
                     ra_deg, dec_deg = pos
                     return {
-                        "name": identifiant.capitalize(),
+                        "nom": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet"
+                        "type": "planet",
+                        "is_planet": True,
+                        "source": "ephemerides",
                     }
             except Exception:
                 pass

@@ -285,6 +285,15 @@ class TestTrackingStatusView:
         assert response.status_code == 200
 
 
+class TestObjectListView:
+    def test_list_objects(self, api_client, mock_ipc):
+        """M-27 corrigé : ObjectListView ne crashe plus."""
+        response = api_client.get("/api/tracking/objects/")
+        assert response.status_code == 200
+        assert "count" in response.data
+        assert "objects" in response.data
+
+
 class TestObjectSearchView:
     def test_search_empty_query(self, api_client, mock_ipc):
         response = api_client.get("/api/tracking/search/?q=")

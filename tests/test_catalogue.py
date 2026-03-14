@@ -140,14 +140,14 @@ class TestRechercher:
             assert "ra_deg" in result
             assert "dec_deg" in result
 
-    def test_planet_result_structure_bug(self, populated_catalogue):
-        """Bug connu H-14 : les planètes retournent 'name' au lieu de 'nom'
-        et n'incluent pas 'is_planet'."""
+    def test_planet_result_structure(self, populated_catalogue):
+        """H-14 corrigé : les planètes retournent 'nom' et 'is_planet'."""
         result = populated_catalogue.rechercher("Jupiter", utiliser_api=False)
         if result is not None:
-            # Documente le bug : 'name' au lieu de 'nom'
-            assert "name" in result  # Bug : devrait être 'nom' pour cohérence
-            assert "is_planet" not in result  # Bug : manquant, tracker vérifie ce champ
+            assert "nom" in result
+            assert result["is_planet"] is True
+            assert result["source"] == "ephemerides"
+            assert "name" not in result  # Plus de clé incohérente
 
 
 # =============================================================================

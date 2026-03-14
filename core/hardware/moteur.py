@@ -18,6 +18,7 @@ Date: 9 décembre 2025
 
 import json
 import logging
+import math
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -100,6 +101,12 @@ class DaemonEncoderReader:
                 elif status.startswith("SPI"):
                     self.logger.warning(f"Démon encodeur: {status}")
                     return angle
+                else:
+                    # Statut inconnu (CALIBRATING, ERROR, etc.) — timeout au lieu de boucle infinie
+                    if elapsed_ms > timeout_ms:
+                        self.logger.warning(f"Démon encodeur statut inconnu: {status}, retour angle={angle}")
+                        return angle
+                    time.sleep(0.01)
 
             except json.JSONDecodeError as e:
                 if elapsed_ms > timeout_ms:
@@ -150,7 +157,10 @@ class DaemonEncoderReader:
         if not positions:
             raise RuntimeError("Impossible de lire la position du démon")
 
-        return sum(positions) / len(positions)
+        # Moyenne circulaire (atan2) pour gérer correctement la frontière 0°/360°
+        sin_sum = sum(math.sin(math.radians(p)) for p in positions)
+        cos_sum = sum(math.cos(math.radians(p)) for p in positions)
+        return math.degrees(math.atan2(sin_sum, cos_sum)) % 360.0
 
 
 # Instance globale pour usage statique (compatibilité)
