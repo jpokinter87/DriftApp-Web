@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     # Apps DriftApp
     'tracking',
     'hardware',
+    'health',
 ]
 
 MIDDLEWARE = [
