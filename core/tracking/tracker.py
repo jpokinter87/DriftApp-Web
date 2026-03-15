@@ -40,25 +40,20 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     """
 
     # Mapping des icônes de mode
-    MODE_ICONS = {
-        'normal': '🟢',
-        'critical': '🟠',
-        'continuous': '🔴',
-        'fast_track': '🟣'
-    }
+    MODE_ICONS = {"normal": "🟢", "critical": "🟠", "continuous": "🔴", "fast_track": "🟣"}
 
     def __init__(
-            self,
-            moteur: Optional[MoteurCoupole | MoteurSimule],
-            calc: AstronomicalCalculations,
-            logger: TrackingLogger,
-            seuil: float = 0.5,
-            intervalle: int = 300,
-            abaque_file: str = None,
-            adaptive_config=None,
-            motor_config=None,
-            encoder_config=None,
-            goto_callback=None
+        self,
+        moteur: Optional[MoteurCoupole | MoteurSimule],
+        calc: AstronomicalCalculations,
+        logger: TrackingLogger,
+        seuil: float = 0.5,
+        intervalle: int = 300,
+        abaque_file: str = None,
+        adaptive_config=None,
+        motor_config=None,
+        encoder_config=None,
+        goto_callback=None,
     ):
         """
         Initialise une session de suivi.
@@ -86,6 +81,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         # Instance unique de PlanetaryEphemerides (évite de recréer à chaque correction)
         from core.observatoire import PlanetaryEphemerides
+
         self._ephemerides = PlanetaryEphemerides()
 
         # Initialisation par étapes
@@ -110,6 +106,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             return
 
         from core.hardware.hardware_detector import HardwareDetector
+
         encoder_ok, encoder_error, _ = HardwareDetector.check_encoder_daemon()
 
         if not encoder_ok:
@@ -129,9 +126,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     def _init_adaptive_manager(self, intervalle, seuil, adaptive_config):
         """Initialise le gestionnaire adaptatif."""
         self.adaptive_manager = AdaptiveTrackingManager(
-            base_interval=intervalle,
-            base_threshold=seuil,
-            adaptive_config=adaptive_config
+            base_interval=intervalle, base_threshold=seuil, adaptive_config=adaptive_config
         )
 
     def _init_abaque(self, abaque_file):
@@ -140,6 +135,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             raise ValueError("abaque_file requis")
 
         from core.tracking.abaque_manager import AbaqueManager
+
         self.abaque_manager = AbaqueManager(abaque_file)
 
         if not self.abaque_manager.load_abaque():
@@ -160,10 +156,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         """
         if self.is_planet:
             planet_pos = self._ephemerides.get_planet_position(
-                self.objet.capitalize(),
-                now,
-                self.calc.latitude,
-                self.calc.longitude
+                self.objet.capitalize(), now, self.calc.latitude, self.calc.longitude
             )
             if planet_pos:
                 ra, dec = planet_pos
@@ -174,9 +167,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         return self.calc.calculer_coords_horizontales(self.ra_deg, self.dec_deg, now)
 
     def _calculate_target_position(
-        self,
-        azimut_objet: float,
-        altitude_objet: float
+        self, azimut_objet: float, altitude_objet: float
     ) -> Tuple[float, dict]:
         """
         Calcule la position cible de la coupole par interpolation de l'abaque.
@@ -189,11 +180,8 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             Tuple (position_cible, infos_debug)
         """
         # Méthode abaque : interpolation des mesures réelles
-        position_cible, infos = self.abaque_manager.get_dome_position(
-            altitude_objet,
-            azimut_objet
-        )
-        infos['method'] = 'abaque'
+        position_cible, infos = self.abaque_manager.get_dome_position(altitude_objet, azimut_objet)
+        infos["method"] = "abaque"
 
         return position_cible, infos
 
@@ -283,29 +271,29 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         # Log et message de retour
         self._log_start(objet_name, azimut, altitude, position_cible_init)
 
-        return True, self._format_start_message(
-            objet_name, azimut, altitude, position_cible_init
-        )
+        return True, self._format_start_message(objet_name, azimut, altitude, position_cible_init)
 
     def _start_tracking(self, objet_name: str, now: datetime, initial_interval: int = None):
         """Active le suivi."""
         self.running = True
-        self.drift_tracking['start_time'] = now
+        self.drift_tracking["start_time"] = now
         # Utiliser l'intervalle adaptatif si fourni, sinon l'intervalle par défaut
         interval = initial_interval if initial_interval is not None else self.intervalle
         self.next_correction_time = now + timedelta(seconds=interval)
-        self.tracking_logger.start_tracking(objet_name, f"{self.ra_deg:.2f}°", f"{self.dec_deg:.2f}°")
+        self.tracking_logger.start_tracking(
+            objet_name, f"{self.ra_deg:.2f}°", f"{self.dec_deg:.2f}°"
+        )
 
-    def _log_start(self, objet_name: str, azimut: float, altitude: float,
-                   position_cible: float):
+    def _log_start(self, objet_name: str, azimut: float, altitude: float, position_cible: float):
         """Log le démarrage du suivi."""
         self.logger.info(
             f"Méthode: ABAQUE | Az={azimut:.1f}° Alt={altitude:.1f}° | "
             f"Position cible={position_cible % 360:.1f}°"
         )
 
-    def _format_start_message(self, objet_name: str, azimut: float,
-                               altitude: float, position_cible: float) -> str:
+    def _format_start_message(
+        self, objet_name: str, azimut: float, altitude: float, position_cible: float
+    ) -> str:
         """Formate le message de démarrage."""
         return (
             f"Suivi démarré : {objet_name}\n"
@@ -327,7 +315,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             Dictionnaire avec les informations de statut
         """
         if not self.running:
-            return {'running': False}
+            return {"running": False}
 
         now = datetime.now()
         azimut, altitude = self._calculate_current_coords(now)
@@ -349,40 +337,46 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         remaining = int((self.next_correction_time - now).total_seconds())
         return max(0, remaining)
 
-    def _build_status_dict(self, azimut: float, altitude: float,
-                           position_cible: float, remaining: int,
-                           diag_info: dict, infos: dict) -> dict:
+    def _build_status_dict(
+        self,
+        azimut: float,
+        altitude: float,
+        position_cible: float,
+        remaining: int,
+        diag_info: dict,
+        infos: dict,
+    ) -> dict:
         """Construit le dictionnaire de statut."""
         # Lisser la position cible (Mixin TrackingStateMixin)
         position_cible_lissee = self._smooth_position_cible(position_cible)
 
         return {
-            'running': True,
-            'objet': self.objet,
-            'obj_az_raw': azimut,
-            'obj_alt': altitude,
-            'position_cible': position_cible_lissee,
-            'position_relative': self.position_relative % 360,
-            'remaining_seconds': remaining,
-            'total_corrections': self.total_corrections,
-            'total_movement': self.total_movement,
+            "running": True,
+            "objet": self.objet,
+            "obj_az_raw": azimut,
+            "obj_alt": altitude,
+            "position_cible": position_cible_lissee,
+            "position_relative": self.position_relative % 360,
+            "remaining_seconds": remaining,
+            "total_corrections": self.total_corrections,
+            "total_movement": self.total_movement,
             # Informations adaptatives
-            'adaptive_mode': diag_info['mode'],
-            'adaptive_mode_description': diag_info['mode_description'],
-            'adaptive_interval': diag_info['check_interval'],
-            'adaptive_threshold': diag_info['correction_threshold'],
-            'adaptive_motor_delay': diag_info['motor_delay'],
-            'in_critical_zone': diag_info['in_critical_zone'],
-            'is_high_altitude': diag_info['is_high_altitude'],
-            'is_large_movement': diag_info['is_large_movement'],
-            'mode_icon': self.MODE_ICONS.get(diag_info['mode'], '⚪'),
+            "adaptive_mode": diag_info["mode"],
+            "adaptive_mode_description": diag_info["mode_description"],
+            "adaptive_interval": diag_info["check_interval"],
+            "adaptive_threshold": diag_info["correction_threshold"],
+            "adaptive_motor_delay": diag_info["motor_delay"],
+            "in_critical_zone": diag_info["in_critical_zone"],
+            "is_high_altitude": diag_info["is_high_altitude"],
+            "is_large_movement": diag_info["is_large_movement"],
+            "mode_icon": self.MODE_ICONS.get(diag_info["mode"], "⚪"),
             # Autres informations
-            'steps_correction_factor': self.steps_correction_factor,
-            'encoder_daemon': self.encoder_available,
-            'abaque_method': infos.get('method', 'interpolation'),
-            'in_bounds': infos.get('in_bounds', True),
+            "steps_correction_factor": self.steps_correction_factor,
+            "encoder_daemon": self.encoder_available,
+            "abaque_method": infos.get("method", "interpolation"),
+            "in_bounds": infos.get("in_bounds", True),
             # Offset encodeur (différence entre position logique et encodeur)
-            'encoder_offset': self.encoder_offset,
+            "encoder_offset": self.encoder_offset,
         }
 
     # =========================================================================
@@ -391,8 +385,13 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
     def stop(self):
         """Arrête le suivi, sauvegarde la session et affiche un bilan."""
-        self._log_session_summary()  # Mixin TrackingStateMixin
-        self._save_session_to_file()  # Sauvegarde automatique
+        try:
+            self._log_session_summary()  # Mixin TrackingStateMixin
+        except Exception as e:
+            self.logger.error(
+                f"Erreur log_session_summary (session sera quand même sauvegardée): {e}"
+            )
+        self._save_session_to_file()  # Sauvegarde automatique — toujours exécuté
         self._finalize_stop()
 
     def _save_session_to_file(self):
@@ -412,17 +411,17 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             session_data = self.get_session_data()  # Mixin TrackingStateMixin
 
             # Ajouter les métadonnées de l'objet
-            session_data['object'] = {
-                'name': self.objet,
-                'ra_deg': self.ra_deg,
-                'dec_deg': self.dec_deg,
+            session_data["object"] = {
+                "name": self.objet,
+                "ra_deg": self.ra_deg,
+                "dec_deg": self.dec_deg,
             }
 
             # Ajouter l'heure de fin
-            session_data['timing'] = {
-                'start_time': session_data.pop('start_time'),
-                'end_time': datetime.now().isoformat(),
-                'duration_seconds': session_data.pop('duration_seconds'),
+            session_data["timing"] = {
+                "start_time": session_data.pop("start_time"),
+                "end_time": datetime.now().isoformat(),
+                "duration_seconds": session_data.pop("duration_seconds"),
             }
 
             # Sauvegarder
@@ -444,9 +443,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         self.logger.info("Suivi arrêté")
 
         avg_correction = (
-            self.total_movement / self.total_corrections
-            if self.total_corrections > 0
-            else 0.0
+            self.total_movement / self.total_corrections if self.total_corrections > 0 else 0.0
         )
         self.tracking_logger.stop_tracking("Manuel")
         self.logger.info(

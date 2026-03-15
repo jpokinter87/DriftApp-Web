@@ -55,16 +55,31 @@ from services.command_handlers import GotoHandler, JogHandler, ContinuousHandler
 LOGS_DIR = Path(__file__).parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
 
-# Nombre max de fichiers de log à conserver
-MAX_LOG_FILES = 20
+# Rétention des fichiers de log par âge (en jours)
+MAX_LOG_AGE_DAYS = 7
+# Fallback de sécurité : nombre max absolu de fichiers
+MAX_LOG_FILES_SAFETY = 200
 
 
-def cleanup_old_logs(prefix: str = "motor_service_", keep: int = MAX_LOG_FILES):
-    """Supprime les vieux fichiers de log, garde les N plus récents."""
+def cleanup_old_logs(prefix: str = "motor_service_"):
+    """Supprime les fichiers de log plus anciens que MAX_LOG_AGE_DAYS."""
+    cutoff = time.time() - (MAX_LOG_AGE_DAYS * 86400)
     log_files = sorted(
         LOGS_DIR.glob(f"{prefix}*.log"), key=lambda f: f.stat().st_mtime, reverse=True
     )
-    for old_file in log_files[keep:]:
+    for log_file in log_files:
+        try:
+            if log_file.stat().st_mtime < cutoff:
+                logger_name = log_file.name
+                log_file.unlink()
+                logging.getLogger(__name__).info(f"Log expiré supprimé: {logger_name}")
+        except OSError:
+            pass
+    # Fallback de sécurité : si trop de fichiers malgré la rétention
+    remaining = sorted(
+        LOGS_DIR.glob(f"{prefix}*.log"), key=lambda f: f.stat().st_mtime, reverse=True
+    )
+    for old_file in remaining[MAX_LOG_FILES_SAFETY:]:
         try:
             old_file.unlink()
         except OSError:

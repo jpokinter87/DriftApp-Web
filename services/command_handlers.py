@@ -489,6 +489,9 @@ class TrackingHandler:
         logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
 
         if self.active:
+            logger.info(
+                f"Session précédente active — arrêt et sauvegarde avant nouvelle cible: {object_name}"
+            )
             self.stop(current_status)
 
         # IMPORTANT: Signaler immédiatement que le tracking est en cours d'initialisation
@@ -577,7 +580,16 @@ class TrackingHandler:
                 set_simulated_position(final_pos)
                 current_status["position"] = final_pos
 
-            self.session.stop()
+            try:
+                self.session.stop()
+            except Exception as e:
+                logger.error(f"Erreur pendant session.stop(): {e}")
+                # Fallback : tenter la sauvegarde même si stop() échoue
+                try:
+                    self.session._save_session_to_file()
+                    logger.info("Session sauvegardée via fallback après erreur stop()")
+                except Exception as e2:
+                    logger.error(f"Échec sauvegarde fallback: {e2}")
             self.session = None
 
         self.active = False

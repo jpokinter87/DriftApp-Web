@@ -6,6 +6,7 @@ Sauvegarde et lecture des sessions de suivi au format JSON.
 
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -13,10 +14,12 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # Répertoire de stockage des sessions
-SESSIONS_DIR = Path(__file__).parent.parent.parent / 'data' / 'sessions'
+SESSIONS_DIR = Path(__file__).parent.parent.parent / "data" / "sessions"
 
-# Nombre maximum de sessions conservées
-MAX_SESSIONS = 100
+# Rétention des sessions par âge (en jours)
+MAX_SESSION_AGE_DAYS = 7
+# Fallback de sécurité : nombre max absolu de fichiers
+MAX_SESSIONS_SAFETY = 500
 
 
 def _ensure_sessions_dir():
@@ -52,25 +55,25 @@ def save_session(session_data: dict) -> Optional[str]:
     _ensure_sessions_dir()
 
     try:
-        session_id = session_data.get('session_id')
+        session_id = session_data.get("session_id")
         if not session_id:
             # Générer un ID si non fourni
-            object_name = session_data.get('object', {}).get('name', 'unknown')
-            start_time_str = session_data.get('timing', {}).get('start_time')
+            object_name = session_data.get("object", {}).get("name", "unknown")
+            start_time_str = session_data.get("timing", {}).get("start_time")
             if start_time_str:
                 start_time = datetime.fromisoformat(start_time_str)
             else:
                 start_time = datetime.now()
             session_id = generate_session_id(object_name, start_time)
-            session_data['session_id'] = session_id
+            session_data["session_id"] = session_id
 
         # Ajouter version si manquante
-        if 'version' not in session_data:
-            session_data['version'] = '1.0'
+        if "version" not in session_data:
+            session_data["version"] = "1.0"
 
         file_path = SESSIONS_DIR / f"{session_id}.json"
 
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             json.dump(session_data, f, indent=2, ensure_ascii=False, default=str)
 
         logger.info(f"Session sauvegardée: {session_id}")
@@ -98,23 +101,25 @@ def list_sessions(limit: int = 50) -> list:
 
     try:
         # Lister tous les fichiers JSON
-        json_files = sorted(SESSIONS_DIR.glob('*.json'), reverse=True)
+        json_files = sorted(SESSIONS_DIR.glob("*.json"), reverse=True)
 
         for file_path in json_files[:limit]:
             try:
-                with open(file_path, 'r', encoding='utf-8') as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
 
                 # Extraire le résumé
-                sessions.append({
-                    'session_id': data.get('session_id', file_path.stem),
-                    'object_name': data.get('object', {}).get('name', 'Inconnu'),
-                    'start_time': data.get('timing', {}).get('start_time'),
-                    'end_time': data.get('timing', {}).get('end_time'),
-                    'duration_seconds': data.get('timing', {}).get('duration_seconds', 0),
-                    'total_corrections': data.get('summary', {}).get('total_corrections', 0),
-                    'total_movement_deg': data.get('summary', {}).get('total_movement_deg', 0),
-                })
+                sessions.append(
+                    {
+                        "session_id": data.get("session_id", file_path.stem),
+                        "object_name": data.get("object", {}).get("name", "Inconnu"),
+                        "start_time": data.get("timing", {}).get("start_time"),
+                        "end_time": data.get("timing", {}).get("end_time"),
+                        "duration_seconds": data.get("timing", {}).get("duration_seconds", 0),
+                        "total_corrections": data.get("summary", {}).get("total_corrections", 0),
+                        "total_movement_deg": data.get("summary", {}).get("total_movement_deg", 0),
+                    }
+                )
             except (OSError, IOError, json.JSONDecodeError) as e:
                 logger.warning(f"Erreur lecture session {file_path}: {e}")
                 continue
@@ -141,7 +146,7 @@ def load_session(session_id: str) -> Optional[dict]:
         return None
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except (OSError, IOError, json.JSONDecodeError) as e:
         logger.error(f"Erreur chargement session {session_id}: {e}")
@@ -169,18 +174,26 @@ def delete_session(session_id: str) -> bool:
 
 
 def _cleanup_old_sessions():
-    """Supprime les sessions les plus anciennes si > MAX_SESSIONS."""
+    """Supprime les sessions plus anciennes que MAX_SESSION_AGE_DAYS."""
     try:
-        json_files = sorted(SESSIONS_DIR.glob('*.json'), reverse=True)
+        cutoff = time.time() - (MAX_SESSION_AGE_DAYS * 86400)
+        json_files = sorted(SESSIONS_DIR.glob("*.json"), reverse=True)
 
-        if len(json_files) > MAX_SESSIONS:
-            # Supprimer les plus anciennes
-            for file_path in json_files[MAX_SESSIONS:]:
-                try:
+        for file_path in json_files:
+            try:
+                if file_path.stat().st_mtime < cutoff:
+                    logger.info(f"Session expirée supprimée: {file_path.stem}")
                     file_path.unlink()
-                    logger.debug(f"Session ancienne supprimée: {file_path.stem}")
-                except OSError:
-                    pass
+            except OSError:
+                pass
+
+        # Fallback de sécurité : si trop de fichiers malgré la rétention
+        remaining = sorted(SESSIONS_DIR.glob("*.json"), reverse=True)
+        for file_path in remaining[MAX_SESSIONS_SAFETY:]:
+            try:
+                file_path.unlink()
+            except OSError:
+                pass
 
     except OSError as e:
         logger.warning(f"Erreur nettoyage sessions: {e}")

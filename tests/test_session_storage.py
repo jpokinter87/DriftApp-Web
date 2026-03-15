@@ -31,6 +31,7 @@ def sessions_dir(tmp_path, monkeypatch):
 # generate_session_id
 # =============================================================================
 
+
 class TestGenerateSessionId:
     def test_format(self):
         dt = datetime(2025, 6, 21, 22, 0, 0)
@@ -51,6 +52,7 @@ class TestGenerateSessionId:
 # =============================================================================
 # save_session
 # =============================================================================
+
 
 class TestSaveSession:
     def test_save_with_auto_id(self, sessions_dir):
@@ -80,6 +82,7 @@ class TestSaveSession:
 # =============================================================================
 # list_sessions
 # =============================================================================
+
 
 class TestListSessions:
     def test_empty_dir(self, sessions_dir):
@@ -114,6 +117,7 @@ class TestListSessions:
 # load_session
 # =============================================================================
 
+
 class TestLoadSession:
     def test_load_existing(self, sessions_dir):
         data = {"session_id": "test", "object": {"name": "M42"}}
@@ -131,6 +135,7 @@ class TestLoadSession:
 # delete_session
 # =============================================================================
 
+
 class TestDeleteSession:
     def test_delete_existing(self, sessions_dir):
         (sessions_dir / "to_delete.json").write_text("{}")
@@ -145,21 +150,34 @@ class TestDeleteSession:
 # _cleanup_old_sessions
 # =============================================================================
 
+
 class TestCleanupOldSessions:
-    def test_cleanup_keeps_max(self, sessions_dir, monkeypatch):
-        monkeypatch.setattr(session_storage, "MAX_SESSIONS", 5)
+    def test_cleanup_removes_old_sessions(self, sessions_dir, monkeypatch):
+        """Les sessions > MAX_SESSION_AGE_DAYS sont supprimées."""
+        import os
+        import time
+
+        now = time.time()
+        day = 86400
+        monkeypatch.setattr(session_storage, "MAX_SESSION_AGE_DAYS", 7)
+
+        # 2 récentes, 2 anciennes
+        for i, age_days in enumerate([1, 3, 8, 10]):
+            f = sessions_dir / f"session_{i:02d}.json"
+            f.write_text("{}")
+            mtime = now - (age_days * day)
+            os.utime(f, (mtime, mtime))
+
+        session_storage._cleanup_old_sessions()
+        remaining = list(sessions_dir.glob("*.json"))
+        assert len(remaining) == 2
+
+    def test_no_cleanup_recent_sessions(self, sessions_dir, monkeypatch):
+        """Les sessions récentes sont préservées quel que soit leur nombre."""
+        monkeypatch.setattr(session_storage, "MAX_SESSION_AGE_DAYS", 7)
         for i in range(10):
             (sessions_dir / f"session_{i:02d}.json").write_text("{}")
 
         session_storage._cleanup_old_sessions()
         remaining = list(sessions_dir.glob("*.json"))
-        assert len(remaining) == 5
-
-    def test_no_cleanup_under_max(self, sessions_dir, monkeypatch):
-        monkeypatch.setattr(session_storage, "MAX_SESSIONS", 10)
-        for i in range(3):
-            (sessions_dir / f"session_{i:02d}.json").write_text("{}")
-
-        session_storage._cleanup_old_sessions()
-        remaining = list(sessions_dir.glob("*.json"))
-        assert len(remaining) == 3
+        assert len(remaining) == 10

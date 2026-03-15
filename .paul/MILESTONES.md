@@ -5,6 +5,45 @@ Completed milestone log for this project.
 | Milestone | Completed | Duration | Stats |
 |-----------|-----------|----------|-------|
 | v5.0 Interface Moderne | 2026-02-22 | 1 day | 5 phases, 11 plans |
+| v5.1 Synchronisation & Qualité | 2026-03-14 | 1 day | 6 phases, 11 plans |
+
+---
+
+## v5.1 Synchronisation & Qualité
+
+**Completed:** 2026-03-14
+**Duration:** 1 day
+
+### Stats
+
+| Metric | Value |
+|--------|-------|
+| Phases | 6 |
+| Plans | 11 |
+| Files modified | ~35 (22 core/services sync + 11 refactoring + 4 tests créés) |
+| Tests | 407 → 746 (+339 tests, 0 échecs) |
+| Issues corrigées | 38 (5C + 16H + 14M + 3 acceptées) |
+
+### Key Accomplishments
+
+- core/ et services/ synchronisés byte-for-byte avec la production DriftApp_v4_6 (22 fichiers)
+- Audit code complet : 54 issues identifiées (7C, 15H, 20M, 12L) dans core/ et services/
+- 27 issues corrigées dans core/ : moyenne circulaire, verrou fcntl, chemins absolus, code mort supprimé, angle_utils centralisé
+- 11 issues corrigées dans services/ : thread safety (status_lock), validation entrées, IPC simplifié, zombie detection
+- Suite de tests passée de 407 à 693 tests (8 fichiers réparés, alignés sur API production)
+- Couverture étendue : 3 nouveaux fichiers tests (health, session views, session storage) → 738 tests
+- Validation cross-couche : 8 tests Django ↔ IPC ↔ MotorService → 746 tests verts
+- Simulation réaliste avec délais I2C calibrés sur matériel EMS22A
+
+### Key Decisions
+
+- Source de vérité : DriftApp_v4_6 (production Pi) pour sync
+- Corriger les tests pour refléter l'API production, pas l'inverse
+- Thread safety limité à ContinuousHandler (seul handler multi-thread)
+- Pas de threading GOTO/JOG (trop risqué pour refactoring, milestone dédié futur)
+- Centralisation angle_utils pour toute normalisation/distance angulaire
+- APIRequestFactory pour contourner dispatch Django dans les mocks
+- Patch double IPC pour tests cross-couche (ipc_manager + Django settings)
 
 ---
 

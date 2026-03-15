@@ -4,50 +4,52 @@
 Application web Django embarquee sur Raspberry Pi pour le controle d'une coupole astronomique.
 
 ## Current Milestone
-**v5.1 Synchronisation & Qualité**
-Status: Complete
-Phases: 6 of 6 complete
+**v5.2 Stabilité Terrain**
+Status: In Progress
+Phases: 1 of 4 complete
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
-| 1 | Sync Production | 2 | Complete ✓ | 2026-03-14 |
-| 2 | Audit Code | 2 | Complete ✓ | 2026-03-14 |
-| 3 | Refactoring Core | 2 | Complete ✓ | 2026-03-14 |
-| 4 | Refactoring Services | 2 | Complete ✓ | 2026-03-14 |
-| 5 | Tests | 2 | Complete ✓ | 2026-03-14 |
-| 6 | Validation | 1 | Complete ✓ | 2026-03-14 |
+| 1 | Persistance Logs | 1 | Complete ✓ | 2026-03-15 |
+| 2 | Bug Retournement Méridien | TBD | Not started | - |
+| 3 | Bugs Connus | TBD | Not started | - |
+| 4 | Programme Tests Terrain | TBD | Not started | - |
 
-### Phase 1: Sync Production
+### Phase 1: Persistance Logs
 
-Focus: Aligner core/ et services/ sur le code production DriftApp_v4_6, adapter web/ (views, urls) sans toucher templates/static v5.0
+Focus: Fichier log par cible (nom+timestamp), rétention 7 jours, pas d'écrasement entre cibles d'une même nuit
 Plans: TBD (defined during /paul:plan)
 
-### Phase 2: Audit Code
+### Phase 2: Bug Retournement Méridien
 
-Focus: Code review complète sur la bonne base, identifier les vrais problèmes de qualité
+Focus: Analyse du flux tracking au flip de la monture, correction de la perte de suivi post-retournement
 Plans: TBD (defined during /paul:plan)
 
-### Phase 3: Refactoring Core
+### Phase 3: Bugs Connus
 
-Focus: Config, hardware, tracking, observatoire, utils — améliorations qualité
+Focus: ObjectListView.get_objets_disponibles() bug, routes park/calibrate/end-session non implémentées
 Plans: TBD (defined during /paul:plan)
 
-### Phase 4: Refactoring Services
+### Phase 4: Programme Tests Terrain
 
-Focus: motor_service, command_handlers, ipc_manager, simulation
-Plans: TBD (defined during /paul:plan)
-
-### Phase 5: Tests
-
-Focus: Suite de tests alignée sur le vrai code, couverture étendue, nouveaux tests
-Plans: TBD (defined during /paul:plan)
-
-### Phase 6: Validation
-
-Focus: Tests d'intégration, vérification fonctionnelle complète
+Focus: Fonction de test de jour simulant des positions critiques (méridien, zénith, pôle) et vérifiant les décisions tracking+moteur
 Plans: TBD (defined during /paul:plan)
 
 ## Completed Milestones
+
+<details>
+<summary>v5.1 Synchronisation & Qualité - 2026-03-14 (6 phases)</summary>
+
+| Phase | Name | Plans | Completed |
+|-------|------|-------|-----------|
+| 1 | Sync Production | 2 | 2026-03-14 |
+| 2 | Audit Code | 2 | 2026-03-14 |
+| 3 | Refactoring Core | 2 | 2026-03-14 |
+| 4 | Refactoring Services | 2 | 2026-03-14 |
+| 5 | Tests | 2 | 2026-03-14 |
+| 6 | Validation | 1 | 2026-03-14 |
+
+</details>
 
 <details>
 <summary>v5.0 Interface Moderne - 2026-02-22 (5 phases)</summary>
@@ -64,4 +66,4 @@ Plans: TBD (defined during /paul:plan)
 
 ---
 *Roadmap created: 2026-02-22*
-*Last updated: 2026-03-14 — Phase 6 complete, milestone v5.1 complete*
+*Last updated: 2026-03-15 — Phase 1 complete*

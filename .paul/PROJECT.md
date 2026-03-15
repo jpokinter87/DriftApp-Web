@@ -9,7 +9,9 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-(none)
+- [ ] Correction bug retournement méridien (perte de suivi post-flip) — v5.2 Phase 2
+- [ ] Correction bugs connus (ObjectListView, routes manquantes) — v5.2 Phase 3
+- [ ] Programme de tests terrain de jour (positions critiques simulées) — v5.2 Phase 4
 
 ### Validated
 - ✓ core/ et services/ synchronisés sur production DriftApp_v4_6 — v5.1 Phase 1
@@ -18,6 +20,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Refactoring services : 11 issues corrigées (thread safety, validation, IPC, zombie detection, simulation) — v5.1 Phase 4
 - ✓ Suite de tests alignée (738 tests, 0 échecs) et couverture étendue (health, session, storage) — v5.1 Phase 5
 - ✓ Validation cross-couche (Django ↔ IPC ↔ MotorService), 746 tests verts — v5.1 Phase 6
+- ✓ Rétention logs 7 jours + sauvegarde session robuste, 754 tests verts — v5.2 Phase 1
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1
@@ -64,6 +67,8 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Tests alignés sur API production | v5.1 P5 | Corriger tests plutôt que production — tests reflètent la réalité |
 | APIRequestFactory pour mocks vues | v5.1 P5 | Contourne dispatch Django pour injecter mocks motor_client |
 | Patch double IPC pour tests cross-couche | v5.1 P6 | ipc_manager + Django settings vers memes fichiers tmp_path |
+| Rétention par âge au lieu de par nombre | v5.2 P1 | 7 jours au lieu de MAX_FILES=20/100 — préserve les logs terrain |
+| Sauvegarde session robuste (fallback) | v5.2 P1 | Garantit la persistance même si stop() échoue |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js
@@ -84,11 +89,11 @@ Quick Reference:
 
 | Field | Value |
 |-------|-------|
-| Version | 5.0.0 |
-| Last milestone | v5.0 Interface Moderne (2026-02-22) |
-| Current milestone | v5.1 Synchronisation & Qualité |
-| Status | Complete |
+| Version | 5.1.0 |
+| Last milestone | v5.1 Synchronisation & Qualité (2026-03-14) |
+| Current milestone | v5.2 Stabilité Terrain |
+| Status | In Progress |
 
 ---
 *Created: 2026-02-22*
-*Last updated: 2026-03-14 — Phase 6 complete, milestone v5.1 complete*
+*Last updated: 2026-03-15 — Phase 1 (Persistance Logs) complete*
