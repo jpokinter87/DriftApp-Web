@@ -91,7 +91,7 @@
     <!-- ═══ Footer ═══ -->
     <footer class="border-t border-obs-border bg-obs-panel/50">
         <div class="max-w-screen-2xl mx-auto px-4 py-2 flex items-center justify-between text-xs text-obs-text-muted font-mono">
-            <span>DriftApp v{% block version %}5.0{% endblock %}</span>
+            <span>DriftApp v{{ APP_VERSION|default:"5.0" }}</span>
             {% block footer_extra %}{% endblock %}
             <span id="footer-time"></span>
         </div>

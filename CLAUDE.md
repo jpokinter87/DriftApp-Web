@@ -275,7 +275,20 @@ sudo journalctl -u motor_service -f  # Logs temps reel
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **5.2** | Mars 2026 | Watchdog thread méridien, logging structuré clé=valeur, tests terrain |
+| **5.1** | Mars 2026 | Sync production, audit code, refactoring, 746 tests |
+| **5.0** | Fev 2026 | Interface moderne Tailwind + Alpine.js |
 | **4.6** | Dec 2025 | DaemonEncoderReader extrait, warm-up phase, support Pi 5 |
 | **4.5** | Dec 2025 | Rampe S-curve acceleration/deceleration |
 | **4.4** | Dec 2025 | GOTO fluide (direct + correction finale), suppression FAST_TRACK |
 | **4.3** | Dec 2025 | Architecture 3 processus IPC |
+
+---
+
+## Versionnement
+
+La version est definie dans `pyproject.toml` (champ `version`) et affichee dynamiquement dans le footer de l'interface web via le context processor Django `driftapp_web.context_processors.app_version`.
+
+**Regle** : Mettre a jour la version dans `pyproject.toml` apres chaque milestone ou phase importante :
+- Milestone complet : incrementer le mineur (ex: 5.1.0 → 5.2.0)
+- Hotfix terrain : incrementer le patch (ex: 5.2.0 → 5.2.1)
