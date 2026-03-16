@@ -9,7 +9,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ## Requirements
 
 ### Active
-- [ ] Correction bug retournement méridien (perte de suivi post-flip) — v5.2 Phase 2
+- [x] Correction bug retournement méridien (perte de suivi post-flip) — v5.2 Phase 2
 - [ ] Correction bugs connus (ObjectListView, routes manquantes) — v5.2 Phase 3
 - [ ] Programme de tests terrain de jour (positions critiques simulées) — v5.2 Phase 4
 
@@ -21,6 +21,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Suite de tests alignée (738 tests, 0 échecs) et couverture étendue (health, session, storage) — v5.1 Phase 5
 - ✓ Validation cross-couche (Django ↔ IPC ↔ MotorService), 746 tests verts — v5.1 Phase 6
 - ✓ Rétention logs 7 jours + sauvegarde session robuste, 754 tests verts — v5.2 Phase 1
+- ✓ Watchdog thread + fix méridien (normalisation, re-sync, détection transit), 771 tests — v5.2 Phase 2
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1
@@ -69,6 +70,8 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 | Patch double IPC pour tests cross-couche | v5.1 P6 | ipc_manager + Django settings vers memes fichiers tmp_path |
 | Rétention par âge au lieu de par nombre | v5.2 P1 | 7 jours au lieu de MAX_FILES=20/100 — préserve les logs terrain |
 | Sauvegarde session robuste (fallback) | v5.2 P1 | Garantit la persistance même si stop() échoue |
+| Thread daemon watchdog systemd | v5.2 P2 | Heartbeat indépendant de la boucle principale — survit aux rotations bloquantes |
+| Re-sync encodeur après delta > 30° | v5.2 P2 | Évite dérive offset post-méridien sans surcharger les petites corrections |
 
 ## Success Criteria
 - Interface modernisee avec Tailwind CSS v4 + Alpine.js

@@ -177,14 +177,14 @@ class MotorService:
 
     # Intervalle watchdog (en secondes) - doit être < WatchdogSec/2 dans systemd
     # Avec WatchdogSec=30 dans le .service, 10s laisse 2 heartbeats manqués avant kill.
-    # NB: les commandes GOTO/JOG bloquent la boucle principale pendant leur exécution,
-    # ce qui peut retarder le heartbeat. Un GOTO de 180° dure ~15-20s, ce qui reste
-    # dans la marge du watchdog 30s.
+    # Le heartbeat tourne sur un thread dédié pour survivre aux rotations bloquantes
+    # (ex: flip méridien 134° ≈ 100s en mode CONTINUOUS).
     WATCHDOG_INTERVAL = 10.0
 
     def __init__(self):
         """Initialise le service moteur."""
         self.running = False
+        self._watchdog_thread = None
 
         # Initialiser le notifier systemd (si disponible)
         self._init_systemd_notifier()
@@ -325,6 +325,28 @@ class MotorService:
                 self._systemd_notifier.notify(message)
             except Exception as e:
                 logger.debug(f"Erreur notification systemd: {e}")
+
+    def _start_watchdog_thread(self):
+        """
+        Démarre un thread dédié pour le heartbeat watchdog systemd.
+
+        Le heartbeat tourne indépendamment de la boucle principale pour
+        survivre aux opérations bloquantes longues (ex: rotation feedback
+        de 100+ secondes lors d'un flip méridien).
+        """
+        if not self._watchdog_enabled:
+            return
+
+        def _watchdog_loop():
+            while self.running:
+                self._notify_systemd("WATCHDOG=1")
+                time.sleep(self.WATCHDOG_INTERVAL)
+
+        self._watchdog_thread = threading.Thread(
+            target=_watchdog_loop, daemon=True, name="watchdog-heartbeat"
+        )
+        self._watchdog_thread.start()
+        logger.info("Thread watchdog démarré (heartbeat indépendant)")
 
     def _create_initial_status(self) -> Dict[str, Any]:
         """Crée l'état initial."""
@@ -474,8 +496,10 @@ class MotorService:
         self._notify_systemd("READY=1")
         self._notify_systemd("STATUS=Motor Service prêt")
 
+        # Démarrer le thread watchdog dédié (survit aux rotations bloquantes)
+        self._start_watchdog_thread()
+
         last_tracking_update = time.time()
-        last_watchdog_ping = time.time()
         tracking_interval = 1.0
 
         while self.running:
@@ -502,11 +526,6 @@ class MotorService:
                 pos = self.read_encoder_position()
                 if pos is not None and not self.tracking_handler.is_active:
                     self.current_status["position"] = pos
-
-                # Envoyer heartbeat watchdog périodiquement
-                if now - last_watchdog_ping >= self.WATCHDOG_INTERVAL:
-                    self._notify_systemd("WATCHDOG=1")
-                    last_watchdog_ping = now
 
                 time.sleep(0.05)  # 20Hz de polling
 

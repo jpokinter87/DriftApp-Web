@@ -74,6 +74,15 @@ class TrackingCorrectionsMixin:
         )
 
 
+        # Détection explicite du transit méridien
+        if abs(delta) > self.LARGE_MOVEMENT_THRESHOLD:
+            self.logger.info(
+                f"TRANSIT MÉRIDIEN détecté : delta={delta:+.1f}° | "
+                f"Az={azimut:.1f}° Alt={altitude:.1f}° | "
+                f"Coupole: {self.position_relative:.1f}° → {position_cible:.1f}°"
+            )
+            self._log_goto(self.position_relative, position_cible, delta, 'meridian_transit')
+
         # Vérifier si la correction dépasse le seuil
         if abs(delta) < tracking_params.correction_threshold:
             # Mise à jour du temps de prochaine vérification
@@ -145,11 +154,27 @@ class TrackingCorrectionsMixin:
             position_cible_logique, angle_cible_encodeur = self._calculer_cibles(delta_deg)
             # Autoriser les grands mouvements si delta > seuil (ex: traversée méridien près du zénith)
             allow_large = abs(delta_deg) > self.LARGE_MOVEMENT_THRESHOLD
-            result, duration = self._executer_rotation_feedback(
-                angle_cible_encodeur, motor_delay, allow_large_movement=allow_large
-            )
-            self._finaliser_correction(delta_deg, position_cible_logique)
-            self._traiter_resultat_feedback(result, duration)
+
+            if allow_large:
+                self.is_large_movement_in_progress = True
+                self.logger.info(
+                    f"Grand mouvement en cours: {delta_deg:+.1f}° "
+                    f"(position {self.position_relative:.1f}° → {position_cible_logique:.1f}°)"
+                )
+
+            try:
+                result, duration = self._executer_rotation_feedback(
+                    angle_cible_encodeur, motor_delay, allow_large_movement=allow_large
+                )
+                self._finaliser_correction(delta_deg, position_cible_logique)
+                self._traiter_resultat_feedback(result, duration)
+
+                # Re-sync encodeur après grand mouvement pour éviter dérive de l'offset
+                if allow_large and self.encoder_available:
+                    self._resync_encoder_offset(position_cible_logique)
+            finally:
+                if allow_large:
+                    self.is_large_movement_in_progress = False
 
         except (RuntimeError, IOError, OSError) as e:
             # Erreurs de communication avec l'encodeur - fallback légitime
@@ -313,6 +338,26 @@ class TrackingCorrectionsMixin:
                 f"(erreur avant: {erreur_avant:+.2f}°, après: {erreur_apres:+.2f}°)"
             )
 
+    def _resync_encoder_offset(self, position_cible_logique: float):
+        """
+        Re-synchronise l'offset encodeur après un grand mouvement.
+
+        Après un transit méridien, l'offset peut dériver si la rotation
+        n'a pas atteint exactement la cible. La re-sync corrige cela.
+        """
+        try:
+            from core.hardware.moteur import MoteurCoupole
+            real_position = MoteurCoupole.get_daemon_angle()
+            old_offset = self.encoder_offset
+            self.encoder_offset = position_cible_logique - real_position
+            self.logger.info(
+                f"Re-sync encodeur post-méridien: "
+                f"offset {old_offset:.1f}° → {self.encoder_offset:.1f}° "
+                f"(encodeur={real_position:.1f}°, logique={position_cible_logique:.1f}°)"
+            )
+        except Exception as e:
+            self.logger.debug(f"Re-sync encodeur non critique: {e}")
+
     def _apply_correction_sans_feedback(self, delta_deg: float, motor_delay: float = 0.002):
         """
         Applique une correction SANS feedback (ancienne méthode).
@@ -347,8 +392,8 @@ class TrackingCorrectionsMixin:
         for _ in range(steps):
             self.moteur.faire_un_pas(delai=motor_delay)
 
-        # Mettre à jour la position relative
-        self.position_relative += delta_deg
+        # Mettre à jour la position relative (normalisée dans [0, 360[)
+        self.position_relative = (self.position_relative + delta_deg) % 360
 
         # Statistiques
         self.total_corrections += 1

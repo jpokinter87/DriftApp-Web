@@ -536,7 +536,7 @@ class TrackingHandler:
                 goto_callback=on_goto_info,
             )
 
-            success = self.session.start(object_name, skip_goto=skip_goto)
+            success, start_message = self.session.start(object_name, skip_goto=skip_goto)
 
             if success:
                 self.active = True
@@ -552,12 +552,12 @@ class TrackingHandler:
 
                 self.log_callback(f"Suivi actif: {object_name}", "success")
             else:
-                logger.error(f"Échec démarrage suivi de {object_name}")
+                logger.error(f"Échec démarrage suivi de {object_name}: {start_message}")
                 current_status["status"] = "idle"
                 current_status["tracking_object"] = None
                 current_status["tracking_pending"] = False
                 current_status["goto_info"] = None
-                current_status["error"] = "Échec démarrage suivi"
+                current_status["error"] = f"Échec démarrage suivi: {start_message}"
 
         except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
