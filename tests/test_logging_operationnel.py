@@ -16,6 +16,8 @@ import pytest
 
 pytest.importorskip("astropy", reason="astropy requis pour les tests logging")
 
+pytestmark = pytest.mark.slow
+
 
 # =============================================================================
 # FIXTURES

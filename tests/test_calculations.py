@@ -16,10 +16,10 @@ try:
 except ImportError:
     HAS_ASTROPY = False
 
-pytestmark = pytest.mark.skipif(
-    not HAS_ASTROPY,
-    reason="Ces tests nécessitent astropy"
-)
+pytestmark = [
+    pytest.mark.skipif(not HAS_ASTROPY, reason="Ces tests nécessitent astropy"),
+    pytest.mark.slow,
+]
 
 
 class TestAstronomicalCalculationsInit:

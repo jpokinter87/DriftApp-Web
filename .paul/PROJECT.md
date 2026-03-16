@@ -11,7 +11,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 ### Active
 - [x] Correction bug retournement méridien (perte de suivi post-flip) — v5.2 Phase 2
 - [x] Correction bugs connus (ObjectListView, routes manquantes) — v5.2 Phase 3
-- [ ] Programme de tests terrain de jour (positions critiques simulées) — v5.2 Phase 4
+- [x] Programme de tests terrain de jour (positions critiques simulées) — v5.2 Phase 4
 
 ### Validated
 - ✓ core/ et services/ synchronisés sur production DriftApp_v4_6 — v5.1 Phase 1
@@ -24,6 +24,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Watchdog thread + fix méridien (normalisation, re-sync, détection transit), 771 tests — v5.2 Phase 2
 - ✓ get_objets_disponibles() + routes stub park/calibrate/end-session (501) — v5.2 Phase 3
 - ✓ Logging structuré clé=valeur, heartbeat 10s, snapshot IPC 60s, milestone 5min, 782 tests — v5.2 Phase 3.5
+- ✓ Simulation monture NGC 5033/LBN 166 + tests terrain + marqueurs slow, 791 tests — v5.2 Phase 4
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1
@@ -95,9 +96,9 @@ Quick Reference:
 | Field | Value |
 |-------|-------|
 | Version | 5.1.0 |
-| Last milestone | v5.1 Synchronisation & Qualité (2026-03-14) |
-| Current milestone | v5.2 Stabilité Terrain |
-| Status | In Progress |
+| Last milestone | v5.2 Stabilité Terrain (2026-03-16) |
+| Current milestone | — |
+| Status | Milestone complete |
 
 ---
 *Created: 2026-02-22*

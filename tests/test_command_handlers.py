@@ -20,6 +20,8 @@ import pytest
 # Skip ce module si astropy n'est pas installé
 pytest.importorskip("astropy", reason="astropy requis pour les tests command_handlers")
 
+pytestmark = pytest.mark.slow
+
 
 # =============================================================================
 # FIXTURES

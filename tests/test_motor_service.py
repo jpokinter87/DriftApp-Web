@@ -18,6 +18,8 @@ import pytest
 # Skip ce module si astropy n'est pas installe
 pytest.importorskip("astropy", reason="astropy requis pour les tests motor_service")
 
+pytestmark = pytest.mark.slow
+
 
 # =============================================================================
 # FIXTURES

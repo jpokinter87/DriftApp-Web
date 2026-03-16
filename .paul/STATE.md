@@ -5,28 +5,30 @@
 See: .paul/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescope pendant toute la duree d'une session d'astrophotographie.
-**Current focus:** v5.2 Stabilité Terrain — Phase 3.5 complete, ready for Phase 4
+**Current focus:** v5.2 Stabilité Terrain — MILESTONE COMPLETE
 
 ## Current Position
 
-Milestone: v5.2 Stabilité Terrain
-Phase: 3.5 of 5 (Refonte Logging Opérationnel) — Complete ✓
-Plan: 03.5-01 complete
-Status: Ready for next PLAN
-Last activity: 2026-03-16 — Phase 3.5 complete, transitioned to Phase 4
+Milestone: v5.2 Stabilité Terrain — Complete ✓
+Phase: 5 of 5 — All phases complete
+Plan: All plans complete
+Status: Milestone complete, ready for next milestone
+Last activity: 2026-03-16 — Milestone v5.2 complete (5 phases, 791 tests)
 
 Progress:
-- v5.2 Stabilité Terrain: [████████░░] 80%
+- v5.2 Stabilité Terrain: [██████████] 100%
 - Phase 1: [██████████] 100% ✓
 - Phase 2: [██████████] 100% ✓
 - Phase 3: [██████████] 100% ✓
+- Phase 3.5: [██████████] 100% ✓
+- Phase 4: [██████████] 100% ✓
 
 ## Loop Position
 
 Current loop state:
 ```
 PLAN ──▶ APPLY ──▶ UNIFY
-  ✓        ✓        ✓     [Loop complete — ready for next PLAN]
+  ✓        ✓        ✓     [Milestone v5.2 COMPLETE]
 ```
 
 ## Accumulated Context
@@ -47,16 +49,16 @@ PLAN ──▶ APPLY ──▶ UNIFY
 None.
 
 ### Git State
-Last commit: 6af443b
+Last commit: ab982ec
 Branch: main
 
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Phase 3.5 complete, ready to plan Phase 4
-Next action: /paul:plan for Phase 4
+Stopped at: Milestone v5.2 complete
+Next action: /paul:complete-milestone ou /paul:milestone pour v5.3
 Resume file: .paul/ROADMAP.md
-Resume context: Logging structuré clé=valeur, heartbeat 10s, snapshot IPC 60s, 782 tests
+Resume context: 5 phases complètes, 791 tests, prêt pour déploiement terrain
 
 ---
 *STATE.md — Updated after every significant action*

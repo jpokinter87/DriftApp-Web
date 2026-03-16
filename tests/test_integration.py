@@ -36,6 +36,8 @@ requires_astropy = pytest.mark.skipif(
     reason="Ces tests nécessitent astropy"
 )
 
+pytestmark = pytest.mark.slow
+
 
 # =============================================================================
 # Fixtures communes
