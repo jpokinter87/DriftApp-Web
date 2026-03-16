@@ -10,7 +10,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 
 ### Active
 - [x] Correction bug retournement méridien (perte de suivi post-flip) — v5.2 Phase 2
-- [ ] Correction bugs connus (ObjectListView, routes manquantes) — v5.2 Phase 3
+- [x] Correction bugs connus (ObjectListView, routes manquantes) — v5.2 Phase 3
 - [ ] Programme de tests terrain de jour (positions critiques simulées) — v5.2 Phase 4
 
 ### Validated
@@ -22,6 +22,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Validation cross-couche (Django ↔ IPC ↔ MotorService), 746 tests verts — v5.1 Phase 6
 - ✓ Rétention logs 7 jours + sauvegarde session robuste, 754 tests verts — v5.2 Phase 1
 - ✓ Watchdog thread + fix méridien (normalisation, re-sync, détection transit), 771 tests — v5.2 Phase 2
+- ✓ get_objets_disponibles() + routes stub park/calibrate/end-session (501) — v5.2 Phase 3
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1

@@ -219,3 +219,33 @@ class MotorStatusView(APIView):
 
     def get(self, request):
         return Response(motor_client.get_motor_status())
+
+
+class ParkView(APIView):
+    """POST /api/hardware/park/ — À implémenter."""
+
+    def post(self, request):
+        return Response(
+            {'error': 'Fonction park non implémentée'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+
+
+class CalibrateView(APIView):
+    """POST /api/hardware/calibrate/ — À implémenter."""
+
+    def post(self, request):
+        return Response(
+            {'error': 'Fonction calibrate non implémentée'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )
+
+
+class EndSessionView(APIView):
+    """POST /api/hardware/end-session/ — À implémenter."""
+
+    def post(self, request):
+        return Response(
+            {'error': 'Fonction end-session non implémentée'},
+            status=status.HTTP_501_NOT_IMPLEMENTED
+        )

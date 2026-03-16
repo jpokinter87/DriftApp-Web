@@ -5,20 +5,21 @@
 See: .paul/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescope pendant toute la duree d'une session d'astrophotographie.
-**Current focus:** v5.2 Stabilité Terrain — Phase 2 complete, ready for Phase 3
+**Current focus:** v5.2 Stabilité Terrain — Phase 3 complete, ready for Phase 4
 
 ## Current Position
 
 Milestone: v5.2 Stabilité Terrain
-Phase: 2 of 4 (Bug Retournement Méridien) — Complete ✓
-Plan: 02-01 complete
+Phase: 3 of 4 (Bugs Connus) — Complete ✓
+Plan: 03-01 complete
 Status: Ready for next PLAN
-Last activity: 2026-03-16 — Phase 2 complete, transitioned to Phase 3
+Last activity: 2026-03-16 — Phase 3 complete, transitioned to Phase 4
 
 Progress:
-- v5.2 Stabilité Terrain: [█████░░░░░] 50%
+- v5.2 Stabilité Terrain: [███████░░░] 75%
 - Phase 1: [██████████] 100% ✓
 - Phase 2: [██████████] 100% ✓
+- Phase 3: [██████████] 100% ✓
 
 ## Loop Position
 
@@ -39,23 +40,23 @@ PLAN ──▶ APPLY ──▶ UNIFY
 - Re-sync encodeur uniquement pour delta > 30°
 
 ### Deferred Issues
-- ObjectListView.get_objets_disponibles() bug production (web/tracking/views.py:100) → Phase 3
-- Routes /api/hardware/park/, calibrate/, end-session/ non implémentées → Phase 3
+- ~~ObjectListView.get_objets_disponibles()~~ → Corrigé Phase 3
+- ~~Routes park/calibrate/end-session~~ → Stubs 501 Phase 3
 
 ### Blockers/Concerns
 None.
 
 ### Git State
-Last commit: 25b3f4c
+Last commit: 6d5bd44
 Branch: main
 
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Phase 2 complete, ready to plan Phase 3
-Next action: /paul:plan for Phase 3
+Stopped at: Phase 3 complete, ready to plan Phase 4
+Next action: /paul:plan for Phase 4
 Resume file: .paul/ROADMAP.md
-Resume context: Watchdog thread + 4 fixes méridien, 771 tests verts
+Resume context: 3 phases complètes, 771 tests verts, issues déferrées résolues
 
 ---
 *STATE.md — Updated after every significant action*

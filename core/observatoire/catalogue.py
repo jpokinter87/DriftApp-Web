@@ -10,7 +10,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
 
 from core.config.config import CACHE_FILE
 
@@ -91,6 +91,15 @@ class GestionnaireCatalogue:
         except Exception as e:
             logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
 
+
+    def get_objets_disponibles(self) -> List[Dict[str, Any]]:
+        """
+        Retourne la liste des objets disponibles dans le cache local.
+
+        Returns:
+            Liste de dicts avec les informations de chaque objet.
+        """
+        return list(self.objets.values())
 
     def rechercher_simbad(self, identifiant: str) -> Optional[Dict[str, Any]]:
         """

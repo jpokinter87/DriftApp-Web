@@ -11,4 +11,7 @@ urlpatterns = [
     path('continuous/', views.ContinuousView.as_view(), name='motor-continuous'),
     path('encoder/', views.EncoderView.as_view(), name='encoder-status'),
     path('status/', views.MotorStatusView.as_view(), name='motor-status'),
+    path('park/', views.ParkView.as_view(), name='motor-park'),
+    path('calibrate/', views.CalibrateView.as_view(), name='motor-calibrate'),
+    path('end-session/', views.EndSessionView.as_view(), name='motor-end-session'),
 ]

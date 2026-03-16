@@ -258,20 +258,20 @@ class TestMotorStatusView:
         assert "status" in response.data
 
 
-class TestNonExistentRoutes:
-    """Routes park, calibrate, end-session ne sont pas implémentées."""
+class TestStubRoutes:
+    """Routes park, calibrate, end-session retournent 501 Not Implemented."""
 
-    def test_park_not_found(self, api_client, mock_ipc):
+    def test_park_returns_501(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/park/")
-        assert response.status_code == 404
+        assert response.status_code == 501
 
-    def test_calibrate_not_found(self, api_client, mock_ipc):
+    def test_calibrate_returns_501(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/calibrate/")
-        assert response.status_code == 404
+        assert response.status_code == 501
 
-    def test_end_session_not_found(self, api_client, mock_ipc):
+    def test_end_session_returns_501(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/end-session/")
-        assert response.status_code == 404
+        assert response.status_code == 501
 
 
 # =============================================================================
@@ -305,10 +305,13 @@ class TestTrackingStatusView:
 
 
 class TestObjectListView:
-    def test_list_objects_raises_attribute_error(self, api_client, mock_ipc):
-        """ObjectListView appelle get_objets_disponibles qui n'existe pas → AttributeError."""
-        with pytest.raises(AttributeError, match="get_objets_disponibles"):
-            api_client.get("/api/tracking/objects/")
+    def test_list_objects_returns_list(self, api_client, mock_ipc):
+        """ObjectListView retourne la liste des objets du cache."""
+        response = api_client.get("/api/tracking/objects/")
+        assert response.status_code == 200
+        assert 'count' in response.data
+        assert 'objects' in response.data
+        assert isinstance(response.data['objects'], list)
 
 
 class TestObjectSearchView:

@@ -6,13 +6,13 @@ Application web Django embarquee sur Raspberry Pi pour le controle d'une coupole
 ## Current Milestone
 **v5.2 Stabilité Terrain**
 Status: In Progress
-Phases: 2 of 4 complete
+Phases: 3 of 4 complete
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Persistance Logs | 1 | Complete ✓ | 2026-03-15 |
 | 2 | Bug Retournement Méridien | 1 | Complete ✓ | 2026-03-16 |
-| 3 | Bugs Connus | TBD | Not started | - |
+| 3 | Bugs Connus | 1 | Complete ✓ | 2026-03-16 |
 | 4 | Programme Tests Terrain | TBD | Not started | - |
 
 ### Phase 1: Persistance Logs
