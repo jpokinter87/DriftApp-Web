@@ -23,6 +23,7 @@ Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescop
 - ✓ Rétention logs 7 jours + sauvegarde session robuste, 754 tests verts — v5.2 Phase 1
 - ✓ Watchdog thread + fix méridien (normalisation, re-sync, détection transit), 771 tests — v5.2 Phase 2
 - ✓ get_objets_disponibles() + routes stub park/calibrate/end-session (501) — v5.2 Phase 3
+- ✓ Logging structuré clé=valeur, heartbeat 10s, snapshot IPC 60s, milestone 5min, 782 tests — v5.2 Phase 3.5
 - ✓ Tailwind CSS v4 + Alpine.js integres dans Django — Phase 1
 - ✓ Template de base avec heritage (base.html) — Phase 1
 - ✓ 38 composants reutilisables (@layer components) — Phase 1

@@ -6,13 +6,14 @@ Application web Django embarquee sur Raspberry Pi pour le controle d'une coupole
 ## Current Milestone
 **v5.2 Stabilité Terrain**
 Status: In Progress
-Phases: 3 of 4 complete
+Phases: 4 of 5 complete
 
 | Phase | Name | Plans | Status | Completed |
 |-------|------|-------|--------|-----------|
 | 1 | Persistance Logs | 1 | Complete ✓ | 2026-03-15 |
 | 2 | Bug Retournement Méridien | 1 | Complete ✓ | 2026-03-16 |
 | 3 | Bugs Connus | 1 | Complete ✓ | 2026-03-16 |
+| 3.5 | Refonte Logging Opérationnel | 1 | Complete ✓ | 2026-03-16 |
 | 4 | Programme Tests Terrain | TBD | Not started | - |
 
 ### Phase 1: Persistance Logs
@@ -28,6 +29,11 @@ Plans: TBD (defined during /paul:plan)
 ### Phase 3: Bugs Connus
 
 Focus: ObjectListView.get_objets_disponibles() bug, routes park/calibrate/end-session non implémentées
+Plans: TBD (defined during /paul:plan)
+
+### Phase 3.5: Refonte Logging Opérationnel
+
+Focus: Format structuré clé=valeur, heartbeat motor_service, snapshot IPC /dev/shm dans les logs, milestones session tracking, couverture encodeur et commandes
 Plans: TBD (defined during /paul:plan)
 
 ### Phase 4: Programme Tests Terrain
@@ -66,4 +72,4 @@ Plans: TBD (defined during /paul:plan)
 
 ---
 *Roadmap created: 2026-02-22*
-*Last updated: 2026-03-15 — Phase 1 complete*
+*Last updated: 2026-03-16 — Phase 3.5 added (Refonte Logging)*

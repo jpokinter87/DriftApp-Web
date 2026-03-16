@@ -277,12 +277,35 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         """Active le suivi."""
         self.running = True
         self.drift_tracking["start_time"] = now
+        self._last_milestone_time = now
         # Utiliser l'intervalle adaptatif si fourni, sinon l'intervalle par défaut
         interval = initial_interval if initial_interval is not None else self.intervalle
         self.next_correction_time = now + timedelta(seconds=interval)
         self.tracking_logger.start_tracking(
             objet_name, f"{self.ra_deg:.2f}°", f"{self.dec_deg:.2f}°"
         )
+
+    def _check_session_milestone(self):
+        """Émet un log session_health toutes les 5 minutes pendant le tracking."""
+        if not self.running or not hasattr(self, '_last_milestone_time'):
+            return
+
+        now = datetime.now()
+        elapsed = (now - self._last_milestone_time).total_seconds()
+        if elapsed < 300:  # 5 minutes
+            return
+
+        start_time = self.drift_tracking.get('start_time', now)
+        duration_min = int((now - start_time).total_seconds() / 60)
+        mode = self.adaptive_manager.current_mode.value if hasattr(self.adaptive_manager, 'current_mode') else 'unknown'
+        enc_status = 'ok' if self.encoder_available else 'lost'
+
+        self.logger.info(
+            f"session_health | object={self.objet} duration_min={duration_min} "
+            f"corrections={self.total_corrections} total_movement={self.total_movement:.1f} "
+            f"mode={mode} encoder={enc_status} failed={self.failed_feedback_count}"
+        )
+        self._last_milestone_time = now
 
     def _log_start(self, objet_name: str, azimut: float, altitude: float, position_cible: float):
         """Log le démarrage du suivi."""

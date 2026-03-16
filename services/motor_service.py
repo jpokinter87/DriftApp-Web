@@ -435,23 +435,25 @@ class MotorService:
             logger.warning(f"Commande invalide: {command}")
             return
 
-        logger.info(f"Traitement commande: {cmd_type}")
-
         if cmd_type == "goto":
             angle = command.get("angle", 0)
             speed = command.get("speed")
+            logger.info(f"ipc_command | type=goto angle={angle} speed={speed}")
             self.current_status = self.goto_handler.execute(angle, self.current_status, speed)
 
         elif cmd_type == "jog":
             delta = command.get("delta", 0)
             speed = command.get("speed")
+            logger.info(f"ipc_command | type=jog delta={delta} speed={speed}")
             self.current_status = self.jog_handler.execute(delta, self.current_status, speed)
 
         elif cmd_type == "stop":
+            logger.info("ipc_command | type=stop")
             self.handle_stop()
 
         elif cmd_type == "continuous":
             direction = command.get("direction", "cw")
+            logger.info(f"ipc_command | type=continuous direction={direction}")
             if self.tracking_handler.is_active:
                 self.handle_stop()
             self.continuous_handler.start(direction, self.current_status)
@@ -459,19 +461,21 @@ class MotorService:
         elif cmd_type == "tracking_start":
             object_name = command.get("object", command.get("name"))
             skip_goto = command.get("skip_goto", False)
+            logger.info(f"ipc_command | type=tracking_start object={object_name} skip_goto={skip_goto}")
             if object_name:
                 self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
             else:
-                logger.warning("tracking_start sans nom d'objet")
+                logger.warning("ipc_command | type=tracking_start error=missing_object")
 
         elif cmd_type == "tracking_stop":
+            logger.info("ipc_command | type=tracking_stop")
             self.tracking_handler.stop(self.current_status)
 
         elif cmd_type == "status":
             pass  # Juste mettre à jour
 
         else:
-            logger.warning(f"Commande inconnue: {cmd_type}")
+            logger.warning(f"ipc_command | type={cmd_type} error=unknown_command")
 
         self.ipc.clear_command()
 
@@ -501,6 +505,10 @@ class MotorService:
 
         last_tracking_update = time.time()
         tracking_interval = 1.0
+        service_start_time = time.time()
+        last_heartbeat_time = time.time()
+        last_ipc_snapshot_time = time.time()
+        cmd_count_since_heartbeat = 0
 
         while self.running:
             try:
@@ -511,6 +519,7 @@ class MotorService:
                 command = self.ipc.read_command()
                 if command:
                     self.process_command(command)
+                    cmd_count_since_heartbeat += 1
 
                 # Mettre à jour le suivi si actif
                 now = time.time()
@@ -526,6 +535,37 @@ class MotorService:
                 pos = self.read_encoder_position()
                 if pos is not None and not self.tracking_handler.is_active:
                     self.current_status["position"] = pos
+
+                # Heartbeat toutes les 10 secondes
+                if now - last_heartbeat_time >= self.WATCHDOG_INTERVAL:
+                    uptime = int(now - service_start_time)
+                    is_active = self.tracking_handler.is_active
+                    obj = self.current_status.get("tracking_object", "none") or "none"
+                    tracking_info = self.current_status.get("tracking_info", {})
+                    corrections = tracking_info.get("total_corrections", 0) if is_active else 0
+                    enc = "ok" if pos is not None else "lost"
+                    logger.info(
+                        f"heartbeat | uptime={uptime} tracking={is_active} "
+                        f"object={obj} corrections={corrections} "
+                        f"encoder={enc} cmds={cmd_count_since_heartbeat}"
+                    )
+                    cmd_count_since_heartbeat = 0
+                    last_heartbeat_time = now
+
+                # Snapshot IPC toutes les 60 secondes pendant tracking
+                if self.tracking_handler.is_active and now - last_ipc_snapshot_time >= 60.0:
+                    s = self.current_status
+                    ti = s.get("tracking_info", {})
+                    logger.info(
+                        f"ipc_snapshot | status={s.get('status', 'unknown')} "
+                        f"position={s.get('position', 0):.1f} "
+                        f"target={s.get('target', 'none')} "
+                        f"mode={s.get('mode', 'unknown')} "
+                        f"encoder_angle={pos if pos is not None else 'none'} "
+                        f"encoder_calibrated={ti.get('encoder_offset', 'n/a')} "
+                        f"tracking_object={s.get('tracking_object', 'none')}"
+                    )
+                    last_ipc_snapshot_time = now
 
                 time.sleep(0.05)  # 20Hz de polling
 

@@ -5,18 +5,18 @@
 See: .paul/PROJECT.md (updated 2026-03-15)
 
 **Core value:** Maintenir automatiquement le cimier de la coupole face a l'ouverture du telescope pendant toute la duree d'une session d'astrophotographie.
-**Current focus:** v5.2 Stabilité Terrain — Phase 3 complete, ready for Phase 4
+**Current focus:** v5.2 Stabilité Terrain — Phase 3.5 complete, ready for Phase 4
 
 ## Current Position
 
 Milestone: v5.2 Stabilité Terrain
-Phase: 3 of 4 (Bugs Connus) — Complete ✓
-Plan: 03-01 complete
+Phase: 3.5 of 5 (Refonte Logging Opérationnel) — Complete ✓
+Plan: 03.5-01 complete
 Status: Ready for next PLAN
-Last activity: 2026-03-16 — Phase 3 complete, transitioned to Phase 4
+Last activity: 2026-03-16 — Phase 3.5 complete, transitioned to Phase 4
 
 Progress:
-- v5.2 Stabilité Terrain: [███████░░░] 75%
+- v5.2 Stabilité Terrain: [████████░░] 80%
 - Phase 1: [██████████] 100% ✓
 - Phase 2: [██████████] 100% ✓
 - Phase 3: [██████████] 100% ✓
@@ -47,16 +47,16 @@ PLAN ──▶ APPLY ──▶ UNIFY
 None.
 
 ### Git State
-Last commit: 6d5bd44
+Last commit: 6af443b
 Branch: main
 
 ## Session Continuity
 
 Last session: 2026-03-16
-Stopped at: Phase 3 complete, ready to plan Phase 4
+Stopped at: Phase 3.5 complete, ready to plan Phase 4
 Next action: /paul:plan for Phase 4
 Resume file: .paul/ROADMAP.md
-Resume context: 3 phases complètes, 771 tests verts, issues déferrées résolues
+Resume context: Logging structuré clé=valeur, heartbeat 10s, snapshot IPC 60s, 782 tests
 
 ---
 *STATE.md — Updated after every significant action*

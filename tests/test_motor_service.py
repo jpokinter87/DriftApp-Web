@@ -114,7 +114,7 @@ class TestProcessCommand:
         """Verify unknown commands are handled gracefully with warning."""
         with caplog.at_level(logging.WARNING):
             motor_service.process_command({'command': 'unknown_command_xyz'})
-        assert "Commande inconnue: unknown_command_xyz" in caplog.text
+        assert "ipc_command | type=unknown_command_xyz error=unknown_command" in caplog.text
 
     def test_invalid_command_missing_type(self, motor_service, caplog):
         """Verify commands without type are logged as invalid."""
@@ -165,7 +165,7 @@ class TestHandlerDelegation:
         """tracking_start warns if no object name provided."""
         with caplog.at_level(logging.WARNING):
             motor_service.process_command({'command': 'tracking_start'})
-        assert "tracking_start sans nom d'objet" in caplog.text
+        assert "ipc_command | type=tracking_start error=missing_object" in caplog.text
 
     def test_tracking_stop_delegates(self, motor_service):
         """tracking_stop delegates to tracking_handler.stop."""

@@ -287,13 +287,9 @@ class AdaptiveTrackingManager:
         """Log le changement de mode."""
         reasons_str = ", ".join(reasons)
         self.logger.info(
-            f"🔄 Changement de mode: {old_mode.value} → {new_mode.value}"
-        )
-        self.logger.info(f"   Raisons: {reasons_str}")
-        self.logger.info(
-            f"   Paramètres: intervalle={params.check_interval}s, "
-            f"seuil={params.correction_threshold}°, "
-            f"délai={params.motor_delay}s"
+            f"mode_change | from={old_mode.value} to={new_mode.value} "
+            f"reason={reasons_str} interval={params.check_interval} "
+            f"threshold={params.correction_threshold} delay={params.motor_delay}"
         )
 
     # =========================================================================

@@ -45,14 +45,15 @@ class TrackingCorrectionsMixin:
         if not self.running:
             return False, "Suivi non actif"
 
+        # Session milestone (toutes les 5 min)
+        self._check_session_milestone()
+
         now = datetime.now()
 
         # Vérifier si c'est le moment de faire une correction
         # (respecte l'intervalle configuré, même si appelé plus fréquemment)
         if self.next_correction_time and now < self.next_correction_time:
             return False, ""  # Pas encore le moment
-
-        timestamp = now.strftime("%H:%M:%S")
 
         # Calculer la position actuelle de l'objet (méthode centralisée)
         azimut, altitude = self._calculate_current_coords(now)
@@ -77,9 +78,8 @@ class TrackingCorrectionsMixin:
         # Détection explicite du transit méridien
         if abs(delta) > self.LARGE_MOVEMENT_THRESHOLD:
             self.logger.info(
-                f"TRANSIT MÉRIDIEN détecté : delta={delta:+.1f}° | "
-                f"Az={azimut:.1f}° Alt={altitude:.1f}° | "
-                f"Coupole: {self.position_relative:.1f}° → {position_cible:.1f}°"
+                f"meridian_transit | delta={delta:+.1f} az={azimut:.1f} alt={altitude:.1f} "
+                f"from={self.position_relative:.1f} to={position_cible:.1f}"
             )
             self._log_goto(self.position_relative, position_cible, delta, 'meridian_transit')
 
@@ -87,26 +87,26 @@ class TrackingCorrectionsMixin:
         if abs(delta) < tracking_params.correction_threshold:
             # Mise à jour du temps de prochaine vérification
             self.next_correction_time = now + timedelta(seconds=tracking_params.check_interval)
-
-            return False, f"Delta {delta:+.2f}° < seuil {tracking_params.correction_threshold:.2f}°"
+            self.logger.debug(
+                f"correction_skip | delta={delta:+.2f} threshold={tracking_params.correction_threshold:.2f} "
+                f"next_check={tracking_params.check_interval}s"
+            )
+            return False, f"correction_skip | delta={delta:+.2f} threshold={tracking_params.correction_threshold:.2f}"
 
         # === APPLIQUER LA CORRECTION ===
         self._apply_correction(delta, tracking_params.motor_delay)
 
-        # === LOGS ENRICHIS ===
+        # === LOGS STRUCTURÉS ===
+        mode_str = tracking_params.mode.value if hasattr(tracking_params.mode, 'value') else str(tracking_params.mode)
         log_message = (
-            f"[{now.strftime('%H:%M:%S')}] Correction: {delta:+.2f}° | "
-            f"Az={azimut:.1f}° Alt={altitude:.1f}° | "
-            f"AzCoupole={position_cible:.1f}° | "
-            f"Mode: {tracking_params.mode} (interval={tracking_params.check_interval}s, "
-            f"seuil={tracking_params.correction_threshold}°)"
+            f"correction | delta={delta:+.2f} az={azimut:.1f} alt={altitude:.1f} "
+            f"dome={position_cible:.1f} mode={mode_str} "
+            f"interval={tracking_params.check_interval} threshold={tracking_params.correction_threshold:.2f}"
         )
 
         self.logger.info(log_message)
 
         # === Ajouter à l'historique de dérive ===
-        # Note: tracking_params.mode est un enum TrackingMode, on utilise .value pour la string
-        mode_str = tracking_params.mode.value if hasattr(tracking_params.mode, 'value') else str(tracking_params.mode)
         self.drift_tracking['corrections_log'].append({
             'timestamp': now.isoformat(),
             'azimut': round(azimut, 2),

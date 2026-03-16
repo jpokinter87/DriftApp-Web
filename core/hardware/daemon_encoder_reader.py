@@ -55,6 +55,8 @@ class DaemonEncoderReader:
         """
         self.daemon_path = daemon_path
         self.logger = logging.getLogger(__name__)
+        self._read_count = 0
+        self._stale_count = 0
 
     def is_available(self) -> bool:
         """Vérifie si le fichier démon existe."""
@@ -119,8 +121,10 @@ class DaemonEncoderReader:
                     ts = data.get("ts", 0)
                     age_ms = (time.time() - ts) * 1000.0
                     if age_ms > max_age_ms:
+                        self._stale_count += 1
                         self.logger.warning(
-                            f"⚠️ Données encodeur périmées: {age_ms:.0f}ms > {max_age_ms:.0f}ms"
+                            f"encoder_stale | age_ms={age_ms:.0f} max={max_age_ms:.0f} "
+                            f"reads={self._read_count} stale={self._stale_count}"
                         )
                         raise StaleDataError(
                             f"Données encodeur périmées ({age_ms:.0f}ms > {max_age_ms:.0f}ms)"
@@ -130,11 +134,17 @@ class DaemonEncoderReader:
                 status = data.get("status", "OK")
 
                 if status.startswith("OK"):
+                    self._read_count += 1
+                    if self._read_count % 50 == 0:
+                        self.logger.debug(
+                            f"encoder_health | reads={self._read_count} "
+                            f"stale={self._stale_count} angle={angle:.1f}"
+                        )
                     return angle
                 elif status == "FROZEN":
                     frozen_duration = data.get("frozen_duration", 0)
                     self.logger.warning(
-                        f"⚠️ Encodeur figé depuis {frozen_duration:.1f}s"
+                        f"encoder_frozen | duration={frozen_duration:.1f}s reads={self._read_count}"
                     )
                     raise FrozenEncoderError(
                         f"Encodeur figé depuis {frozen_duration:.1f}s"

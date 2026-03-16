@@ -411,9 +411,9 @@ class TestMeridianTransitDetection:
         with caplog.at_level(logging.INFO, logger='core.tracking.tracker'):
             tracking_session.check_and_correct()
 
-        transit_logs = [r for r in caplog.records if "TRANSIT MÉRIDIEN" in r.message]
+        transit_logs = [r for r in caplog.records if "meridian_transit |" in r.message]
         assert len(transit_logs) >= 1, \
-            f"Aucun log 'TRANSIT MÉRIDIEN' trouvé. Logs: {[r.message for r in caplog.records]}"
+            f"Aucun log 'meridian_transit' trouvé. Logs: {[r.message for r in caplog.records]}"
 
     def test_no_transit_for_small_delta(self, tracking_session):
         """Pas de log transit pour les petits deltas."""
