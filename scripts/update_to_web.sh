@@ -138,15 +138,34 @@ print_step "Répertoire: $(pwd)"
 CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 print_step "Commit actuel: $CURRENT_COMMIT"
 
-# Vérifier s'il y a des modifications locales (notamment config.json)
-LOCAL_CHANGES=false
+# Restaurer les permissions de tout le répertoire (évite les erreurs de permission
+# causées par des exécutions précédentes avec sudo)
+OWNER=$(stat -c '%U:%G' "$DRIFTAPP_DIR")
+print_step "Restauration des permissions du répertoire ($OWNER)..."
+chown -R "$OWNER" "$DRIFTAPP_DIR"
+print_success "Permissions restaurées"
+
+# Sauvegarder config.json si modifié localement
+CONFIG_BACKUP=""
 if ! git diff --quiet data/config.json 2>/dev/null; then
-    LOCAL_CHANGES=true
+    CONFIG_BACKUP="$BACKUP_DIR/config.json.backup_$(date '+%Y%m%d_%H%M%S')"
     print_warning "Modifications locales détectées dans config.json"
-    print_step "Sauvegarde temporaire des modifications locales (git stash)..."
-    git stash push -m "update_to_web: sauvegarde avant pull $(date '+%Y%m%d_%H%M%S')" -- data/config.json
-    print_success "Modifications locales sauvegardées"
+    cp data/config.json "$CONFIG_BACKUP"
+    print_success "Config sauvegardée: $CONFIG_BACKUP"
 fi
+
+# Nettoyer tous les fichiers modifiés localement (sauf config.json déjà sauvegardé)
+# Cela évite les conflits avec git pull pour les fichiers cache, .gitignore, etc.
+if ! git diff --quiet 2>/dev/null; then
+    print_step "Nettoyage des modifications locales (hors config.json sauvegardé)..."
+    git checkout -- . 2>/dev/null || true
+    print_success "Modifications locales nettoyées"
+fi
+
+# Supprimer les fichiers/dossiers non trackés qui pourraient interférer
+# (ex: .paul/ retiré du tracking mais encore présent)
+print_step "Nettoyage des fichiers obsolètes..."
+git clean -fd .paul/ 2>/dev/null || true
 
 # Git pull
 print_step "Téléchargement des mises à jour..."
@@ -159,31 +178,25 @@ if git pull origin main; then
     fi
 else
     print_error "Échec du git pull"
-    # Restaurer les modifications locales si on a stash
-    if [ "$LOCAL_CHANGES" = true ]; then
-        print_step "Restauration des modifications locales..."
-        git stash pop 2>/dev/null || true
+    # Restaurer config.json si sauvegardé
+    if [ -n "$CONFIG_BACKUP" ]; then
+        cp "$CONFIG_BACKUP" data/config.json
+        print_success "Config restaurée depuis $CONFIG_BACKUP"
     fi
     exit 1
 fi
 
-# Restaurer les modifications locales de config.json si elles existaient
-if [ "$LOCAL_CHANGES" = true ]; then
-    print_step "Restauration des modifications locales de config.json..."
-    if git stash pop 2>/dev/null; then
-        print_success "Modifications locales restaurées"
-    else
-        print_warning "Conflit lors de la restauration - vérifiez config.json manuellement"
-        print_step "  → git stash list  (pour voir les sauvegardes)"
-        print_step "  → git stash pop   (pour restaurer)"
-    fi
+# Restaurer config.json depuis la sauvegarde
+if [ -n "$CONFIG_BACKUP" ]; then
+    print_step "Restauration de config.json personnalisé..."
+    cp "$CONFIG_BACKUP" data/config.json
+    print_success "Config restaurée"
 fi
 
-# Restaurer les permissions .git (évite "permission denied" pour l'utilisateur)
-OWNER=$(stat -c '%U:%G' "$DRIFTAPP_DIR")
-print_step "Restauration des permissions .git ($OWNER)..."
-chown -R "$OWNER" "$DRIFTAPP_DIR/.git"
-print_success "Permissions .git restaurées"
+# Restaurer les permissions après le pull
+print_step "Restauration des permissions après mise à jour ($OWNER)..."
+chown -R "$OWNER" "$DRIFTAPP_DIR"
+print_success "Permissions restaurées"
 
 # =============================================================================
 # ÉTAPE 3: Sauvegarde de l'ancien service ems22d
@@ -291,7 +304,9 @@ fi
 print_step "Ajustement des permissions pour $REAL_USER..."
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/logs" 2>/dev/null || true
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/data" 2>/dev/null || true
+chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/data" 2>/dev/null || true
 chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/db.sqlite3" 2>/dev/null || true
+chown "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/uv.lock" 2>/dev/null || true
 
 # Démarrage via systemd
 print_step "Activation et démarrage de driftapp_web.service..."
