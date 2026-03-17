@@ -55,3 +55,10 @@ in_situ/
 
 # Tailwind CSS (binary only - output CSS is committed for deployment)
 tailwindcss
+
+# Cache objets célestes (généré au runtime)
+data/objets_cache.json
+web/data/objets_cache.json
+
+# Fichiers de gestion de projet (non nécessaires en production)
+.paul/
