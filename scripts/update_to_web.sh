@@ -58,6 +58,9 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Utilisateur qui a lancé sudo (pour les permissions)
+REAL_USER="${SUDO_USER:-$USER}"
+
 # Début du script
 print_header "MISE À JOUR VERS DRIFTAPP WEB"
 echo ""
@@ -199,6 +202,36 @@ chown -R "$OWNER" "$DRIFTAPP_DIR"
 print_success "Permissions restaurées"
 
 # =============================================================================
+# ÉTAPE 2b: Installation des dépendances Python
+# =============================================================================
+print_header "ÉTAPE 2b: Installation des dépendances Python (uv sync)"
+
+print_step "Vérification de uv..."
+if command -v uv &> /dev/null; then
+    print_success "uv trouvé: $(uv --version)"
+else
+    print_error "uv non trouvé! Installation requise: curl -LsSf https://astral.sh/uv/install.sh | sh"
+    exit 1
+fi
+
+print_step "Installation des dépendances (uv sync)..."
+# Exécuter uv sync en tant que l'utilisateur réel (pas root) pour éviter les problèmes de permissions
+if su - "$REAL_USER" -c "cd $DRIFTAPP_DIR && uv sync" 2>&1; then
+    print_success "Dépendances installées"
+else
+    print_error "Échec de uv sync!"
+    exit 1
+fi
+
+# Vérifier que le venv existe
+if [ -f "$DRIFTAPP_DIR/.venv/bin/python" ]; then
+    print_success "Environnement virtuel OK: $DRIFTAPP_DIR/.venv/bin/python"
+else
+    print_error "Environnement virtuel non trouvé après uv sync!"
+    exit 1
+fi
+
+# =============================================================================
 # ÉTAPE 3: Sauvegarde de l'ancien service ems22d
 # =============================================================================
 print_header "ÉTAPE 3: Sauvegarde des fichiers de service"
@@ -289,9 +322,6 @@ fi
 # ÉTAPE 6: Démarrage de Django (via systemd)
 # =============================================================================
 print_header "ÉTAPE 6: Démarrage de Django"
-
-# Utilisateur qui a lancé sudo (pour les permissions des fichiers)
-REAL_USER="${SUDO_USER:-$USER}"
 
 # Arrêter Django manuel s'il tourne (processus orphelins)
 if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
