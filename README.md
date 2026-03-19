@@ -7,7 +7,7 @@
 
 **Système intelligent de suivi de coupole d'observatoire** avec modes adaptatifs automatiques et feedback temps réel. Interface web responsive pour contrôle local et distant.
 
-> **Version actuelle** : 4.6 Web - Architecture trois processus + Monitoring (Janvier 2026)
+> **Version actuelle** : 5.3.0 - Pilotage RP2040 + Interface Tailwind/Alpine.js (Mars 2026)
 
 ---
 
@@ -37,10 +37,11 @@ Lors d'observations astronomiques prolongées, le télescope suit l'objet céles
 ### Solution DriftApp
 
 DriftApp calcule en permanence la position optimale de la coupole en utilisant :
-- **Méthode Abaque** : Interpolation à partir de ~130 mesures terrain réelles
-- **Modes adaptatifs** : Ajustement automatique des paramètres selon l'altitude
-- **Feedback encodeur** : Boucle fermée avec encodeur magnétique EMS22A
-- **Calibration automatique** : Recalage via microswitch à 45° azimut
+- **Methode Abaque** : Interpolation a partir de ~275 mesures terrain reelles
+- **Modes adaptatifs** : Ajustement automatique des parametres selon l'altitude
+- **Feedback encodeur** : Boucle fermee avec encodeur magnetique EMS22A
+- **Calibration automatique** : Recalage via microswitch a 45° azimut
+- **Pilotage RP2040** (v5.3) : Delegation optionnelle au Pi Pico pour precision PIO 8 ns
 
 ---
 
@@ -50,7 +51,7 @@ DriftApp utilise exclusivement une **méthode abaque** basée sur des mesures r�
 
 ### Interpolation à partir de mesures terrain
 
-Le fichier `data/Loi_coupole.xlsx` contient ~130 points de mesure :
+Le fichier `data/Loi_coupole.xlsx` contient ~275 points de mesure :
 ```
 (Altitude, Azimut) → Position_Coupole
 ```
@@ -76,46 +77,60 @@ Pour une position (Alt, Az) donnée :
 
 ```
 
-### Structure des Répertoires
+### Structure des Repertoires
 
 ```
 DriftApp/
-├── manage.py                      # Point d'entrée Django
-├── ems22d_calibrated.py           # Démon encodeur
+├── ems22d_calibrated.py           # Demon encodeur
+├── start_web.sh                   # Demarrage production (sudo)
+├── start_dev.sh                   # Demarrage developpement (simulation)
 │
-├── core/                          # Logique métier
-│   ├── config/                    # Configuration
-│   ├── hardware/                  # Moteur, encodeur, simulation
-│   │   ├── moteur.py              # Contrôle moteur DM556T
-│   │   ├── moteur_simule.py       # Simulation réaliste
-│   │   └── feedback_controller.py # Boucle fermée
-│   ├── tracking/                  # Logique de suivi
-│   │   ├── tracker.py             # Session de tracking
-│   │   ├── adaptive_tracking.py   # Système adaptatif
-│   │   └── abaque_manager.py      # Interpolation abaque
+├── core/                          # Logique metier
+│   ├── config/
+│   │   ├── config.py              # Constantes, get_motor_config()
+│   │   └── config_loader.py       # ConfigLoader, dataclasses (DriftAppConfig...)
+│   ├── hardware/
+│   │   ├── moteur.py              # MoteurCoupole (GPIO lgpio/RPi.GPIO)
+│   │   ├── moteur_rp2040.py       # MoteurRP2040 (serie USB vers Pi Pico) — v5.3
+│   │   ├── serial_simulator.py    # Simulateur serie pour dev sans Pico — v5.3
+│   │   ├── moteur_simule.py       # Simulation realiste
+│   │   ├── feedback_controller.py # Boucle fermee iterative
+│   │   ├── acceleration_ramp.py   # Rampe S-curve
+│   │   └── daemon_encoder_reader.py # Lecteur encodeur IPC
+│   ├── tracking/
+│   │   ├── tracker.py             # TrackingSession (classe principale)
+│   │   ├── adaptive_tracking.py   # 3 modes adaptatifs
+│   │   └── abaque_manager.py      # Interpolation 2D (Loi_coupole.xlsx)
 │   └── observatoire/              # Calculs astronomiques
 │
+├── firmware/                      # Firmware RP2040 (v5.3)
+│   ├── main.py                    # Boucle serie MOVE/STOP/STATUS
+│   ├── step_generator.py          # Programme PIO assembleur
+│   ├── ramp.py                    # Rampe S-curve cote firmware
+│   └── README.md                  # Guide flash MicroPython
+│
 ├── services/                      # Motor Service
-│   ├── motor_service.py           # Service principal
+│   ├── motor_service.py           # Service principal, watchdog systemd
 │   ├── command_handlers.py        # Handlers GOTO/JOG/TRACKING
 │   ├── ipc_manager.py             # Communication inter-processus
-│   └── simulation.py              # Composants simulation
+│   └── simulation.py              # SimulatedDaemonReader
 │
-├── web/                           # Application Django
-│   ├── settings.py                # Configuration Django
-│   ├── views.py                   # Vues API
-│   ├── urls.py                    # Routes
-│   ├── templates/                 # Templates HTML
-│   │   └── dashboard.html
-│   └── static/                    # CSS, JS
-│       ├── css/dashboard.css
-│       └── js/dashboard.js
+├── web/                           # Application Django + Tailwind + Alpine.js
+│   ├── driftapp_web/              # Config Django (settings.py, urls.py)
+│   ├── hardware/                  # API controle moteur
+│   ├── tracking/                  # API suivi astronomique
+│   ├── health/                    # API diagnostic systeme
+│   ├── session/                   # API sessions
+│   ├── templates/                 # 3 pages HTML (dashboard, system, session)
+│   └── static/                    # Tailwind CSS, Alpine.js, boussole canvas
 │
 ├── data/
-│   ├── config.json                # Configuration
-│   └── Loi_coupole.xlsx           # Abaque mesures terrain
+│   ├── config.json                # Configuration centralisee
+│   └── Loi_coupole.xlsx           # Abaque 275 mesures terrain
 │
-└── tests/                         # Tests unitaires
+├── tests/                         # 820+ tests (pytest)
+├── RP2040_UPGRADE.md              # Guide migration GPIO → RP2040
+└── CLAUDE.md                      # Guide developpeur
 ```
 
 ---
@@ -248,7 +263,11 @@ Fichier : `data/config.json`
     "latitude": 44.15,
     "longitude": 5.23,
     "altitude": 800,
-    "nom": "Observatoire"
+    "nom": "Observatoire Ubik"
+  },
+  "motor_driver": {
+    "type": "gpio",
+    "serial": { "port": "/dev/ttyACM0", "baudrate": 115200, "timeout": 2.0 }
   },
   "moteur": {
     "microsteps": 4,
@@ -257,20 +276,19 @@ Fichier : `data/config.json`
     "steps_correction_factor": 1.08849
   },
   "adaptive_tracking": {
-    "altitudes": {
-      "critical": 68.0,
-      "zenith": 75.0
-    },
+    "altitudes": { "critical": 68.0, "zenith": 75.0 },
     "modes": {
-      "normal": { "interval_sec": 60, "motor_delay": 0.0011 },
-      "critical": { "interval_sec": 15, "motor_delay": 0.00055 },
-      "continuous": { "interval_sec": 5, "motor_delay": 0.00015 }
+      "normal": { "interval_sec": 60, "motor_delay": 0.002 },
+      "critical": { "interval_sec": 30, "motor_delay": 0.001 },
+      "continuous": { "interval_sec": 30, "motor_delay": 0.00014 }
     }
   }
 }
 ```
 
-**IMPORTANT** : Le paramètre `microsteps: 4` DOIT correspondre à la configuration du driver DM556T.
+**Notes** :
+- `microsteps: 4` DOIT correspondre a la configuration du driver DM556T
+- `motor_driver.type` : `"gpio"` (defaut) ou `"rp2040"` (Pi Pico) — voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md)
 
 ---
 
@@ -327,11 +345,11 @@ uv run python manage.py runserver 0.0.0.0:8000
 
 ### 3 Modes Automatiques
 
-| Mode | Déclencheur | Intervalle | Seuil | Vitesse |
-|------|-------------|------------|-------|---------|
-| NORMAL | Altitude < 68° | 60s | 0.5° | ~9°/min |
-| CRITICAL | 68° ≤ Alt < 75° | 15s | 0.25° | ~17°/min |
-| CONTINUOUS | Alt ≥ 75° ou Δ > 30° | 5s | 0.1° | ~41°/min |
+| Mode | Declencheur | Intervalle | Seuil | Delai moteur |
+|------|-------------|------------|-------|--------------|
+| NORMAL | Altitude < 68° | 60s | 0.5° | 2.0 ms |
+| CRITICAL | 68° ≤ Alt < 75° | 30s | 0.35° | 1.0 ms |
+| CONTINUOUS | Alt ≥ 75° ou Δ > 30° | 30s | 0.3° | 0.14 ms |
 
 ### Logique de Sélection
 
@@ -492,23 +510,28 @@ Redémarrer le Motor Service pour réinitialiser.
 ## Tests
 
 ```bash
-# Tests rapides (sans dépendances lourdes)
-uv run pytest tests/test_angle_utils.py tests/test_config.py tests/test_simulation.py -v
-
-# Tests complets
+# Tests complets (820+)
 uv run pytest tests/ -v
 
-# Tests de simulation avec timing
-uv run pytest tests/test_simulation.py -v
+# Tests rapides (sans astropy)
+uv run pytest tests/ -k "not astropy" -v
+
+# Tests moteur GPIO et RP2040
+uv run pytest tests/test_moteur.py tests/test_moteur_rp2040.py -v
+
+# Tests integration RP2040
+uv run pytest tests/test_integration_rp2040.py -v
 ```
 
 ---
 
 ## Documentation
 
-- **CLAUDE.md** : Guide développeur, instructions Claude Code
-- **data/config.json** : Configuration complète avec commentaires
-- **tests_sur_site/** : Outils de diagnostic terrain
+- **CLAUDE.md** : Guide developpeur, instructions Claude Code
+- **RP2040_UPGRADE.md** : Guide migration GPIO → RP2040 (terrain)
+- **firmware/README.md** : Guide flash MicroPython + branchements Pi Pico
+- **data/config.json** : Configuration complete avec commentaires
+- **docs/IPC_API.md** : Documentation API IPC inter-processus
 
 ---
 
@@ -537,6 +560,20 @@ Cette protection est activée par défaut et réduit considérablement le stress
 
 ---
 
-**Version** : 4.6 Web
-**Date** : Décembre 2025
+## Changelog
+
+| Version | Date | Description |
+|---------|------|-------------|
+| **5.3** | Mars 2026 | Pilotage RP2040 : firmware PIO 8 ns, MoteurRP2040 serie, fallback GPIO/RP2040 |
+| **5.2** | Mars 2026 | Watchdog thread meridien, logging structure cle=valeur, tests terrain |
+| **5.1** | Mars 2026 | Sync production, audit code, refactoring, 746 tests |
+| **5.0** | Fev 2026 | Interface moderne Tailwind CSS v4 + Alpine.js, responsive |
+| **4.6** | Dec 2025 | DaemonEncoderReader, warm-up phase, support Pi 5 |
+| **4.5** | Dec 2025 | Rampe S-curve acceleration/deceleration |
+| **4.4** | Dec 2025 | GOTO fluide, architecture 3 processus IPC |
+
+---
+
+**Version** : 5.3.0
+**Date** : Mars 2026
 **Licence** : MIT
