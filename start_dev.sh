@@ -15,6 +15,11 @@ cd "$PROJECT_DIR"
 # Python du virtual environment
 PYTHON="$PROJECT_DIR/.venv/bin/python"
 
+# Synchroniser les dépendances (crée le venv si nécessaire)
+if command -v uv &> /dev/null; then
+    uv sync --quiet 2>/dev/null || true
+fi
+
 # Vérifier que le venv existe
 if [[ ! -f "$PYTHON" ]]; then
     echo -e "\033[0;31m[ERROR]\033[0m Virtual environment non trouvé!"

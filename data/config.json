@@ -38,6 +38,18 @@
 
   "simulation": false,
 
+  "motor_driver": {
+    "_comment": "Pilote moteur : gpio (direct Raspberry Pi) ou rp2040 (via Pico USB serie)",
+    "type": "gpio",
+    "_type_comment": "gpio = pilotage GPIO direct (defaut), rp2040 = delegation au firmware Pico",
+    "serial": {
+      "port": "/dev/ttyACM0",
+      "baudrate": 115200,
+      "timeout": 2.0,
+      "_port_comment": "Port serie USB CDC du Pico (generalement /dev/ttyACM0)"
+    }
+  },
+
   "moteur": {
     "_comment": "Configuration du moteur pas-à-pas",
     

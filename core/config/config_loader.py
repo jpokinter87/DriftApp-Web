@@ -164,6 +164,21 @@ class ThresholdsConfig:
 
 
 @dataclass
+class SerialConfig:
+    """Configuration du port serie pour RP2040."""
+    port: str
+    baudrate: int
+    timeout: float
+
+
+@dataclass
+class MotorDriverConfig:
+    """Configuration du pilote moteur (GPIO direct ou RP2040 serie)."""
+    type: str  # "gpio" ou "rp2040"
+    serial: SerialConfig
+
+
+@dataclass
 class EncoderSPIConfig:
     """Configuration SPI de l'encodeur."""
     bus: int
@@ -204,6 +219,7 @@ class DriftAppConfig:
     """
     site: SiteConfig
     motor: MotorConfig
+    motor_driver: MotorDriverConfig
     tracking: TrackingConfig
     adaptive: AdaptiveConfig
     encoder: EncoderConfig
@@ -215,6 +231,7 @@ class DriftAppConfig:
             f"DriftAppConfig(\n"
             f"  Site: {self.site}\n"
             f"  Motor: {self.motor}\n"
+            f"  Driver: {self.motor_driver.type}\n"
             f"  Adaptive: {len(self.adaptive.modes)} modes\n"
             f"  Encoder: {'ON' if self.encoder.enabled else 'OFF'}\n"
             f"  Simulation: {self.simulation}\n"
@@ -267,6 +284,7 @@ class ConfigLoader:
         return DriftAppConfig(
             site=self._parse_site(),
             motor=self._parse_motor(),
+            motor_driver=self._parse_motor_driver(),
             tracking=self._parse_tracking(),
             adaptive=self._parse_adaptive(),
             encoder=self._parse_encoder(),
@@ -308,6 +326,19 @@ class ConfigLoader:
             motor_delay_max=float(c.get("motor_delay_max", 0.01)),
             max_speed_steps_per_sec=int(c.get("max_speed_steps_per_sec", 10000)),
             acceleration_steps_per_sec2=int(c.get("acceleration_steps_per_sec2", 5000))
+        )
+
+    def _parse_motor_driver(self) -> MotorDriverConfig:
+        """Parse la section motor_driver (fallback GPIO par defaut)."""
+        c = self.cfg.get("motor_driver", {})
+        serial_cfg = c.get("serial", {})
+        return MotorDriverConfig(
+            type=str(c.get("type", "gpio")).lower(),
+            serial=SerialConfig(
+                port=str(serial_cfg.get("port", "/dev/ttyACM0")),
+                baudrate=int(serial_cfg.get("baudrate", 115200)),
+                timeout=float(serial_cfg.get("timeout", 2.0)),
+            ),
         )
 
     def _parse_tracking(self) -> TrackingConfig:
@@ -409,6 +440,7 @@ class ConfigLoader:
         self.logger.info(f"  Moteur: {config.motor.steps_per_dome_revolution} steps/tour")
         self.logger.info(f"  Modes adaptatifs: {len(config.adaptive.modes)}")
         self.logger.info(f"  Encodeur: {'ON' if config.encoder.enabled else 'OFF'}")
+        self.logger.info(f"  Driver: {config.motor_driver.type}")
         self.logger.info(f"  Mode: {'SIMULATION' if config.simulation else 'PRODUCTION'}")
 
 

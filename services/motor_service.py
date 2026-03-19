@@ -42,7 +42,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
 from core.hardware.moteur import MoteurCoupole, get_daemon_reader, set_daemon_reader
+from core.hardware.moteur_rp2040 import MoteurRP2040
 from core.hardware.moteur_simule import MoteurSimule
+from core.hardware.serial_simulator import SerialSimulator
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager
@@ -224,16 +226,36 @@ class MotorService:
 
     def _init_hardware(self):
         """Initialise le matériel (moteur et encodeur)."""
+        driver_type = self.config.motor_driver.type
+
         if self.simulation_mode:
             logger.info("MODE SIMULATION ACTIVÉ")
-            self.moteur = MoteurSimule(self.config.motor)
+            if driver_type == "rp2040":
+                logger.info("Driver RP2040 (simulation serie)")
+                serial_sim = SerialSimulator()
+                self.moteur = MoteurRP2040(self.config.motor, serial_sim)
+            else:
+                self.moteur = MoteurSimule(self.config.motor)
             # Injecter le lecteur simulé comme instance globale
             self.daemon_reader = SimulatedDaemonReader()
             set_daemon_reader(self.daemon_reader)
-            self.feedback_controller = self.moteur
+            self.feedback_controller = self.moteur if driver_type != "rp2040" else FeedbackController(
+                self.moteur,
+                self.daemon_reader,
+                protection_threshold=self.config.thresholds.feedback_protection_deg,
+            )
         else:
-            logger.info("MODE PRODUCTION - GPIO actif")
-            self.moteur = MoteurCoupole(self.config.motor)
+            if driver_type == "rp2040":
+                logger.info("MODE PRODUCTION - RP2040 serie")
+                serial_port = self._open_serial_port()
+                if serial_port is not None:
+                    self.moteur = MoteurRP2040(self.config.motor, serial_port)
+                else:
+                    logger.warning("Fallback vers GPIO direct (port serie indisponible)")
+                    self.moteur = MoteurCoupole(self.config.motor)
+            else:
+                logger.info("MODE PRODUCTION - GPIO actif")
+                self.moteur = MoteurCoupole(self.config.motor)
             # Réutiliser l'instance globale du lecteur daemon
             self.daemon_reader = get_daemon_reader()
             self.feedback_controller = FeedbackController(
@@ -241,6 +263,30 @@ class MotorService:
                 self.daemon_reader,
                 protection_threshold=self.config.thresholds.feedback_protection_deg,
             )
+
+    def _open_serial_port(self):
+        """
+        Ouvre le port serie pour le RP2040.
+
+        Returns:
+            serial.Serial ou None si echec
+        """
+        cfg = self.config.motor_driver.serial
+        try:
+            import serial
+            port = serial.Serial(
+                port=cfg.port,
+                baudrate=cfg.baudrate,
+                timeout=cfg.timeout,
+            )
+            logger.info(f"Port serie ouvert: {cfg.port} @ {cfg.baudrate} bauds")
+            return port
+        except ImportError:
+            logger.warning("pyserial non installe — impossible d'ouvrir le port serie")
+            return None
+        except Exception as e:
+            logger.warning(f"Erreur ouverture port serie {cfg.port}: {e}")
+            return None
 
     def _init_managers(self):
         """Initialise les gestionnaires."""

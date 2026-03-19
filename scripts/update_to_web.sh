@@ -193,6 +193,18 @@ if [ -n "$CONFIG_BACKUP" ]; then
     print_success "Config restaurée"
 fi
 
+# Synchroniser les dépendances Python après mise à jour du code
+print_step "Synchronisation des dépendances (uv sync)..."
+if command -v uv &> /dev/null; then
+    if uv sync 2>&1; then
+        print_success "Dépendances synchronisées"
+    else
+        print_warning "Échec de uv sync — les dépendances peuvent être obsolètes"
+    fi
+else
+    print_warning "uv non installé — synchronisation des dépendances ignorée"
+fi
+
 # Restaurer les permissions après le pull
 print_step "Restauration des permissions après mise à jour ($OWNER)..."
 chown -R "$OWNER" "$DRIFTAPP_DIR"

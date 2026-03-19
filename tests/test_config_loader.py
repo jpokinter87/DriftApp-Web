@@ -24,7 +24,9 @@ from core.config.config_loader import (
     EncoderSPIConfig,
     GPIOPins,
     MotorConfig,
+    MotorDriverConfig,
     MovementThresholds,
+    SerialConfig,
     SiteConfig,
     ThresholdsConfig,
     TrackingConfig,
@@ -219,6 +221,7 @@ class TestDriftAppConfig:
                 GPIOPins(17, 18), 200, 4, 2230.0, 1.0,
                 0.002, 0.00001, 0.01, 1000, 500
             ),
+            motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, "data/Loi.xlsx"),
             adaptive=AdaptiveConfig(
                 AltitudeThresholds(68.0, 75.0),
@@ -238,6 +241,7 @@ class TestDriftAppConfig:
         config = DriftAppConfig(
             site=SiteConfig(0, 0, 0, "", "", 0),
             motor=MotorConfig(GPIOPins(0, 0), 200, 4, 2230, 1, 0, 0, 0, 0, 0),
+            motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, ""),
             adaptive=AdaptiveConfig(
                 AltitudeThresholds(68, 75), MovementThresholds(30, 50), {}, []
