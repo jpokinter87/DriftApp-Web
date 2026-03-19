@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 4.6 (Janvier 2025)
+**Version actuelle**: 5.3.0 (Mars 2026)
 
 ---
 
@@ -25,8 +25,9 @@ sudo ./start_web.sh
 cd web && python manage.py runserver 0.0.0.0:8000
 
 # Tests
-uv run pytest -v                                    # Tous les tests (315+)
-uv run pytest tests/test_moteur.py -v              # Tests moteur
+uv run pytest -v                                    # Tous les tests (820+)
+uv run pytest tests/test_moteur.py -v              # Tests moteur GPIO
+uv run pytest tests/test_moteur_rp2040.py -v       # Tests moteur RP2040
 uv run pytest tests/ -k "not astropy" -v           # Sans astropy
 
 # Diagnostics manuels (Raspberry Pi)
@@ -47,6 +48,15 @@ Django (port 8000) ──► /dev/shm/motor_command.json ──► Motor Service
                          Encoder Daemon (ems22d_calibrated.py)
 ```
 
+**Pilotage moteur** (configurable dans `data/config.json` → `motor_driver.type`):
+- `"gpio"` (defaut): Motor Service pilote directement via GPIO (lgpio/RPi.GPIO)
+- `"rp2040"`: Motor Service envoie des commandes serie au Pi Pico (RP2040) via USB CDC
+
+```
+Mode GPIO:    Motor Service ──► GPIO ──► DM556T
+Mode RP2040:  Motor Service ──► USB serie ──► Pi Pico (PIO 8ns) ──► DM556T
+```
+
 **Fichiers IPC**:
 - `motor_command.json`: Commandes Django → Motor (GOTO, JOG, TRACKING)
 - `motor_status.json`: Etat Motor → Django (position, mode, logs)
@@ -61,10 +71,13 @@ Django (port 8000) ──► /dev/shm/motor_command.json ──► Motor Service
 ```
 core/
 ├── config/
-│   └── config.py               # Constantes, get_motor_config(), get_site_config()
+│   ├── config.py               # Constantes, get_motor_config(), get_site_config()
+│   └── config_loader.py        # ConfigLoader, dataclasses (DriftAppConfig, MotorDriverConfig...)
 │
 ├── hardware/
 │   ├── moteur.py               # MoteurCoupole (GPIO lgpio/RPi.GPIO)
+│   ├── moteur_rp2040.py        # MoteurRP2040 (serie USB vers Pi Pico) — v5.3
+│   ├── serial_simulator.py     # Simulateur serie pour dev sans Pico — v5.3
 │   ├── acceleration_ramp.py    # Rampe S-curve + warm-up (10 pas @ 10ms)
 │   ├── daemon_encoder_reader.py # Lecteur encodeur IPC (v4.6)
 │   ├── feedback_controller.py  # Boucle fermee iterative
@@ -113,6 +126,16 @@ web/
 └── static/               # CSS, JS (boussole canvas, Chart.js)
 ```
 
+### firmware/ - Firmware RP2040 (v5.3)
+
+```
+firmware/
+├── main.py              # Boucle serie MOVE/STOP/STATUS via USB CDC
+├── step_generator.py    # Programme PIO assembleur + classe StepGenerator
+├── ramp.py              # Rampe S-curve portee depuis acceleration_ramp.py
+└── README.md            # Guide flash MicroPython + branchements
+```
+
 ---
 
 ## Modes Adaptatifs
@@ -120,8 +143,8 @@ web/
 | Mode | Declencheur | Delai Moteur | Intervalle | Usage |
 |------|-------------|--------------|------------|-------|
 | NORMAL | altitude < 68° | 2.0 ms | 60s | Suivi standard |
-| CRITICAL | 68° ≤ alt < 75° | 1.0 ms | 15s | Proche zenith |
-| CONTINUOUS | alt ≥ 75° ou Δ > 30° | 0.15 ms | 5s | Zenith + GOTO |
+| CRITICAL | 68° ≤ alt < 75° | 1.0 ms | 30s | Proche zenith |
+| CONTINUOUS | alt ≥ 75° ou Δ > 30° | 0.14 ms | 30s | Zenith + GOTO |
 
 ---
 
@@ -146,13 +169,31 @@ reader = get_daemon_reader()  # Singleton global
 angle = reader.read_angle()   # Lecture avec timeout
 ```
 
+### Pilotage RP2040 (v5.3)
+```python
+# MoteurRP2040 a la meme interface que MoteurCoupole
+from core.hardware.moteur_rp2040 import MoteurRP2040
+from core.hardware.serial_simulator import SerialSimulator
+
+# En dev (simulation) :
+moteur = MoteurRP2040(config_moteur, SerialSimulator())
+
+# En production (Pi Pico branche) :
+import serial
+moteur = MoteurRP2040(config_moteur, serial.Serial("/dev/ttyACM0", 115200))
+
+# Memes methodes que MoteurCoupole :
+moteur.rotation(45.0, vitesse=0.002, use_ramp=True)  # → MOVE serie
+moteur.request_stop()                                  # → STOP serie
+```
+
 ---
 
 ## Fichiers de Configuration
 
 | Fichier | Description |
 |---------|-------------|
-| `data/config.json` | Config centralisee (site, moteur, GPIO, seuils, modes) |
+| `data/config.json` | Config centralisee (site, moteur, motor_driver, GPIO, seuils, modes) |
 | `data/Loi_coupole.xlsx` | Abaque 275 points mesures (interpolation 2D) |
 | `ems22d.service` | Service systemd encodeur |
 | `motor_service.service` | Service systemd moteur (watchdog 30s) |
@@ -198,10 +239,17 @@ params = adaptive_manager.evaluate_tracking_zone(altitude, azimut, delta)
 ## Tests
 
 ```bash
+# Tous les tests (820+)
+uv run pytest -v
+
 # Tests rapides (sans astropy)
 uv run pytest tests/test_angle_utils.py tests/test_config.py tests/test_moteur.py \
+    tests/test_moteur_rp2040.py tests/test_config_loader.py \
     tests/test_feedback_controller.py tests/test_ipc_manager.py tests/test_simulation.py \
     tests/test_acceleration_ramp.py -v
+
+# Tests RP2040 (unitaires + integration)
+uv run pytest tests/test_moteur_rp2040.py tests/test_integration_rp2040.py -v
 
 # Tests avec astropy
 uv run pytest tests/test_calculations.py tests/test_command_handlers.py -v
@@ -212,6 +260,7 @@ uv run pytest tests/test_moteur.py::TestMoteurCoupoleControl -v
 
 **Notes**:
 - Mocks GPIO/hardware (fonctionne sans Raspberry Pi)
+- SerialSimulator pour tests RP2040 sans Pi Pico physique
 - Scripts diagnostics dans `scripts/diagnostics/` (non collectes par pytest)
 
 ---
@@ -235,6 +284,14 @@ sudo journalctl -u motor_service -f  # Logs temps reel
 // data/config.json
 { "simulation": true }
 ```
+
+### Changer de driver moteur (GPIO ↔ RP2040)
+```json
+// data/config.json → section motor_driver
+{ "motor_driver": { "type": "rp2040" } }   // Pi Pico
+{ "motor_driver": { "type": "gpio" } }      // GPIO direct (defaut)
+```
+Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 ---
 
@@ -275,7 +332,8 @@ sudo journalctl -u motor_service -f  # Logs temps reel
 
 | Version | Date | Changements |
 |---------|------|-------------|
-| **5.2** | Mars 2026 | Watchdog thread méridien, logging structuré clé=valeur, tests terrain |
+| **5.3** | Mars 2026 | Pilotage RP2040 : firmware PIO, MoteurRP2040 serie, fallback GPIO/RP2040, guide terrain |
+| **5.2** | Mars 2026 | Watchdog thread meridien, logging structure cle=valeur, tests terrain |
 | **5.1** | Mars 2026 | Sync production, audit code, refactoring, 746 tests |
 | **5.0** | Fev 2026 | Interface moderne Tailwind + Alpine.js |
 | **4.6** | Dec 2025 | DaemonEncoderReader extrait, warm-up phase, support Pi 5 |
