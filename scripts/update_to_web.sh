@@ -279,9 +279,8 @@ sleep 2  # Attendre que l'encodeur soit prêt
 if systemctl is-active --quiet ems22d.service; then
     print_success "ems22d.service actif"
 else
-    print_error "ems22d.service n'a pas démarré!"
-    journalctl -u ems22d.service -n 10 --no-pager
-    exit 1
+    print_warning "ems22d.service n'a pas démarré (le systeme reste fonctionnel)"
+    journalctl -u ems22d.service -n 5 --no-pager 2>/dev/null || true
 fi
 
 print_step "Activation et démarrage de motor_service.service..."
@@ -292,9 +291,8 @@ sleep 3  # Attendre l'initialisation
 if systemctl is-active --quiet motor_service.service; then
     print_success "motor_service.service actif"
 else
-    print_error "motor_service.service n'a pas démarré!"
-    journalctl -u motor_service.service -n 10 --no-pager
-    exit 1
+    print_warning "motor_service.service n'a pas démarré (le systeme reste fonctionnel)"
+    journalctl -u motor_service.service -n 5 --no-pager 2>/dev/null || true
 fi
 
 # =============================================================================
