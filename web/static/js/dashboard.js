@@ -1559,7 +1559,7 @@ function showUpdateError(message) {
  * Polls the health endpoint until it responds.
  */
 async function waitForServiceRestart() {
-    const maxAttempts = 30;  // 30 attempts x 2 seconds = 60 seconds max
+    const maxAttempts = 90;  // 90 attempts x 2 seconds = 3 minutes max
     let attempts = 0;
     const progressText = document.getElementById('update-progress-text');
 
