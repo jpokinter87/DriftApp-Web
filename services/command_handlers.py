@@ -393,21 +393,28 @@ class ContinuousHandler:
         if self.thread and self.thread.is_alive():
             self.stop_flag.set()
             self.moteur.request_stop()
-            self.thread.join(timeout=2.0)
+            self.thread.join(timeout=5.0)
 
             if self.thread.is_alive():
-                logger.warning("ContinuousHandler thread did not stop within timeout (2s)")
+                logger.warning("ContinuousHandler thread did not stop within timeout (5s)")
                 self.moteur.request_stop()
 
             self.thread = None
 
     def _movement_loop(self, direction: str, current_status: Dict[str, Any]):
         """Boucle de mouvement continu (daemon thread)."""
-        delta_per_step = 1.0 if direction == "cw" else -1.0
         step_interval = 0.1
         speed = _get_motor_speed(self.config)
 
-        logger.debug(f"Thread mouvement continu démarré: {direction}")
+        # Pour le RP2040, envoyer des rotations plus grandes (30°) pour eviter
+        # les allers-retours serie qui causent des micro-arrets.
+        # Le firmware gere STOP en cours de mouvement via check_for_stop().
+        is_rp2040 = hasattr(self.moteur, '_serial_lock')
+        delta_per_step = 30.0 if is_rp2040 else 1.0
+        if direction != "cw":
+            delta_per_step = -delta_per_step
+
+        logger.debug(f"Thread mouvement continu démarré: {direction} (delta={delta_per_step}°)")
 
         while not self.stop_flag.is_set():
             try:
@@ -417,7 +424,8 @@ class ContinuousHandler:
 
                 if self.simulation_mode:
                     current = get_simulated_position()
-                    new_pos = (current + delta_per_step) % 360
+                    sim_delta = 1.0 if direction == "cw" else -1.0
+                    new_pos = (current + sim_delta) % 360
                     set_simulated_position(new_pos)
                     with self.status_lock:
                         current_status["position"] = new_pos

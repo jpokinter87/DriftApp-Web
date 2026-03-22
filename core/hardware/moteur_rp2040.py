@@ -23,6 +23,7 @@ Date: Mars 2026
 """
 
 import logging
+import threading
 import time
 from typing import Dict, Any, Optional
 
@@ -58,6 +59,7 @@ class MoteurRP2040:
         self.serial_port = serial_port
         self.direction_actuelle = 1
         self.stop_requested = False
+        self._serial_lock = threading.Lock()
 
         # Parser la config moteur (meme logique que MoteurCoupole)
         params = parse_motor_config(config_moteur)
@@ -90,6 +92,9 @@ class MoteurRP2040:
         """
         Envoie une commande au firmware et lit la reponse.
 
+        Thread-safe via _serial_lock. Ne pas appeler depuis request_stop()
+        qui utilise _send_stop() sans lock pour pouvoir interrompre un MOVE en cours.
+
         Args:
             cmd: Commande texte (sans newline)
             timeout: Timeout pour la reponse (secondes). Si None, utilise le timeout du port.
@@ -103,26 +108,24 @@ class MoteurRP2040:
         if not self.serial_port.is_open:
             raise IOError("Port serie RP2040 ferme")
 
-        # Vider le buffer d'entree avant d'envoyer (evite les reponses residuelles)
-        self.serial_port.reset_input_buffer()
-
-        # Ajuster le timeout si specifie
-        old_timeout = self.serial_port.timeout
-        if timeout is not None:
-            self.serial_port.timeout = timeout
-
-        try:
-            self.serial_port.write((cmd + "\n").encode("utf-8"))
-            response = self.serial_port.readline()
-        finally:
+        with self._serial_lock:
+            # Ajuster le timeout si specifie
+            old_timeout = self.serial_port.timeout
             if timeout is not None:
-                self.serial_port.timeout = old_timeout
+                self.serial_port.timeout = timeout
 
-        if not response:
-            self.logger.warning(f"Pas de reponse pour commande: {cmd}")
-            return ""
+            try:
+                self.serial_port.write((cmd + "\n").encode("utf-8"))
+                response = self.serial_port.readline()
+            finally:
+                if timeout is not None:
+                    self.serial_port.timeout = old_timeout
 
-        return response.decode("utf-8", errors="replace").strip()
+            if not response:
+                self.logger.warning(f"Pas de reponse pour commande: {cmd}")
+                return ""
+
+            return response.decode("utf-8", errors="replace").strip()
 
     def _wait_ready(self):
         """
@@ -313,12 +316,19 @@ class MoteurRP2040:
     def request_stop(self):
         """
         Demande l'arret du mouvement en cours.
-        Envoie STOP au firmware RP2040.
+
+        Envoie STOP directement sans prendre le lock serie, car un MOVE
+        bloquant peut etre en cours dans un autre thread. Le firmware
+        detecte STOP via check_for_stop() et repond STOPPED au MOVE
+        en cours — la reponse sera lue par le thread qui attend le MOVE.
         """
         self.stop_requested = True
-        response = self._send_command("STOP")
-        self._parse_response(response, "request_stop")
-        self.logger.info("Arret demande au firmware RP2040")
+        try:
+            if self.serial_port.is_open:
+                self.serial_port.write(b"STOP\n")
+                self.logger.info("Arret demande au firmware RP2040")
+        except Exception as e:
+            self.logger.warning(f"Erreur envoi STOP: {e}")
 
     def clear_stop_request(self):
         """Efface le flag d'arret."""
