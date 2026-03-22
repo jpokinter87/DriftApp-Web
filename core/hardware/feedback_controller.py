@@ -165,22 +165,24 @@ class FeedbackController:
                                          angle_cible: float,
                                          tolerance: float) -> None:
         """
-        Exécute les pas - VERSION OPTIMISÉE alignée sur calibration_moteur.py.
+        Exécute les pas moteur.
 
-        CHANGEMENT CRITIQUE : Plus de vérification pendant le mouvement !
-        - Le feedback se fait APRÈS le mouvement complet, pas pendant
-        - Cela garantit un flux de pulses continu sans interruption
-        - Identique au comportement de calibration_moteur.py qui fonctionne
-
-        AJOUT : Vérification stop_requested tous les 1000 pas pour permettre
-        l'arrêt via bouton STOPPER (overhead négligeable : 1 check / 1000 pas).
+        Pour le RP2040, utilise rotation() qui envoie une seule commande MOVE
+        au firmware (rapide). Pour le GPIO, utilise faire_un_pas() en boucle
+        (le timing est géré directement par le Pi).
         """
-        # Boucle avec vérification arrêt périodique (tous les 1000 pas)
-        for i in range(steps):
-            if i % 1000 == 0 and self.stop_requested:
-                self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
-                break
-            self.moteur.faire_un_pas(delai=vitesse)
+        if hasattr(self.moteur, '_serial_lock'):
+            # RP2040 : une seule commande MOVE serie (évite 1 aller-retour par pas)
+            deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
+            angle = steps * deg_per_step * (1 if self.moteur.direction_actuelle >= 0 else -1)
+            self.moteur.rotation(angle, vitesse=vitesse)
+        else:
+            # GPIO : boucle pas-a-pas (timing direct, pas d'overhead serie)
+            for i in range(steps):
+                if i % 1000 == 0 and self.stop_requested:
+                    self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
+                    break
+                self.moteur.faire_un_pas(delai=vitesse)
 
     def _verifier_arret_anticipe(self, angle_cible: float, tolerance: float,
                                   step_index: int, total_steps: int) -> bool:

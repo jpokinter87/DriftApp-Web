@@ -127,6 +127,26 @@ class MoteurRP2040:
 
             return response.decode("utf-8", errors="replace").strip()
 
+    def _drain_serial_buffer(self):
+        """
+        Lit et ignore les donnees residuelles dans le buffer serie.
+
+        Utilise un timeout court (50ms) pour ne pas bloquer.
+        Evite les reponses fantomes apres un STOP ou un mouvement interrompu.
+        """
+        old_timeout = self.serial_port.timeout
+        self.serial_port.timeout = 0.05
+        try:
+            while True:
+                data = self.serial_port.readline()
+                if not data:
+                    break
+                text = data.decode("utf-8", errors="replace").strip()
+                if text:
+                    self.logger.debug(f"Drain buffer: {text}")
+        finally:
+            self.serial_port.timeout = old_timeout
+
     def _wait_ready(self):
         """
         Verifie que le firmware RP2040 est pret.
@@ -261,6 +281,7 @@ class MoteurRP2040:
             return
 
         direction = 1 if angle_deg >= 0 else 0
+        self.direction_actuelle = 1 if angle_deg >= 0 else -1
         delay_us = max(1, int(vitesse * 1_000_000))
         ramp_type = "SCURVE" if use_ramp else "NONE"
 
@@ -273,6 +294,10 @@ class MoteurRP2040:
             f"Rotation {angle_deg:+.2f}° ({steps} pas, "
             f"delay={delay_us}us, rampe={ramp_type}, timeout={move_timeout:.1f}s)"
         )
+
+        # Drainer les reponses residuelles avant d'envoyer le MOVE
+        # (ex: apres un STOP, la reponse IDLE peut rester dans le buffer)
+        self._drain_serial_buffer()
 
         response = self._send_command(
             f"MOVE {steps} {direction} {delay_us} {ramp_type}",
