@@ -101,6 +101,11 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
     """
     Execute un mouvement avec rampe optionnelle.
 
+    Optimise en 3 phases pour eviter l'overhead Python en croisiere :
+    - Phase 1 (accel) : delais calcules par pas (lent OK, vitesse faible)
+    - Phase 2 (cruise) : boucle ultra-serree, delai pre-calcule
+    - Phase 3 (decel) : delais calcules par pas (lent OK, vitesse decroit)
+
     Args:
         sg: StepGenerator instance
         steps: Nombre de pas
@@ -121,30 +126,58 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
     steps_done = 0
     stopped = False
 
-    # Pre-calculer le delai constant si pas de rampe
-    uniform_cycles = None if has_ramp else sg._delay_us_to_cycles(delay_us)
-
     sg._moving = True
     sg._stop_flag = False
     sg._steps_done = 0
     sg._sm.active(1)
 
     try:
-        for i in range(steps):
-            # Verification periodique de STOP
-            if i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                if check_for_stop():
-                    stopped = True
-                    break
+        if not has_ramp:
+            # Mode uniforme : boucle serree avec delai constant
+            cycles = sg._delay_us_to_cycles(delay_us)
+            for i in range(steps):
+                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
+                    if check_for_stop():
+                        stopped = True
+                        break
+                sg._sm.put(cycles)
+                steps_done += 1
+        else:
+            # Mode 3 phases : accel / cruise / decel
+            accel_end = ramp.accel_end
+            decel_start = ramp.decel_start
+            cruise_cycles = sg._delay_us_to_cycles(ramp.target_delay_us)
 
-            if has_ramp:
-                # Calcul du delai a la volee (pas d'allocation memoire)
+            # Phase 1 : Acceleration (delais variables, vitesse faible → overhead OK)
+            for i in range(min(accel_end, steps)):
+                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
+                    if check_for_stop():
+                        stopped = True
+                        break
                 cycles = sg._delay_us_to_cycles(ramp.get_delay(i))
-            else:
-                cycles = uniform_cycles
+                sg._sm.put(cycles)
+                steps_done += 1
 
-            sg._sm.put(cycles)
-            steps_done += 1
+            # Phase 2 : Croisiere (boucle ultra-serree, delai pre-calcule)
+            if not stopped:
+                for i in range(accel_end, min(decel_start, steps)):
+                    if i % STOP_CHECK_INTERVAL == 0:
+                        if check_for_stop():
+                            stopped = True
+                            break
+                    sg._sm.put(cruise_cycles)
+                    steps_done += 1
+
+            # Phase 3 : Deceleration (delais variables)
+            if not stopped:
+                for i in range(decel_start, steps):
+                    if i % STOP_CHECK_INTERVAL == 0:
+                        if check_for_stop():
+                            stopped = True
+                            break
+                    cycles = sg._delay_us_to_cycles(ramp.get_delay(i))
+                    sg._sm.put(cycles)
+                    steps_done += 1
     finally:
         sg._sm.active(0)
         sg._moving = False

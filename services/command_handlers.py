@@ -406,13 +406,15 @@ class ContinuousHandler:
         step_interval = 0.1
         speed = _get_motor_speed(self.config)
 
-        # Pour le RP2040, envoyer des rotations plus grandes (30°) pour eviter
-        # les allers-retours serie qui causent des micro-arrets.
+        # Pour le RP2040, envoyer un seul MOVE de 360° (tour complet).
         # Le firmware gere STOP en cours de mouvement via check_for_stop().
+        # Cela elimine le claquement entre rotations successives.
         is_rp2040 = hasattr(self.moteur, '_serial_lock')
-        delta_per_step = 30.0 if is_rp2040 else 1.0
-        if direction != "cw":
-            delta_per_step = -delta_per_step
+
+        if direction == "cw":
+            delta_per_step = 360.0 if is_rp2040 else 1.0
+        else:
+            delta_per_step = -360.0 if is_rp2040 else -1.0
 
         logger.debug(f"Thread mouvement continu démarré: {direction} (delta={delta_per_step}°)")
 
