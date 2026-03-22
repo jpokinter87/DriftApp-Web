@@ -458,13 +458,19 @@ def apply_update(request):
             }, status=500)
 
     except subprocess.TimeoutExpired:
-        # Timeout attendu si les services redémarrent
-        logger.info("Timeout du script - services en cours de redémarrage")
+        # Le script a dépassé 5 min — vérifier si le code a été mis à jour
+        new_commit = get_local_commit()
+        code_updated = new_commit != old_commit
+        if code_updated:
+            logger.info(f"Timeout du script mais code mis à jour: {old_commit} -> {new_commit}")
+        else:
+            logger.warning("Timeout du script et code inchangé — mise à jour probablement échouée")
         return Response({
-            'success': True,
-            'message': 'Mise à jour en cours (services redémarrent)',
-            'old_commit': old_commit
-        })
+            'success': code_updated,
+            'message': 'Mise à jour en cours (services redémarrent)' if code_updated else 'Timeout — le code n\'a pas été mis à jour',
+            'old_commit': old_commit,
+            'new_commit': new_commit if code_updated else None
+        }, status=200 if code_updated else 500)
     except PermissionError as e:
         logger.error(f"Permission refusée: {e}")
         return Response({

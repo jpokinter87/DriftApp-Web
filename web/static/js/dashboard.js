@@ -1561,13 +1561,14 @@ function showUpdateError(message) {
 async function waitForServiceRestart() {
     const maxAttempts = 30;  // 30 attempts x 2 seconds = 60 seconds max
     let attempts = 0;
+    const progressText = document.getElementById('update-progress-text');
 
     while (attempts < maxAttempts) {
         await sleep(2000);
         attempts++;
 
-        if (updateElements.progressText) {
-            updateElements.progressText.textContent = `Reconnexion... (${attempts}/${maxAttempts})`;
+        if (progressText) {
+            progressText.textContent = `Reconnexion... (${attempts}/${maxAttempts})`;
         }
 
         try {
@@ -1583,8 +1584,8 @@ async function waitForServiceRestart() {
             if (response.ok) {
                 // Service is back, reload page
                 log('Services redemarres, rechargement...', 'success');
-                if (updateElements.progressText) {
-                    updateElements.progressText.textContent = 'Rechargement de la page...';
+                if (progressText) {
+                    progressText.textContent = 'Rechargement de la page...';
                 }
                 await sleep(500);
                 window.location.reload();
@@ -1596,13 +1597,14 @@ async function waitForServiceRestart() {
     }
 
     // Timeout - ask user to reload manually
-    if (updateElements.progressText) {
-        updateElements.progressText.textContent = 'Delai depasse - rechargez la page manuellement';
+    if (progressText) {
+        progressText.textContent = 'Delai depasse - rechargez la page manuellement';
     }
     log('Delai depasse, rechargez la page manuellement', 'warning');
 
     // Re-enable later button so user can dismiss
-    if (updateElements.btnLater) updateElements.btnLater.disabled = false;
+    const store = Alpine.store('dashboard');
+    store.updateButtonsDisabled = false;
 }
 
 /**
