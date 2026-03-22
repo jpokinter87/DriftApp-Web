@@ -448,7 +448,7 @@ wheels = [
 
 [[package]]
 name = "driftapp-web"
-version = "5.2.0"
+version = "5.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "astropy" },
@@ -457,6 +457,7 @@ dependencies = [
     { name = "django", version = "6.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "djangorestframework" },
     { name = "lgpio", marker = "platform_machine == 'aarch64'" },
+    { name = "mpremote", marker = "platform_machine == 'aarch64'" },
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "packaging" },
@@ -493,6 +494,7 @@ requires-dist = [
     { name = "django", specifier = ">=4.2.0" },
     { name = "djangorestframework", specifier = ">=3.14.0" },
     { name = "lgpio", marker = "platform_machine == 'aarch64'", specifier = ">=0.2.2.0" },
+    { name = "mpremote", marker = "platform_machine == 'aarch64'", specifier = ">=1.22" },
     { name = "numpy", specifier = ">=1.24.0" },
     { name = "openpyxl", specifier = ">=3.1.0" },
     { name = "packaging", specifier = ">=23.0" },
@@ -679,6 +681,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ea/5d/38b681d3fce7a266dd9ab73c66959406d565b3e85f21d5e66e1181d93721/more_itertools-10.8.0.tar.gz", hash = "sha256:f638ddf8a1a0d134181275fb5d58b086ead7c6a72429ad725c67503f13ba30bd", size = 137431, upload-time = "2025-09-02T15:23:11.018Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a4/8e/469e5a4a2f5855992e425f3cb33804cc07bf18d48f2db061aec61ce50270/more_itertools-10.8.0-py3-none-any.whl", hash = "sha256:52d4362373dcf7c52546bc4af9a86ee7c4579df9a8dc268be0a2f949d376cc9b", size = 69667, upload-time = "2025-09-02T15:23:09.635Z" },
+]
+
+[[package]]
+name = "mpremote"
+version = "1.27.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "platformdirs" },
+    { name = "pyserial" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d2/1c/be7d96275379eca70af111a1d4711c77b1afa78f1782582f3ad082e2d228/mpremote-1.27.0.tar.gz", hash = "sha256:6bb75774648091dad6833af4f86c5bf6505f8d7aec211380f9e6996c01d23cb5", size = 31420, upload-time = "2025-12-09T14:51:55.587Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/bf/cb9a7f38015c0fec0295b2cd014b830561f224d264f2f303c2ec15d8ef2f/mpremote-1.27.0-py3-none-any.whl", hash = "sha256:11d134c69b21b487dae3d03eed54c8ccbf84c916c8732a3e069a97cae47be3d4", size = 36094, upload-time = "2025-12-09T14:51:53.759Z" },
 ]
 
 [[package]]

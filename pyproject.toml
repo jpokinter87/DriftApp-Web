@@ -39,6 +39,9 @@ dependencies = [
 
     # Communication serie RP2040 (Raspberry Pi uniquement)
     "pyserial>=3.5; platform_machine == 'aarch64'",
+
+    # Flash firmware RP2040 via USB (Raspberry Pi uniquement)
+    "mpremote>=1.22; platform_machine == 'aarch64'",
 ]
 
 [project.optional-dependencies]
