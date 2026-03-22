@@ -81,7 +81,7 @@ def _get_motor_speed(config, speed: Optional[float] = None, delta: Optional[floa
         if continuous:
             return continuous.motor_delay
 
-    return 0.00014  # Fallback CONTINUOUS ajusté 01/01/2026
+    return 0.00026  # Fallback CONTINUOUS validé terrain 22/03/2026 (260µs)
 
 
 def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):

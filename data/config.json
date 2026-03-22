@@ -133,17 +133,17 @@
         "_comment": "68° ≤ Altitude < 75° - Suivi rapproché",
         "interval_sec": 30,
         "threshold_deg": 0.35,
-        "motor_delay": 0.001,
-        "_speed": "~9°/min - Tracking rapproché"
+        "motor_delay": 0.00052,
+        "_speed": "~17°/min - Tracking rapproché (2x CONTINUOUS)"
       },
 
       "continuous": {
         "_comment": "Altitude ≥ 75° ou mouvement extrême - AUSSI UTILISÉ POUR GOTO",
         "interval_sec": 30,
         "threshold_deg": 0.3,
-        "motor_delay": 0.00014,
-        "_speed": "~44°/min - Vitesse ajustée 01/01/2026 (0.12ms causait encodeur stagnant)",
-        "_usage": "Tracking continu + GOTO manuels/automatiques"
+        "motor_delay": 0.00026,
+        "_speed": "~34°/min - Validé terrain 22/03/2026 (260us, fluide, rapide)",
+        "_usage": "Tracking continu + GOTO manuels/automatiques + CW/CCW"
       }
     },
     
