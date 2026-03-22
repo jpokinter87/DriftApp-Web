@@ -129,17 +129,15 @@ class Ramp:
 
     def compute_delays(self):
         """
-        Pre-calcule tous les delais pour le mouvement complet.
+        Indique si la rampe est active (delais variables).
 
         Returns:
-            list: Liste de delais en microsecondes, un par pas
+            True si rampe active (utiliser get_delay() par pas),
+            None si delai uniforme
         """
         if not self.ramp_enabled:
-            # Retourner None pour indiquer delai uniforme
-            # (evite d'allouer une grande liste en memoire)
             return None
-
-        delays = []
-        for i in range(self.total_steps):
-            delays.append(self.get_delay(i))
-        return delays
+        # Retourner True au lieu d'une liste pour eviter OOM sur RP2040
+        # (53940 floats = ~430 KB > RAM disponible)
+        # L'appelant utilise get_delay(i) pour chaque pas
+        return True

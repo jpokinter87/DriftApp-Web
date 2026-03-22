@@ -86,12 +86,13 @@ class MoteurRP2040:
     # COMMUNICATION SERIE
     # =========================================================================
 
-    def _send_command(self, cmd: str) -> str:
+    def _send_command(self, cmd: str, timeout: float = None) -> str:
         """
         Envoie une commande au firmware et lit la reponse.
 
         Args:
             cmd: Commande texte (sans newline)
+            timeout: Timeout pour la reponse (secondes). Si None, utilise le timeout du port.
 
         Returns:
             Reponse du firmware (strippee)
@@ -102,8 +103,20 @@ class MoteurRP2040:
         if not self.serial_port.is_open:
             raise IOError("Port serie RP2040 ferme")
 
-        self.serial_port.write((cmd + "\n").encode("utf-8"))
-        response = self.serial_port.readline()
+        # Vider le buffer d'entree avant d'envoyer (evite les reponses residuelles)
+        self.serial_port.reset_input_buffer()
+
+        # Ajuster le timeout si specifie
+        old_timeout = self.serial_port.timeout
+        if timeout is not None:
+            self.serial_port.timeout = timeout
+
+        try:
+            self.serial_port.write((cmd + "\n").encode("utf-8"))
+            response = self.serial_port.readline()
+        finally:
+            if timeout is not None:
+                self.serial_port.timeout = old_timeout
 
         if not response:
             self.logger.warning(f"Pas de reponse pour commande: {cmd}")
@@ -225,13 +238,19 @@ class MoteurRP2040:
         delay_us = max(1, int(vitesse * 1_000_000))
         ramp_type = "SCURVE" if use_ramp else "NONE"
 
+        # Estimer la duree du mouvement pour le timeout serie
+        # En mode SCURVE, le delai moyen est plus grand que delay_us (rampe)
+        estimated_secs = (steps * max(delay_us, 500)) / 1_000_000
+        move_timeout = estimated_secs + 5.0  # marge de 5s
+
         self.logger.debug(
             f"Rotation {angle_deg:+.2f}° ({steps} pas, "
-            f"delay={delay_us}us, rampe={ramp_type})"
+            f"delay={delay_us}us, rampe={ramp_type}, timeout={move_timeout:.1f}s)"
         )
 
         response = self._send_command(
-            f"MOVE {steps} {direction} {delay_us} {ramp_type}"
+            f"MOVE {steps} {direction} {delay_us} {ramp_type}",
+            timeout=move_timeout,
         )
         self._parse_response(response, f"rotation {angle_deg:+.2f}°")
 

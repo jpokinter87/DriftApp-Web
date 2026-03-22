@@ -25,6 +25,7 @@ class SerialSimulator:
 
     def __init__(self):
         self.is_open = True
+        self.timeout = 2.0
         self._response_buffer: deque[bytes] = deque()
         self._lock = threading.Lock()
         # Le firmware envoie READY au demarrage
@@ -85,6 +86,11 @@ class SerialSimulator:
             if self._response_buffer:
                 return self._response_buffer.popleft()
         return b""
+
+    def reset_input_buffer(self):
+        """Vide le buffer d'entree (compatibilite pyserial)."""
+        with self._lock:
+            self._response_buffer.clear()
 
     def close(self):
         """Ferme le port serie simule."""

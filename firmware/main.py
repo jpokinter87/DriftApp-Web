@@ -116,63 +116,41 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
 
     # Calculer la rampe
     ramp = Ramp(steps, delay_us, ramp_type)
-    delays = ramp.compute_delays()
+    has_ramp = ramp.compute_delays()
 
-    if delays is not None:
-        # Mode rampe : delais variables
-        # On doit executer pas par pas pour pouvoir verifier STOP
-        steps_done = 0
-        stopped = False
+    steps_done = 0
+    stopped = False
 
-        sg._moving = True
-        sg._stop_flag = False
-        sg._steps_done = 0
-        sg._sm.active(1)
+    # Pre-calculer le delai constant si pas de rampe
+    uniform_cycles = None if has_ramp else sg._delay_us_to_cycles(delay_us)
 
-        try:
-            for i in range(steps):
-                # Verification periodique de STOP
-                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                    if check_for_stop():
-                        stopped = True
-                        break
+    sg._moving = True
+    sg._stop_flag = False
+    sg._steps_done = 0
+    sg._sm.active(1)
 
-                cycles = sg._delay_us_to_cycles(delays[i])
-                sg._sm.put(cycles)
-                steps_done += 1
-        finally:
-            sg._sm.active(0)
-            sg._moving = False
-            sg._steps_done = steps_done
+    try:
+        for i in range(steps):
+            # Verification periodique de STOP
+            if i % STOP_CHECK_INTERVAL == 0 and i > 0:
+                if check_for_stop():
+                    stopped = True
+                    break
 
-        return steps_done, stopped
-    else:
-        # Mode uniforme : delai constant
-        # Meme logique avec verification STOP
-        steps_done = 0
-        stopped = False
-        cycles = sg._delay_us_to_cycles(delay_us)
+            if has_ramp:
+                # Calcul du delai a la volee (pas d'allocation memoire)
+                cycles = sg._delay_us_to_cycles(ramp.get_delay(i))
+            else:
+                cycles = uniform_cycles
 
-        sg._moving = True
-        sg._stop_flag = False
-        sg._steps_done = 0
-        sg._sm.active(1)
+            sg._sm.put(cycles)
+            steps_done += 1
+    finally:
+        sg._sm.active(0)
+        sg._moving = False
+        sg._steps_done = steps_done
 
-        try:
-            for i in range(steps):
-                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                    if check_for_stop():
-                        stopped = True
-                        break
-
-                sg._sm.put(cycles)
-                steps_done += 1
-        finally:
-            sg._sm.active(0)
-            sg._moving = False
-            sg._steps_done = steps_done
-
-        return steps_done, stopped
+    return steps_done, stopped
 
 
 def main():
