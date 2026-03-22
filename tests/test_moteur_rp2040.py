@@ -131,13 +131,23 @@ class TestMoteurRP2040Init:
         # Si on arrive ici sans TimeoutError, READY a ete recu
         assert moteur.steps_per_dome_revolution > 0
 
-    def test_init_timeout_without_ready(self, motor_config):
-        """TimeoutError si READY non recu."""
+    def test_init_fallback_status_when_no_ready(self, motor_config):
+        """Fallback via STATUS si READY manque (Pico deja demarre)."""
         sim = SerialSimulator()
-        # Vider le buffer READY
+        # Vider le buffer READY pour simuler un Pico deja boote
         sim.readline()
 
-        with pytest.raises(TimeoutError):
+        # Le constructeur envoie STATUS en fallback et accepte IDLE
+        moteur = MoteurRP2040(motor_config, sim)
+        assert moteur.steps_per_dome_revolution > 0
+
+    def test_init_timeout_without_any_response(self, motor_config):
+        """TimeoutError si le firmware ne repond pas du tout."""
+        sim = SerialSimulator()
+        sim.readline()  # Vider READY
+        sim.close()     # Fermer pour empecher toute reponse
+
+        with pytest.raises((TimeoutError, IOError)):
             MoteurRP2040(motor_config, sim)
 
 

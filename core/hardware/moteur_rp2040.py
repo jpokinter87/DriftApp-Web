@@ -126,12 +126,18 @@ class MoteurRP2040:
 
     def _wait_ready(self):
         """
-        Attend la reponse READY du firmware au demarrage.
+        Verifie que le firmware RP2040 est pret.
+
+        Tente d'abord de lire un READY spontane (boot frais du Pico).
+        Si rien recu, envoie STATUS pour verifier que le firmware repond
+        (cas ou le Pico a boote avant l'ouverture du port serie).
 
         Raises:
-            TimeoutError: Si READY non recu dans le delai
+            TimeoutError: Si le firmware ne repond pas dans le delai
         """
         start = time.time()
+
+        # Phase 1 : attendre un READY spontane (boot frais)
         while time.time() - start < READY_TIMEOUT:
             response = self.serial_port.readline()
             if response:
@@ -139,8 +145,25 @@ class MoteurRP2040:
                 if text == "READY":
                     self.logger.info("Firmware RP2040 pret (READY recu)")
                     return
+                elif text == "IDLE":
+                    self.logger.info("Firmware RP2040 pret (IDLE — deja demarre)")
+                    return
+
+        # Phase 2 : le READY a ete manque, envoyer STATUS pour verifier
+        self.logger.debug("Pas de READY recu, envoi STATUS pour verifier le firmware")
+        try:
+            self.serial_port.write(b"STATUS\n")
+            response = self.serial_port.readline()
+            if response:
+                text = response.decode("utf-8", errors="replace").strip()
+                if text in ("IDLE", "READY"):
+                    self.logger.info(f"Firmware RP2040 pret ({text} via STATUS)")
+                    return
+        except Exception:
+            pass
+
         raise TimeoutError(
-            f"Firmware RP2040 n'a pas repondu READY dans {READY_TIMEOUT}s"
+            f"Firmware RP2040 n'a pas repondu dans {READY_TIMEOUT}s"
         )
 
     def _parse_response(self, response: str, context: str = "") -> Optional[int]:
