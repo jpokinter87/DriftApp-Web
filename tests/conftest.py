@@ -189,7 +189,7 @@ def reset_simulation_state():
     simulées à zéro et en réinitialisant le lecteur daemon global.
     """
     from core.hardware.moteur_simule import reset_all_simulated_positions
-    from core.hardware.moteur import reset_daemon_reader
+    from core.hardware.daemon_encoder_reader import reset_daemon_reader
     reset_all_simulated_positions()
     reset_daemon_reader()
     yield

@@ -31,13 +31,12 @@ def mock_daemon_reader():
 
 @pytest.fixture
 def mock_moteur():
-    """Mock pour MoteurCoupole."""
+    """Mock pour le moteur (MoteurRP2040 ou MoteurSimule)."""
     moteur = MagicMock()
     moteur.steps_per_dome_revolution = 1942968
     moteur.stop_requested = False
     moteur.direction_actuelle = 1
     moteur.definir_direction = MagicMock()
-    moteur.faire_un_pas = MagicMock()
     moteur.rotation = MagicMock()
     moteur.clear_stop_request = MagicMock()
     return moteur
@@ -378,7 +377,7 @@ class TestExecuterPas:
     def test_executer_pas_avec_verification(
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
-        """Exécution des pas avec vérifications périodiques."""
+        """Exécution des pas via rotation()."""
         mock_daemon_reader.read_angle.return_value = 45.0
 
         feedback_controller._executer_pas_avec_verification(
@@ -388,26 +387,27 @@ class TestExecuterPas:
             tolerance=0.5
         )
 
-        # Devrait avoir appelé faire_un_pas 100 fois (ou moins si arrêt anticipé)
-        assert mock_moteur.faire_un_pas.call_count <= 100
+        # Devrait avoir appelé rotation() une seule fois (pas faire_un_pas)
+        mock_moteur.rotation.assert_called_once()
 
-    def test_executer_pas_arret_anticipe(
+    def test_executer_pas_rotation_called_with_correct_angle(
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
-        """Arrêt anticipé si objectif atteint."""
-        # Simuler atteinte de l'objectif après quelques pas
+        """rotation() est appelée avec l'angle calculé depuis les steps."""
         mock_daemon_reader.read_angle.return_value = 45.0
-        feedback_controller.stop_requested = True
+        mock_moteur.direction_actuelle = 1
 
         feedback_controller._executer_pas_avec_verification(
-            steps=1000,
+            steps=100,
             vitesse=0.001,
             angle_cible=45.0,
             tolerance=0.5
         )
 
-        # Devrait s'arrêter avant les 1000 pas
-        assert mock_moteur.faire_un_pas.call_count < 1000
+        # Vérifier que rotation a été appelée avec un angle positif
+        call_args = mock_moteur.rotation.call_args
+        angle = call_args[0][0]
+        assert angle > 0  # Direction positive
 
 
 # =============================================================================

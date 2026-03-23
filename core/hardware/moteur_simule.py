@@ -1,13 +1,11 @@
 """
 Moteur simulé pour tests sans matériel.
 
-Cette classe simule l'interface du MoteurCoupole pour permettre
+Cette classe simule l'interface du moteur RP2040 pour permettre
 le développement et les tests sans accès au matériel réel.
 
 VERSION 4.0 : Intègre les méthodes de feedback simulées.
-VERSION 4.3 : Ajout get_feedback_controller, get_daemon_angle, rotation_absolue
-              pour compatibilité avec MoteurCoupole refactorisé.
-VERSION 4.4 : Simulation réaliste du déplacement (faire_un_pas, get_daemon_angle)
+VERSION 4.3 : Ajout get_feedback_controller, get_daemon_angle, rotation_absolue.
 VERSION 4.5 : Compatibilité paramètre use_ramp (ignoré en simulation)
 VERSION 4.6 : Timing réaliste pour GOTO (délai proportionnel au mouvement)
 """
@@ -105,6 +103,9 @@ class MoteurSimule:
         self.ramp_steps = 400  # Aligné avec moteur.py
         self.ramp_enabled = True
 
+        # Attribut pour compatibilité avec hasattr checks (RP2040)
+        self._serial_lock = None
+
         # Degrés par pas (pour simulation réaliste)
         self.degrees_per_step = 360.0 / self.steps_per_dome_revolution
 
@@ -113,26 +114,6 @@ class MoteurSimule:
     def definir_direction(self, direction: int):
         """Définit la direction de rotation."""
         self.direction = direction
-
-    def faire_un_pas(self, delai: float = 0.0):
-        """
-        Simule un pas moteur.
-
-        Met à jour la position de cette instance ET la position globale
-        pour compatibilité avec les handlers.
-        """
-        global _global_position
-
-        # Calculer le déplacement en degrés
-        delta = self.degrees_per_step * self.direction
-
-        # Mettre à jour la position de cette instance
-        new_pos = (_get_instance_position(self._instance_id) + delta) % 360
-        _set_instance_position(self._instance_id, new_pos)
-
-        # Synchroniser la position globale pour les handlers
-        _global_position = new_pos
-        self.position_actuelle = new_pos
 
     def _calculer_delai_rampe(self, step_index: int, total_steps: int,
                                vitesse_nominale: float) -> float:

@@ -4,6 +4,8 @@ Firmware principal RP2040 pour pilotage moteur pas-a-pas.
 Recoit des commandes serie depuis le Raspberry Pi et genere les
 impulsions STEP/DIR via PIO state machines.
 
+Version 2 : PIO autonome en croisiere, pas-a-pas pour rampe uniquement.
+
 Protocole serie :
   Commandes (Pi → Pico) :
     MOVE <steps> <direction> <target_delay_us> <ramp_type>\n
@@ -31,8 +33,10 @@ from ramp import Ramp
 STEP_PIN = 2   # GP2 → PUL+ du DM556T
 DIR_PIN = 3    # GP3 → DIR+ du DM556T
 
-# Intervalle de verification STOP pendant un mouvement (en pas)
-STOP_CHECK_INTERVAL = 100
+# Pre-allouer le poller pour check_for_stop()
+# Evite creation/destruction d'objet a chaque appel (cause GC)
+_poller = select.poll()
+_poller.register(sys.stdin, select.POLLIN)
 
 
 def send_response(message):
@@ -78,15 +82,12 @@ def check_for_stop():
     """
     Verifie si une commande STOP a ete recue pendant un mouvement.
 
+    Utilise un poller pre-alloue (pas d'allocation a chaque appel).
+
     Returns:
         bool: True si STOP recu
     """
-    # Utiliser select.poll pour verifier si des donnees sont disponibles
-    poller = select.poll()
-    poller.register(sys.stdin, select.POLLIN)
-    events = poller.poll(0)  # Non-bloquant
-    poller.unregister(sys.stdin)
-
+    events = _poller.poll(0)  # Non-bloquant
     if events:
         try:
             line = sys.stdin.readline().strip()
@@ -101,10 +102,10 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
     """
     Execute un mouvement avec rampe optionnelle.
 
-    Optimise en 3 phases pour eviter l'overhead Python en croisiere :
-    - Phase 1 (accel) : delais calcules par pas (lent OK, vitesse faible)
-    - Phase 2 (cruise) : boucle ultra-serree, delai pre-calcule
-    - Phase 3 (decel) : delais calcules par pas (lent OK, vitesse decroit)
+    Architecture PIO autonome :
+    - Croisiere : PIO recoit N pas + delai, tourne en autonome
+    - Accel/decel : PIO recoit 1 pas + delai variable a chaque iteration
+      (overhead MicroPython acceptable car vitesse faible en rampe)
 
     Args:
         sg: StepGenerator instance
@@ -126,62 +127,53 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
     steps_done = 0
     stopped = False
 
-    sg._moving = True
-    sg._stop_flag = False
+    # Reset etat StepGenerator
     sg._steps_done = 0
-    sg._sm.active(1)
 
-    try:
-        if not has_ramp:
-            # Mode uniforme : boucle serree avec delai constant
-            cycles = sg._delay_us_to_cycles(delay_us)
-            for i in range(steps):
-                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                    if check_for_stop():
-                        stopped = True
-                        break
-                sg._sm.put(cycles)
-                steps_done += 1
-        else:
-            # Mode 3 phases : accel / cruise / decel
-            accel_end = ramp.accel_end
-            decel_start = ramp.decel_start
-            cruise_cycles = sg._delay_us_to_cycles(ramp.target_delay_us)
+    if not has_ramp:
+        # Pas de rampe : tout en PIO autonome
+        done = sg.move_steps(steps, delay_us, stop_checker=check_for_stop)
+        steps_done = done
+        stopped = sg._stop_flag
+    else:
+        # Mode 3 phases : accel (variable) / cruise (autonome) / decel (variable)
+        accel_end = ramp.accel_end
+        decel_start = ramp.decel_start
 
-            # Phase 1 : Acceleration (delais variables, vitesse faible → overhead OK)
-            for i in range(min(accel_end, steps)):
-                if i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                    if check_for_stop():
-                        stopped = True
-                        break
-                cycles = sg._delay_us_to_cycles(ramp.get_delay(i))
-                sg._sm.put(cycles)
-                steps_done += 1
+        # Phase 1 : Acceleration (delais variables, PIO pas-par-pas)
+        accel_steps = min(accel_end, steps)
+        if accel_steps > 0:
+            done = sg.move_steps_variable(
+                accel_steps, ramp.get_delay, start_index=0,
+                stop_checker=check_for_stop,
+            )
+            steps_done += done
+            stopped = sg._stop_flag
 
-            # Phase 2 : Croisiere (boucle ultra-serree, delai pre-calcule)
-            if not stopped:
-                for i in range(accel_end, min(decel_start, steps)):
-                    if i % STOP_CHECK_INTERVAL == 0:
-                        if check_for_stop():
-                            stopped = True
-                            break
-                    sg._sm.put(cruise_cycles)
-                    steps_done += 1
+        # Phase 2 : Croisiere (PIO autonome — zero overhead Python)
+        if not stopped:
+            cruise_steps = min(decel_start, steps) - accel_end
+            if cruise_steps > 0:
+                done = sg.move_steps(
+                    cruise_steps, delay_us,
+                    stop_checker=check_for_stop,
+                )
+                steps_done += done
+                stopped = sg._stop_flag
 
-            # Phase 3 : Deceleration (delais variables)
-            if not stopped:
-                for i in range(decel_start, steps):
-                    if i % STOP_CHECK_INTERVAL == 0:
-                        if check_for_stop():
-                            stopped = True
-                            break
-                    cycles = sg._delay_us_to_cycles(ramp.get_delay(i))
-                    sg._sm.put(cycles)
-                    steps_done += 1
-    finally:
-        sg._sm.active(0)
-        sg._moving = False
-        sg._steps_done = steps_done
+        # Phase 3 : Deceleration (delais variables, PIO pas-par-pas)
+        if not stopped:
+            decel_steps = steps - decel_start
+            if decel_steps > 0:
+                done = sg.move_steps_variable(
+                    decel_steps, ramp.get_delay, start_index=decel_start,
+                    stop_checker=check_for_stop,
+                )
+                steps_done += done
+                stopped = sg._stop_flag
+
+    # Mettre a jour le compteur total
+    sg._steps_done = steps_done
 
     return steps_done, stopped
 
@@ -190,7 +182,6 @@ def main():
     """Boucle principale du firmware."""
     # Initialiser le generateur de pas
     sg = StepGenerator(step_pin=STEP_PIN, dir_pin=DIR_PIN)
-    moving = False
 
     send_response("READY")
 

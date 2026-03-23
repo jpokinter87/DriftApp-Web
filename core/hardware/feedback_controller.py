@@ -15,7 +15,8 @@ from core.utils.angle_utils import shortest_angular_distance
 from core.hardware.daemon_encoder_reader import StaleDataError, FrozenEncoderError
 
 if TYPE_CHECKING:
-    from core.hardware.moteur import MoteurCoupole, DaemonEncoderReader
+    from core.hardware.moteur_rp2040 import MoteurRP2040
+    from core.hardware.daemon_encoder_reader import DaemonEncoderReader
 
 
 class FeedbackController:
@@ -26,7 +27,7 @@ class FeedbackController:
     corrige itérativement jusqu'à atteindre la tolérance souhaitée.
 
     Usage:
-        moteur = MoteurCoupole(config)
+        moteur = MoteurRP2040(config, serial_port)
         feedback = FeedbackController(moteur, daemon_reader)
         result = feedback.rotation_avec_feedback(angle_cible=45.0)
     """
@@ -42,7 +43,7 @@ class FeedbackController:
 
     def __init__(
         self,
-        moteur: 'MoteurCoupole',
+        moteur: 'MoteurRP2040',
         daemon_reader: 'DaemonEncoderReader',
         protection_threshold: Optional[float] = None
     ):
@@ -50,7 +51,7 @@ class FeedbackController:
         Initialise le contrôleur de feedback.
 
         Args:
-            moteur: Instance de MoteurCoupole pour le contrôle moteur
+            moteur: Instance de MoteurRP2040 (ou MoteurSimule) pour le contrôle moteur
             daemon_reader: Instance de DaemonEncoderReader pour la lecture position
             protection_threshold: Seuil de protection contre mouvements anormaux (°)
                                   Si non fourni, utilise DEFAULT_PROTECTION_THRESHOLD (20.0°)
@@ -165,24 +166,11 @@ class FeedbackController:
                                          angle_cible: float,
                                          tolerance: float) -> None:
         """
-        Exécute les pas moteur.
-
-        Pour le RP2040, utilise rotation() qui envoie une seule commande MOVE
-        au firmware (rapide). Pour le GPIO, utilise faire_un_pas() en boucle
-        (le timing est géré directement par le Pi).
+        Exécute les pas moteur via une seule commande rotation().
         """
-        if hasattr(self.moteur, '_serial_lock'):
-            # RP2040 : une seule commande MOVE serie (évite 1 aller-retour par pas)
-            deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
-            angle = steps * deg_per_step * (1 if self.moteur.direction_actuelle >= 0 else -1)
-            self.moteur.rotation(angle, vitesse=vitesse)
-        else:
-            # GPIO : boucle pas-a-pas (timing direct, pas d'overhead serie)
-            for i in range(steps):
-                if i % 1000 == 0 and self.stop_requested:
-                    self.logger.info(f"Arrêt demandé à {i}/{steps} pas")
-                    break
-                self.moteur.faire_un_pas(delai=vitesse)
+        deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
+        angle = steps * deg_per_step * (1 if self.moteur.direction_actuelle >= 0 else -1)
+        self.moteur.rotation(angle, vitesse=vitesse)
 
     def _verifier_arret_anticipe(self, angle_cible: float, tolerance: float,
                                   step_index: int, total_steps: int) -> bool:

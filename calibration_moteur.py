@@ -15,14 +15,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.hardware.moteur import MoteurCoupole
 from core.config.config_loader import load_config
+from core.hardware.moteur_rp2040 import MoteurRP2040
 
 
 class MotorCalibrator:
     def __init__(self):
         self.config = load_config()
-        self.moteur = MoteurCoupole(self.config.motor)
+        serial_cfg = self.config.motor_driver.serial
+        import serial
+        serial_port = serial.Serial(
+            port=serial_cfg.port,
+            baudrate=serial_cfg.baudrate,
+            timeout=serial_cfg.timeout,
+        )
+        self.moteur = MoteurRP2040(self.config.motor, serial_port)
 
         # Valeurs actuelles du config
         self.modes_config = {
@@ -47,13 +54,8 @@ class MotorCalibrator:
         vitesse_theo = self.calculer_vitesse_theorique(motor_delay)
         print(f"   Vitesse théorique: {vitesse_theo:.1f}°/min")
 
-        self.moteur.definir_direction(1)
-        deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
-        steps = int(angle_deg / deg_per_step)
-
         start = time.time()
-        for _ in range(steps):
-            self.moteur.faire_un_pas(delai=motor_delay)
+        self.moteur.rotation(angle_deg, vitesse=motor_delay)
         duree = time.time() - start
 
         # AJOUT : pause pour stabilisation électromagnétique

@@ -4,7 +4,7 @@ Controleur moteur pas-a-pas via RP2040 (communication serie).
 Delegue la generation d'impulsions STEP/DIR au firmware MicroPython
 sur Pi Pico, communiquant via USB CDC serie.
 
-Meme interface publique que MoteurCoupole pour interchangeabilite.
+Interface publique standard pour le controleur moteur.
 
 Protocole serie (defini en Phase 1 firmware) :
   Commandes: MOVE <steps> <direction> <delay_us> <ramp_type>
@@ -43,8 +43,7 @@ class MoteurRP2040:
     """
     Controleur moteur via RP2040 serie.
 
-    Compatible avec l'interface de MoteurCoupole pour permettre
-    le fallback GPIO/RP2040 transparent.
+    Controleur moteur via communication serie avec le firmware RP2040.
     """
 
     def __init__(self, config_moteur, serial_port):
@@ -61,7 +60,7 @@ class MoteurRP2040:
         self.stop_requested = False
         self._serial_lock = threading.Lock()
 
-        # Parser la config moteur (meme logique que MoteurCoupole)
+        # Parser la config moteur
         params = parse_motor_config(config_moteur)
         validate_motor_params(params)
 
@@ -237,7 +236,7 @@ class MoteurRP2040:
             return None
 
     # =========================================================================
-    # INTERFACE PUBLIQUE (compatible MoteurCoupole)
+    # INTERFACE PUBLIQUE
     # =========================================================================
 
     def definir_direction(self, direction: int):
@@ -248,18 +247,6 @@ class MoteurRP2040:
             direction: 1 pour horaire, -1 pour anti-horaire
         """
         self.direction_actuelle = 1 if direction >= 0 else -1
-
-    def faire_un_pas(self, delai: float = 0.0015):
-        """
-        Fait faire un pas au moteur.
-
-        Args:
-            delai: Delai en secondes entre les impulsions
-        """
-        direction = 1 if self.direction_actuelle >= 0 else 0
-        delay_us = max(1, int(delai * 1_000_000))
-        response = self._send_command(f"MOVE 1 {direction} {delay_us} NONE")
-        self._parse_response(response, "faire_un_pas")
 
     def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
         """
@@ -360,7 +347,7 @@ class MoteurRP2040:
         self.stop_requested = False
 
     # =========================================================================
-    # METHODES DEMON ENCODEUR (delegation — identique a MoteurCoupole)
+    # METHODES DEMON ENCODEUR
     # =========================================================================
 
     @staticmethod
@@ -378,7 +365,7 @@ class MoteurRP2040:
         return get_daemon_reader().read_status()
 
     # =========================================================================
-    # FEEDBACK CONTROLLER (delegation — identique a MoteurCoupole)
+    # FEEDBACK CONTROLLER
     # =========================================================================
 
     def get_feedback_controller(self):
@@ -404,7 +391,7 @@ class MoteurRP2040:
         """
         Rotation avec feedback via demon encodeur.
 
-        Delegue au FeedbackController (identique a MoteurCoupole).
+        Delegue au FeedbackController.
         """
         controller = self.get_feedback_controller()
         return controller.rotation_avec_feedback(

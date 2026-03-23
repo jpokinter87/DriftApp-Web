@@ -174,7 +174,7 @@ class SerialConfig:
 @dataclass
 class MotorDriverConfig:
     """Configuration du pilote moteur (GPIO direct ou RP2040 serie)."""
-    type: str  # "gpio" ou "rp2040"
+    type: str  # "rp2040"
     serial: SerialConfig
 
 
@@ -214,7 +214,7 @@ class DriftAppConfig:
 
     Usage:
         config = load_config()
-        moteur = MoteurCoupole(config.motor)
+        moteur = MoteurRP2040(config.motor, serial_port)
         tracker = Tracker(config.site, config.tracking, config.adaptive)
     """
     site: SiteConfig
@@ -329,11 +329,11 @@ class ConfigLoader:
         )
 
     def _parse_motor_driver(self) -> MotorDriverConfig:
-        """Parse la section motor_driver (fallback GPIO par defaut)."""
+        """Parse la section motor_driver."""
         c = self.cfg.get("motor_driver", {})
         serial_cfg = c.get("serial", {})
         return MotorDriverConfig(
-            type=str(c.get("type", "gpio")).lower(),
+            type=str(c.get("type", "rp2040")).lower(),
             serial=SerialConfig(
                 port=str(serial_cfg.get("port", "/dev/ttyACM0")),
                 baudrate=int(serial_cfg.get("baudrate", 115200)),

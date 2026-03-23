@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Motor Service - Processus dédié pour le contrôle moteur GPIO.
+Motor Service - Processus dédié pour le contrôle moteur RP2040.
 
 Ce service tourne dans un processus séparé avec son propre GIL,
 garantissant un timing optimal pour les pulses GPIO sans interférence
@@ -41,7 +41,7 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.config.config_loader import ConfigLoader
-from core.hardware.moteur import MoteurCoupole, get_daemon_reader, set_daemon_reader
+from core.hardware.daemon_encoder_reader import get_daemon_reader, set_daemon_reader
 from core.hardware.moteur_rp2040 import MoteurRP2040
 from core.hardware.moteur_simule import MoteurSimule
 from core.hardware.serial_simulator import SerialSimulator
@@ -225,37 +225,28 @@ class MotorService:
         logger.info(f"Motor Service initialisé en mode {mode_str}")
 
     def _init_hardware(self):
-        """Initialise le matériel (moteur et encodeur)."""
-        driver_type = self.config.motor_driver.type
-
+        """Initialise le matériel (moteur RP2040 et encodeur)."""
         if self.simulation_mode:
-            logger.info("MODE SIMULATION ACTIVÉ")
-            if driver_type == "rp2040":
-                logger.info("Driver RP2040 (simulation serie)")
-                serial_sim = SerialSimulator()
-                self.moteur = MoteurRP2040(self.config.motor, serial_sim)
-            else:
-                self.moteur = MoteurSimule(self.config.motor)
+            logger.info("MODE SIMULATION ACTIVÉ - RP2040 (simulation serie)")
+            serial_sim = SerialSimulator()
+            self.moteur = MoteurRP2040(self.config.motor, serial_sim)
             # Injecter le lecteur simulé comme instance globale
             self.daemon_reader = SimulatedDaemonReader()
             set_daemon_reader(self.daemon_reader)
-            self.feedback_controller = self.moteur if driver_type != "rp2040" else FeedbackController(
+            self.feedback_controller = FeedbackController(
                 self.moteur,
                 self.daemon_reader,
                 protection_threshold=self.config.thresholds.feedback_protection_deg,
             )
         else:
-            if driver_type == "rp2040":
-                logger.info("MODE PRODUCTION - RP2040 serie")
-                serial_port = self._open_serial_port()
-                if serial_port is not None:
-                    self.moteur = MoteurRP2040(self.config.motor, serial_port)
-                else:
-                    logger.warning("Fallback vers GPIO direct (port serie indisponible)")
-                    self.moteur = MoteurCoupole(self.config.motor)
-            else:
-                logger.info("MODE PRODUCTION - GPIO actif")
-                self.moteur = MoteurCoupole(self.config.motor)
+            logger.info("MODE PRODUCTION - RP2040 serie")
+            serial_port = self._open_serial_port()
+            if serial_port is None:
+                raise RuntimeError(
+                    "Port serie RP2040 indisponible. "
+                    "Verifiez que le Pi Pico est branche sur USB."
+                )
+            self.moteur = MoteurRP2040(self.config.motor, serial_port)
             # Réutiliser l'instance globale du lecteur daemon
             self.daemon_reader = get_daemon_reader()
             self.feedback_controller = FeedbackController(

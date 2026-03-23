@@ -255,9 +255,10 @@ class HardwareDetector:
             "system": platform.system(),
         }
 
-        # Mode production si Raspberry Pi + GPIO fonctionnel
+        # Mode production si Raspberry Pi détecté
+        # Le moteur est piloté via RP2040 (série USB), pas GPIO direct
         # Le démon encodeur est optionnel (fallback sur position logicielle)
-        is_production_mode = is_rpi and gpio_ok
+        is_production_mode = is_rpi
 
         return is_production_mode, hardware_info
 

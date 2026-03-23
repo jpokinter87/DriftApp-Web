@@ -346,8 +346,8 @@ class TrackingCorrectionsMixin:
         n'a pas atteint exactement la cible. La re-sync corrige cela.
         """
         try:
-            from core.hardware.moteur import MoteurCoupole
-            real_position = MoteurCoupole.get_daemon_angle()
+            from core.hardware.daemon_encoder_reader import get_daemon_reader
+            real_position = get_daemon_reader().read_angle()
             old_offset = self.encoder_offset
             self.encoder_offset = position_cible_logique - real_position
             self.logger.info(
@@ -388,9 +388,10 @@ class TrackingCorrectionsMixin:
             f"DEBUG: steps_per_dome_revolution = {self.moteur.steps_per_dome_revolution}"
         )
 
-        # Faire les pas
-        for _ in range(steps):
-            self.moteur.faire_un_pas(delai=motor_delay)
+        # Appliquer la rotation
+        deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
+        angle = steps * deg_per_step * direction
+        self.moteur.rotation(angle, vitesse=motor_delay)
 
         # Mettre à jour la position relative (normalisée dans [0, 360[)
         self.position_relative = (self.position_relative + delta_deg) % 360

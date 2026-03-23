@@ -47,8 +47,8 @@ def rp2040_config_file(tmp_path):
 
 
 @pytest.fixture
-def gpio_config_file(tmp_path):
-    """Config temporaire avec motor_driver type=gpio (defaut)."""
+def config_no_motor_driver(tmp_path):
+    """Config temporaire sans section motor_driver (defaut rp2040)."""
     config_data = {
         "site": {"latitude": 44.15, "longitude": 5.23, "altitude": 800,
                  "nom": "Test Obs", "fuseau": "Europe/Paris", "tz_offset": 1},
@@ -118,12 +118,10 @@ class TestFullFlowRP2040:
         moteur.nettoyer()
         assert not sim.is_open
 
-    def test_full_flow_gpio_fallback(self, gpio_config_file):
-        """Config sans motor_driver → type gpio par defaut."""
-        config = ConfigLoader(gpio_config_file).load()
-        assert config.motor_driver.type == "gpio"
-        # En mode gpio, on instancierait MoteurCoupole (pas MoteurRP2040)
-        # Ici on verifie juste que la config est correcte
+    def test_full_flow_no_motor_driver_defaults_rp2040(self, config_no_motor_driver):
+        """Config sans motor_driver → type rp2040 par defaut."""
+        config = ConfigLoader(config_no_motor_driver).load()
+        assert config.motor_driver.type == "rp2040"
         assert config.motor_driver.serial.port == "/dev/ttyACM0"
 
     def test_rotation_absolue_integration(self, rp2040_config_file):
@@ -216,35 +214,6 @@ class TestMotorServiceRP2040Integration:
             # Cleanup
             service.moteur.nettoyer()
 
-    def test_motor_service_gpio_default(self, gpio_config_file):
-        """MotorService instancie MoteurSimule en simulation avec config gpio."""
-        from unittest.mock import patch
-        from core.hardware.moteur_simule import MoteurSimule
-        from services.motor_service import MotorService
-
-        mock_hw_info = {
-            'raspberry_pi': False, 'rpi_model': None,
-            'gpio': False, 'gpio_error': 'Non teste',
-            'encoder_daemon': False, 'encoder_error': 'Non teste',
-            'encoder_position': None, 'daemon_process': False,
-            'motor': False, 'motor_error': 'Non teste',
-            'spi_available': False, 'spi_devices': [],
-            'platform': 'Linux-test', 'machine': 'x86_64', 'system': 'Linux',
-        }
-
-        with patch('services.motor_service.HardwareDetector.detect_hardware',
-                   return_value=(False, mock_hw_info)), \
-             patch('services.motor_service.ConfigLoader') as mock_loader, \
-             patch('services.motor_service.IpcManager'), \
-             patch('services.motor_service.AdaptiveTrackingManager'):
-
-            real_config = ConfigLoader(gpio_config_file).load()
-            mock_loader.return_value.load.return_value = real_config
-
-            service = MotorService()
-
-            # Verifier que MoteurSimule est instancie (pas MoteurRP2040)
-            assert isinstance(service.moteur, MoteurSimule)
 
 
 # ============================================================================

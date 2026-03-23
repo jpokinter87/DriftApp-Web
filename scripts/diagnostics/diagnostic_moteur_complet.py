@@ -283,18 +283,20 @@ class DiagnosticMoteur:
 
     def initialiser_moteur(self) -> bool:
         try:
-            from core.hardware.moteur import MoteurCoupole
-            self.moteur = MoteurCoupole(self.config.motor)
-            print_ok(f"Moteur initialisé ({self.moteur.gpio_lib})")
+            from core.hardware.moteur_rp2040 import MoteurRP2040
+            serial_cfg = self.config.motor_driver.serial
+            import serial
+            serial_port = serial.Serial(
+                port=serial_cfg.port,
+                baudrate=serial_cfg.baudrate,
+                timeout=serial_cfg.timeout,
+            )
+            self.moteur = MoteurRP2040(self.config.motor, serial_port)
+            print_ok(f"Moteur RP2040 initialisé")
             print_info(f"Steps par tour de coupole: {self.moteur.steps_per_dome_revolution:,}")
             return True
         except Exception as e:
-            error_msg = str(e)
-            if "GPIO busy" in error_msg or "busy" in error_msg.lower():
-                print_error("GPIO occupés par un autre processus!")
-                print_info("Solutions: sudo pkill -f motor_service.py")
-            else:
-                print_error(f"Impossible d'initialiser le moteur: {e}")
+            print_error(f"Impossible d'initialiser le moteur RP2040: {e}")
             return False
 
     def nettoyer_moteur(self):
@@ -327,21 +329,13 @@ class DiagnosticMoteur:
         self.moteur.clear_stop_request()
         self.moteur.definir_direction(1 if angle >= 0 else -1)
 
-        timings = []
-        gc_was_enabled = gc.isenabled()
-        gc.disable()
-
         t_start = time.perf_counter()
-        try:
-            for i in range(steps):
-                t0 = time.perf_counter()
-                self.moteur.faire_un_pas(vitesse)
-                timings.append(time.perf_counter() - t0)
-        finally:
-            if gc_was_enabled:
-                gc.enable()
-        
+        self.moteur.rotation(angle, vitesse=vitesse)
         t_total = time.perf_counter() - t_start
+
+        # Pour le rapport, creer un timing synthetique (pas de mesure par-pas avec RP2040)
+        avg_delay = t_total / steps if steps > 0 else vitesse
+        timings = [avg_delay] * min(steps, 100)  # Echantillon representatif
 
         return self._analyser_timings(timings, vitesse, description, t_total)
 

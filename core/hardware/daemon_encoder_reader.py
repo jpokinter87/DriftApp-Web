@@ -43,7 +43,7 @@ class DaemonEncoderReader:
     Lecteur centralisé pour le démon encodeur EMS22A.
 
     Gère la lecture du fichier JSON partagé avec retry, timeout et moyennage.
-    Utilisé par MoteurCoupole et potentiellement d'autres composants.
+    Utilisé par MoteurRP2040 et potentiellement d'autres composants.
     """
 
     def __init__(self, daemon_path: Path = DAEMON_JSON):

@@ -15,7 +15,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
-from core.hardware.moteur import MoteurCoupole
+from core.hardware.daemon_encoder_reader import get_daemon_reader
+from core.hardware.moteur_rp2040 import MoteurRP2040
 from core.hardware.moteur_simule import MoteurSimule
 from core.observatoire import AstronomicalCalculations
 from core.tracking.adaptive_tracking import AdaptiveTrackingManager
@@ -44,7 +45,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
     def __init__(
         self,
-        moteur: Optional[MoteurCoupole | MoteurSimule],
+        moteur: Optional[MoteurRP2040 | MoteurSimule],
         calc: AstronomicalCalculations,
         logger: TrackingLogger,
         seuil: float = 0.5,
@@ -114,7 +115,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             return
 
         try:
-            pos = MoteurCoupole.get_daemon_angle(timeout_ms=200)
+            pos = get_daemon_reader().read_angle(timeout_ms=200)
             self.encoder_available = True
             self.logger.info(f"Encodeur actif - Position: {pos:.1f}°")
         except Exception as e:
@@ -241,7 +242,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         if skip_goto:
             # Utiliser la position réelle comme point de départ
             try:
-                real_position = MoteurCoupole.get_daemon_angle()
+                real_position = get_daemon_reader().read_angle()
                 self._setup_initial_position(azimut, altitude, real_position)
                 self._sync_encoder(real_position)
                 self.logger.info(f"Position initiale depuis encodeur: {real_position:.1f}°")

@@ -6,7 +6,7 @@ Couvre :
 - Position simulée (variable globale partagée)
 - Rotation (relative et absolue)
 - Feedback simulé (toujours succès)
-- API compatible avec MoteurCoupole
+- API compatible avec MoteurRP2040
 - Contrôle d'arrêt (stop_requested)
 """
 
@@ -127,28 +127,6 @@ class TestMoteurSimuleRotation:
         m = MoteurSimule()
         m.rotation_absolue(10.0, 350.0)
         assert get_simulated_position() == pytest.approx(10.0)
-
-
-# =============================================================================
-# Faire un pas
-# =============================================================================
-
-class TestMoteurSimuleFaireUnPas:
-    def test_un_pas_direction_positive(self):
-        m = MoteurSimule()
-        m.direction = 1
-        pos_avant = get_simulated_position()
-        m.faire_un_pas()
-        pos_apres = get_simulated_position()
-        assert pos_apres > pos_avant or (pos_avant > 359 and pos_apres < 1)
-
-    def test_un_pas_direction_negative(self):
-        set_simulated_position(10.0)
-        m = MoteurSimule()
-        m.direction = -1
-        m.faire_un_pas()
-        pos = get_simulated_position()
-        assert pos < 10.0 or pos > 359.0
 
 
 # =============================================================================

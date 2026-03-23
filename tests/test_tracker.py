@@ -100,7 +100,7 @@ def mock_astropy_modules():
 
 @pytest.fixture
 def mock_moteur():
-    """Mock pour MoteurCoupole."""
+    """Mock pour le moteur (MoteurRP2040 ou MoteurSimule)."""
     moteur = MagicMock()
     moteur.steps_per_dome_revolution = 1942968
     moteur.stop_requested = False
@@ -215,23 +215,22 @@ def tracking_session(
     }):
         # Patcher les imports au niveau du module tracker
         with patch('core.tracking.tracker.AdaptiveTrackingManager', MagicMock(return_value=mock_adaptive)):
-            with patch('core.hardware.moteur.MoteurCoupole'):
-                with patch('core.hardware.hardware_detector.HardwareDetector'):
-                    # Import après le patching
-                    from core.tracking.tracker import TrackingSession
+            with patch('core.hardware.hardware_detector.HardwareDetector'):
+                # Import après le patching
+                from core.tracking.tracker import TrackingSession
 
-                    session = TrackingSession(
-                        moteur=mock_moteur,
-                        calc=mock_calc,
-                        logger=mock_tracking_logger,
-                        seuil=0.5,
-                        intervalle=60,
-                        abaque_file="data/Loi_coupole.xlsx",
-                        encoder_config=mock_encoder_config,
-                        motor_config=mock_motor_config
-                    )
+                session = TrackingSession(
+                    moteur=mock_moteur,
+                    calc=mock_calc,
+                    logger=mock_tracking_logger,
+                    seuil=0.5,
+                    intervalle=60,
+                    abaque_file="data/Loi_coupole.xlsx",
+                    encoder_config=mock_encoder_config,
+                    motor_config=mock_motor_config
+                )
 
-                    return session
+                return session
 
 
 # =============================================================================
@@ -332,10 +331,16 @@ class TestTrackingSessionEncoder:
         }):
             with patch('core.tracking.tracker.AdaptiveTrackingManager'):
                 with patch('core.hardware.hardware_detector.HardwareDetector') as mock_hw:
-                    with patch('core.tracking.tracker.MoteurCoupole') as mock_moteur_cls:
-                        mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
-                        mock_moteur_cls.get_daemon_angle.return_value = 45.0
+                    mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
 
+                    mock_reader = MagicMock()
+                    mock_reader.read_angle.return_value = 45.0
+                    mock_reader.read_status.return_value = {
+                        'angle': 45.0, 'status': 'OK', 'calibrated': True
+                    }
+
+                    with patch('core.tracking.tracker.get_daemon_reader',
+                               return_value=mock_reader):
                         from core.tracking.tracker import TrackingSession
 
                         session = TrackingSession(

@@ -328,8 +328,8 @@ class TestMoteurRP2040Cleanup:
 class TestConfigFallback:
     """Tests du fallback config GPIO/RP2040."""
 
-    def test_config_fallback_gpio_default(self, tmp_path):
-        """Config sans motor_driver → type='gpio' par defaut."""
+    def test_config_fallback_rp2040_default(self, tmp_path):
+        """Config sans motor_driver → type='rp2040' par defaut."""
         config_data = {
             "site": {"latitude": 44.0, "longitude": 5.0, "altitude": 800,
                      "nom": "Test", "fuseau": "Europe/Paris", "tz_offset": 1},
@@ -350,7 +350,7 @@ class TestConfigFallback:
         config_file.write_text(json.dumps(config_data))
 
         config = ConfigLoader(config_file).load()
-        assert config.motor_driver.type == "gpio"
+        assert config.motor_driver.type == "rp2040"
         assert config.motor_driver.serial.port == "/dev/ttyACM0"
 
     def test_config_rp2040_parsing(self, tmp_path):

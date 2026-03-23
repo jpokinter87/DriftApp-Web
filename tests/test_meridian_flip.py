@@ -327,9 +327,11 @@ class TestEncoderResync:
         tracking_session.moteur.rotation_avec_feedback = MagicMock(return_value=mock_result)
 
         # Mock get_daemon_angle pour la re-sync
-        with patch('core.hardware.moteur.MoteurCoupole') as MockMoteur:
-            MockMoteur.get_daemon_angle.return_value = 130.0
+        mock_reader = MagicMock()
+        mock_reader.read_angle.return_value = 130.0
 
+        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
+                   return_value=mock_reader):
             tracking_session._apply_correction_avec_feedback(35.0, 0.001)
 
             # Vérifier que encoder_offset a été recalculé
@@ -358,11 +360,14 @@ class TestEncoderResync:
         tracking_session.moteur = MagicMock()
         tracking_session.moteur.rotation_avec_feedback = MagicMock(return_value=mock_result)
 
-        with patch('core.hardware.moteur.MoteurCoupole') as MockMoteur:
+        mock_reader = MagicMock()
+
+        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
+                   return_value=mock_reader):
             tracking_session._apply_correction_avec_feedback(3.0, 0.001)
 
-            # get_daemon_angle ne devrait PAS avoir été appelé (pas de re-sync)
-            MockMoteur.get_daemon_angle.assert_not_called()
+            # read_angle ne devrait PAS avoir été appelé (pas de re-sync)
+            mock_reader.read_angle.assert_not_called()
             assert tracking_session.encoder_offset == 5.0
 
 
@@ -480,9 +485,11 @@ class TestLargeMovementFlag:
         tracking_session.moteur = MagicMock()
         tracking_session.moteur.rotation_avec_feedback = capture_flag
 
-        with patch('core.hardware.moteur.MoteurCoupole') as MockMoteur:
-            MockMoteur.get_daemon_angle.return_value = 135.0
+        mock_reader = MagicMock()
+        mock_reader.read_angle.return_value = 135.0
 
+        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
+                   return_value=mock_reader):
             tracking_session._apply_correction_avec_feedback(35.0, 0.001)
 
         assert flag_during_rotation[0] is True, "Flag devrait être True pendant la rotation"
