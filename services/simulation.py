@@ -68,6 +68,17 @@ class SimulatedDaemonReader:
         """Retourne le statut complet simulé."""
         return self.read_raw()
 
+    def read_fast(self, num_samples: int = 2, delay_ms: int = 10) -> float:
+        """
+        Lecture rapide simulee sans pause de stabilisation.
+
+        Args:
+            num_samples: Nombre d'echantillons (non utilise en simulation)
+            delay_ms: Delai entre echantillons en ms (simule minimalement)
+        """
+        time.sleep(delay_ms / 1000.0)
+        return self.read_angle()
+
     def read_stable(
         self, num_samples: int = 3, delay_ms: int = 10, stabilization_ms: int = 50
     ) -> float:

@@ -25,6 +25,7 @@ def mock_daemon_reader():
     reader.is_available.return_value = True
     reader.read_angle.return_value = 45.0
     reader.read_stable.return_value = 45.0
+    reader.read_fast.return_value = 45.0
     reader.read_raw.return_value = {"angle": 45.0, "status": "OK"}
     return reader
 
@@ -110,12 +111,12 @@ class TestFeedbackControllerCalculs:
 
     def test_lire_position_stable(self, feedback_controller, mock_daemon_reader):
         """Lecture position via daemon."""
-        mock_daemon_reader.read_stable.return_value = 67.5
+        mock_daemon_reader.read_fast.return_value = 67.5
 
         result = feedback_controller._lire_position_stable()
 
         assert result == 67.5
-        mock_daemon_reader.read_stable.assert_called_once()
+        mock_daemon_reader.read_fast.assert_called_once()
 
     def test_calculer_correction(self, feedback_controller):
         """Calcul des paramètres de correction."""
@@ -194,7 +195,7 @@ class TestRotationAvecFeedback:
     ):
         """Rotation réussie dès la première lecture (déjà à la cible)."""
         # Configurer le mock pour être déjà à la position cible
-        mock_daemon_reader.read_stable.return_value = 90.0
+        mock_daemon_reader.read_fast.return_value = 90.0
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -211,7 +212,7 @@ class TestRotationAvecFeedback:
         """Rotation nécessitant des corrections."""
         # Position initiale 0°, puis 45° après correction, puis 90° (cible)
         positions = [0.0, 0.0, 45.0, 45.0, 90.0]
-        mock_daemon_reader.read_stable.side_effect = positions
+        mock_daemon_reader.read_fast.side_effect = positions
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -227,7 +228,7 @@ class TestRotationAvecFeedback:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Fallback si daemon non disponible."""
-        mock_daemon_reader.read_stable.side_effect = RuntimeError("Daemon not found")
+        mock_daemon_reader.read_fast.side_effect = RuntimeError("Daemon not found")
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -241,14 +242,14 @@ class TestRotationAvecFeedback:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Arrêt si stop_requested pendant la boucle."""
-        mock_daemon_reader.read_stable.return_value = 0.0
+        mock_daemon_reader.read_fast.return_value = 0.0
 
         # Simuler un arrêt après la première lecture
         def set_stop(*args, **kwargs):
             feedback_controller.stop_requested = True
             return 0.0
 
-        mock_daemon_reader.read_stable.side_effect = set_stop
+        mock_daemon_reader.read_fast.side_effect = set_stop
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -263,7 +264,7 @@ class TestRotationAvecFeedback:
     ):
         """Arrêt après max_iterations."""
         # Position qui ne change jamais (erreur persistante)
-        mock_daemon_reader.read_stable.return_value = 0.0
+        mock_daemon_reader.read_fast.return_value = 0.0
         mock_daemon_reader.read_angle.return_value = 0.0
 
         result = feedback_controller.rotation_avec_feedback(
@@ -280,12 +281,19 @@ class TestRotationAvecFeedback:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Le timeout global interrompt la boucle avant max_iterations."""
-        # Position qui ne change jamais (erreur persistante de 5°)
-        mock_daemon_reader.read_stable.return_value = 0.0
-        mock_daemon_reader.read_angle.return_value = 0.0
+        # Positions qui varient légèrement pour éviter la détection d'encodeur figé
+        # mais ne convergent jamais vers la cible (5°)
+        call_count = [0]
+        def oscillating_position(*args, **kwargs):
+            call_count[0] += 1
+            # Osciller entre 0° et 2° — mouvement détectable mais jamais à la cible
+            return 0.0 if call_count[0] % 2 == 0 else 2.0
+
+        mock_daemon_reader.read_fast.side_effect = oscillating_position
+        mock_daemon_reader.read_angle.side_effect = oscillating_position
 
         result = feedback_controller.rotation_avec_feedback(
-            angle_cible=5.0,       # Erreur de 5° (< protection 20°)
+            angle_cible=5.0,       # Erreur de 3-5° (< protection 20°)
             tolerance=0.1,
             max_iterations=1000,  # Beaucoup d'itérations
             max_duration=0.1      # Mais timeout très court (100ms)
@@ -300,7 +308,7 @@ class TestRotationAvecFeedback:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Le résultat contient timeout=False si pas de timeout."""
-        mock_daemon_reader.read_stable.return_value = 45.0
+        mock_daemon_reader.read_fast.return_value = 45.0
         mock_daemon_reader.read_angle.return_value = 45.0
 
         result = feedback_controller.rotation_avec_feedback(
@@ -324,7 +332,7 @@ class TestRotationRelative:
     ):
         """Calcul correct de l'angle cible."""
         mock_daemon_reader.read_angle.return_value = 45.0
-        mock_daemon_reader.read_stable.return_value = 90.0  # Après rotation
+        mock_daemon_reader.read_fast.return_value = 90.0  # Après rotation
 
         with patch.object(
             feedback_controller, 'rotation_avec_feedback',
@@ -342,7 +350,7 @@ class TestRotationRelative:
     ):
         """Rotation relative qui traverse 360°."""
         mock_daemon_reader.read_angle.return_value = 350.0
-        mock_daemon_reader.read_stable.return_value = 20.0
+        mock_daemon_reader.read_fast.return_value = 20.0
 
         with patch.object(
             feedback_controller, 'rotation_avec_feedback',
@@ -421,7 +429,7 @@ class TestEnregistrerCorrection:
         self, feedback_controller, mock_daemon_reader
     ):
         """Vérifie la structure de l'enregistrement."""
-        mock_daemon_reader.read_stable.return_value = 50.0
+        mock_daemon_reader.read_fast.return_value = 50.0
 
         correction = feedback_controller._enregistrer_correction(
             iteration=0,
@@ -446,7 +454,7 @@ class TestEnregistrerCorrection:
         self, feedback_controller, mock_daemon_reader
     ):
         """Vérifie les valeurs de l'enregistrement."""
-        mock_daemon_reader.read_stable.return_value = 50.0
+        mock_daemon_reader.read_fast.return_value = 50.0
 
         correction = feedback_controller._enregistrer_correction(
             iteration=2,
@@ -477,7 +485,7 @@ class TestExecuterIteration:
         self, feedback_controller, mock_daemon_reader
     ):
         """Retourne None si objectif atteint."""
-        mock_daemon_reader.read_stable.return_value = 90.0
+        mock_daemon_reader.read_fast.return_value = 90.0
 
         result = feedback_controller._executer_iteration(
             angle_cible=90.0,
@@ -494,7 +502,7 @@ class TestExecuterIteration:
     ):
         """Retourne dict si correction effectuée."""
         # Position initiale proche de la cible (erreur < 20° pour passer la protection)
-        mock_daemon_reader.read_stable.side_effect = [85.0, 90.0]
+        mock_daemon_reader.read_fast.side_effect = [85.0, 90.0]
 
         result = feedback_controller._executer_iteration(
             angle_cible=90.0,
@@ -512,7 +520,7 @@ class TestExecuterIteration:
         self, feedback_controller, mock_daemon_reader
     ):
         """Retourne None si erreur de lecture."""
-        mock_daemon_reader.read_stable.side_effect = RuntimeError("Error")
+        mock_daemon_reader.read_fast.side_effect = RuntimeError("Error")
 
         result = feedback_controller._executer_iteration(
             angle_cible=90.0,
@@ -538,7 +546,7 @@ class TestEncoderFrozenDetection:
         """Détecte un encodeur stagnant après 3 corrections sans mouvement."""
         # Position qui ne change jamais malgré les corrections
         # (erreur de 5° < seuil protection 20°)
-        mock_daemon_reader.read_stable.return_value = 0.0
+        mock_daemon_reader.read_fast.return_value = 0.0
         mock_daemon_reader.read_angle.return_value = 0.0
 
         result = feedback_controller.rotation_avec_feedback(
@@ -560,7 +568,7 @@ class TestEncoderFrozenDetection:
         """Pas de détection de blocage si l'encodeur bouge."""
         # Positions qui changent à chaque lecture (assez pour position initiale + corrections + finale)
         positions = [0.0, 2.0, 4.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
-        mock_daemon_reader.read_stable.side_effect = positions
+        mock_daemon_reader.read_fast.side_effect = positions
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=5.0,
@@ -586,7 +594,7 @@ class TestEncoderFrozenDetection:
             else:
                 raise FrozenEncoderError("Encodeur figé depuis 5.0s")
 
-        mock_daemon_reader.read_stable.side_effect = side_effect
+        mock_daemon_reader.read_fast.side_effect = side_effect
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -609,7 +617,7 @@ class TestEncoderFrozenDetection:
             else:
                 raise StaleDataError("Données périmées (1000ms > 500ms)")
 
-        mock_daemon_reader.read_stable.side_effect = side_effect
+        mock_daemon_reader.read_fast.side_effect = side_effect
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=90.0,
@@ -624,7 +632,7 @@ class TestEncoderFrozenDetection:
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
         """Le résultat contient encoder_frozen=False si pas de problème."""
-        mock_daemon_reader.read_stable.return_value = 45.0
+        mock_daemon_reader.read_fast.return_value = 45.0
 
         result = feedback_controller.rotation_avec_feedback(
             angle_cible=45.0,

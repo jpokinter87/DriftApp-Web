@@ -58,6 +58,7 @@ class MoteurRP2040:
         self.serial_port = serial_port
         self.direction_actuelle = 1
         self.stop_requested = False
+        self._needs_drain = False
         self._serial_lock = threading.Lock()
 
         # Parser la config moteur
@@ -212,6 +213,7 @@ class MoteurRP2040:
 
         elif status == "STOPPED":
             steps_done = int(parts[1]) if len(parts) > 1 else 0
+            self._needs_drain = True
             self.logger.info(
                 f"Mouvement arrete par firmware apres {steps_done} pas ({context})"
             )
@@ -282,9 +284,11 @@ class MoteurRP2040:
             f"delay={delay_us}us, rampe={ramp_type}, timeout={move_timeout:.1f}s)"
         )
 
-        # Drainer les reponses residuelles avant d'envoyer le MOVE
-        # (ex: apres un STOP, la reponse IDLE peut rester dans le buffer)
-        self._drain_serial_buffer()
+        # Drainer les reponses residuelles seulement apres un STOP
+        # (la reponse IDLE peut rester dans le buffer apres interruption)
+        if self._needs_drain:
+            self._drain_serial_buffer()
+            self._needs_drain = False
 
         response = self._send_command(
             f"MOVE {steps} {direction} {delay_us} {ramp_type}",
@@ -335,6 +339,7 @@ class MoteurRP2040:
         en cours — la reponse sera lue par le thread qui attend le MOVE.
         """
         self.stop_requested = True
+        self._needs_drain = True
         try:
             if self.serial_port.is_open:
                 self.serial_port.write(b"STOP\n")

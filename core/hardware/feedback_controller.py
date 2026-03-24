@@ -104,7 +104,7 @@ class FeedbackController:
         Returns:
             Position moyenne en degrés
         """
-        return self.daemon_reader.read_stable(num_samples=3, delay_ms=10, stabilization_ms=50)
+        return self.daemon_reader.read_fast(num_samples=2, delay_ms=10)
 
     def _calculer_correction(self, erreur: float,
                              max_correction: float) -> tuple:
@@ -198,7 +198,7 @@ class FeedbackController:
         correction_duration = time.time() - correction_start
 
         try:
-            position_apres = self._lire_position_stable()
+            position_apres = self.daemon_reader.read_angle(timeout_ms=50)
             erreur_apres = self._calculer_delta_angulaire(position_apres, angle_cible)
         except RuntimeError:
             position_apres = position_avant + (angle_correction * direction)
@@ -460,7 +460,7 @@ class FeedbackController:
                     stagnant_count = 0  # Réinitialiser si mouvement détecté
 
             iteration += 1
-            time.sleep(0.05)  # Pause stabilisation
+            time.sleep(0.01)  # Pause stabilisation courte
 
         # Mesure finale
         try:

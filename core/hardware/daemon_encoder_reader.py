@@ -167,6 +167,45 @@ class DaemonEncoderReader:
         """
         return self.read_raw()
 
+    def read_fast(self, num_samples: int = 2, delay_ms: int = 10) -> float:
+        """
+        Lecture rapide avec moyenne, sans pause de stabilisation.
+
+        Optimisee pour la boucle feedback ou la stabilisation mecanique
+        n'est pas necessaire (le moteur vient de s'arreter, encodeur deja stable).
+
+        Args:
+            num_samples: Nombre d'echantillons a moyenner
+            delay_ms: Delai entre echantillons en ms
+
+        Returns:
+            float: Position moyenne en degres
+
+        Raises:
+            RuntimeError: Si impossible de lire suffisamment d'echantillons
+        """
+        positions = []
+        for _ in range(num_samples):
+            try:
+                pos = self.read_angle(timeout_ms=100)
+                positions.append(pos)
+                if len(positions) < num_samples:
+                    time.sleep(delay_ms / 1000.0)
+            except RuntimeError as e:
+                self.logger.warning(f"Erreur lecture demon: {e}")
+                if positions:
+                    break
+                else:
+                    raise
+
+        if not positions:
+            raise RuntimeError("Impossible de lire la position du demon")
+
+        # Moyenne circulaire (correcte au passage 0/360)
+        sin_sum = sum(math.sin(math.radians(p)) for p in positions)
+        cos_sum = sum(math.cos(math.radians(p)) for p in positions)
+        return math.degrees(math.atan2(sin_sum, cos_sum)) % 360
+
     def read_stable(self, num_samples: int = 3, delay_ms: int = 10,
                     stabilization_ms: int = 50) -> float:
         """
