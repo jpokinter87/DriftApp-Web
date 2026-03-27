@@ -25,7 +25,8 @@
 
     <!-- ══ Left Column: Compass ══ -->
     <section class="panel panel-astro">
-        <h2 class="section-title section-title-fire mb-4">Position Coupole</h2>
+        <h2 class="section-title section-title-fire mb-1">Position Coupole</h2>
+        <div id="compass-countdown" class="text-center text-sm font-mono font-bold h-5" style="color: #4da6ff;"></div>
 
         <div class="flex justify-center mb-4">
             <canvas id="compass" width="320" height="320"
@@ -48,7 +49,7 @@
             </div>
             <!-- CIBLE -->
             <div class="telescope-item flex justify-between items-center p-2 bg-obs-input rounded-button">
-                <label class="text-accent-green font-bold">CIBLE &radic;x&sup2;:</label>
+                <label class="text-accent-green font-bold">CIBLE &#x1F3AF;:</label>
                 <span id="dome-target" class="telescope-value font-bold text-accent-green">--&deg;</span>
             </div>
             <!-- ENC -->
@@ -99,8 +100,7 @@
         </div>
 
         <!-- Suivi Actif (hidden by default, Alpine.js controlled) -->
-        <div id="tracking-info" class="panel panel-astro tracking-active-glow"
-             x-show="$store.dashboard.trackingVisible" x-cloak>
+        <div id="tracking-info" class="panel panel-astro tracking-active-glow hidden">
             <h3 class="text-accent-green font-display font-semibold text-sm mb-3">Suivi Actif</h3>
             <div class="info-grid">
                 <div class="info-item">
@@ -267,5 +267,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/dashboard.js?v=20260222c"></script>
+<script src="/static/js/dashboard.js?v=20260327d"></script>
 {% endblock %}

@@ -322,6 +322,13 @@ class JogHandler:
             self.moteur.clear_stop_request()
             self.moteur.rotation(delta, vitesse=speed)
 
+            # Mettre à jour la position simulée après rotation
+            # (MoteurRP2040+SerialSimulator ne met pas à jour get_simulated_position)
+            if self.simulation_mode:
+                current = current_status.get("position", 0)
+                new_pos = (current + delta) % 360
+                set_simulated_position(new_pos)
+
             # Lire la position réelle après rotation
             if self.daemon_reader.is_available():
                 pos_finale = self.daemon_reader.read_angle(timeout_ms=200)
@@ -465,12 +472,14 @@ class TrackingHandler:
 
     def __init__(
         self,
+        moteur,
         feedback_controller,
         config,
         simulation_mode: bool,
         status_callback: Callable,
         log_callback: Callable,
     ):
+        self.moteur = moteur
         self.feedback_controller = feedback_controller
         self.config = config
         self.simulation_mode = simulation_mode
@@ -534,7 +543,7 @@ class TrackingHandler:
             tracking_logger = TrackingLogger()
 
             self.session = TrackingSession(
-                moteur=self.feedback_controller,
+                moteur=self.moteur,
                 calc=calc,
                 logger=tracking_logger,
                 seuil=self.config.tracking.seuil_correction_deg,

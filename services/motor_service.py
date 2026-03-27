@@ -310,6 +310,7 @@ class MotorService:
             status_lock=self.status_lock,
         )
         self.tracking_handler = TrackingHandler(
+            self.moteur,
             self.feedback_controller,
             self.config,
             self.simulation_mode,

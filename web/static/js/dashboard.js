@@ -274,6 +274,9 @@ async function searchObject() {
 
         // Effet clignotement vert du bouton pendant 5 secondes
         flashButtonSuccess(elements.btnStartTracking, 5000);
+
+        // Focus sur le bouton pour lancer le suivi avec ENTER
+        elements.btnStartTracking.focus();
     }
 }
 
@@ -736,6 +739,7 @@ function updateTrackingDisplay(motor) {
         }
 
         Alpine.store('dashboard').trackingVisible = true;
+        elements.trackingInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
 
@@ -819,6 +823,7 @@ function updateTrackingDisplay(motor) {
         }
     } else {
         Alpine.store('dashboard').trackingVisible = false;
+        elements.trackingInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
 
@@ -1085,7 +1090,7 @@ function drawStarField(ctx, cx, cy, outerR, innerR) {
     ctx.globalAlpha = 1.0;
 }
 
-// Dessiner la flèche de direction calculée (√x²) avec timer intégré
+// Dessiner la flèche de direction calculée (🎯) avec décompte au-dessus du compass
 function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     // Si pas d'angle de tracking, utiliser la position coupole
     const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
@@ -1096,7 +1101,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     const arrowHeadSize = 12;
     const arrowWidth = 3;
 
-    // Rayon du centre pour le symbole √x² et timer
+    // Rayon du centre pour la cible 🎯
     const centerRadius = 28;
 
     ctx.save();
@@ -1122,7 +1127,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     ctx.closePath();
     ctx.fill();
 
-    // === CERCLE CENTRAL avec symbole √x² ===
+    // === CERCLE CENTRAL avec 🎯 ===
     // Cercle extérieur
     ctx.fillStyle = '#1e3a5f';
     ctx.beginPath();
@@ -1136,45 +1141,31 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
 
     ctx.restore();
 
-    // === CONTENU DU CERCLE CENTRAL ===
-    const hasTimer = countdownValue !== undefined && countdownValue !== null && countdownValue !== '--';
+    // === 🎯 centré, occupant tout le cercle ===
+    ctx.save();
+    const emojiSize = centerRadius * 1.6;
+    ctx.font = `${emojiSize}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('🎯', cx, cy + emojiSize * 0.35);
+    ctx.restore();
 
-    if (hasTimer) {
-        // Mode avec timer: afficher timer + symbole √x² en dessous
-        // Formater le texte du timer
-        let timerText;
-        if (typeof countdownValue === 'number') {
-            timerText = Math.round(countdownValue) + 's';
+    // === Décompte affiché au-dessus du compass (élément HTML) ===
+    const countdownEl = document.getElementById('compass-countdown');
+    if (countdownEl) {
+        const hasTimer = countdownValue !== undefined && countdownValue !== null && countdownValue !== '--';
+        if (hasTimer) {
+            let timerText;
+            if (typeof countdownValue === 'number') {
+                timerText = Math.round(countdownValue) + 's';
+            } else {
+                timerText = String(countdownValue);
+            }
+            countdownEl.textContent = `⏱ ${timerText}`;
+            countdownEl.style.color = timerColor || '#4da6ff';
         } else {
-            timerText = String(countdownValue);
+            countdownEl.textContent = '';
         }
-
-        // Timer (légèrement au-dessus du centre)
-        ctx.save();
-        ctx.fillStyle = timerColor || '#4da6ff';
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(timerText, cx, cy - 7);
-        ctx.restore();
-
-        // Symbole √x² en dessous du timer
-        ctx.save();
-        ctx.fillStyle = '#4ade80';
-        ctx.font = 'bold 14px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('√x²', cx, cy + 10);
-        ctx.restore();
-    } else {
-        // Mode sans timer: symbole √x² seul, centré
-        ctx.save();
-        ctx.fillStyle = '#4ade80';
-        ctx.font = 'bold 20px serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('√x²', cx, cy);
-        ctx.restore();
     }
 }
 
@@ -1208,7 +1199,7 @@ function drawCompassLegend(ctx, x, y) {
 
     // CIBLE (direction calculée) en vert
     ctx.fillStyle = '#4ade80';
-    ctx.fillText('● CIBLE (√x²)', x - 45, y);
+    ctx.fillText('● CIBLE (🎯)', x - 45, y);
 
     // CIMIER en ambre (aligné avec cartouche CSS --accent-amber)
     ctx.fillStyle = '#d4a055';

@@ -56,7 +56,6 @@ class GestionnaireCatalogue:
                 from astroquery.simbad import Simbad
                 # Ajouter des colonnes à la requête Simbad
                 self.simbad = Simbad()
-                self.simbad.add_votable_fields('otype', 'ra(d)', 'dec(d)', 'flux(V)', 'morphtype')
             except ImportError:
                 self.simbad = None
     

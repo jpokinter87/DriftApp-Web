@@ -367,10 +367,11 @@ class TestTrackingHandler:
     """Tests pour le handler de suivi."""
 
     @pytest.fixture
-    def handler(self, mock_feedback_controller, mock_config, status_callback, log_callback):
+    def handler(self, mock_moteur, mock_feedback_controller, mock_config, status_callback, log_callback):
         """Crée un TrackingHandler."""
         from services.command_handlers import TrackingHandler
         return TrackingHandler(
+            moteur=mock_moteur,
             feedback_controller=mock_feedback_controller,
             config=mock_config,
             simulation_mode=True,
