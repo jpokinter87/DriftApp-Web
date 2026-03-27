@@ -296,6 +296,13 @@ class MoteurRP2040:
         )
         self._parse_response(response, f"rotation {angle_deg:+.2f}°")
 
+        # En simulation, synchroniser la position globale
+        # (SerialSimulator ne met pas a jour get_simulated_position)
+        from core.hardware.serial_simulator import SerialSimulator
+        if isinstance(self.serial_port, SerialSimulator):
+            from core.hardware.moteur_simule import get_simulated_position, set_simulated_position
+            set_simulated_position((get_simulated_position() + angle_deg) % 360)
+
     def rotation_absolue(
         self,
         position_cible_deg: float,

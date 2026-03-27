@@ -253,20 +253,12 @@ async function searchObject() {
         elements.btnStartTracking.disabled = true;
         state.searchedObject = null;
     } else {
-        const raDeg = result.ra_deg ?? null;
-        const decDeg = result.dec_deg ?? null;
+        const raHMS = formatHMS(result.ra_deg ?? null);
+        const decDMS = formatDMS(result.dec_deg ?? null);
 
-        // Format décimal
-        const raDecimal = raDeg !== null ? raDeg.toFixed(2) + '°' : '--';
-        const decDecimal = decDeg !== null ? decDeg.toFixed(2) + '°' : '--';
-
-        // Format sexagésimal : HMS pour RA, DMS pour DEC
-        const raHMS = formatHMS(raDeg);
-        const decDMS = formatDMS(decDeg);
-
-        // Affichage sur deux lignes : décimal + sexagésimal
+        // Affichage compact sur une ligne
         elements.objectCoords.innerHTML =
-            `RA: ${raDecimal} (${raHMS})<br>DEC: ${decDecimal} (${decDMS})`;
+            `RA: ${raHMS} &mdash; DEC: ${decDMS}`;
         elements.objectInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = false;
         state.searchedObject = result.nom || name;

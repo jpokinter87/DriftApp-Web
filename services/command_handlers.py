@@ -322,13 +322,6 @@ class JogHandler:
             self.moteur.clear_stop_request()
             self.moteur.rotation(delta, vitesse=speed)
 
-            # Mettre à jour la position simulée après rotation
-            # (MoteurRP2040+SerialSimulator ne met pas à jour get_simulated_position)
-            if self.simulation_mode:
-                current = current_status.get("position", 0)
-                new_pos = (current + delta) % 360
-                set_simulated_position(new_pos)
-
             # Lire la position réelle après rotation
             if self.daemon_reader.is_available():
                 pos_finale = self.daemon_reader.read_angle(timeout_ms=200)

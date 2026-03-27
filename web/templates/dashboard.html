@@ -81,12 +81,12 @@
         <!-- Suivi d'Objet -->
         <div class="panel panel-astro">
             <h3 class="section-title section-title-fire mb-3">Suivi d'Objet</h3>
-            <div class="input-group mb-3">
+            <div class="input-group mb-1">
                 <input type="text" id="object-name" class="input-field flex-1"
                        placeholder="Ex: M31, Vega, Jupiter...">
                 <button id="btn-search" class="btn btn-secondary">Rechercher</button>
             </div>
-            <div id="object-info" class="hidden p-3 bg-obs-input rounded-button mb-3 text-sm">
+            <div id="object-info" class="hidden text-xs text-obs-text-secondary font-mono mb-2 px-1">
                 <span id="object-coords">--</span>
             </div>
             <div class="button-group">
@@ -151,8 +151,8 @@
             <!-- GOTO -->
             <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Position</span>
             <div class="flex gap-2">
-                <input type="number" id="goto-angle" class="input-field flex-1"
-                       min="0" max="360" placeholder="Angle (0-360)">
+                <input type="text" inputmode="decimal" id="goto-angle" class="input-field flex-1"
+                       placeholder="Angle (0-360)">
                 <button id="btn-goto" class="btn btn-secondary">GOTO</button>
             </div>
         </div>
@@ -267,5 +267,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/dashboard.js?v=20260327d"></script>
+<script src="/static/js/dashboard.js?v=20260327e"></script>
 {% endblock %}
