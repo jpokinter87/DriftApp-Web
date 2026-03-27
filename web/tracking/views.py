@@ -125,6 +125,22 @@ class ObjectSearchView(APIView):
         result = catalogue.rechercher(query)
 
         if result:
+            # Ajouter le temps avant passage au méridien
+            ra_deg = result.get('ra_deg')
+            if ra_deg is not None:
+                from datetime import datetime
+                from core.observatoire import AstronomicalCalculations
+                from core.config.config import get_site_config
+
+                latitude, longitude, tz_offset, _, _ = get_site_config()
+                calc = AstronomicalCalculations(latitude, longitude, tz_offset)
+                now = datetime.now()
+                ha = calc.calculer_angle_horaire(ra_deg, now, deja_jnow=False)
+                result['meridian_seconds'] = round(-ha * 240)
+
+                passage = calc.calculer_heure_passage_meridien(ra_deg, now)
+                result['meridian_time'] = passage.strftime('%Hh%M')
+
             return Response(result)
         else:
             return Response(

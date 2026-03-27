@@ -115,6 +115,10 @@ const elements = {
     gotoAngle: document.getElementById('goto-angle'),
     btnGoto: document.getElementById('btn-goto'),
 
+    // Méridien
+    meridianCartouche: document.getElementById('meridian-cartouche'),
+    meridianValue: document.getElementById('meridian-value'),
+
     // Nouveaux cartouches
     trackingModeIndicator: document.getElementById('tracking-mode-indicator'),
     correctionsCount: document.getElementById('corrections-count'),
@@ -252,6 +256,7 @@ async function searchObject() {
         elements.objectInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = true;
         state.searchedObject = null;
+        updateMeridianCartouche(null);
     } else {
         const raHMS = formatHMS(result.ra_deg ?? null);
         const decDMS = formatDMS(result.dec_deg ?? null);
@@ -263,6 +268,9 @@ async function searchObject() {
         elements.btnStartTracking.disabled = false;
         state.searchedObject = result.nom || name;
         log(`Trouvé: ${state.searchedObject}`, 'success');
+
+        // Afficher le cartouche méridien dès la recherche
+        updateMeridianCartouche(result.meridian_seconds, result.meridian_time);
 
         // Effet clignotement vert du bouton pendant 5 secondes
         flashButtonSuccess(elements.btnStartTracking, 5000);
@@ -326,7 +334,9 @@ async function stopTracking() {
         elements.btnStartTracking.disabled = false;
         elements.btnStopTracking.disabled = true;
         elements.trackingInfo.classList.add('hidden');
-        
+        state.searchedObject = null;
+        updateMeridianCartouche(null);
+
         // Fermer la modal GOTO si ouverte
         hideGotoModal();
     }
@@ -801,6 +811,11 @@ function updateTrackingDisplay(motor) {
             elements.trackingRemaining.textContent = apiRemaining ? `${apiRemaining}s` : '--';
         }
 
+        // Cartouche méridien (ne pas masquer si absent — garder état précédent)
+        if (info.meridian_seconds !== undefined) {
+            updateMeridianCartouche(info.meridian_seconds, info.meridian_time);
+        }
+
         // Timer intégré dans la boussole - redessiner
         drawCompass();
 
@@ -839,10 +854,62 @@ function updateTrackingDisplay(motor) {
             elements.correctionsTotal.textContent = '0.00°';
         }
 
+        // Masquer le cartouche méridien seulement si aucun objet recherché
+        if (!state.searchedObject) {
+            updateMeridianCartouche(null);
+        }
+
         // Reset du flag de sync pour permettre la reconnexion à une future session
         // (permet de sync si un suivi démarre depuis un autre appareil)
         initialSyncDone = false;
     }
+}
+
+// Mise à jour du cartouche méridien
+function updateMeridianCartouche(meridianSeconds, meridianTime) {
+    const cart = elements.meridianCartouche;
+    const val = elements.meridianValue;
+    if (!cart || !val) return;
+
+    // Supprimer toutes les classes d'état
+    cart.classList.remove('meridian-safe', 'meridian-warning', 'meridian-danger',
+                          'meridian-critical', 'meridian-passed', 'hidden');
+
+    if (meridianSeconds === null || meridianSeconds === undefined) {
+        cart.classList.add('hidden');
+        return;
+    }
+
+    const sec = meridianSeconds;
+    const minutes = sec / 60;
+    const timeStr = meridianTime || '';
+
+    if (sec <= 0) {
+        // Méridien passé
+        cart.classList.add('meridian-passed');
+        val.textContent = `${timeStr} — PASSÉ`;
+    } else if (minutes < 5) {
+        cart.classList.add('meridian-critical');
+        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+    } else if (minutes < 15) {
+        cart.classList.add('meridian-danger');
+        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+    } else if (minutes < 30) {
+        cart.classList.add('meridian-warning');
+        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+    } else {
+        cart.classList.add('meridian-safe');
+        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+    }
+}
+
+function formatMeridianTime(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    if (h > 0) {
+        return `${h}h${String(m).padStart(2, '0')}`;
+    }
+    return `${m}min`;
 }
 
 // Correction 1: Démarrer le countdown local

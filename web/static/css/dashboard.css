@@ -178,6 +178,51 @@ header h1 span {
     50% { opacity: 0.5; }
 }
 
+/* Meridien: cartouche avec bordure coloree (meme style que ENC) */
+.meridian-item.meridian-safe {
+    border-color: var(--color-accent-green) !important;
+}
+.meridian-item.meridian-safe label,
+.meridian-item.meridian-safe #meridian-value {
+    color: var(--color-accent-green) !important;
+}
+
+.meridian-item.meridian-warning {
+    border-color: #f59e0b !important;
+}
+.meridian-item.meridian-warning label,
+.meridian-item.meridian-warning #meridian-value {
+    color: #f59e0b !important;
+}
+
+.meridian-item.meridian-danger {
+    border-color: #ef4444 !important;
+}
+.meridian-item.meridian-danger label,
+.meridian-item.meridian-danger #meridian-value {
+    color: #ef4444 !important;
+}
+
+.meridian-item.meridian-critical {
+    border-color: #ff0040 !important;
+    animation: neon-pulse-red 0.8s ease-in-out infinite !important;
+    background: rgba(255, 0, 64, 0.15) !important;
+}
+.meridian-item.meridian-critical label,
+.meridian-item.meridian-critical #meridian-value {
+    color: #ff0040 !important;
+    animation: text-blink 0.8s ease-in-out infinite;
+}
+
+.meridian-item.meridian-passed {
+    border-color: #666666 !important;
+    opacity: 0.6;
+}
+.meridian-item.meridian-passed label,
+.meridian-item.meridian-passed #meridian-value {
+    color: #666666 !important;
+}
+
 /* Mode value — pastilles colorees */
 .mode-value {
     font-weight: bold;

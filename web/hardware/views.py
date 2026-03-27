@@ -218,7 +218,30 @@ class MotorStatusView(APIView):
     """
 
     def get(self, request):
-        return Response(motor_client.get_motor_status())
+        data = motor_client.get_motor_status()
+
+        # Enrichir avec le temps avant passage au méridien
+        tracking_info = data.get('tracking_info')
+        if tracking_info and tracking_info.get('ra_deg') is not None:
+            from datetime import datetime
+            from core.observatoire import AstronomicalCalculations
+            from core.config.config import get_site_config
+
+            latitude, longitude, tz_offset, _, _ = get_site_config()
+            calc = AstronomicalCalculations(latitude, longitude, tz_offset)
+            now = datetime.now()
+            ha = calc.calculer_angle_horaire(
+                tracking_info['ra_deg'], now, deja_jnow=False
+            )
+            meridian_seconds = round(-ha * 240)
+            tracking_info['meridian_seconds'] = meridian_seconds
+
+            passage = calc.calculer_heure_passage_meridien(
+                tracking_info['ra_deg'], now
+            )
+            tracking_info['meridian_time'] = passage.strftime('%Hh%M')
+
+        return Response(data)
 
 
 class ParkView(APIView):
