@@ -131,7 +131,7 @@
         "interval_sec": 30,
         "threshold_deg": 0.35,
         "motor_delay": 0.00052,
-        "_speed": "~17°/min - Tracking rapproché (2x CONTINUOUS)"
+        "_speed": "~20°/min - Tracking rapproché (2× CONTINUOUS). Validé terrain 31/03/2026"
       },
 
       "continuous": {
@@ -139,8 +139,9 @@
         "interval_sec": 30,
         "threshold_deg": 0.3,
         "motor_delay": 0.00026,
-        "_speed": "~34°/min - Validé terrain 22/03/2026 (260us, fluide, rapide)",
-        "_usage": "Tracking continu + GOTO manuels/automatiques + CW/CCW"
+        "_speed": "~40°/min - Limite hardware DM860T (270µs min). Validé terrain 28-31/03/2026",
+        "_usage": "Tracking continu + GOTO manuels/automatiques + CW/CCW",
+        "_note": "DM556T (UPAN) atteint 96°/min avec même moteur. Upgrade driver possible."
       }
     },
     
