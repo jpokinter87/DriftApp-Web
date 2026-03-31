@@ -401,14 +401,12 @@ def apply_update(request):
     """
     Applique la mise à jour en exécutant le script update_to_web.sh.
 
-    Ce endpoint déclenche le script qui:
-    1. Arrête les services (motor_service, ems22d, django)
-    2. Fait un git pull (avec préservation de config.json)
-    3. Installe les nouveaux fichiers de service
-    4. Redémarre les services
+    Le script se détache automatiquement quand il détecte qu'il est lancé
+    sans TTY (depuis Django). Il retourne immédiatement "UPDATE_STARTED"
+    puis continue en background : git pull, uv sync, redémarrage services.
 
-    Note: La connexion sera perdue pendant le redémarrage.
-    Le frontend doit gérer la reconnexion.
+    La connexion sera perdue pendant le redémarrage de Django.
+    Le frontend doit gérer la reconnexion automatique.
 
     Returns:
         JSON avec success, message, old_commit
@@ -426,19 +424,29 @@ def apply_update(request):
     old_commit = get_local_commit()
 
     try:
-        # Exécuter le script avec sudo
-        # Note: Nécessite une configuration sudoers appropriée
         logger.info(f"Démarrage de la mise à jour depuis {old_commit}")
 
+        # Le script se détache automatiquement (nohup + background) quand
+        # lancé sans TTY. Il retourne immédiatement avec "UPDATE_STARTED".
         result = subprocess.run(
             ['sudo', str(UPDATE_SCRIPT)],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=300  # 5 minutes max
+            timeout=30  # Le script détaché retourne en < 1 seconde
         )
 
-        if result.returncode == 0:
+        output = result.stdout.strip() if result.stdout else ''
+
+        if result.returncode == 0 and 'UPDATE_STARTED' in output:
+            logger.info("Script de mise à jour lancé en background")
+            return Response({
+                'success': True,
+                'message': 'Mise à jour lancée. Les services vont redémarrer.',
+                'old_commit': old_commit,
+            })
+        elif result.returncode == 0:
+            # Mode manuel (avec TTY) — le script a tout fait synchrone
             new_commit = get_local_commit()
             logger.info(f"Mise à jour réussie: {old_commit} -> {new_commit}")
             return Response({
@@ -446,7 +454,7 @@ def apply_update(request):
                 'message': 'Mise à jour terminée',
                 'old_commit': old_commit,
                 'new_commit': new_commit,
-                'output': result.stdout[-2000:] if result.stdout else ''
+                'output': output[-2000:]
             })
         else:
             logger.error(f"Échec de la mise à jour: {result.stderr}")
@@ -458,19 +466,13 @@ def apply_update(request):
             }, status=500)
 
     except subprocess.TimeoutExpired:
-        # Le script a dépassé 5 min — vérifier si le code a été mis à jour
-        new_commit = get_local_commit()
-        code_updated = new_commit != old_commit
-        if code_updated:
-            logger.info(f"Timeout du script mais code mis à jour: {old_commit} -> {new_commit}")
-        else:
-            logger.warning("Timeout du script et code inchangé — mise à jour probablement échouée")
+        # Ne devrait plus arriver avec le mode détaché, mais au cas où
+        logger.warning("Timeout du script — la mise à jour est probablement en cours")
         return Response({
-            'success': code_updated,
-            'message': 'Mise à jour en cours (services redémarrent)' if code_updated else 'Timeout — le code n\'a pas été mis à jour',
+            'success': True,
+            'message': 'Mise à jour en cours (services redémarrent)',
             'old_commit': old_commit,
-            'new_commit': new_commit if code_updated else None
-        }, status=200 if code_updated else 500)
+        })
     except PermissionError as e:
         logger.error(f"Permission refusée: {e}")
         return Response({

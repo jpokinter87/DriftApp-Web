@@ -1,17 +1,20 @@
 #!/bin/bash
 # =============================================================================
-# update_to_web.sh - Mise à jour vers la version Web de DriftApp
+# update_to_web.sh - Mise à jour DriftApp Web
 # =============================================================================
 # Ce script:
 # 1. Met à jour le code depuis GitHub (git pull)
-# 2. Sauvegarde l'ancien fichier ems22d.service
-# 3. Installe les nouveaux fichiers de service systemd
-# 4. Démarre les services dans le bon ordre
+# 2. Synchronise les dépendances Python (uv sync)
+# 3. Redémarre les services dans le bon ordre
 #
-# Usage: sudo ./update_to_web.sh
+# Peut être lancé de deux façons :
+#   - Manuellement : sudo ./scripts/update_to_web.sh
+#   - Depuis l'UI : détaché automatiquement (le script se relance en background)
+#
+# Usage: sudo ./scripts/update_to_web.sh [--background]
 # =============================================================================
 
-set -e  # Arrêter en cas d'erreur
+set -euo pipefail
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
@@ -19,15 +22,33 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
-# Configuration - À ADAPTER SI NÉCESSAIRE
-DRIFTAPP_DIR="/home/slenk/DriftApp"
-BACKUP_DIR="/home/slenk/backups"
+# Configuration — déduit automatiquement depuis l'emplacement du script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DRIFTAPP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKUP_DIR="$DRIFTAPP_DIR/backups"
 SERVICE_DIR="/etc/systemd/system"
+LOG_FILE="$DRIFTAPP_DIR/logs/update.log"
 
-# Fonction d'affichage
+# =============================================================================
+# DÉTACHEMENT AUTOMATIQUE
+# =============================================================================
+# Si lancé depuis Django (pas de TTY, pas --background), se relancer en
+# background pour survivre au redémarrage du service Django.
+if [ "${1:-}" != "--background" ] && [ ! -t 0 ]; then
+    mkdir -p "$(dirname "$LOG_FILE")"
+    nohup "$0" --background > "$LOG_FILE" 2>&1 &
+    # Retourner immédiatement à Django avec succès
+    echo "UPDATE_STARTED"
+    exit 0
+fi
+
+# Si --background, on est le processus détaché — retirer le flag
+shift 2>/dev/null || true
+
+# Fonctions d'affichage
 print_header() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════════════╗${NC}"
@@ -35,21 +56,10 @@ print_header() {
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════════════╝${NC}"
 }
 
-print_step() {
-    echo -e "${BLUE}▶${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}✓${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}✗${NC} $1"
-}
+print_step() { echo -e "${BLUE}▶${NC} $1"; }
+print_success() { echo -e "${GREEN}✓${NC} $1"; }
+print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
+print_error() { echo -e "${RED}✗${NC} $1"; }
 
 # Vérification des privilèges root
 if [ "$EUID" -ne 0 ]; then
@@ -59,44 +69,37 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Début du script
-print_header "MISE À JOUR VERS DRIFTAPP WEB"
+print_header "MISE À JOUR DRIFTAPP WEB"
 echo ""
 echo -e "  Répertoire: ${CYAN}$DRIFTAPP_DIR${NC}"
 echo -e "  Date: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
 # Vérifier que le répertoire existe
-if [ ! -d "$DRIFTAPP_DIR" ]; then
-    print_error "Répertoire $DRIFTAPP_DIR non trouvé!"
-    echo "Vérifiez que DriftApp est cloné dans ce répertoire."
+if [ ! -d "$DRIFTAPP_DIR/.git" ]; then
+    print_error "Répertoire git $DRIFTAPP_DIR non trouvé!"
     exit 1
 fi
 
-# Créer le répertoire de backup si nécessaire
 mkdir -p "$BACKUP_DIR"
 
 # =============================================================================
-# ÉTAPE 1: Arrêter les services existants
+# ÉTAPE 1: Arrêter les services
 # =============================================================================
 print_header "ÉTAPE 1: Arrêt des services"
 
-# Fonction pour arrêter un service de manière robuste
 stop_service_robust() {
     local service=$1
     print_step "Arrêt de $service..."
 
-    # Toujours tenter l'arrêt, même si le service semble inactif
     systemctl stop "$service" 2>/dev/null || true
 
-    # Attendre que le service soit vraiment arrêté
     local attempts=0
     while systemctl is-active --quiet "$service" 2>/dev/null && [ $attempts -lt 10 ]; do
         sleep 1
         attempts=$((attempts + 1))
-        print_step "  Attente arrêt $service... ($attempts/10)"
     done
 
-    # Si toujours actif, forcer l'arrêt
     if systemctl is-active --quiet "$service" 2>/dev/null; then
         print_warning "Forçage de l'arrêt de $service..."
         systemctl kill "$service" 2>/dev/null || true
@@ -111,10 +114,9 @@ stop_service_robust() {
     fi
 }
 
-# Tuer aussi les processus Python orphelins qui pourraient bloquer le GPIO
-print_step "Recherche de processus motor_service orphelins..."
+# Tuer les processus motor_service orphelins
 if pgrep -f "motor_service.py" > /dev/null 2>&1; then
-    print_warning "Processus motor_service.py trouvé, arrêt..."
+    print_warning "Processus motor_service.py orphelin, arrêt..."
     pkill -f "motor_service.py" 2>/dev/null || true
     sleep 2
 fi
@@ -122,7 +124,7 @@ fi
 stop_service_robust "motor_service.service"
 stop_service_robust "ems22d.service"
 
-# Pause pour libérer les GPIO (lgpio a besoin de temps)
+# Pause pour libérer les GPIO
 print_step "Attente libération GPIO..."
 sleep 3
 
@@ -134,38 +136,22 @@ print_header "ÉTAPE 2: Mise à jour du code (git pull)"
 cd "$DRIFTAPP_DIR"
 print_step "Répertoire: $(pwd)"
 
-# Sauvegarder l'état actuel
 CURRENT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 print_step "Commit actuel: $CURRENT_COMMIT"
 
-# Restaurer les permissions de tout le répertoire (évite les erreurs de permission
-# causées par des exécutions précédentes avec sudo)
+# Restaurer les permissions pour que git pull fonctionne
 OWNER=$(stat -c '%U:%G' "$DRIFTAPP_DIR")
-print_step "Restauration des permissions du répertoire ($OWNER)..."
-chown -R "$OWNER" "$DRIFTAPP_DIR"
+print_step "Restauration des permissions ($OWNER)..."
+chown -R "$OWNER" "$DRIFTAPP_DIR" 2>/dev/null || true
 print_success "Permissions restaurées"
 
-# Sauvegarder config.json si modifié localement
-CONFIG_BACKUP=""
-if ! git diff --quiet data/config.json 2>/dev/null; then
-    CONFIG_BACKUP="$BACKUP_DIR/config.json.backup_$(date '+%Y%m%d_%H%M%S')"
-    print_warning "Modifications locales détectées dans config.json"
-    cp data/config.json "$CONFIG_BACKUP"
-    print_success "Config sauvegardée: $CONFIG_BACKUP"
-fi
-
-# Nettoyer tous les fichiers modifiés localement (sauf config.json déjà sauvegardé)
-# Cela évite les conflits avec git pull pour les fichiers cache, .gitignore, etc.
+# Nettoyer les modifications locales (config.json non touché par git pull
+# car les changements config sont maintenant dans le dépôt)
 if ! git diff --quiet 2>/dev/null; then
-    print_step "Nettoyage des modifications locales (hors config.json sauvegardé)..."
+    print_step "Nettoyage des modifications locales..."
     git checkout -- . 2>/dev/null || true
     print_success "Modifications locales nettoyées"
 fi
-
-# Supprimer les fichiers/dossiers non trackés qui pourraient interférer
-# (ex: .paul/ retiré du tracking mais encore présent)
-print_step "Nettoyage des fichiers obsolètes..."
-git clean -fd .paul/ 2>/dev/null || true
 
 # Git pull
 print_step "Téléchargement des mises à jour..."
@@ -178,25 +164,13 @@ if git pull origin main; then
     fi
 else
     print_error "Échec du git pull"
-    # Restaurer config.json si sauvegardé
-    if [ -n "$CONFIG_BACKUP" ]; then
-        cp "$CONFIG_BACKUP" data/config.json
-        print_success "Config restaurée depuis $CONFIG_BACKUP"
-    fi
     exit 1
 fi
 
-# Restaurer config.json depuis la sauvegarde
-if [ -n "$CONFIG_BACKUP" ]; then
-    print_step "Restauration de config.json personnalisé..."
-    cp "$CONFIG_BACKUP" data/config.json
-    print_success "Config restaurée"
-fi
-
 # Synchroniser les dépendances Python après mise à jour du code
-print_step "Synchronisation des dépendances (uv sync)..."
+print_step "Synchronisation des dépendances (uv sync --extra dev)..."
 if command -v uv &> /dev/null; then
-    if uv sync 2>&1; then
+    if uv sync --extra dev 2>&1; then
         print_success "Dépendances synchronisées"
     else
         print_warning "Échec de uv sync — les dépendances peuvent être obsolètes"
@@ -207,128 +181,90 @@ fi
 
 # Restaurer les permissions après le pull
 print_step "Restauration des permissions après mise à jour ($OWNER)..."
-chown -R "$OWNER" "$DRIFTAPP_DIR"
+chown -R "$OWNER" "$DRIFTAPP_DIR" 2>/dev/null || true
 print_success "Permissions restaurées"
 
 # =============================================================================
-# ÉTAPE 3: Sauvegarde de l'ancien service ems22d
+# ÉTAPE 3: Installation des fichiers de service
 # =============================================================================
-print_header "ÉTAPE 3: Sauvegarde des fichiers de service"
+print_header "ÉTAPE 3: Installation des fichiers de service"
 
 BACKUP_TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
-if [ -f "$SERVICE_DIR/ems22d.service" ]; then
-    BACKUP_FILE="$BACKUP_DIR/ems22d.service.backup_$BACKUP_TIMESTAMP"
-    cp "$SERVICE_DIR/ems22d.service" "$BACKUP_FILE"
-    print_success "Sauvegarde: $BACKUP_FILE"
+# Sauvegarder les anciens services si présents
+for svc in ems22d.service motor_service.service driftapp_web.service; do
+    if [ -f "$SERVICE_DIR/$svc" ]; then
+        cp "$SERVICE_DIR/$svc" "$BACKUP_DIR/${svc}.backup_$BACKUP_TIMESTAMP"
+    fi
+done
+print_success "Services existants sauvegardés"
 
-    # Créer aussi un lien vers la dernière sauvegarde
-    ln -sf "$BACKUP_FILE" "$BACKUP_DIR/ems22d.service.last_backup"
-    print_success "Lien créé: $BACKUP_DIR/ems22d.service.last_backup"
-else
-    print_warning "Pas de fichier ems22d.service existant à sauvegarder"
-fi
+# Installer les nouveaux fichiers de service
+for svc in ems22d.service motor_service.service driftapp_web.service; do
+    if [ -f "$DRIFTAPP_DIR/$svc" ]; then
+        cp "$DRIFTAPP_DIR/$svc" "$SERVICE_DIR/"
+        print_success "$svc installé"
+    else
+        print_warning "$svc non trouvé dans le dépôt"
+    fi
+done
 
-# =============================================================================
-# ÉTAPE 4: Installation des nouveaux fichiers de service
-# =============================================================================
-print_header "ÉTAPE 4: Installation des fichiers de service"
-
-# Vérifier que les fichiers source existent
-if [ ! -f "$DRIFTAPP_DIR/ems22d.service" ]; then
-    print_error "Fichier $DRIFTAPP_DIR/ems22d.service non trouvé!"
-    exit 1
-fi
-
-if [ ! -f "$DRIFTAPP_DIR/motor_service.service" ]; then
-    print_error "Fichier $DRIFTAPP_DIR/motor_service.service non trouvé!"
-    exit 1
-fi
-
-if [ ! -f "$DRIFTAPP_DIR/driftapp_web.service" ]; then
-    print_error "Fichier $DRIFTAPP_DIR/driftapp_web.service non trouvé!"
-    exit 1
-fi
-
-print_step "Copie de ems22d.service..."
-cp "$DRIFTAPP_DIR/ems22d.service" "$SERVICE_DIR/"
-print_success "ems22d.service installé"
-
-print_step "Copie de motor_service.service..."
-cp "$DRIFTAPP_DIR/motor_service.service" "$SERVICE_DIR/"
-print_success "motor_service.service installé"
-
-print_step "Copie de driftapp_web.service..."
-cp "$DRIFTAPP_DIR/driftapp_web.service" "$SERVICE_DIR/"
-print_success "driftapp_web.service installé"
-
-print_step "Rechargement de systemd..."
 systemctl daemon-reload
 print_success "Daemon systemd rechargé"
 
 # =============================================================================
-# ÉTAPE 5: Démarrage des services
+# ÉTAPE 4: Démarrage des services
 # =============================================================================
-print_header "ÉTAPE 5: Démarrage des services"
+print_header "ÉTAPE 4: Démarrage des services"
 
-print_step "Activation et démarrage de ems22d.service..."
-systemctl enable ems22d.service
+# Utilisateur réel pour les permissions
+REAL_USER="${SUDO_USER:-$USER}"
+
+# Ajuster les permissions des dossiers de données
+print_step "Ajustement des permissions pour $REAL_USER..."
+for dir in logs data web/data; do
+    chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/$dir" 2>/dev/null || true
+done
+chown "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/db.sqlite3" 2>/dev/null || true
+chown "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/uv.lock" 2>/dev/null || true
+
+# Démarrer encodeur
+print_step "Démarrage ems22d.service..."
+systemctl enable ems22d.service 2>/dev/null || true
 systemctl start ems22d.service
-sleep 2  # Attendre que l'encodeur soit prêt
+sleep 2
 
 if systemctl is-active --quiet ems22d.service; then
     print_success "ems22d.service actif"
 else
-    print_warning "ems22d.service n'a pas démarré (le systeme reste fonctionnel)"
+    print_warning "ems22d.service n'a pas démarré"
     journalctl -u ems22d.service -n 5 --no-pager 2>/dev/null || true
 fi
 
-print_step "Activation et démarrage de motor_service.service..."
-systemctl enable motor_service.service
+# Démarrer motor service
+print_step "Démarrage motor_service.service..."
+systemctl enable motor_service.service 2>/dev/null || true
 systemctl start motor_service.service
-sleep 3  # Attendre l'initialisation
+sleep 3
 
 if systemctl is-active --quiet motor_service.service; then
     print_success "motor_service.service actif"
 else
-    print_warning "motor_service.service n'a pas démarré (le systeme reste fonctionnel)"
+    print_warning "motor_service.service n'a pas démarré"
     journalctl -u motor_service.service -n 5 --no-pager 2>/dev/null || true
 fi
 
-# =============================================================================
-# ÉTAPE 6: Démarrage de Django (via systemd)
-# =============================================================================
-print_header "ÉTAPE 6: Démarrage de Django"
-
-# Utilisateur qui a lancé sudo (pour les permissions des fichiers)
-REAL_USER="${SUDO_USER:-$USER}"
-
-# Arrêter Django manuel s'il tourne (processus orphelins)
-if pgrep -f "manage.py runserver" > /dev/null 2>&1; then
-    print_step "Arrêt de Django manuel existant..."
-    pkill -f "manage.py runserver" 2>/dev/null || true
-    sleep 2
-fi
-
-# Ajuster les permissions des dossiers pour l'utilisateur
-print_step "Ajustement des permissions pour $REAL_USER..."
-chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/logs" 2>/dev/null || true
-chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/data" 2>/dev/null || true
-chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/data" 2>/dev/null || true
-chown -R "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/web/db.sqlite3" 2>/dev/null || true
-chown "$REAL_USER:$REAL_USER" "$DRIFTAPP_DIR/uv.lock" 2>/dev/null || true
-
-# Démarrage via systemd
-print_step "Activation et démarrage de driftapp_web.service..."
-systemctl enable driftapp_web.service
+# Démarrer Django
+print_step "Démarrage driftapp_web.service..."
+systemctl enable driftapp_web.service 2>/dev/null || true
 systemctl start driftapp_web.service
 sleep 3
 
 if systemctl is-active --quiet driftapp_web.service; then
-    print_success "Django actif sur http://localhost:8000 (systemd)"
+    print_success "driftapp_web.service actif"
 else
-    print_error "Django n'a pas démarré!"
-    journalctl -u driftapp_web.service -n 10 --no-pager
+    print_error "driftapp_web.service n'a pas démarré!"
+    journalctl -u driftapp_web.service -n 10 --no-pager 2>/dev/null || true
 fi
 
 # =============================================================================
@@ -337,16 +273,10 @@ fi
 print_header "MISE À JOUR TERMINÉE"
 
 echo ""
-echo -e "  ${GREEN}✓${NC} Code mis à jour depuis GitHub"
-echo -e "  ${GREEN}✓${NC} Services systemd installés"
-echo -e "  ${GREEN}✓${NC} ems22d.service: $(systemctl is-active ems22d.service)"
-echo -e "  ${GREEN}✓${NC} motor_service.service: $(systemctl is-active motor_service.service)"
-echo -e "  ${GREEN}✓${NC} driftapp_web.service: $(systemctl is-active driftapp_web.service)"
+echo -e "  ${GREEN}✓${NC} Code mis à jour: $CURRENT_COMMIT → $(git rev-parse --short HEAD)"
+echo -e "  ${GREEN}✓${NC} ems22d.service: $(systemctl is-active ems22d.service 2>/dev/null || echo 'inactive')"
+echo -e "  ${GREEN}✓${NC} motor_service.service: $(systemctl is-active motor_service.service 2>/dev/null || echo 'inactive')"
+echo -e "  ${GREEN}✓${NC} driftapp_web.service: $(systemctl is-active driftapp_web.service 2>/dev/null || echo 'inactive')"
 echo ""
-echo -e "  ${CYAN}Sauvegarde:${NC} $BACKUP_DIR/ems22d.service.last_backup"
-echo ""
-echo -e "  ${YELLOW}Pour revenir à la version TUI:${NC}"
-echo -e "  sudo $DRIFTAPP_DIR/scripts/revert_to_tui.sh"
-echo ""
-echo -e "  ${CYAN}Interface Web:${NC} http://$(hostname -I | awk '{print $1}'):8000"
+echo -e "  ${CYAN}Interface Web:${NC} http://$(hostname -I 2>/dev/null | awk '{print $1}'):8000"
 echo ""
