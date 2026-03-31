@@ -12,6 +12,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
+from zoneinfo import ZoneInfo
 
 # Chemins (absolus depuis la racine du projet)
 _PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
@@ -25,7 +26,7 @@ DEFAULTS = {
     "site": {
         "latitude": 49.01,
         "longitude": 2.10,
-        "tz_offset": None,         # si None: on calcule dynamiquement
+        "fuseau": "Europe/Paris",
         "encoder_mode": "relative",
         "simulation": False,
     },
@@ -69,20 +70,32 @@ def _deep_update(base: dict, override: dict) -> dict:
 
 _config = _deep_update(DEFAULTS, _load_json(CONFIG_FILE))
 
-def get_current_utc_offset() -> int:
-    """Décalage local vs UTC en heures (pur Python, pas de GPIO)."""
-    now = datetime.now().astimezone()
-    off = now.utcoffset() or (now - datetime.now(timezone.utc))
+def get_current_utc_offset(fuseau: str | None = None) -> int:
+    """Décalage UTC en heures pour le fuseau donné, à l'instant présent.
+
+    Gère automatiquement l'heure d'été/hiver via zoneinfo.
+    """
+    if fuseau:
+        tz = ZoneInfo(fuseau)
+    else:
+        tz = datetime.now().astimezone().tzinfo
+    now = datetime.now(tz)
+    off = now.utcoffset()
     return int(round(off.total_seconds() / 3600.0))
 
 # Expose a few top-level convenience values expected elsewhere
 SITE_LATITUDE: float  = float(_config["site"]["latitude"])
 SITE_LONGITUDE: float = float(_config["site"]["longitude"])
-SITE_TZ_OFFSET = (
-    int(_config["site"]["tz_offset"])
-    if _config["site"]["tz_offset"] is not None
-    else get_current_utc_offset()
-)
+SITE_FUSEAU: str = str(_config["site"].get("fuseau", "Europe/Paris"))
+
+def get_site_tz_offset() -> int:
+    """Offset UTC actuel pour le fuseau du site (DST-aware)."""
+    return get_current_utc_offset(SITE_FUSEAU)
+
+# Rétro-compatibilité : les appelants qui lisent SITE_TZ_OFFSET obtiennent
+# la valeur correcte au moment de l'import. Pour un calcul précis en cours
+# de session (transit méridien etc.), utiliser get_site_tz_offset().
+SITE_TZ_OFFSET: int = get_site_tz_offset()
 
 ENCODER_MODE: str = str(_config["site"].get("encoder_mode", "relative")).lower()
 SIMULATION: bool = bool(_config["site"].get("simulation", False))
@@ -99,7 +112,7 @@ def get_site_config() -> Tuple[float, float, int, str, bool]:
     """
     Retourne (latitude, longitude, tz_offset, encoder_mode, simulation).
     """
-    return SITE_LATITUDE, SITE_LONGITUDE, SITE_TZ_OFFSET, ENCODER_MODE, SIMULATION
+    return SITE_LATITUDE, SITE_LONGITUDE, get_site_tz_offset(), ENCODER_MODE, SIMULATION
 
 def get_motor_config() -> dict:
     """
@@ -118,7 +131,7 @@ def save_config() -> None:
         "site": {
             "latitude": SITE_LATITUDE,
             "longitude": SITE_LONGITUDE,
-            "tz_offset": SITE_TZ_OFFSET,
+            "fuseau": SITE_FUSEAU,
             "encoder_mode": ENCODER_MODE,
             "simulation": SIMULATION,
         },

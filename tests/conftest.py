@@ -25,7 +25,7 @@ def sample_config() -> Dict[str, Any]:
         "site": {
             "latitude": 44.15,
             "longitude": 5.23,
-            "tz_offset": 1,
+            "fuseau": "Europe/Paris",
             "encoder_mode": "relative",
             "simulation": True
         },
@@ -145,7 +145,7 @@ def site_location() -> Dict[str, float]:
         "latitude": 44.15,
         "longitude": 5.23,
         "altitude_m": 800,
-        "tz_offset": 1
+        "fuseau": "Europe/Paris"
     }
 
 

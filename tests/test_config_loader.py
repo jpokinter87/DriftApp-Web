@@ -49,7 +49,6 @@ def sample_config_dict():
             "altitude": 800,
             "nom": "Observatoire Test",
             "fuseau": "Europe/Paris",
-            "tz_offset": 1,
         },
         "moteur": {
             "gpio_pins": {"dir": 17, "step": 18},
@@ -129,15 +128,16 @@ class TestSiteConfig:
     def test_construction(self):
         site = SiteConfig(
             latitude=44.15, longitude=5.23, altitude=800,
-            nom="Test", fuseau="Europe/Paris", tz_offset=1
+            nom="Test", fuseau="Europe/Paris"
         )
         assert site.latitude == 44.15
         assert site.nom == "Test"
+        assert site.tz_offset in (1, 2)  # DST-aware
 
     def test_str(self):
         site = SiteConfig(
             latitude=44.15, longitude=5.23, altitude=800,
-            nom="Ubik", fuseau="Europe/Paris", tz_offset=1
+            nom="Ubik", fuseau="Europe/Paris"
         )
         s = str(site)
         assert "Ubik" in s
@@ -216,7 +216,7 @@ class TestTrackingModeParams:
 class TestDriftAppConfig:
     def test_is_production(self):
         config = DriftAppConfig(
-            site=SiteConfig(44.15, 5.23, 800, "Test", "UTC", 1),
+            site=SiteConfig(44.15, 5.23, 800, "Test", "UTC"),
             motor=MotorConfig(
                 GPIOPins(17, 18), 200, 4, 2230.0, 1.0,
                 0.002, 0.00001, 0.01, 1000, 500
@@ -239,7 +239,7 @@ class TestDriftAppConfig:
 
     def test_is_simulation(self):
         config = DriftAppConfig(
-            site=SiteConfig(0, 0, 0, "", "", 0),
+            site=SiteConfig(0, 0, 0, "", "UTC"),
             motor=MotorConfig(GPIOPins(0, 0), 200, 4, 2230, 1, 0, 0, 0, 0, 0),
             motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, ""),
@@ -315,7 +315,7 @@ class TestConfigLoader:
         assert config.site.longitude == 5.23
         assert config.site.altitude == 800
         assert config.site.fuseau == "Europe/Paris"
-        assert config.site.tz_offset == 1
+        assert config.site.tz_offset in (1, 2)  # DST-aware
 
     def test_parse_motor(self, tmp_config_file):
         loader = ConfigLoader(tmp_config_file)

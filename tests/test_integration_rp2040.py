@@ -23,7 +23,7 @@ def rp2040_config_file(tmp_path):
     """Config temporaire avec motor_driver type=rp2040."""
     config_data = {
         "site": {"latitude": 44.15, "longitude": 5.23, "altitude": 800,
-                 "nom": "Test Obs", "fuseau": "Europe/Paris", "tz_offset": 1},
+                 "nom": "Test Obs", "fuseau": "Europe/Paris"},
         "motor_driver": {
             "type": "rp2040",
             "serial": {"port": "/dev/ttyACM0", "baudrate": 115200, "timeout": 2.0},
@@ -51,7 +51,7 @@ def config_no_motor_driver(tmp_path):
     """Config temporaire sans section motor_driver (defaut rp2040)."""
     config_data = {
         "site": {"latitude": 44.15, "longitude": 5.23, "altitude": 800,
-                 "nom": "Test Obs", "fuseau": "Europe/Paris", "tz_offset": 1},
+                 "nom": "Test Obs", "fuseau": "Europe/Paris"},
         "moteur": {"gpio_pins": {"dir": 17, "step": 18},
                    "steps_per_revolution": 200, "microsteps": 4,
                    "gear_ratio": 2230, "steps_correction_factor": 1.08849,

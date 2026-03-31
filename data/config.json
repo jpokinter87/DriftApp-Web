@@ -25,8 +25,7 @@
     "longitude": 5.23,
     "altitude": 800,
     "nom": "Observatoire Ubik",
-    "fuseau": "Europe/Paris",
-    "tz_offset": 1
+    "fuseau": "Europe/Paris"
   },
 
   "suivi": {

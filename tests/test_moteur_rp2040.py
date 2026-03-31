@@ -332,7 +332,7 @@ class TestConfigFallback:
         """Config sans motor_driver → type='rp2040' par defaut."""
         config_data = {
             "site": {"latitude": 44.0, "longitude": 5.0, "altitude": 800,
-                     "nom": "Test", "fuseau": "Europe/Paris", "tz_offset": 1},
+                     "nom": "Test", "fuseau": "Europe/Paris"},
             "moteur": {"gpio_pins": {"dir": 17, "step": 18},
                        "steps_per_revolution": 200, "microsteps": 4,
                        "gear_ratio": 2230, "steps_correction_factor": 1.0,
@@ -357,7 +357,7 @@ class TestConfigFallback:
         """Config avec motor_driver rp2040 → type='rp2040', port correct."""
         config_data = {
             "site": {"latitude": 44.0, "longitude": 5.0, "altitude": 800,
-                     "nom": "Test", "fuseau": "Europe/Paris", "tz_offset": 1},
+                     "nom": "Test", "fuseau": "Europe/Paris"},
             "motor_driver": {
                 "type": "rp2040",
                 "serial": {"port": "/dev/ttyUSB0", "baudrate": 9600, "timeout": 5.0},

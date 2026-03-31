@@ -17,9 +17,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 
 # ============================================================================
@@ -34,8 +36,14 @@ class SiteConfig:
     altitude: float
     nom: str
     fuseau: str
-    tz_offset: int
-    
+
+    @property
+    def tz_offset(self) -> int:
+        """Offset UTC actuel, DST-aware (calculé dynamiquement)."""
+        tz = ZoneInfo(self.fuseau)
+        off = datetime.now(tz).utcoffset()
+        return int(round(off.total_seconds() / 3600.0))
+
     def __str__(self) -> str:
         return (f"{self.nom} (lat={self.latitude}°, lon={self.longitude}°, "
                 f"alt={self.altitude}m, TZ={self.fuseau})")
@@ -304,8 +312,7 @@ class ConfigLoader:
             longitude=float(c.get("longitude", 0.0)),
             altitude=float(c.get("altitude", 0.0)),
             nom=str(c.get("nom", "Observatoire")),
-            fuseau=str(c.get("fuseau", "UTC")),
-            tz_offset=int(c.get("tz_offset", 0))
+            fuseau=str(c.get("fuseau", "Europe/Paris")),
         )
 
     def _parse_motor(self) -> MotorConfig:
