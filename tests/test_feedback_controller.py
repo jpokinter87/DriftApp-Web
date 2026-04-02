@@ -8,10 +8,7 @@ import pytest
 import time
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from core.hardware.daemon_encoder_reader import (
-    StaleDataError,
-    FrozenEncoderError
-)
+from core.hardware.daemon_encoder_reader import StaleDataError
 
 
 # =============================================================================
@@ -578,32 +575,6 @@ class TestEncoderFrozenDetection:
 
         # Pas de détection de blocage
         assert result['encoder_frozen'] is False
-
-    def test_frozen_encoder_error_interrompt_boucle(
-        self, feedback_controller, mock_daemon_reader, mock_moteur
-    ):
-        """FrozenEncoderError du daemon interrompt la boucle."""
-        # Position initiale OK, puis erreur dans la boucle, puis position finale
-        # L'exception dans la boucle est attrapée et encoder_frozen est mis à True
-        # La mesure finale échouera aussi (même exception), donc on catch
-        call_count = [0]
-        def side_effect(*args, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return 0.0  # Position initiale
-            else:
-                raise FrozenEncoderError("Encodeur figé depuis 5.0s")
-
-        mock_daemon_reader.read_fast.side_effect = side_effect
-
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            tolerance=0.5,
-            max_iterations=10
-        )
-
-        assert result['encoder_frozen'] is True
-        assert result['success'] is False
 
     def test_stale_data_error_interrompt_boucle(
         self, feedback_controller, mock_daemon_reader, mock_moteur

@@ -12,7 +12,7 @@ import time
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
 from core.utils.angle_utils import shortest_angular_distance
-from core.hardware.daemon_encoder_reader import StaleDataError, FrozenEncoderError
+from core.hardware.daemon_encoder_reader import StaleDataError
 
 if TYPE_CHECKING:
     from core.hardware.moteur_rp2040 import MoteurRP2040
@@ -254,8 +254,8 @@ class FeedbackController:
         # Lecture position et calcul erreur
         try:
             position_actuelle = self._lire_position_stable()
-        except (FrozenEncoderError, StaleDataError):
-            # Propager ces exceptions spécifiques pour que la boucle les traite
+        except StaleDataError:
+            # Propager cette exception spécifique pour que la boucle la traite
             raise
         except RuntimeError:
             self.logger.warning(f"Erreur lecture démon à l'itération {iteration}")
@@ -404,7 +404,7 @@ class FeedbackController:
                     position_initiale=position_initiale,  # Pour détecter recalibration switch
                     allow_large_movement=allow_large_movement  # Pour GOTO initial
                 )
-            except (FrozenEncoderError, StaleDataError) as e:
+            except StaleDataError as e:
                 self.logger.error(f"⚠️ Problème encodeur détecté: {e}")
                 encoder_frozen = True
                 break
@@ -465,7 +465,7 @@ class FeedbackController:
         # Mesure finale
         try:
             position_finale = self._lire_position_stable()
-        except (RuntimeError, FrozenEncoderError, StaleDataError):
+        except (RuntimeError, StaleDataError):
             position_finale = angle_cible
             self.logger.warning("Impossible de lire position finale")
 

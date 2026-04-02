@@ -29,15 +29,6 @@ class StaleDataError(RuntimeError):
     pass
 
 
-class FrozenEncoderError(RuntimeError):
-    """Exception levée quand l'encodeur est détecté comme figé.
-
-    Indique que la valeur SPI de l'encodeur n'a pas changé depuis
-    trop longtemps alors que la coupole devrait bouger.
-    """
-    pass
-
-
 class DaemonEncoderReader:
     """
     Lecteur centralisé pour le démon encodeur EMS22A.
@@ -133,7 +124,9 @@ class DaemonEncoderReader:
                 angle = float(data.get("angle", 0.0)) % 360.0
                 status = data.get("status", "OK")
 
-                if status.startswith("OK"):
+                if status.startswith("OK") or status == "FROZEN":
+                    # FROZEN traité comme OK : la détection FROZEN a été supprimée
+                    # du daemon (v5.5), mais on accepte l'ancien format par rétro-compatibilité
                     self._read_count += 1
                     if self._read_count % 50 == 0:
                         self.logger.debug(
@@ -141,14 +134,6 @@ class DaemonEncoderReader:
                             f"stale={self._stale_count} angle={angle:.1f}"
                         )
                     return angle
-                elif status == "FROZEN":
-                    frozen_duration = data.get("frozen_duration", 0)
-                    self.logger.warning(
-                        f"encoder_frozen | duration={frozen_duration:.1f}s reads={self._read_count}"
-                    )
-                    raise FrozenEncoderError(
-                        f"Encodeur figé depuis {frozen_duration:.1f}s"
-                    )
                 elif status.startswith("SPI"):
                     self.logger.warning(f"Démon encodeur: {status}")
                     return angle

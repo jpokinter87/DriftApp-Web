@@ -14,7 +14,6 @@ from unittest.mock import MagicMock, patch
 from core.hardware.daemon_encoder_reader import (
     DaemonEncoderReader,
     StaleDataError,
-    FrozenEncoderError,
     get_daemon_reader,
     set_daemon_reader,
     reset_daemon_reader
@@ -166,45 +165,17 @@ class TestStaleDataDetection:
 # TESTS DÉTECTION ENCODEUR FIGÉ
 # =============================================================================
 
-class TestFrozenEncoderDetection:
-    """Tests pour la détection d'encodeur figé."""
+class TestFrozenStatusRetroCompat:
+    """Tests pour la rétro-compatibilité du statut FROZEN (supprimé en v5.5)."""
 
-    def test_frozen_status_raises_error(self, daemon_reader, temp_json_file):
-        """read_angle lève FrozenEncoderError si statut FROZEN."""
+    def test_frozen_status_returns_angle_normally(self, daemon_reader, temp_json_file):
+        """read_angle retourne l'angle normalement même avec ancien statut FROZEN."""
         data = {
             "angle": 45.0,
             "ts": time.time(),
             "status": "FROZEN",
             "frozen": True,
             "frozen_duration": 5.0
-        }
-        write_json_data(temp_json_file, data)
-
-        with pytest.raises(FrozenEncoderError, match="figé"):
-            daemon_reader.read_angle()
-
-    def test_frozen_error_contains_duration(self, daemon_reader, temp_json_file):
-        """FrozenEncoderError contient la durée du blocage."""
-        data = {
-            "angle": 45.0,
-            "ts": time.time(),
-            "status": "FROZEN",
-            "frozen": True,
-            "frozen_duration": 10.5
-        }
-        write_json_data(temp_json_file, data)
-
-        with pytest.raises(FrozenEncoderError, match="10.5"):
-            daemon_reader.read_angle()
-
-    def test_ok_status_no_frozen_error(self, daemon_reader, temp_json_file):
-        """Pas d'erreur si statut OK."""
-        data = {
-            "angle": 45.0,
-            "ts": time.time(),
-            "status": "OK",
-            "frozen": False,
-            "frozen_duration": 0
         }
         write_json_data(temp_json_file, data)
 
@@ -296,17 +267,7 @@ class TestExceptions:
         error = StaleDataError("test")
         assert isinstance(error, RuntimeError)
 
-    def test_frozen_encoder_error_is_runtime_error(self):
-        """FrozenEncoderError hérite de RuntimeError."""
-        error = FrozenEncoderError("test")
-        assert isinstance(error, RuntimeError)
-
     def test_stale_data_error_message(self):
         """StaleDataError conserve le message."""
         error = StaleDataError("Données périmées (1000ms > 500ms)")
         assert "1000ms" in str(error)
-
-    def test_frozen_encoder_error_message(self):
-        """FrozenEncoderError conserve le message."""
-        error = FrozenEncoderError("Encodeur figé depuis 5.0s")
-        assert "5.0s" in str(error)
