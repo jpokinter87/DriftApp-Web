@@ -231,9 +231,96 @@ class TestDiagnostic:
         assert "timestamp" in data
 
 
+class TestVersionTuple:
+    """Tests pour _version_tuple."""
+
+    def test_version_normale(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("5.4.0") == (5, 4, 0)
+
+    def test_version_deux_segments(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("5.4") == (5, 4)
+
+    def test_version_unknown(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("unknown") == (0,)
+
+    def test_version_vide(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("") == (0,)
+
+    def test_version_none(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple(None) == (0,)
+
+    def test_comparaison_superieure(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("5.5.0") > _version_tuple("5.4.0")
+
+    def test_comparaison_egale(self):
+        from web.health.update_checker import _version_tuple
+        assert _version_tuple("5.4.0") == _version_tuple("5.4.0")
+
+
+class TestCheckForUpdatesLogic:
+    """Tests pour la logique de check_for_updates."""
+
+    def test_meme_version_pas_de_mise_a_jour(self):
+        """Même version locale/distante → update_available=False."""
+        from web.health.update_checker import check_for_updates
+        with patch("web.health.update_checker.fetch_remote", return_value=True), \
+             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
+             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
+             patch("web.health.update_checker.count_commits_behind", return_value=3), \
+             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
+             patch("web.health.update_checker.get_remote_version", return_value="5.4.0"):
+            result = check_for_updates()
+            assert result["update_available"] is False
+
+    def test_version_distante_superieure_mise_a_jour(self):
+        """Version distante > locale → update_available=True."""
+        from web.health.update_checker import check_for_updates
+        with patch("web.health.update_checker.fetch_remote", return_value=True), \
+             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
+             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
+             patch("web.health.update_checker.count_commits_behind", return_value=5), \
+             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
+             patch("web.health.update_checker.get_remote_version", return_value="5.5.0"), \
+             patch("web.health.update_checker.get_commit_messages", return_value=["abc feat"]):
+            result = check_for_updates()
+            assert result["update_available"] is True
+            assert result["commits_behind"] == 5
+
+    def test_fetch_echoue_pas_de_mise_a_jour(self):
+        """Fetch échoue → update_available=False."""
+        from web.health.update_checker import check_for_updates
+        with patch("web.health.update_checker.fetch_remote", return_value=False), \
+             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
+             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
+             patch("web.health.update_checker.count_commits_behind", return_value=3), \
+             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
+             patch("web.health.update_checker.get_remote_version", return_value="5.5.0"):
+            result = check_for_updates()
+            assert result["update_available"] is False
+            assert result["fetch_success"] is False
+
+    def test_version_locale_superieure_pas_de_mise_a_jour(self):
+        """Version locale > distante (hotfix terrain) → update_available=False."""
+        from web.health.update_checker import check_for_updates
+        with patch("web.health.update_checker.fetch_remote", return_value=True), \
+             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
+             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
+             patch("web.health.update_checker.count_commits_behind", return_value=1), \
+             patch("web.health.update_checker.get_local_version", return_value="5.5.0"), \
+             patch("web.health.update_checker.get_remote_version", return_value="5.4.0"):
+            result = check_for_updates()
+            assert result["update_available"] is False
+
+
 class TestCheckUpdate:
     def test_check_update_success(self, api_client, health_ipc):
-        mock_result = {"update_available": False, "local_version": "abc123"}
+        mock_result = {"update_available": False, "local_version": "5.4.0"}
         with patch("web.health.update_checker.check_for_updates", return_value=mock_result):
             response = api_client.get("/api/health/update/check/")
             assert response.status_code == 200

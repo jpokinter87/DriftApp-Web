@@ -189,6 +189,24 @@ def get_remote_version() -> str:
         return "unknown"
 
 
+def _version_tuple(version_str: str) -> tuple:
+    """
+    Convertit une version string en tuple pour comparaison.
+
+    Args:
+        version_str: Version (ex: "5.4.0")
+
+    Returns:
+        Tuple d'entiers (ex: (5, 4, 0)) ou (0,) si invalide
+    """
+    if not version_str or version_str == "unknown":
+        return (0,)
+    try:
+        return tuple(int(x) for x in version_str.split('.'))
+    except (ValueError, AttributeError):
+        return (0,)
+
+
 def check_for_updates() -> dict:
     """
     Vérifie si des mises à jour sont disponibles.
@@ -211,15 +229,26 @@ def check_for_updates() -> dict:
     local_commit = get_local_commit()
     remote_commit = get_remote_commit()
     commits_behind = count_commits_behind()
-    update_available = commits_behind > 0
+    local_ver = get_local_version()
+    remote_ver = get_remote_version()
+
+    # Mise à jour disponible seulement si :
+    # 1. Le fetch a réussi (données fiables de origin/main)
+    # 2. Il y a des commits de retard
+    # 3. La version distante est strictement supérieure à la locale
+    update_available = (
+        fetch_success
+        and commits_behind > 0
+        and _version_tuple(remote_ver) > _version_tuple(local_ver)
+    )
 
     result = {
         'update_available': update_available,
-        'local_version': get_local_version(),
+        'local_version': local_ver,
         'local_commit': local_commit,
         'remote_commit': remote_commit,
         'commits_behind': commits_behind,
-        'remote_version': get_remote_version(),
+        'remote_version': remote_ver,
         'fetch_success': fetch_success
     }
 
