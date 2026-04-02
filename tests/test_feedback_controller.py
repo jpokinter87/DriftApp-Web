@@ -149,17 +149,6 @@ class TestFeedbackControllerCalculs:
 class TestFeedbackControllerResultats:
     """Tests pour la création de résultats."""
 
-    def test_creer_resultat_sans_feedback(self, feedback_controller):
-        """Création résultat en mode sans feedback."""
-        start_time = time.time()
-
-        result = feedback_controller._creer_resultat_sans_feedback(90.0, start_time)
-
-        assert result['success'] is False
-        assert result['position_cible'] == 90.0
-        assert result['mode'] == 'sans_feedback'
-        assert 'temps_total' in result
-
     def test_creer_resultat_success(self, feedback_controller):
         """Création résultat avec succès."""
         result = feedback_controller._creer_resultat(
@@ -221,19 +210,20 @@ class TestRotationAvecFeedback:
         assert result['mode'] == 'feedback_daemon'
         assert 'corrections' in result
 
-    def test_rotation_daemon_indisponible(
+    def test_rotation_daemon_indisponible_leve_erreur(
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
-        """Fallback si daemon non disponible."""
+        """RuntimeError propagée si daemon non disponible."""
         mock_daemon_reader.read_fast.side_effect = RuntimeError("Daemon not found")
 
-        result = feedback_controller.rotation_avec_feedback(
-            angle_cible=90.0,
-            vitesse=0.001
-        )
+        with pytest.raises(RuntimeError, match="Daemon not found"):
+            feedback_controller.rotation_avec_feedback(
+                angle_cible=90.0,
+                vitesse=0.001
+            )
 
-        assert result['success'] is False
-        assert result['mode'] == 'sans_feedback'
+        # Aucune rotation moteur ne doit avoir lieu
+        mock_moteur.rotation.assert_not_called()
 
     def test_rotation_stop_requested(
         self, feedback_controller, mock_daemon_reader, mock_moteur
@@ -359,17 +349,17 @@ class TestRotationRelative:
             call_kwargs = mock_rotation.call_args[1]
             assert call_kwargs['angle_cible'] == 20.0
 
-    def test_rotation_relative_daemon_indisponible(
+    def test_rotation_relative_daemon_indisponible_leve_erreur(
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):
-        """Fallback si daemon non disponible."""
+        """RuntimeError propagée si daemon non disponible."""
         mock_daemon_reader.read_angle.side_effect = RuntimeError("Daemon not found")
 
-        result = feedback_controller.rotation_relative_avec_feedback(45.0)
+        with pytest.raises(RuntimeError, match="Daemon not found"):
+            feedback_controller.rotation_relative_avec_feedback(45.0)
 
-        assert result['success'] is False
-        assert result['mode'] == 'sans_feedback'
-        mock_moteur.rotation.assert_called_once()
+        # Aucune rotation moteur ne doit avoir lieu
+        mock_moteur.rotation.assert_not_called()
 
 
 # =============================================================================

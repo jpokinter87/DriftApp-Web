@@ -124,21 +124,6 @@ class FeedbackController:
     # RÉSULTATS
     # =========================================================================
 
-    def _creer_resultat_sans_feedback(self, angle_cible: float,
-                                       start_time: float) -> Dict[str, Any]:
-        """Crée un résultat pour le mode sans feedback."""
-        return {
-            'success': False,
-            'position_initiale': 0,
-            'position_finale': angle_cible,
-            'position_cible': angle_cible,
-            'erreur_finale': 0,
-            'iterations': 0,
-            'temps_total': time.time() - start_time,
-            'corrections': [],
-            'mode': 'sans_feedback'
-        }
-
     def _creer_resultat(self, success: bool, position_initiale: float,
                         position_finale: float, angle_cible: float,
                         erreur_finale: float, iterations: int,
@@ -346,15 +331,8 @@ class FeedbackController:
         start_time = time.time()
         self.clear_stop_request()
 
-        # Lecture position initiale
-        try:
-            position_initiale = self._lire_position_stable()
-        except RuntimeError as e:
-            self.logger.error(f"Démon encodeur non disponible: {e}")
-            self.logger.warning("Passage en mode sans feedback")
-            delta = self._calculer_delta_angulaire(0, angle_cible)
-            self.moteur.rotation(delta, vitesse)
-            return self._creer_resultat_sans_feedback(angle_cible, start_time)
+        # Lecture position initiale — si le démon est inaccessible, propager l'erreur
+        position_initiale = self._lire_position_stable()
 
         self.logger.info(
             f"Rotation avec feedback: {position_initiale:.1f}° -> {angle_cible:.1f}°"
@@ -503,21 +481,8 @@ class FeedbackController:
         Returns:
             dict: Résultat de rotation_avec_feedback()
         """
-        try:
-            position_actuelle = self.daemon_reader.read_angle()
-        except RuntimeError:
-            self.logger.warning("Démon non disponible, rotation relative sans feedback")
-            self.moteur.rotation(delta_deg, kwargs.get('vitesse', 0.001))
-            return {
-                'success': False,
-                'position_initiale': 0,
-                'position_finale': delta_deg,
-                'position_cible': delta_deg,
-                'erreur_finale': 0,
-                'iterations': 0,
-                'corrections': [],
-                'mode': 'sans_feedback'
-            }
+        # Si le démon est inaccessible, propager l'erreur
+        position_actuelle = self.daemon_reader.read_angle()
 
         angle_cible = (position_actuelle + delta_deg) % 360
 
