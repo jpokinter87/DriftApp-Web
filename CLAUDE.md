@@ -347,6 +347,9 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 La version est definie dans `pyproject.toml` (champ `version`) et affichee dynamiquement dans le footer de l'interface web via le context processor Django `driftapp_web.context_processors.app_version`.
 
-**Regle** : Mettre a jour la version dans `pyproject.toml` apres chaque milestone ou phase importante :
-- Milestone complet : incrementer le mineur (ex: 5.1.0 → 5.2.0)
-- Hotfix terrain : incrementer le patch (ex: 5.2.0 → 5.2.1)
+**Regle** : Mettre a jour la version dans `pyproject.toml` a **chaque commit pousse**, meme mineur :
+- Milestone complet : incrementer le mineur (ex: 5.5.0 → 5.6.0)
+- Correction/fix/amelioration : incrementer le patch (ex: 5.6.0 → 5.6.1 → 5.6.2...)
+
+Le systeme de mise a jour OTA compare les versions pour proposer les updates.
+Sans bump de version, la mise a jour n'est pas proposee a l'utilisateur.
