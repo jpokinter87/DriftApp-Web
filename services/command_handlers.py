@@ -16,6 +16,7 @@ import logging
 import math
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Tuple
 
@@ -481,6 +482,7 @@ class TrackingHandler:
         self.session: Optional[TrackingSession] = None
         self.active = False
         self._consecutive_errors = 0
+        self._calc: Optional[AstronomicalCalculations] = None
 
     def start(self, object_name: str, current_status: Dict[str, Any], skip_goto: bool = False):
         """
@@ -527,7 +529,7 @@ class TrackingHandler:
             )
 
         try:
-            calc = AstronomicalCalculations(
+            self._calc = AstronomicalCalculations(
                 latitude=self.config.site.latitude,
                 longitude=self.config.site.longitude,
                 tz_offset=self.config.site.tz_offset,
@@ -537,7 +539,7 @@ class TrackingHandler:
 
             self.session = TrackingSession(
                 moteur=self.moteur,
-                calc=calc,
+                calc=self._calc,
                 logger=tracking_logger,
                 seuil=self.config.tracking.seuil_correction_deg,
                 intervalle=self.config.tracking.intervalle_verification_sec,
@@ -632,7 +634,9 @@ class TrackingHandler:
                 current_status["position"] = status.get("position_relative", 0)
                 current_status["mode"] = status.get("adaptive_mode", "normal")
 
-                current_status["tracking_info"] = {
+                ra_deg = getattr(self.session, "ra_deg", None)
+
+                tracking_info = {
                     "azimut": status.get("obj_az_raw", 0),
                     "altitude": status.get("obj_alt", 0),
                     "position_cible": status.get("position_cible", 0),
@@ -642,9 +646,18 @@ class TrackingHandler:
                     "total_correction_degrees": status.get("total_movement", 0.0),
                     "mode_icon": status.get("mode_icon", ""),
                     "encoder_offset": status.get("encoder_offset", 0.0),
-                    "ra_deg": getattr(self.session, "ra_deg", None),
+                    "ra_deg": ra_deg,
                     "dec_deg": getattr(self.session, "dec_deg", None),
                 }
+
+                if ra_deg is not None and self._calc is not None:
+                    now = datetime.now()
+                    ha = self._calc.calculer_angle_horaire(ra_deg, now, deja_jnow=False)
+                    tracking_info["meridian_seconds"] = round(-ha * 240)
+                    passage = self._calc.calculer_heure_passage_meridien(ra_deg, now)
+                    tracking_info["meridian_time"] = passage.strftime('%Hh%M')
+
+                current_status["tracking_info"] = tracking_info
 
                 # Données de session pour l'API /api/session/
                 # Tronquer les logs pour éviter la fuite mémoire sur sessions longues

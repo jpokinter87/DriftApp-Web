@@ -890,16 +890,16 @@ function updateMeridianCartouche(meridianSeconds, meridianTime) {
         val.textContent = `${timeStr} — PASSÉ`;
     } else if (minutes < 5) {
         cart.classList.add('meridian-critical');
-        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+        val.textContent = `${timeStr} (dans ${formatMeridianTime(sec)})`;
     } else if (minutes < 15) {
         cart.classList.add('meridian-danger');
-        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+        val.textContent = `${timeStr} (dans ${formatMeridianTime(sec)})`;
     } else if (minutes < 30) {
         cart.classList.add('meridian-warning');
-        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+        val.textContent = `${timeStr} (dans ${formatMeridianTime(sec)})`;
     } else {
         cart.classList.add('meridian-safe');
-        val.textContent = `${timeStr} (${formatMeridianTime(sec)})`;
+        val.textContent = `${timeStr} (dans ${formatMeridianTime(sec)})`;
     }
 }
 

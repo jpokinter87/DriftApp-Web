@@ -394,6 +394,75 @@ class TestTrackingHandler:
         """La session est None au démarrage."""
         assert handler.session is None
 
+    def test_update_includes_meridian_data(self, handler):
+        """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
+        from datetime import datetime
+        from core.observatoire import AstronomicalCalculations
+
+        handler.active = True
+        handler.session = MagicMock()
+        handler.session.check_and_correct.return_value = (False, "")
+        handler.session.ra_deg = 83.63  # Betelgeuse ~5h35m RA
+        handler.session.dec_deg = 7.41
+        handler.session.get_status.return_value = {
+            "running": True,
+            "obj_az_raw": 180.0,
+            "obj_alt": 45.0,
+            "position_cible": 90.0,
+            "remaining_seconds": 30,
+            "adaptive_interval": 60,
+            "total_corrections": 2,
+            "total_movement": 1.5,
+            "mode_icon": "",
+            "encoder_offset": 0.0,
+            "adaptive_mode": "normal",
+        }
+        handler.session.get_session_data.return_value = {}
+
+        handler._calc = AstronomicalCalculations(
+            latitude=44.15, longitude=5.23, tz_offset=1
+        )
+
+        current_status = {"status": "tracking"}
+        handler.update(current_status)
+
+        tracking_info = current_status.get("tracking_info", {})
+        assert "meridian_seconds" in tracking_info
+        assert "meridian_time" in tracking_info
+        assert isinstance(tracking_info["meridian_seconds"], int)
+        assert "h" in tracking_info["meridian_time"]
+
+    def test_update_without_ra_deg_no_meridian(self, handler):
+        """update() sans ra_deg n'inclut pas de données méridien."""
+        handler.active = True
+        handler.session = MagicMock()
+        handler.session.check_and_correct.return_value = (False, "")
+        handler.session.ra_deg = None
+        handler.session.dec_deg = None
+        handler.session.get_status.return_value = {
+            "running": True,
+            "obj_az_raw": 180.0,
+            "obj_alt": 45.0,
+            "position_cible": 90.0,
+            "remaining_seconds": 30,
+            "adaptive_interval": 60,
+            "total_corrections": 0,
+            "total_movement": 0.0,
+            "mode_icon": "",
+            "encoder_offset": 0.0,
+            "adaptive_mode": "normal",
+        }
+        handler.session.get_session_data.return_value = {}
+
+        handler._calc = MagicMock()
+
+        current_status = {"status": "tracking"}
+        handler.update(current_status)
+
+        tracking_info = current_status.get("tracking_info", {})
+        assert "meridian_seconds" not in tracking_info
+        assert "meridian_time" not in tracking_info
+
 
 # =============================================================================
 # TESTS SEUIL FEEDBACK (via config.thresholds.feedback_min_deg)
