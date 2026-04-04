@@ -491,3 +491,68 @@ class TestModeTransitions:
         params = manager.evaluate_tracking_zone(45.0, 120.0, 2.0)
         assert params.mode == TrackingMode.NORMAL
         assert manager.current_mode == TrackingMode.NORMAL
+
+
+class TestDiagnosticReflectsCurrentState:
+    """Tests que get_diagnostic_info reflète l'état courant après réévaluation."""
+
+    def test_diagnostic_reflects_mode_after_evaluate(self):
+        """get_diagnostic_info retourne le mode courant après evaluate_tracking_zone."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+        assert manager.current_mode == TrackingMode.NORMAL
+
+        # Simuler conditions CRITICAL (altitude ≥ 68°)
+        manager.evaluate_tracking_zone(70.0, 180.0, 2.0)
+        diag = manager.get_diagnostic_info(70.0, 180.0, 2.0)
+        assert diag["mode"] == "critical"
+
+    def test_diagnostic_stale_without_evaluate(self):
+        """Sans réévaluation, get_diagnostic_info retourne l'ancien mode."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+
+        # Forcer NORMAL
+        manager.evaluate_tracking_zone(45.0, 180.0, 1.0)
+        assert manager.current_mode == TrackingMode.NORMAL
+
+        # Sans réévaluer, diagnostic retourne toujours NORMAL
+        # même si les arguments correspondent à CRITICAL
+        diag = manager.get_diagnostic_info(70.0, 180.0, 2.0)
+        assert diag["mode"] == "normal"  # stale!
+
+    def test_diagnostic_fresh_after_evaluate(self):
+        """Après réévaluation, get_diagnostic_info retourne le bon mode."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+
+        # Forcer NORMAL
+        manager.evaluate_tracking_zone(45.0, 180.0, 1.0)
+        assert manager.current_mode == TrackingMode.NORMAL
+
+        # Réévaluer PUIS diagnostic — comme le fait get_status() corrigé
+        manager.evaluate_tracking_zone(70.0, 180.0, 2.0)
+        diag = manager.get_diagnostic_info(70.0, 180.0, 2.0)
+        assert diag["mode"] == "critical"  # fresh!
+
+    def test_diagnostic_continuous_on_extreme_movement(self):
+        """CONTINUOUS déclenché uniquement pour mouvement extrême (≥ 50°)."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
+
+        # Mouvement extrême (flip méridien) → CONTINUOUS
+        manager.evaluate_tracking_zone(45.0, 180.0, 55.0)
+        diag = manager.get_diagnostic_info(45.0, 180.0, 55.0)
+        assert diag["mode"] == "continuous"

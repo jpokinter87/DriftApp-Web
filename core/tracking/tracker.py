@@ -349,6 +349,9 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         delta, _ = self.adaptive_manager.verify_shortest_path(
             self.position_relative, position_cible, log_large_movements=False
         )
+        # Réévaluer le mode adaptatif pour refléter l'état courant
+        # (sinon current_params garde le mode de la dernière correction)
+        self.adaptive_manager.evaluate_tracking_zone(altitude, azimut, abs(delta))
         diag_info = self.adaptive_manager.get_diagnostic_info(altitude, azimut, delta)
         remaining = self._calculate_remaining_time(now)
 
