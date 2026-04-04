@@ -3,7 +3,7 @@
 {% block title %}Controle Coupole{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="/static/css/dashboard.css?v=5.0.3">
+<link rel="stylesheet" href="/static/css/dashboard.css?v={{ APP_VERSION }}">
 <style>[x-cloak] { display: none !important; }</style>
 {% endblock %}
 
@@ -272,5 +272,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="/static/js/dashboard.js?v=20260327e"></script>
+<script src="/static/js/dashboard.js?v={{ APP_VERSION }}"></script>
 {% endblock %}

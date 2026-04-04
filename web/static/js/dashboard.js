@@ -1606,33 +1606,57 @@ function showUpdateError(message) {
 
 /**
  * Wait for services to restart, then reload the page.
- * Polls the health endpoint until it responds.
+ * Phase 1: wait for Django to go DOWN (connection error or timeout).
+ * Phase 2: wait for Django to come back UP.
+ * This prevents premature reload before the update script restarts Django.
  */
 async function waitForServiceRestart() {
-    const maxAttempts = 90;  // 90 attempts x 2 seconds = 3 minutes max
-    let attempts = 0;
     const progressText = document.getElementById('update-progress-text');
 
-    while (attempts < maxAttempts) {
+    // Phase 1: Wait for Django to go down (max 30 seconds)
+    let serviceDown = false;
+    for (let i = 0; i < 15; i++) {
         await sleep(2000);
-        attempts++;
-
         if (progressText) {
-            progressText.textContent = `Reconnexion... (${attempts}/${maxAttempts})`;
+            progressText.textContent = `Attente du redemarrage... (${i + 1})`;
         }
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            await fetch('/api/health/', { signal: controller.signal });
+            clearTimeout(timeoutId);
+            // Still up, keep waiting
+        } catch (e) {
+            // Connection failed = service is restarting
+            serviceDown = true;
+            break;
+        }
+    }
 
+    if (!serviceDown) {
+        // Service never went down — script may have failed or is very slow
+        // Wait a bit more then try to reload anyway
+        if (progressText) {
+            progressText.textContent = 'Redemarrage en cours...';
+        }
+        await sleep(5000);
+    }
+
+    // Phase 2: Wait for Django to come back up (max 2 minutes)
+    for (let i = 0; i < 60; i++) {
+        await sleep(2000);
+        if (progressText) {
+            progressText.textContent = `Reconnexion... (${i + 1}/60)`;
+        }
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
-
             const response = await fetch('/api/health/', {
                 signal: controller.signal
             });
-
             clearTimeout(timeoutId);
 
             if (response.ok) {
-                // Service is back, reload page
                 log('Services redemarres, rechargement...', 'success');
                 if (progressText) {
                     progressText.textContent = 'Rechargement de la page...';
@@ -1652,7 +1676,6 @@ async function waitForServiceRestart() {
     }
     log('Delai depasse, rechargez la page manuellement', 'warning');
 
-    // Re-enable later button so user can dismiss
     const store = Alpine.store('dashboard');
     store.updateButtonsDisabled = false;
 }
