@@ -25,8 +25,10 @@ class TrackingCorrectionsMixin:
     """
 
     # Seuil au-delà duquel on autorise les grands mouvements dans le FeedbackController
-    # Correspond au seuil CONTINUOUS (30°) - évite que la protection 20° bloque les corrections post-méridien
-    LARGE_MOVEMENT_THRESHOLD = 30.0
+    # Doit être INFÉRIEUR à protection_threshold (20°) du FeedbackController
+    # pour que les deltas méridien typiques (15-30°) passent allow_large=True
+    # au lieu d'être bloqués par la protection anti-mouvement anormal
+    LARGE_MOVEMENT_THRESHOLD = 15.0
 
     # Seuil d'erreur acceptable même avec timeout (en degrés)
     # Si erreur < ce seuil, ne pas compter comme échec même si timeout atteint
