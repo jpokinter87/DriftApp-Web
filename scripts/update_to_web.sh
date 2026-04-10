@@ -14,7 +14,9 @@
 # Usage: sudo ./scripts/update_to_web.sh [--background]
 # =============================================================================
 
-set -euo pipefail
+set -uo pipefail
+# Note: pas de `set -e` — on gère les erreurs manuellement
+# pour garantir le redémarrage des services même si git pull échoue
 
 # Couleurs pour l'affichage
 RED='\033[0;31m'
@@ -145,11 +147,11 @@ print_step "Restauration des permissions ($OWNER)..."
 chown -R "$OWNER" "$DRIFTAPP_DIR" 2>/dev/null || true
 print_success "Permissions restaurées"
 
-# Nettoyer les modifications locales (config.json non touché par git pull
-# car les changements config sont maintenant dans le dépôt)
+# Nettoyer les modifications locales pour permettre le git pull
+# git reset --hard est plus fiable que checkout -- . pour les fichiers binaires
 if ! git diff --quiet 2>/dev/null; then
     print_step "Nettoyage des modifications locales..."
-    git checkout -- . 2>/dev/null || true
+    git reset --hard HEAD 2>/dev/null || true
     print_success "Modifications locales nettoyées"
 fi
 
@@ -163,8 +165,8 @@ if git pull origin main; then
         print_success "Mis à jour: $CURRENT_COMMIT → $NEW_COMMIT"
     fi
 else
-    print_error "Échec du git pull"
-    exit 1
+    print_error "Échec du git pull — les services seront redémarrés avec le code actuel"
+    # NE PAS exit : on redémarre les services quand même
 fi
 
 # Synchroniser les dépendances Python après mise à jour du code
