@@ -24,6 +24,7 @@ from core.hardware.moteur_simule import set_simulated_position, get_simulated_po
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
+from core.config.config import GEM_MERIDIAN_DELAY_MIN
 from core.utils.angle_utils import shortest_angular_distance
 
 logger = logging.getLogger(__name__)
@@ -652,9 +653,16 @@ class TrackingHandler:
 
                 if ra_deg is not None and self._calc is not None:
                     now = datetime.now()
-                    ha = self._calc.calculer_angle_horaire(ra_deg, now, deja_jnow=False)
-                    tracking_info["meridian_seconds"] = round(-ha * 240)
-                    passage = self._calc.calculer_heure_passage_meridien(ra_deg, now)
+                    dec_deg = getattr(self.session, "dec_deg", None) or 0.0
+                    ha = self._calc.calculer_angle_horaire(
+                        ra_deg, now, deja_jnow=False, declinaison=dec_deg
+                    )
+                    gem_delay_sec = GEM_MERIDIAN_DELAY_MIN * 60
+                    tracking_info["meridian_seconds"] = round(-ha * 239.3447) + gem_delay_sec
+                    passage = self._calc.calculer_heure_passage_meridien(
+                        ra_deg, now, declinaison=dec_deg,
+                        gem_delay_minutes=GEM_MERIDIAN_DELAY_MIN
+                    )
                     tracking_info["meridian_time"] = passage.strftime('%Hh%M')
 
                 current_status["tracking_info"] = tracking_info

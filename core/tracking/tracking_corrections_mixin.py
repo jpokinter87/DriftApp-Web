@@ -15,6 +15,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Tuple
 
+from core.config.config import GEM_MERIDIAN_DELAY_MIN
+
 
 class TrackingCorrectionsMixin:
     """
@@ -60,8 +62,14 @@ class TrackingCorrectionsMixin:
         # Calculer la position actuelle de l'objet (méthode centralisée)
         azimut, altitude = self._calculate_current_coords(now)
 
+        # === Gel méridien GEM ===
+        # Quand l'azimut franchit 180° (transit astronomique), on clamp à 179.9°
+        # pendant gem_delay_minutes pour laisser la monture GEM flipper avant
+        # de déclencher le grand mouvement de la coupole.
+        azimut_abaque = self._apply_meridian_freeze(azimut, now)
+
         # Calculer la position cible
-        position_cible, infos = self._calculate_target_position(azimut, altitude)
+        position_cible, infos = self._calculate_target_position(azimut_abaque, altitude)
 
         # === Vérification du chemin le plus court ===
         delta, path_verification = self.adaptive_manager.verify_shortest_path(
@@ -134,6 +142,59 @@ class TrackingCorrectionsMixin:
         self.next_correction_time = now + timedelta(seconds=tracking_params.check_interval)
 
         return True, log_message
+
+    def _apply_meridian_freeze(self, azimut: float, now: datetime) -> float:
+        """
+        Gère le gel de l'azimut au méridien pour montures GEM.
+
+        Quand l'objet passe az=180° (transit astronomique), la coupole ne doit
+        PAS bouger immédiatement car la monture GEM ne flippe que plus tard.
+        On clamp l'azimut à 179.9° pendant gem_delay_minutes.
+
+        Args:
+            azimut: Azimut astronomique réel de l'objet
+            now: Timestamp actuel
+
+        Returns:
+            Azimut à utiliser pour la lookup abaque (clampé ou réel)
+        """
+        if GEM_MERIDIAN_DELAY_MIN <= 0:
+            return azimut
+
+        # Tracker le passage pré-méridien (évite de geler un objet déjà côté Ouest)
+        if azimut < 180.0:
+            self._seen_pre_meridian = True
+
+        # Détecter le franchissement du méridien (az passe de <180 à >=180)
+        if azimut >= 180.0 and self._meridian_freeze_until is None and self._seen_pre_meridian:
+            self._meridian_freeze_until = now + timedelta(minutes=GEM_MERIDIAN_DELAY_MIN)
+            self.logger.info(
+                f"meridian_freeze | az={azimut:.1f} gel={GEM_MERIDIAN_DELAY_MIN}min "
+                f"liberation={self._meridian_freeze_until.strftime('%H:%M:%S')}"
+            )
+
+        # Période de gel active : clamper l'azimut
+        if self._meridian_freeze_until is not None:
+            if now < self._meridian_freeze_until:
+                return 179.9
+            else:
+                # Libération : laisser passer l'azimut réel
+                self.logger.info(
+                    f"meridian_release | az={azimut:.1f} gel_termine"
+                )
+                self._meridian_freeze_until = None
+
+        return azimut
+
+    def _read_meridian_freeze(self, azimut: float, now: datetime) -> float:
+        """
+        Version lecture seule du gel méridien (pour get_status).
+
+        Ne déclenche ni ne libère le freeze, consulte seulement l'état actuel.
+        """
+        if self._meridian_freeze_until is not None and now < self._meridian_freeze_until:
+            return 179.9
+        return azimut
 
     def _apply_correction(self, delta_deg: float, motor_delay: float = 0.002):
         """

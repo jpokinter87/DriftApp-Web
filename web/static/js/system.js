@@ -98,6 +98,7 @@ function cacheElements() {
         thresholdLarge: document.getElementById('threshold-large'),
         thresholdProtection: document.getElementById('threshold-protection'),
         thresholdTolerance: document.getElementById('threshold-tolerance'),
+        thresholdGemDelay: document.getElementById('threshold-gem-delay'),
         modesTbody: document.getElementById('modes-tbody'),
     };
 }
@@ -313,8 +314,10 @@ function updateConfig(config) {
     }
 
     if (config.moteur) {
-        elements.motorSteps.textContent = config.moteur.steps_per_revolution || '--';
-        elements.motorMicrosteps.textContent = config.moteur.microsteps || '--';
+        const spr = config.moteur.steps_per_revolution || 0;
+        const ms = config.moteur.microsteps || 1;
+        elements.motorSteps.textContent = spr ? (spr * ms) : '--';
+        elements.motorMicrosteps.textContent = ms || '--';
         elements.motorGear.textContent = config.moteur.gear_ratio ? config.moteur.gear_ratio + ':1' : '--';
         elements.motorDelay.textContent = config.moteur.motor_delay_base
             ? (config.moteur.motor_delay_base * 1000).toFixed(1) + 'ms'
@@ -330,6 +333,11 @@ function updateConfig(config) {
             ? config.thresholds.feedback_protection_deg + '°' : '--';
         elements.thresholdTolerance.textContent = config.thresholds.default_tolerance_deg
             ? config.thresholds.default_tolerance_deg + '°' : '--';
+    }
+    if (config.meridien) {
+        const delay = config.meridien.gem_delay_minutes;
+        elements.thresholdGemDelay.textContent = (delay !== undefined && delay !== null)
+            ? delay + ' min' : '0 min';
     }
 
     if (config.adaptive_modes) {

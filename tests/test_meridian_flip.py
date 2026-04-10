@@ -227,6 +227,7 @@ class TestTrackingStartUnpacking:
         """Crée un TrackingHandler avec mocks."""
         from services.command_handlers import TrackingHandler
         return TrackingHandler(
+            moteur=MagicMock(),
             feedback_controller=MagicMock(),
             config=mock_config,
             simulation_mode=True,

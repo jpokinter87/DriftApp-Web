@@ -57,6 +57,12 @@ class TrackingStateMixin:
         # Indicateur de grand déplacement (basculement méridien ou GOTO)
         self.is_large_movement_in_progress = False
 
+        # Gel méridien GEM : empêche le saut abaque tant que le flip n'est pas attendu
+        # _meridian_freeze_until: datetime jusqu'à laquelle l'azimut est clampé à <180°
+        self._meridian_freeze_until = None
+        # On ne déclenche le freeze que si l'objet a d'abord été vu à az < 180°
+        self._seen_pre_meridian = False
+
         # Lissage position cible (voir _smooth_position_cible pour algorithme détaillé)
         # - _cached_position_cible: dernière valeur lissée retournée
         # - _position_cible_history: fenêtre glissante pour moyenne circulaire

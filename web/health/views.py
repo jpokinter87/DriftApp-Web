@@ -290,6 +290,7 @@ def _load_config() -> dict:
             'site': config.get('site', {}),
             'thresholds': config.get('thresholds', {}),
             'suivi': config.get('suivi', {}),
+            'meridien': config.get('meridien', {}),
             'moteur': {
                 'steps_per_revolution': config.get('moteur', {}).get('steps_per_revolution'),
                 'microsteps': config.get('moteur', {}).get('microsteps'),

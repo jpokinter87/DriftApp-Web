@@ -470,6 +470,7 @@ class TestTrackingFlow:
             from services.command_handlers import TrackingHandler
 
             handler = TrackingHandler(
+                moteur=MagicMock(),
                 feedback_controller=mock_feedback,
                 config=mock_config,
                 simulation_mode=True,

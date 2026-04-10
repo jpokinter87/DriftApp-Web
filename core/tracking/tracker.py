@@ -343,7 +343,9 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         now = datetime.now()
         azimut, altitude = self._calculate_current_coords(now)
-        position_cible, infos = self._calculate_target_position(azimut, altitude)
+        # Appliquer le gel méridien GEM pour l'affichage (lecture seule, pas de déclenchement)
+        azimut_abaque = self._read_meridian_freeze(azimut, now)
+        position_cible, infos = self._calculate_target_position(azimut_abaque, altitude)
 
         # log_large_movements=False car get_status() est appelé très fréquemment par le frontend
         delta, _ = self.adaptive_manager.verify_shortest_path(

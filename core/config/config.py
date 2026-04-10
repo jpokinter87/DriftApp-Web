@@ -100,6 +100,9 @@ SITE_TZ_OFFSET: int = get_site_tz_offset()
 ENCODER_MODE: str = str(_config["site"].get("encoder_mode", "relative")).lower()
 SIMULATION: bool = bool(_config["site"].get("simulation", False))
 
+# Délai post-méridien GEM (pour aligner l'affichage avec ASIAIR/monture)
+GEM_MERIDIAN_DELAY_MIN: int = int(_config.get("meridien", {}).get("gem_delay_minutes", 0))
+
 MOTOR_STEPS_PER_REV: int = int(_config["motor"]["steps_per_revolution"])
 MOTOR_MICROSTEPPING: int = int(_config["motor"]["microstepping"])
 MOTOR_GEAR_RATIO: float  = float(_config["motor"]["gear_ratio"])

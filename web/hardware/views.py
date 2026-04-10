@@ -227,17 +227,23 @@ class MotorStatusView(APIView):
             from core.observatoire import AstronomicalCalculations
             from core.config.config import get_site_config
 
+            from core.config.config import GEM_MERIDIAN_DELAY_MIN
+
             latitude, longitude, tz_offset, _, _ = get_site_config()
             calc = AstronomicalCalculations(latitude, longitude, tz_offset)
             now = datetime.now()
+            dec_deg = tracking_info.get('dec_deg', 0.0) or 0.0
             ha = calc.calculer_angle_horaire(
-                tracking_info['ra_deg'], now, deja_jnow=False
+                tracking_info['ra_deg'], now, deja_jnow=False,
+                declinaison=dec_deg
             )
-            meridian_seconds = round(-ha * 240)
+            gem_delay_sec = GEM_MERIDIAN_DELAY_MIN * 60
+            meridian_seconds = round(-ha * 239.3447) + gem_delay_sec
             tracking_info['meridian_seconds'] = meridian_seconds
 
             passage = calc.calculer_heure_passage_meridien(
-                tracking_info['ra_deg'], now
+                tracking_info['ra_deg'], now, declinaison=dec_deg,
+                gem_delay_minutes=GEM_MERIDIAN_DELAY_MIN
             )
             tracking_info['meridian_time'] = passage.strftime('%Hh%M')
 

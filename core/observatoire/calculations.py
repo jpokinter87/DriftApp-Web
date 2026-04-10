@@ -136,7 +136,8 @@ class AstronomicalCalculations:
         return theta_G0 + 15.04106728 * (time_seconds / 3600.0)
 
     def calculer_angle_horaire(self, ascension_droite: float, date_heure: datetime,
-                               deja_jnow: bool = False) -> float:
+                               deja_jnow: bool = False,
+                               declinaison: float = 0.0) -> float:
         """
         Calcule l'angle horaire en degrés.
 
@@ -144,9 +145,11 @@ class AstronomicalCalculations:
             ascension_droite: AD en degrés (J2000 ou JNOW selon deja_jnow)
             date_heure: Date/heure d'observation
             deja_jnow: Si True, AD déjà en JNOW (pas de conversion)
+            declinaison: Déclinaison en degrés (J2000), utilisée pour la
+                         précession si deja_jnow=False
         """
         if not deja_jnow:
-            ad_jnow, _ = self.convertir_j2000_vers_jnow(ascension_droite, 0, date_heure)
+            ad_jnow, _ = self.convertir_j2000_vers_jnow(ascension_droite, declinaison, date_heure)
         else:
             ad_jnow = ascension_droite
 
@@ -204,23 +207,28 @@ class AstronomicalCalculations:
 
         return altitude_deg + refraction_deg
 
-    def calculer_heure_passage_meridien(self, ad_deg: float, date_reference: datetime) -> datetime:
-        """Calcule l'heure exacte du passage au méridien pour un objet."""
-        minuit = date_reference.replace(hour=0, minute=0, second=0, microsecond=0)
-        lst_minuit = self.calculer_temps_sideral(minuit)
+    def calculer_heure_passage_meridien(self, ad_deg: float, date_reference: datetime,
+                                        declinaison: float = 0.0,
+                                        gem_delay_minutes: int = 0) -> datetime:
+        """Calcule l'heure exacte du passage au méridien pour un objet.
 
-        diff_deg = (ad_deg - lst_minuit) % 360
-        diff_heures = diff_deg / 15.0
-        diff_heures_solaires = diff_heures * (24.0 / 23.934469444)
+        Utilise le même calcul que le countdown (HA → secondes) pour
+        garantir la cohérence entre l'heure affichée et le décompte.
 
-        diff_heures_solaires = diff_heures_solaires % 24
-        heures = int(diff_heures_solaires)
-        minutes_reste = (diff_heures_solaires - heures) * 60
-        minutes = int(minutes_reste)
-        secondes = int((minutes_reste - minutes) * 60)
-
-        passage = minuit.replace(hour=heures, minute=minutes, second=secondes)
-        return passage
+        Args:
+            ad_deg: Ascension droite en degrés (J2000)
+            date_reference: Date/heure de référence
+            declinaison: Déclinaison en degrés (J2000), pour la précession
+            gem_delay_minutes: Délai post-méridien GEM (minutes), ajouté
+                               au transit astronomique pour aligner avec
+                               l'heure de flip monture (ASIAIR etc.)
+        """
+        ha = self.calculer_angle_horaire(
+            ad_deg, date_reference, deja_jnow=False, declinaison=declinaison
+        )
+        # Même formule que le countdown : secondes sidérales converties en solaires
+        seconds_to_transit = -ha * 239.3447 + gem_delay_minutes * 60
+        return date_reference + timedelta(seconds=round(seconds_to_transit))
 
     def calculer_coords_horizontales_coupole(self, ascension_droite: float,
                                              declinaison: float,
@@ -281,7 +289,7 @@ class AstronomicalCalculations:
                             seuil_minutes: int = 5) -> Tuple[bool, float]:
         """Vérifie si un objet est proche du passage au méridien."""
         angle_horaire = self.calculer_angle_horaire(ad_deg, date_heure, deja_jnow=True)
-        temps_avant_passage_secondes = -angle_horaire * 240
+        temps_avant_passage_secondes = -angle_horaire * 239.3447
         est_proche = abs(temps_avant_passage_secondes) < seuil_minutes * 60
 
         return est_proche, temps_avant_passage_secondes

@@ -35,6 +35,11 @@
     "_intervalle_comment": "60s = valeur du mode adaptatif NORMAL"
   },
 
+  "meridien": {
+    "gem_delay_minutes": 0,
+    "_gem_delay_comment": "Délai post-méridien GEM en minutes (0 = transit astronomique pur, 10-15 = typique ASIAIR)"
+  },
+
   "simulation": false,
 
   "motor_driver": {

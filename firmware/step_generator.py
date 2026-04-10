@@ -174,7 +174,8 @@ class StepGenerator:
         start_ms = time.ticks_ms()
         expected_ms = (steps * delay_us) // 1000 + 1  # +1 pour arrondi
 
-        # Activer la SM et envoyer les parametres
+        # Reset instruction pointer puis activer la SM
+        self._sm.restart()
         self._sm.active(1)
         self._sm.put(steps - 1)   # N-1 car jmp y-- compte N+1 iterations
         self._sm.put(cycles)      # Demi-periode en cycles
@@ -232,6 +233,8 @@ class StepGenerator:
         self._stop_flag = False
         steps_done = 0
 
+        # Reset instruction pointer puis activer la SM
+        self._sm.restart()
         self._sm.active(1)
 
         try:
