@@ -367,9 +367,7 @@ def diagnostic(request):
 # Endpoints de mise à jour
 # =============================================================================
 
-# Chemin vers le script de mise à jour
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-UPDATE_SCRIPT = PROJECT_ROOT / "scripts" / "update_to_web.sh"
 
 
 @api_view(['GET'])
@@ -400,89 +398,69 @@ def check_update(request):
 @api_view(['POST'])
 def apply_update(request):
     """
-    Applique la mise à jour en exécutant le script update_to_web.sh.
+    Applique la mise à jour : git pull synchrone + restart Django détaché.
 
-    Le script se détache automatiquement quand il détecte qu'il est lancé
-    sans TTY (depuis Django). Il retourne immédiatement "UPDATE_STARTED"
-    puis continue en background : git pull, uv sync, redémarrage services.
+    Approche simplifiée (v5.6.4) :
+    1. git pull origin main (synchrone, ~2s)
+    2. Si succès, lance un restart de Django en background
+    3. La connexion est perdue, le frontend attend et recharge
 
-    La connexion sera perdue pendant le redémarrage de Django.
-    Le frontend doit gérer la reconnexion automatique.
-
-    Returns:
-        JSON avec success, message, old_commit
+    Les services motor_service et ems22d ne sont PAS touchés
+    (ils tournent dans des processus séparés et n'ont pas besoin de redémarrer).
     """
     from .update_checker import get_local_commit
 
-    # Vérifier que le script existe
-    if not UPDATE_SCRIPT.exists():
-        return Response({
-            'success': False,
-            'error': f'Script de mise à jour non trouvé: {UPDATE_SCRIPT}'
-        }, status=500)
-
-    # Sauvegarder le commit actuel
     old_commit = get_local_commit()
 
     try:
-        logger.info(f"Démarrage de la mise à jour depuis {old_commit}")
+        logger.info(f"Mise à jour depuis {old_commit}")
 
-        # Le script se détache automatiquement (nohup + background) quand
-        # lancé sans TTY. Il retourne immédiatement avec "UPDATE_STARTED".
+        # Étape 1 : git pull (synchrone)
         result = subprocess.run(
-            ['sudo', str(UPDATE_SCRIPT)],
-            cwd=PROJECT_ROOT,
+            ['git', 'pull', 'origin', 'main'],
+            cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
-            timeout=30  # Le script détaché retourne en < 1 seconde
+            timeout=30
         )
 
-        output = result.stdout.strip() if result.stdout else ''
-
-        if result.returncode == 0 and 'UPDATE_STARTED' in output:
-            logger.info("Script de mise à jour lancé en background")
-            return Response({
-                'success': True,
-                'message': 'Mise à jour lancée. Les services vont redémarrer.',
-                'old_commit': old_commit,
-            })
-        elif result.returncode == 0:
-            # Mode manuel (avec TTY) — le script a tout fait synchrone
-            new_commit = get_local_commit()
-            logger.info(f"Mise à jour réussie: {old_commit} -> {new_commit}")
-            return Response({
-                'success': True,
-                'message': 'Mise à jour terminée',
-                'old_commit': old_commit,
-                'new_commit': new_commit,
-                'output': output[-2000:]
-            })
-        else:
-            logger.error(f"Échec de la mise à jour: {result.stderr}")
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() if result.stderr else 'Erreur inconnue'
+            logger.error(f"git pull échoué: {error_msg}")
             return Response({
                 'success': False,
-                'error': f'Le script a échoué (code {result.returncode})',
-                'old_commit': old_commit,
-                'stderr': result.stderr[-1000:] if result.stderr else ''
+                'error': f'git pull échoué: {error_msg}',
+                'old_commit': old_commit
             }, status=500)
 
-    except subprocess.TimeoutExpired:
-        # Ne devrait plus arriver avec le mode détaché, mais au cas où
-        logger.warning("Timeout du script — la mise à jour est probablement en cours")
+        new_commit = get_local_commit()
+        logger.info(f"git pull OK: {old_commit} → {new_commit}")
+
+        # Étape 2 : restart Django en background (survit à la mort du process)
+        # Délai de 2s pour laisser la réponse HTTP partir avant le kill
+        subprocess.Popen(
+            ['bash', '-c', 'sleep 2 && sudo systemctl restart driftapp_web.service'],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+
         return Response({
             'success': True,
-            'message': 'Mise à jour en cours (services redémarrent)',
+            'message': 'Code mis à jour, redémarrage en cours.',
             'old_commit': old_commit,
+            'new_commit': new_commit,
         })
-    except PermissionError as e:
-        logger.error(f"Permission refusée: {e}")
+
+    except subprocess.TimeoutExpired:
+        logger.warning("git pull timeout")
         return Response({
             'success': False,
-            'error': 'Permission refusée. Vérifiez la configuration sudoers.',
+            'error': 'git pull timeout (réseau lent ?)',
             'old_commit': old_commit
-        }, status=403)
+        }, status=500)
     except (subprocess.SubprocessError, OSError) as e:
-        logger.exception("Erreur inattendue lors de la mise à jour")
+        logger.exception("Erreur lors de la mise à jour")
         return Response({
             'success': False,
             'error': str(e),

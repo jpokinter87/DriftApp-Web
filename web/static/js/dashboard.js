@@ -1554,18 +1554,16 @@ function hideUpdateModal() {
 
 /**
  * Apply the update.
- * Shows progress, calls API, handles service restart.
+ * Calls git pull via API, then waits for Django restart.
  */
 async function applyUpdate() {
     const store = Alpine.store('dashboard');
     const progressText = document.getElementById('update-progress-text');
 
-    // Show progress, disable buttons via Alpine store
     store.updateShowProgress = true;
     store.updateShowError = false;
     store.updateButtonsDisabled = true;
-    if (progressText) progressText.textContent = 'Mise a jour en cours...';
-
+    if (progressText) progressText.textContent = 'git pull en cours...';
     log('Mise a jour en cours...', 'info');
 
     try {
@@ -1576,24 +1574,26 @@ async function applyUpdate() {
 
         const result = await response.json();
 
-        if (result.success) {
-            if (progressText) progressText.textContent = 'Redemarrage des services...';
-            log('Mise a jour reussie, redemarrage...', 'success');
-            await waitForServiceRestart();
-        } else {
+        if (!result.success) {
             showUpdateError(result.error || 'Erreur inconnue');
-            log(`Erreur de mise a jour: ${result.error}`, 'error');
+            log(`Erreur: ${result.error}`, 'error');
+            return;
         }
+
+        log(`git pull OK: ${result.old_commit} -> ${result.new_commit}`, 'success');
+        if (progressText) progressText.textContent = 'Redemarrage...';
+
     } catch (error) {
-        if (progressText) progressText.textContent = 'Reconnexion en cours...';
+        // Connexion perdue = Django est deja en train de redemarrer
         log('Connexion perdue, attente du redemarrage...', 'warning');
-        await waitForServiceRestart();
     }
+
+    // Attendre que Django revienne (max 45s)
+    await waitForRestart(progressText);
 }
 
 /**
  * Show an error message in the update modal.
- * @param {string} message - Error message to display
  */
 function showUpdateError(message) {
     const store = Alpine.store('dashboard');
@@ -1605,77 +1605,39 @@ function showUpdateError(message) {
 }
 
 /**
- * Wait for services to restart, then reload the page.
- * Phase 1: wait for Django to go DOWN (connection error or timeout).
- * Phase 2: wait for Django to come back UP.
- * This prevents premature reload before the update script restarts Django.
+ * Wait for Django to come back after restart, then reload.
  */
-async function waitForServiceRestart() {
-    const progressText = document.getElementById('update-progress-text');
+async function waitForRestart(progressText) {
+    // Attendre 3s que le restart se lance (le Popen a un sleep 2)
+    await sleep(3000);
 
-    // Phase 1: Wait for Django to go down (max 30 seconds)
-    let serviceDown = false;
-    for (let i = 0; i < 15; i++) {
-        await sleep(2000);
+    for (let i = 0; i < 20; i++) {
         if (progressText) {
-            progressText.textContent = `Attente du redemarrage... (${i + 1})`;
+            progressText.textContent = `Reconnexion... (${i + 1}/20)`;
         }
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
-            await fetch('/api/health/', { signal: controller.signal });
-            clearTimeout(timeoutId);
-            // Still up, keep waiting
-        } catch (e) {
-            // Connection failed = service is restarting
-            serviceDown = true;
-            break;
-        }
-    }
-
-    if (!serviceDown) {
-        // Service never went down — script may have failed or is very slow
-        // Wait a bit more then try to reload anyway
-        if (progressText) {
-            progressText.textContent = 'Redemarrage en cours...';
-        }
-        await sleep(5000);
-    }
-
-    // Phase 2: Wait for Django to come back up (max 2 minutes)
-    for (let i = 0; i < 60; i++) {
-        await sleep(2000);
-        if (progressText) {
-            progressText.textContent = `Reconnexion... (${i + 1}/60)`;
-        }
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
-            const response = await fetch('/api/health/', {
-                signal: controller.signal
-            });
+            const response = await fetch('/api/health/', { signal: controller.signal });
             clearTimeout(timeoutId);
 
             if (response.ok) {
-                log('Services redemarres, rechargement...', 'success');
-                if (progressText) {
-                    progressText.textContent = 'Rechargement de la page...';
-                }
+                if (progressText) progressText.textContent = 'Rechargement...';
+                log('Redemarrage OK', 'success');
                 await sleep(500);
                 window.location.reload();
                 return;
             }
         } catch (e) {
-            // Still waiting, continue polling
+            // Django pas encore pret
         }
+        await sleep(2000);
     }
 
-    // Timeout - ask user to reload manually
+    // Timeout (45s) — proposer rechargement manuel
     if (progressText) {
-        progressText.textContent = 'Delai depasse - rechargez la page manuellement';
+        progressText.textContent = 'Rechargez la page manuellement';
     }
-    log('Delai depasse, rechargez la page manuellement', 'warning');
-
     const store = Alpine.store('dashboard');
     store.updateButtonsDisabled = false;
 }
