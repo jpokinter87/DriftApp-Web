@@ -57,6 +57,9 @@ class TrackingStateMixin:
         # Indicateur de grand déplacement (basculement méridien ou GOTO)
         self.is_large_movement_in_progress = False
 
+        # Rattrapage méridien : force CONTINUOUS tant que le delta n'est pas stabilisé
+        self._meridian_catchup_active = False
+
         # Gel méridien GEM : empêche le saut abaque tant que le flip n'est pas attendu
         # _meridian_freeze_until: datetime jusqu'à laquelle l'azimut est clampé à <180°
         self._meridian_freeze_until = None

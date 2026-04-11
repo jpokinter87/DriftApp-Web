@@ -37,6 +37,9 @@ class TrackingCorrectionsMixin:
     # Évite l'arrêt automatique lors de grands déplacements post-méridien
     ACCEPTABLE_ERROR_THRESHOLD = 2.0
 
+    # Seuil sous lequel le rattrapage méridien est considéré terminé
+    MERIDIAN_CATCHUP_DONE_THRESHOLD = 3.0
+
     def check_and_correct(self) -> Tuple[bool, str]:
         """
         Vérifie si une correction est nécessaire et l'applique.
@@ -84,14 +87,29 @@ class TrackingCorrectionsMixin:
             abs(delta)
         )
 
-
         # Détection explicite du transit méridien
         if abs(delta) > self.LARGE_MOVEMENT_THRESHOLD:
+            if not self._meridian_catchup_active:
+                self._meridian_catchup_active = True
+                self.logger.info(
+                    f"meridian_catchup | START delta={delta:+.1f} → forçage CONTINUOUS"
+                )
             self.logger.info(
                 f"meridian_transit | delta={delta:+.1f} az={azimut:.1f} alt={altitude:.1f} "
                 f"from={self.position_relative:.1f} to={position_cible:.1f}"
             )
             self._log_goto(self.position_relative, position_cible, delta, 'meridian_transit')
+
+        # Rattrapage méridien : forcer CONTINUOUS tant que le delta est significatif
+        if self._meridian_catchup_active:
+            if abs(delta) < self.MERIDIAN_CATCHUP_DONE_THRESHOLD:
+                self.logger.info(
+                    f"meridian_catchup | END delta={delta:+.1f} → retour mode adaptatif"
+                )
+                self._meridian_catchup_active = False
+            else:
+                continuous_params = self.adaptive_manager._get_continuous_params()
+                tracking_params = continuous_params
 
         # Vérifier si la correction dépasse le seuil
         if abs(delta) < tracking_params.correction_threshold:
