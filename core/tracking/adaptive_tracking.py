@@ -87,6 +87,7 @@ class AdaptiveTrackingManager:
 
             # Stocker config pour accès aux modes
             self.adaptive_config = adaptive_config
+            self.force_continuous = getattr(adaptive_config, 'force_continuous', False)
         else:
             # Valeurs par défaut
             self.ALTITUDE_CRITICAL = 68.0
@@ -96,6 +97,7 @@ class AdaptiveTrackingManager:
             self.MOVEMENT_MIN_FOR_CONTINUOUS = 1.0  # Seuil par défaut
             self.CRITICAL_ZONE_1 = None
             self.adaptive_config = None
+            self.force_continuous = False
 
         # Historique
         self.correction_history = []
@@ -318,6 +320,19 @@ class AdaptiveTrackingManager:
         Returns:
             Paramètres de suivi adaptés
         """
+        # v5.7: bypass adaptatif — vitesse max partout (simplifie et évite
+        # les lenteurs pré-méridien en NORMAL)
+        if self.force_continuous:
+            params = self._get_continuous_params()
+            if self.current_mode != TrackingMode.CONTINUOUS:
+                self._log_mode_change(
+                    self.current_mode, TrackingMode.CONTINUOUS,
+                    ["force_continuous activé"], params
+                )
+                self.current_mode = TrackingMode.CONTINUOUS
+                self.current_params = params
+            return params
+
         # Évaluer les conditions
         in_critical_zone = self._is_in_critical_zone(altitude, azimut)
         altitude_level = self._get_altitude_level(altitude)

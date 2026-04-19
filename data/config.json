@@ -104,7 +104,10 @@
   
   "adaptive_tracking": {
     "_comment": "Système de suivi adaptatif automatique - VERSION 2.2 (3 modes, FAST_TRACK supprimé)",
-    
+
+    "force_continuous": false,
+    "_force_continuous_comment": "v5.7.0: si true, bypass la gestion adaptative et utilise toujours les params CONTINUOUS (vitesse max). Simplifie le comportement et résout les lenteurs pré-méridien. Réversible. Validation terrain requise.",
+
     "altitudes": {
       "_comment": "Seuils d'altitude pour changement de mode (degrés)",
       "critical": 68.0,

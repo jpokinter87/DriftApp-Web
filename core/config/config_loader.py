@@ -156,7 +156,8 @@ class AdaptiveConfig:
     movements: MovementThresholds
     modes: Dict[str, TrackingModeParams]
     critical_zones: List[CriticalZone]
-    
+    force_continuous: bool = False
+
     def get_mode(self, mode_name: str) -> Optional[TrackingModeParams]:
         """Récupère les paramètres d'un mode."""
         return self.modes.get(mode_name)
@@ -364,7 +365,8 @@ class ConfigLoader:
             altitudes=self._parse_altitudes(c.get("altitudes", {})),
             movements=self._parse_movements(c.get("movements", {})),
             modes=self._parse_modes(c.get("modes", {})),
-            critical_zones=self._parse_critical_zones(c.get("critical_zones", []))
+            critical_zones=self._parse_critical_zones(c.get("critical_zones", [])),
+            force_continuous=bool(c.get("force_continuous", False))
         )
 
     def _parse_altitudes(self, c: dict) -> AltitudeThresholds:

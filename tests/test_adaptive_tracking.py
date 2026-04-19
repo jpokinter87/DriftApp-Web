@@ -81,6 +81,44 @@ class TestAdaptiveTrackingManagerInit:
         assert manager.CRITICAL_ZONE_1 is not None
 
 
+class TestForceContinuous:
+    """Tests pour le flag v5.7.0 force_continuous (bypass adaptatif)."""
+
+    def test_force_continuous_off_par_defaut(self, adaptive_config):
+        """Sans flag, comportement adaptatif standard."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        manager = AdaptiveTrackingManager(
+            base_interval=60, base_threshold=0.5, adaptive_config=adaptive_config
+        )
+        assert manager.force_continuous is False
+
+        # Altitude basse → NORMAL
+        params = manager.evaluate_tracking_zone(30.0, 120.0, 0.5)
+        assert params.mode == TrackingMode.NORMAL
+
+    def test_force_continuous_on_override_tous_les_modes(self, adaptive_config):
+        """Flag actif : toutes zones retournent CONTINUOUS."""
+        from core.tracking.adaptive_tracking import (
+            AdaptiveTrackingManager, TrackingMode
+        )
+
+        adaptive_config.force_continuous = True
+        manager = AdaptiveTrackingManager(
+            base_interval=60, base_threshold=0.5, adaptive_config=adaptive_config
+        )
+        assert manager.force_continuous is True
+
+        # Conditions qui déclencheraient normalement NORMAL/CRITICAL
+        for alt, az, delta in [(30.0, 120.0, 0.5), (70.0, 180.0, 1.0), (77.0, 90.0, 0.3)]:
+            params = manager.evaluate_tracking_zone(alt, az, delta)
+            assert params.mode == TrackingMode.CONTINUOUS, (
+                f"alt={alt} az={az} delta={delta} → {params.mode.value} (attendu continuous)"
+            )
+
+
 class TestGetParams:
     """Tests pour les méthodes _get_*_params."""
 
