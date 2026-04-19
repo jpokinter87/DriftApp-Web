@@ -256,3 +256,113 @@ class TestGetCommitMessages:
         from web.health.update_checker import get_commit_messages
         result = get_commit_messages(5)
         assert result == []
+
+
+class TestGetFilesChanged:
+    """Tests pour get_files_changed (refactor v5.8.0)."""
+
+    @patch('subprocess.run')
+    def test_retourne_liste_fichiers(self, mock_run):
+        """Parse correctement la sortie git diff --name-only."""
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="data/config.json\nweb/health/views.py\nscripts/update_driftapp.sh\n"
+        )
+        from web.health.update_checker import get_files_changed
+        result = get_files_changed()
+        assert result == [
+            "data/config.json",
+            "web/health/views.py",
+            "scripts/update_driftapp.sh",
+        ]
+
+    @patch('subprocess.run')
+    def test_sortie_vide_retourne_liste_vide(self, mock_run):
+        """Retourne [] si rien à mettre à jour."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="")
+        from web.health.update_checker import get_files_changed
+        assert get_files_changed() == []
+
+    @patch('subprocess.run')
+    def test_echec_retourne_liste_vide(self, mock_run):
+        """Retourne [] sur erreur subprocess."""
+        mock_run.side_effect = subprocess.SubprocessError("boom")
+        from web.health.update_checker import get_files_changed
+        assert get_files_changed() == []
+
+    @patch('subprocess.run')
+    def test_returncode_non_zero_retourne_liste_vide(self, mock_run):
+        """Un returncode != 0 retourne [] (pas d'exception)."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        from web.health.update_checker import get_files_changed
+        assert get_files_changed() == []
+
+
+class TestGetConfigFilesAffected:
+    """Tests pour get_config_files_affected (refactor v5.8.0)."""
+
+    def test_filtre_config_json(self):
+        """Détecte data/config.json parmi les changements."""
+        from web.health.update_checker import get_config_files_affected
+        files = ["web/health/views.py", "data/config.json", "scripts/foo.sh"]
+        assert get_config_files_affected(files) == ["data/config.json"]
+
+    def test_filtre_loi_coupole(self):
+        """Détecte data/Loi_coupole.xlsx."""
+        from web.health.update_checker import get_config_files_affected
+        files = ["data/Loi_coupole.xlsx", "README.md"]
+        assert get_config_files_affected(files) == ["data/Loi_coupole.xlsx"]
+
+    def test_aucun_fichier_user_retourne_liste_vide(self):
+        """Retourne [] quand la MàJ ne touche aucun fichier utilisateur."""
+        from web.health.update_checker import get_config_files_affected
+        files = ["web/health/views.py", "tests/test_foo.py"]
+        assert get_config_files_affected(files) == []
+
+    def test_liste_vide_retourne_liste_vide(self):
+        """Entrée vide → sortie vide."""
+        from web.health.update_checker import get_config_files_affected
+        assert get_config_files_affected([]) == []
+
+    @patch('web.health.update_checker.get_files_changed')
+    def test_none_appelle_get_files_changed(self, mock_get):
+        """Si files_changed=None, appelle get_files_changed() par défaut."""
+        mock_get.return_value = ["data/config.json"]
+        from web.health.update_checker import get_config_files_affected
+        result = get_config_files_affected(None)
+        mock_get.assert_called_once()
+        assert result == ["data/config.json"]
+
+
+class TestCheckForUpdatesIncludesNewFields:
+    """Vérifie que check_for_updates() ajoute files_changed + config_files_affected."""
+
+    @patch('web.health.update_checker.get_config_files_affected')
+    @patch('web.health.update_checker.get_files_changed')
+    @patch('web.health.update_checker.fetch_remote')
+    @patch('web.health.update_checker.get_local_commit')
+    @patch('web.health.update_checker.get_remote_commit')
+    @patch('web.health.update_checker.count_commits_behind')
+    @patch('web.health.update_checker.get_local_version')
+    @patch('web.health.update_checker.get_remote_version')
+    @patch('web.health.update_checker.get_commit_messages')
+    def test_fields_presents_si_mise_a_jour(
+        self, mock_msg, mock_rver, mock_lver, mock_count,
+        mock_rcommit, mock_lcommit, mock_fetch, mock_files, mock_config
+    ):
+        mock_fetch.return_value = True
+        mock_lcommit.return_value = "abc1234"
+        mock_rcommit.return_value = "def5678"
+        mock_count.return_value = 2
+        mock_lver.return_value = "5.7.0"
+        mock_rver.return_value = "5.8.0"
+        mock_msg.return_value = ["commit1", "commit2"]
+        mock_files.return_value = ["data/config.json", "web/views.py"]
+        mock_config.return_value = ["data/config.json"]
+
+        from web.health.update_checker import check_for_updates
+        result = check_for_updates()
+
+        assert result['update_available'] is True
+        assert result['files_changed'] == ["data/config.json", "web/views.py"]
+        assert result['config_files_affected'] == ["data/config.json"]

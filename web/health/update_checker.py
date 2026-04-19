@@ -189,6 +189,51 @@ def get_remote_version() -> str:
         return "unknown"
 
 
+def get_files_changed() -> list[str]:
+    """
+    Liste les fichiers trackés qui vont être modifiés par le pull.
+
+    Returns:
+        Liste de chemins relatifs au repo (ex: ["data/config.json", "web/..."]).
+        Liste vide si pas de mise à jour ou erreur.
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'diff', '--name-only', 'HEAD..origin/main'],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip().split('\n')
+        return []
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.warning(f"Erreur git diff --name-only: {e}")
+        return []
+
+
+# Fichiers utilisateur potentiellement personnalisés — avertir l'utilisateur
+# si la MàJ les touche (ses réglages locaux seront préservés mais la version
+# upstream doit être mergée manuellement).
+_USER_CONFIG_PATTERNS = ('data/config.json', 'data/Loi_coupole.xlsx')
+
+
+def get_config_files_affected(files_changed: list[str] | None = None) -> list[str]:
+    """
+    Filtre les fichiers de config utilisateur parmi les fichiers changés.
+
+    Args:
+        files_changed: Liste optionnelle (sinon appelle get_files_changed()).
+
+    Returns:
+        Sous-liste des fichiers matchant _USER_CONFIG_PATTERNS.
+    """
+    if files_changed is None:
+        files_changed = get_files_changed()
+    return [f for f in files_changed if f in _USER_CONFIG_PATTERNS]
+
+
 def _version_tuple(version_str: str) -> tuple:
     """
     Convertit une version string en tuple pour comparaison.
@@ -252,8 +297,11 @@ def check_for_updates() -> dict:
         'fetch_success': fetch_success
     }
 
-    # Ajouter les messages de commit si mise à jour disponible
+    # Ajouter les détails de la mise à jour si dispo
     if update_available:
         result['commit_messages'] = get_commit_messages(min(commits_behind, 10))
+        files_changed = get_files_changed()
+        result['files_changed'] = files_changed
+        result['config_files_affected'] = get_config_files_affected(files_changed)
 
     return result

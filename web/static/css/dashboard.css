@@ -672,7 +672,7 @@ header h1 span {
     border-bottom: none;
 }
 
-/* Progress bar for update */
+/* Progress bar for update (refactor v5.8.0 : progression déterminée par phase) */
 .update-progress {
     padding: 1rem;
     background-color: var(--color-obs-input);
@@ -681,24 +681,132 @@ header h1 span {
 }
 
 .update-progress .progress-bar {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    height: 8px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-.update-progress .progress-fill.progress-indeterminate {
-    width: 30%;
-    animation: indeterminate-progress 1.5s ease-in-out infinite;
+.update-progress .progress-fill {
+    height: 100%;
     background: linear-gradient(90deg, var(--color-accent-amber) 0%, var(--color-accent-green) 100%);
+    transition: width 0.4s ease-out;
 }
 
-@keyframes indeterminate-progress {
-    0% { margin-left: 0%; }
-    50% { margin-left: 70%; }
-    100% { margin-left: 0%; }
+.update-progress .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--color-obs-text-secondary);
+    font-family: monospace;
+    margin-bottom: 0.4rem;
+}
+
+.update-progress .progress-phase {
+    color: var(--color-accent-green);
+    font-weight: 600;
 }
 
 #update-progress-text {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--color-accent-amber);
+}
+
+/* Avertissement config utilisateur impactée */
+.update-config-warning {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background-color: rgba(255, 193, 7, 0.12);
+    border: 1px solid var(--color-accent-amber);
+    border-radius: 8px;
+    margin-top: 0.75rem;
+}
+
+.update-config-warning .warning-icon {
+    font-size: 1.3rem;
+    flex-shrink: 0;
+}
+
+.update-config-warning .warning-text {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--color-obs-text-primary);
+}
+
+.update-config-warning .warning-text strong {
+    display: block;
+    color: var(--color-accent-amber);
+    margin-bottom: 0.3rem;
+}
+
+.update-config-warning ul {
+    list-style: disc inside;
+    margin: 0.3rem 0;
+    padding: 0;
+}
+
+.update-config-warning code {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+
+.update-config-warning small {
+    display: block;
+    margin-top: 0.4rem;
+    color: var(--color-obs-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+/* Bloc détails dépliable */
+.update-details {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.update-details label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--color-obs-text-secondary);
+    letter-spacing: 0.05em;
+}
+
+.update-details ul {
+    list-style: none;
+    margin: 0.3rem 0 0.75rem;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.update-details li {
+    padding: 0.15rem 0;
+    font-size: 0.8rem;
+    font-family: monospace;
+    color: var(--color-obs-text-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.update-files-changed li {
+    color: var(--color-accent-green);
+}
+
+/* Bouton tertiaire (Voir les détails) */
+.btn-tertiary {
+    background-color: transparent;
+    border: 1px solid var(--color-obs-border);
+    color: var(--color-obs-text-secondary);
+}
+
+.btn-tertiary:hover:not(:disabled) {
+    background-color: var(--color-obs-input);
+    color: var(--color-obs-text-primary);
 }
 
 /* Error message */

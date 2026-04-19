@@ -241,23 +241,54 @@
                     <small id="update-commits-behind">-- commit(s)</small>
                 </div>
             </div>
-            <div id="update-commit-messages" class="update-commit-messages hidden">
-                <label>Changements:</label>
-                <ul id="update-changes-list"></ul>
+
+            <!-- Avertissement config utilisateur impacté -->
+            <div id="update-config-warning" class="update-config-warning hidden"
+                 role="alert" aria-live="polite">
+                <span class="warning-icon">&#x26A0;</span>
+                <div class="warning-text">
+                    <strong>Fichiers de configuration modifiés par cette MàJ</strong>
+                    <ul id="update-config-affected-list"></ul>
+                    <small>Vos réglages locaux seront conservés. Les nouveaux paramètres
+                    apportés par la MàJ seront disponibles dans <code>&lt;fichier&gt;.upstream</code>
+                    à côté du fichier original, à merger manuellement si besoin.</small>
+                </div>
             </div>
+
+            <!-- Bloc détails (dépliable) -->
+            <div id="update-details" class="update-details hidden">
+                <div id="update-commit-messages" class="update-commit-messages">
+                    <label>Commits :</label>
+                    <ul id="update-changes-list"></ul>
+                </div>
+                <div id="update-files-changed" class="update-files-changed hidden">
+                    <label>Fichiers modifiés :</label>
+                    <ul id="update-files-list"></ul>
+                </div>
+            </div>
+
+            <!-- Barre de progression détaillée -->
             <div id="update-progress" class="update-progress"
                  x-show="$store.dashboard.updateShowProgress" x-cloak>
                 <div class="progress-bar">
-                    <div class="progress-fill progress-indeterminate"></div>
+                    <div class="progress-fill" id="update-progress-bar"
+                         style="width: 0%;"></div>
                 </div>
-                <span id="update-progress-text">Mise a jour en cours...</span>
+                <div class="progress-meta">
+                    <span id="update-progress-phase" class="progress-phase">--</span>
+                    <span id="update-progress-step" class="progress-step">0/5</span>
+                </div>
+                <span id="update-progress-text" class="progress-text">Démarrage...</span>
             </div>
+
             <div id="update-error" class="update-error"
                  x-show="$store.dashboard.updateShowError" x-cloak>
                 <span id="update-error-text"></span>
             </div>
         </div>
         <div class="update-modal-footer" id="update-buttons">
+            <button id="btn-update-details" class="btn btn-tertiary"
+                    :disabled="$store.dashboard.updateButtonsDisabled">Voir les détails</button>
             <button id="btn-update-later" class="btn btn-secondary"
                     :disabled="$store.dashboard.updateButtonsDisabled">Plus tard</button>
             <button id="btn-update-now" class="btn btn-primary"

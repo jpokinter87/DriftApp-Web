@@ -1,0 +1,14 @@
+# Autorise Django (user slenk) à exécuter le script de mise à jour en root
+# sans mot de passe. Le script s'auto-détache pour survivre au redémarrage
+# de driftapp_web.service pendant sa dernière étape.
+#
+# Installation :
+#   sudo cp setup/driftapp-updater.sudoers /etc/sudoers.d/driftapp-updater
+#   sudo chmod 0440 /etc/sudoers.d/driftapp-updater
+#   sudo visudo -cf /etc/sudoers.d/driftapp-updater   # validation syntaxe
+#
+# Sécurité : seul le script update_driftapp.sh est whitelisté, pas systemctl
+# en général, donc une compromission de Django ne donne pas root complet.
+
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached

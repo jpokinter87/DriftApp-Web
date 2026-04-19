@@ -1506,15 +1506,13 @@ function hideUpdateBadge() {
  */
 function showUpdateModal(data) {
     const store = Alpine.store('dashboard');
-
-    // Populate version info via DOM (complex content)
     const el = (id) => document.getElementById(id);
+
+    // Populate version info
     const currentVersion = el('update-current-version');
     const currentCommit = el('update-current-commit');
     const newVersion = el('update-new-version');
     const commitsBehind = el('update-commits-behind');
-    const changesList = el('update-changes-list');
-    const commitMessages = el('update-commit-messages');
 
     if (currentVersion) currentVersion.textContent = `v${data.local_version}`;
     if (currentCommit) currentCommit.textContent = `(${data.local_commit})`;
@@ -1525,24 +1523,75 @@ function showUpdateModal(data) {
     }
     if (commitsBehind) commitsBehind.textContent = `+${data.commits_behind} commit(s)`;
 
-    // Show commit messages if available
-    if (data.commit_messages && data.commit_messages.length > 0 && changesList) {
+    // Populate commit messages (toujours remplies, affichées seulement après clic "Détails")
+    const changesList = el('update-changes-list');
+    if (changesList) {
         changesList.innerHTML = '';
-        data.commit_messages.forEach(msg => {
+        (data.commit_messages || []).forEach(msg => {
             const li = document.createElement('li');
             li.textContent = msg;
             changesList.appendChild(li);
         });
-        if (commitMessages) commitMessages.classList.remove('hidden');
     }
 
-    // Reset state via Alpine store
+    // Populate files changed
+    const filesList = el('update-files-list');
+    const filesBlock = el('update-files-changed');
+    if (filesList && filesBlock) {
+        filesList.innerHTML = '';
+        const files = data.files_changed || [];
+        if (files.length > 0) {
+            files.forEach(f => {
+                const li = document.createElement('li');
+                li.textContent = f;
+                filesList.appendChild(li);
+            });
+            filesBlock.classList.remove('hidden');
+        } else {
+            filesBlock.classList.add('hidden');
+        }
+    }
+
+    // Avertissement config utilisateur impactée
+    const configWarning = el('update-config-warning');
+    const configList = el('update-config-affected-list');
+    const affected = data.config_files_affected || [];
+    if (configWarning && configList) {
+        configList.innerHTML = '';
+        if (affected.length > 0) {
+            affected.forEach(f => {
+                const li = document.createElement('li');
+                li.innerHTML = `<code>${f}</code>`;
+                configList.appendChild(li);
+            });
+            configWarning.classList.remove('hidden');
+        } else {
+            configWarning.classList.add('hidden');
+        }
+    }
+
+    // Détails dépliables : cachés par défaut, bouton "Voir les détails" toggle
+    const details = el('update-details');
+    if (details) details.classList.add('hidden');
+    const btnDetails = el('btn-update-details');
+    if (btnDetails) btnDetails.textContent = 'Voir les détails';
+
+    // Reset state + show modal
     store.updateShowProgress = false;
     store.updateShowError = false;
     store.updateButtonsDisabled = false;
-
-    // Show modal via Alpine store
     store.updateModalVisible = true;
+}
+
+/**
+ * Toggle the details section (commits + files changed).
+ */
+function toggleUpdateDetails() {
+    const details = document.getElementById('update-details');
+    const btn = document.getElementById('btn-update-details');
+    if (!details || !btn) return;
+    const hidden = details.classList.toggle('hidden');
+    btn.textContent = hidden ? 'Voir les détails' : 'Masquer les détails';
 }
 
 /**
@@ -1554,17 +1603,17 @@ function hideUpdateModal() {
 
 /**
  * Apply the update.
- * Calls git pull via API, then waits for Django restart.
+ * Lance le script côté serveur (détaché) puis poll /api/health/update/status/
+ * jusqu'à done=true. Recharge la page quand Django revient.
  */
 async function applyUpdate() {
     const store = Alpine.store('dashboard');
-    const progressText = document.getElementById('update-progress-text');
 
     store.updateShowProgress = true;
     store.updateShowError = false;
     store.updateButtonsDisabled = true;
-    if (progressText) progressText.textContent = 'git pull en cours...';
-    log('Mise a jour en cours...', 'info');
+    updateProgressUI({phase: 'starting', step: 0, total: 5, message: 'Lancement...'});
+    log('Mise a jour lancée', 'info');
 
     try {
         const response = await fetch('/api/health/update/apply/', {
@@ -1573,23 +1622,117 @@ async function applyUpdate() {
         });
 
         const result = await response.json();
-
         if (!result.success) {
             showUpdateError(result.error || 'Erreur inconnue');
-            log(`Erreur: ${result.error}`, 'error');
+            log(`Erreur lancement MàJ : ${result.error}`, 'error');
             return;
         }
-
-        log(`git pull OK: ${result.old_commit} -> ${result.new_commit}`, 'success');
-        if (progressText) progressText.textContent = 'Redemarrage...';
-
+        log(`Script détaché : ${result.detach_info}`, 'success');
     } catch (error) {
-        // Connexion perdue = Django est deja en train de redemarrer
-        log('Connexion perdue, attente du redemarrage...', 'warning');
+        // Django ne répond plus = il est peut-être déjà en cours de restart
+        // Le script écrit dans un fichier, on va poll quand même.
+        log('Réponse API perdue — on poll le status tout de même', 'warning');
     }
 
-    // Attendre que Django revienne (max 45s)
-    await waitForRestart(progressText);
+    // Polling du status du script (survit aux restarts Django)
+    await pollUpdateStatus();
+}
+
+/**
+ * Poll /api/health/update/status/ toutes les 1s, MAX 4 minutes.
+ *
+ * Gère trois cas :
+ *   - Status success=true, done=true  → reload page
+ *   - Status success=false, done=true → afficher erreur
+ *   - Fetch échoue (Django down pendant restart) → on continue de poll
+ */
+async function pollUpdateStatus() {
+    const maxAttempts = 240;  // 240 * 1s = 4 min
+    let consecutiveFailures = 0;
+    let lastStatus = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const response = await fetch('/api/health/update/status/', {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (response.ok) {
+                const status = await response.json();
+                consecutiveFailures = 0;
+                lastStatus = status;
+                updateProgressUI(status);
+
+                if (status.done) {
+                    if (status.success === true) {
+                        log('Mise à jour terminée — rechargement...', 'success');
+                        await sleep(1500);  // laisse Django finir son restart
+                        window.location.reload();
+                        return;
+                    } else if (status.success === false) {
+                        showUpdateError(status.error || status.message || 'Échec de la MàJ');
+                        log(`Échec MàJ : ${status.error || status.message}`, 'error');
+                        return;
+                    }
+                    // done=true mais success=null → état bizarre, idle
+                    if (status.phase === 'idle') {
+                        // Aucune MàJ en cours — cas limite après timeout ancien status
+                        // On continue de poll un peu au cas où le script démarre tard
+                    }
+                }
+            } else {
+                consecutiveFailures += 1;
+            }
+        } catch (e) {
+            // Django down (probablement restart en cours) — on continue
+            consecutiveFailures += 1;
+            updateProgressUI({
+                phase: lastStatus?.phase || 'restart',
+                step: lastStatus?.step || 5,
+                total: 5,
+                message: 'Redémarrage de Django...'
+            });
+        }
+        await sleep(1000);
+    }
+
+    // Timeout : Django n'est pas revenu en 4 min
+    showUpdateError('Timeout : Django ne répond plus après 4 minutes. '
+        + 'Consultez logs/update.log et rechargez la page manuellement.');
+}
+
+const PHASE_LABELS = {
+    starting: 'Démarrage',
+    stop_services: 'Arrêt services',
+    fetch: 'Récupération code',
+    deps: 'Dépendances',
+    services: 'Installation services',
+    restart: 'Redémarrage',
+    done: 'Terminé',
+    error: 'Erreur',
+    idle: 'Inactif',
+};
+
+/**
+ * Met à jour la barre de progression et les libellés selon le status reçu.
+ */
+function updateProgressUI(status) {
+    const phaseEl = document.getElementById('update-progress-phase');
+    const stepEl = document.getElementById('update-progress-step');
+    const textEl = document.getElementById('update-progress-text');
+    const barEl = document.getElementById('update-progress-bar');
+
+    const total = status.total || 5;
+    const step = status.step || 0;
+    const percent = Math.min(100, Math.round((step / total) * 100));
+
+    if (phaseEl) phaseEl.textContent = PHASE_LABELS[status.phase] || status.phase || '--';
+    if (stepEl) stepEl.textContent = `${step}/${total}`;
+    if (textEl) textEl.textContent = status.message || '...';
+    if (barEl) barEl.style.width = `${percent}%`;
 }
 
 /**
@@ -1602,44 +1745,6 @@ function showUpdateError(message) {
     store.updateButtonsDisabled = false;
     const errorText = document.getElementById('update-error-text');
     if (errorText) errorText.textContent = message;
-}
-
-/**
- * Wait for Django to come back after restart, then reload.
- */
-async function waitForRestart(progressText) {
-    // Attendre 3s que le restart se lance (le Popen a un sleep 2)
-    await sleep(3000);
-
-    for (let i = 0; i < 20; i++) {
-        if (progressText) {
-            progressText.textContent = `Reconnexion... (${i + 1}/20)`;
-        }
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000);
-            const response = await fetch('/api/health/', { signal: controller.signal });
-            clearTimeout(timeoutId);
-
-            if (response.ok) {
-                if (progressText) progressText.textContent = 'Rechargement...';
-                log('Redemarrage OK', 'success');
-                await sleep(500);
-                window.location.reload();
-                return;
-            }
-        } catch (e) {
-            // Django pas encore pret
-        }
-        await sleep(2000);
-    }
-
-    // Timeout (45s) — proposer rechargement manuel
-    if (progressText) {
-        progressText.textContent = 'Rechargez la page manuellement';
-    }
-    const store = Alpine.store('dashboard');
-    store.updateButtonsDisabled = false;
 }
 
 /**
@@ -1657,8 +1762,10 @@ function sleep(ms) {
 function initUpdateListeners() {
     const btnLater = document.getElementById('btn-update-later');
     const btnNow = document.getElementById('btn-update-now');
+    const btnDetails = document.getElementById('btn-update-details');
     if (btnLater) btnLater.addEventListener('click', hideUpdateModal);
     if (btnNow) btnNow.addEventListener('click', applyUpdate);
+    if (btnDetails) btnDetails.addEventListener('click', toggleUpdateDetails);
 
     // Header update check button
     if (elements.btnCheckUpdate) {

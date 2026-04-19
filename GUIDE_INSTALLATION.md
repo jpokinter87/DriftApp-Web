@@ -14,6 +14,44 @@ Cette version ajoute une interface web en plus de l'interface TUI existante.
 
 ---
 
+## 0.0 Mise à Jour depuis l'UI (v5.8.0+) — Installation du sudoers
+
+Depuis la v5.8.0, la mise à jour depuis l'UI utilise `scripts/update_driftapp.sh`
+qui doit pouvoir s'exécuter en root sans mot de passe. À faire **une seule fois**
+à l'installation (et à chaque changement de chemin du dépôt) :
+
+```bash
+# Copier la règle NOPASSWD whitelistée
+sudo cp /home/slenk/DriftApp/setup/driftapp-updater.sudoers /etc/sudoers.d/driftapp-updater
+sudo chmod 0440 /etc/sudoers.d/driftapp-updater
+
+# Valider la syntaxe (IMPORTANT — un sudoers cassé bloque tout sudo)
+sudo visudo -cf /etc/sudoers.d/driftapp-updater
+
+# Vérifier que ça marche
+sudo -n -l -U slenk | grep update_driftapp
+# → doit lister le script en NOPASSWD
+```
+
+Vérification end-to-end (sans rien casser — le script exit immédiatement après détachement) :
+
+```bash
+# Depuis un shell slenk
+sudo -n /home/slenk/DriftApp/scripts/update_driftapp.sh
+# → "UPDATE_STARTED pid=XXXX" puis la MàJ tourne en background
+
+# Suivre la progression
+tail -f /home/slenk/DriftApp/logs/update.log
+cat /home/slenk/DriftApp/logs/update_status.json
+```
+
+**Préservation des réglages utilisateur** : si la MàJ touche `data/config.json`
+ou `data/Loi_coupole.xlsx` et que tu as des modifs locales, le script fait un
+backup `<fichier>.user_backup.<timestamp>` et, en cas de conflit, place la
+version upstream dans `<fichier>.upstream` à côté pour merge manuel.
+
+---
+
 ## 0. Mise à Jour Rapide du Daemon Encodeur (Service Systemd)
 
 Si le daemon encodeur tourne déjà comme service systemd (`ems22d.service`), voici comment le mettre à jour après modification de `ems22d_calibrated.py` :

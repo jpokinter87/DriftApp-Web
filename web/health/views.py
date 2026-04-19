@@ -364,10 +364,20 @@ def diagnostic(request):
 
 
 # =============================================================================
-# Endpoints de mise à jour
+# Endpoints de mise à jour (refactor v5.8.0)
 # =============================================================================
+# Architecture :
+#   POST /api/health/update/apply/  → lance scripts/update_driftapp.sh en détaché
+#   GET  /api/health/update/status/ → lit logs/update_status.json (survit aux
+#                                     restarts de Django pendant la MàJ)
+#
+# Le script écrit sa progression dans logs/update_status.json avant chaque
+# étape. Le frontend poll cet endpoint toutes les 1s jusqu'à done=true.
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+UPDATE_SCRIPT = PROJECT_ROOT / "scripts" / "update_driftapp.sh"
+UPDATE_STATUS_FILE = PROJECT_ROOT / "logs" / "update_status.json"
+UPDATE_LOG_FILE = PROJECT_ROOT / "logs" / "update.log"
 
 
 @api_view(['GET'])
@@ -378,7 +388,8 @@ def check_update(request):
     Compare le HEAD local avec origin/main après un git fetch.
 
     Returns:
-        JSON avec update_available, local_version, commits_behind, etc.
+        JSON avec update_available, local_version, commits_behind,
+        commit_messages, files_changed, config_files_affected, etc.
     """
     from .update_checker import check_for_updates
 
@@ -398,71 +409,119 @@ def check_update(request):
 @api_view(['POST'])
 def apply_update(request):
     """
-    Applique la mise à jour : git pull synchrone + restart Django détaché.
+    Lance le script de mise à jour en détaché (via sudo NOPASSWD).
 
-    Approche simplifiée (v5.6.4) :
-    1. git pull origin main (synchrone, ~2s)
-    2. Si succès, lance un restart de Django en background
-    3. La connexion est perdue, le frontend attend et recharge
-
-    Les services motor_service et ems22d ne sont PAS touchés
-    (ils tournent dans des processus séparés et n'ont pas besoin de redémarrer).
+    Le script écrit sa progression dans logs/update_status.json que le
+    frontend poll via /api/health/update/status/.
     """
     from .update_checker import get_local_commit
 
+    if not UPDATE_SCRIPT.exists():
+        return Response({
+            'success': False,
+            'error': f'Script introuvable : {UPDATE_SCRIPT}'
+        }, status=500)
+
     old_commit = get_local_commit()
+    logger.info(f"Lancement script MàJ depuis {old_commit}")
+
+    # Reset du fichier de status (au cas où une ancienne MàJ l'aurait laissé)
+    try:
+        if UPDATE_STATUS_FILE.exists():
+            UPDATE_STATUS_FILE.unlink()
+    except OSError:
+        pass
 
     try:
-        logger.info(f"Mise à jour depuis {old_commit}")
-
-        # Étape 1 : git pull (synchrone)
+        # Le script s'auto-détache (nohup en background). Retour immédiat
+        # avec "UPDATE_STARTED pid=XXX" via stdout.
         result = subprocess.run(
-            ['git', 'pull', 'origin', 'main'],
+            ['sudo', '-n', str(UPDATE_SCRIPT)],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=10
         )
 
-        if result.returncode != 0:
-            error_msg = result.stderr.strip() if result.stderr else 'Erreur inconnue'
-            logger.error(f"git pull échoué: {error_msg}")
+        output = (result.stdout or '').strip()
+        if result.returncode == 0 and 'UPDATE_STARTED' in output:
+            logger.info(f"Script MàJ lancé : {output}")
             return Response({
-                'success': False,
-                'error': f'git pull échoué: {error_msg}',
-                'old_commit': old_commit
-            }, status=500)
+                'success': True,
+                'message': 'Mise à jour lancée',
+                'old_commit': old_commit,
+                'detach_info': output,
+            })
 
-        new_commit = get_local_commit()
-        logger.info(f"git pull OK: {old_commit} → {new_commit}")
-
-        # Étape 2 : restart Django en background (survit à la mort du process)
-        # Délai de 2s pour laisser la réponse HTTP partir avant le kill
-        subprocess.Popen(
-            ['bash', '-c', 'sleep 2 && sudo systemctl restart driftapp_web.service'],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        return Response({
-            'success': True,
-            'message': 'Code mis à jour, redémarrage en cours.',
-            'old_commit': old_commit,
-            'new_commit': new_commit,
-        })
-
-    except subprocess.TimeoutExpired:
-        logger.warning("git pull timeout")
+        # Échec du lancement
+        err = (result.stderr or '').strip() or output or 'Erreur inconnue'
+        logger.error(f"Lancement script MàJ échoué (rc={result.returncode}) : {err}")
         return Response({
             'success': False,
-            'error': 'git pull timeout (réseau lent ?)',
-            'old_commit': old_commit
+            'error': f'Lancement du script échoué : {err}',
+            'old_commit': old_commit,
+        }, status=500)
+
+    except subprocess.TimeoutExpired:
+        logger.warning("Timeout au lancement du script MàJ")
+        return Response({
+            'success': False,
+            'error': 'Timeout au lancement du script',
+            'old_commit': old_commit,
         }, status=500)
     except (subprocess.SubprocessError, OSError) as e:
-        logger.exception("Erreur lors de la mise à jour")
+        logger.exception("Erreur au lancement du script MàJ")
         return Response({
             'success': False,
             'error': str(e),
-            'old_commit': old_commit
+            'old_commit': old_commit,
+        }, status=500)
+
+
+@api_view(['GET'])
+def update_status(request):
+    """
+    Renvoie l'état courant de la mise à jour en cours (ou la dernière).
+
+    Lit logs/update_status.json écrit par update_driftapp.sh.
+    Si le fichier n'existe pas → aucune MàJ n'a jamais été lancée.
+    """
+    if not UPDATE_STATUS_FILE.exists():
+        return Response({
+            'phase': 'idle',
+            'step': 0,
+            'total': 5,
+            'message': 'Aucune mise à jour en cours',
+            'success': None,
+            'done': True,
+            'error': None,
+            'timestamp': None,
+        })
+
+    try:
+        with open(UPDATE_STATUS_FILE, 'r', encoding='utf-8') as f:
+            content = f.read().strip()
+        if not content:
+            return Response({
+                'phase': 'starting',
+                'step': 0,
+                'total': 5,
+                'message': 'Initialisation...',
+                'success': None,
+                'done': False,
+                'error': None,
+                'timestamp': None,
+            })
+        return Response(json.loads(content))
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Lecture update_status.json échouée : {e}")
+        return Response({
+            'phase': 'error',
+            'step': 0,
+            'total': 5,
+            'message': 'Fichier de status illisible',
+            'success': False,
+            'done': False,
+            'error': str(e),
+            'timestamp': None,
         }, status=500)
