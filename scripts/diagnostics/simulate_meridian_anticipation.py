@@ -76,13 +76,17 @@ FLIP_POST_MARGIN_SEC = 20     # sample target(flip_end + margin) pour valeur sta
 # ou dec = lat + (90 - alt_max) selon le côté (on prend le nord pour rester > 60°).
 
 OBJECTS = [
-    ("alt=70° (dec+24.15°)", 120.0, 24.15),
-    ("alt=75° (dec+29.15°)", 130.0, 29.15),
-    ("alt=80° (dec+34.15°)", 140.0, 34.15),
-    ("alt=83° (dec+37.15°)", 150.0, 37.15),
-    ("alt=86° (dec+40.15°)", 160.0, 40.15),
-    ("alt=88° (dec+42.15°)", 170.0, 42.15),
-    ("46 LMi (réel)        ", 163.32787152823542, 34.214892133082785),
+    # Synthétiques : balayage altitudes
+    ("synth alt=70°        ", 120.0, 24.15),
+    ("synth alt=75°        ", 130.0, 29.15),
+    ("synth alt=83°        ", 150.0, 37.15),
+    ("synth alt=86°        ", 160.0, 40.15),
+    # Réels : extraits de sessions terrain (data/sessions/)
+    ("IC 445 (réel)        ", 99.3384942483, 67.85992306669),   # alt 66.3°
+    ("M 101 (réel)         ", 210.8024, 54.349),                  # alt 79.8°
+    ("46 LMi (réel)        ", 163.32787152823542, 34.214892133082735),  # alt 80.1°
+    ("M 13 (réel)          ", 250.4235, 36.461),                  # alt 82.3°
+    ("α Aur/Capella (réel) ", 79.1723, 45.998),                   # alt 88.2°
 ]
 
 
@@ -90,27 +94,21 @@ OBJECTS = [
 
 def find_meridian_time(calc: AstronomicalCalculations, ra: float, dec: float,
                        start: datetime, window_hours: int) -> datetime:
-    """Trouve l'UTC où |az - 180°| est minimal avec alt > 0°."""
-    best_t, best_d = start, 1e9
+    """Trouve l'UTC de culmination (HA=0). Gère circumpolaire (az=0) ET subpolaire (az=180)."""
+    best_t, best_alt = start, -90.0
     total_minutes = window_hours * 60
     for i in range(total_minutes):
         t = start + timedelta(minutes=i)
         az, alt = calc.calculer_coords_horizontales(ra, dec, t)
-        if alt <= 0:
-            continue
-        d = abs(normalize_angle_180(az - 180.0))
-        if d < best_d:
-            best_d = d
+        if alt > best_alt:
+            best_alt = alt
             best_t = t
-    # Affinage à 10s près autour du minimum
+    # Affinage à 10s près autour du max
     for i in range(-60, 60):
         t = best_t + timedelta(seconds=i * 10)
         az, alt = calc.calculer_coords_horizontales(ra, dec, t)
-        if alt <= 0:
-            continue
-        d = abs(normalize_angle_180(az - 180.0))
-        if d < best_d:
-            best_d = d
+        if alt > best_alt:
+            best_alt = alt
             best_t = t
     return best_t
 
@@ -132,13 +130,22 @@ def build_trajectory(calc, abaque, ra, dec, sim_start):
 
 
 def find_meridian_index(traj):
-    best_i, best_d = 0, 1e9
+    """Retourne l'indice de culmination (alt max)."""
+    best_i, best_alt = 0, -90.0
     for i, p in enumerate(traj):
-        d = abs(normalize_angle_180(p["az"] - 180.0))
-        if d < best_d:
-            best_d = d
+        if p["alt"] > best_alt:
+            best_alt = p["alt"]
             best_i = i
     return best_i
+
+
+def is_at_meridian(az: float, alt: float) -> bool:
+    """Vrai si proche du méridien : az ≈ 180° (dec<lat) OU az ≈ 0° (dec>lat, circumpolaire)."""
+    if alt <= MERIDIAN_ALT_MIN_DEG:
+        return False
+    dist_south = abs(normalize_angle_180(az - 180.0))
+    dist_north = abs(normalize_angle_180(az))
+    return min(dist_south, dist_north) < MERIDIAN_AZ_TOL_DEG
 
 
 # --- Simulation moteur --------------------------------------------------------
@@ -334,8 +341,7 @@ def simulate(traj, strategy: str, debug: bool = False):
         lag = abs(normalize_angle_180(p["dome_target"] - actual))
         lags.append(lag)
 
-        at_meridian = (abs(normalize_angle_180(p["az"] - 180.0)) < MERIDIAN_AZ_TOL_DEG
-                       and p["alt"] > MERIDIAN_ALT_MIN_DEG)
+        at_meridian = is_at_meridian(p["az"], p["alt"])
 
         # --- Stratégie E : timing optimal pré-calculé ---
         if strategy == "optimal" and optimal_schedule and not meridian_triggered:
