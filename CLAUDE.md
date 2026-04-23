@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 5.3.0 (Mars 2026)
+**Version actuelle**: 5.10.0 (Avril 2026)
 
 ---
 
@@ -89,8 +89,7 @@ core/
 │   ├── tracker.py              # TrackingSession (classe principale)
 │   ├── tracking_state_mixin.py # Etat & statistiques
 │   ├── tracking_goto_mixin.py  # GOTO initial & sync
-│   ├── tracking_corrections_mixin.py # Corrections periodiques
-│   ├── adaptive_tracking.py    # 3 modes adaptatifs
+│   ├── tracking_corrections_mixin.py # Corrections periodiques (vitesse unique v5.10)
 │   └── abaque_manager.py       # Interpolation 2D (Loi_coupole.xlsx)
 │
 ├── observatoire/
@@ -138,13 +137,19 @@ firmware/
 
 ---
 
-## Modes Adaptatifs
+## Vitesse Unique (v5.10)
 
-| Mode | Declencheur | Delai Moteur | Intervalle | Usage |
-|------|-------------|--------------|------------|-------|
-| NORMAL | altitude < 68° | 2.0 ms | 60s | Suivi standard |
-| CRITICAL | 68° ≤ alt < 75° | 1.0 ms | 30s | Proche zenith |
-| CONTINUOUS | alt ≥ 75° ou Δ > 30° | 0.14 ms | 30s | Zenith + GOTO |
+| Paramètre | Valeur | Constante |
+|-----------|--------|-----------|
+| Délai moteur | 260 µs/pas (~40°/min) | `SINGLE_SPEED_MOTOR_DELAY` |
+| Intervalle correction | 30 s | `SINGLE_SPEED_CHECK_INTERVAL_S` |
+| Seuil correction | 0.3° | `SINGLE_SPEED_CORRECTION_THRESHOLD_DEG` |
+
+Définies dans `core/config/config.py`. Retour terrain v5.7.0 (23/04/2026) :
+la vitesse max convient pour tout → suppression des 3 modes adaptatifs
+(NORMAL/CRITICAL/CONTINUOUS) + flag `force_continuous_tracking` (v5.7) +
+rattrapage méridien (`_meridian_catchup_active`, v5.6.5) + gel méridien
+GEM (`gem_delay_minutes`, v5.6.2).
 
 ---
 
@@ -218,10 +223,14 @@ def get_daemon_reader():
     return _daemon_reader
 ```
 
-### Strategy Pattern (Tracking Adaptatif)
+### Vitesse Unique (v5.10)
 ```python
-params = adaptive_manager.evaluate_tracking_zone(altitude, azimut, delta)
-# Retourne TrackingParameters avec mode, delay, seuil
+from core.config.config import (
+    SINGLE_SPEED_MOTOR_DELAY,           # 0.00026 s/pas
+    SINGLE_SPEED_CHECK_INTERVAL_S,      # 30 s
+    SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,  # 0.3°
+)
+# Plus de mode adaptatif : toutes les corrections utilisent ces constantes.
 ```
 
 ---
@@ -332,6 +341,13 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **5.10** | Avril 2026 | Vitesse unique 260 µs : suppression mode adaptatif, gel méridien GEM, flag force_continuous, rattrapage meridian_catchup |
+| **5.9** | Avril 2026 | Prédiction méridien Phase 1 (module pur `meridian_anticipation.py`) |
+| **5.8** | Avril 2026 | Refactor mise à jour UI (script 5 étapes, sudoers whitelist) |
+| **5.7** | Avril 2026 | Flag `force_continuous_tracking` (bypass adaptatif, validé terrain) — retiré en v5.10 |
+| **5.6** | Avril 2026 | Fiabilité méridien (anti-saut abaque, correction angle horaire précession) + polish UI |
+| **5.5** | Avril 2026 | Correctifs encodeur FROZEN + fallback sans feedback sécurisé |
+| **5.4** | Mars 2026 | — |
 | **5.3** | Mars 2026 | Pilotage RP2040 : firmware PIO, MoteurRP2040 serie, fallback GPIO/RP2040, guide terrain |
 | **5.2** | Mars 2026 | Watchdog thread meridien, logging structure cle=valeur, tests terrain |
 | **5.1** | Mars 2026 | Sync production, audit code, refactoring, 746 tests |

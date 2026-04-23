@@ -130,7 +130,7 @@ class ObjectSearchView(APIView):
             if ra_deg is not None:
                 from datetime import datetime
                 from core.observatoire import AstronomicalCalculations
-                from core.config.config import get_site_config, GEM_MERIDIAN_DELAY_MIN
+                from core.config.config import get_site_config
 
                 latitude, longitude, tz_offset, _, _ = get_site_config()
                 calc = AstronomicalCalculations(latitude, longitude, tz_offset)
@@ -139,12 +139,10 @@ class ObjectSearchView(APIView):
                 ha = calc.calculer_angle_horaire(
                     ra_deg, now, deja_jnow=False, declinaison=dec_deg
                 )
-                gem_delay_sec = GEM_MERIDIAN_DELAY_MIN * 60
-                result['meridian_seconds'] = round(-ha * 239.3447) + gem_delay_sec
+                result['meridian_seconds'] = round(-ha * 239.3447)
 
                 passage = calc.calculer_heure_passage_meridien(
-                    ra_deg, now, declinaison=dec_deg,
-                    gem_delay_minutes=GEM_MERIDIAN_DELAY_MIN
+                    ra_deg, now, declinaison=dec_deg
                 )
                 result['meridian_time'] = passage.strftime('%Hh%M')
 

@@ -63,18 +63,7 @@ def mock_feedback_controller():
 
 @pytest.fixture
 def mock_config():
-    """Mock de la configuration."""
-    class MockModeConfig:
-        def __init__(self):
-            self.motor_delay = 0.00012  # Vitesse CONTINUOUS ajustée 30/12/2025
-
-    class MockModes:
-        def get(self, mode_name):
-            return MockModeConfig()
-
-    class MockAdaptive:
-        modes = MockModes()
-
+    """Mock de la configuration (v5.10 : vitesse unique, plus de adaptive)."""
     class MockTracking:
         seuil_correction_deg = 0.5
         intervalle_verification_sec = 60
@@ -98,7 +87,6 @@ def mock_config():
         pass
 
     class MockConfig:
-        adaptive = MockAdaptive()
         tracking = MockTracking()
         thresholds = MockThresholds()
         site = MockSite()
@@ -142,10 +130,11 @@ class TestGotoHandler:
         )
 
     def test_get_motor_speed_default(self, handler, mock_config):
-        """Utilise la vitesse CONTINUOUS par défaut via fonction partagée."""
+        """Utilise la vitesse unique v5.10 (260 µs) par défaut."""
         from services.command_handlers import _get_motor_speed
+        from core.config.config import SINGLE_SPEED_MOTOR_DELAY
         speed = _get_motor_speed(mock_config)
-        assert speed == 0.00012  # Vitesse CONTINUOUS ajustée 30/12/2025
+        assert speed == SINGLE_SPEED_MOTOR_DELAY
 
     def test_get_motor_speed_explicit(self, mock_config):
         """Utilise la vitesse explicite si fournie."""

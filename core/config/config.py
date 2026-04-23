@@ -100,8 +100,12 @@ SITE_TZ_OFFSET: int = get_site_tz_offset()
 ENCODER_MODE: str = str(_config["site"].get("encoder_mode", "relative")).lower()
 SIMULATION: bool = bool(_config["site"].get("simulation", False))
 
-# Délai post-méridien GEM (pour aligner l'affichage avec ASIAIR/monture)
-GEM_MERIDIAN_DELAY_MIN: int = int(_config.get("meridien", {}).get("gem_delay_minutes", 0))
+# Vitesse unique du suivi (v5.10) : ex-mode CONTINUOUS validé terrain 22/03/2026.
+# En dur dans le code — si un jour reconfigurable, ajouter une clé
+# `motor_driver.delay_us` dans config.json.
+SINGLE_SPEED_MOTOR_DELAY: float = 0.00026   # 260 µs / pas ≈ 40°/min (limite DM860T)
+SINGLE_SPEED_CHECK_INTERVAL_S: int = 30     # secondes entre deux corrections
+SINGLE_SPEED_CORRECTION_THRESHOLD_DEG: float = 0.3  # seuil au-delà duquel on corrige
 
 MOTOR_STEPS_PER_REV: int = int(_config["motor"]["steps_per_revolution"])
 MOTOR_MICROSTEPPING: int = int(_config["motor"]["microstepping"])

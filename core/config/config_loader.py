@@ -6,21 +6,19 @@ Centralise tout le chargement de configuration en dehors de l'UI.
 
 Usage:
     from core.config.config_loader import load_config
-    
+
     config = load_config()
     print(config.site.latitude)
     print(config.motor.steps_per_revolution)
-    print(config.adaptive.modes.critical.motor_delay)
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 
@@ -101,69 +99,6 @@ class TrackingConfig:
 
 
 @dataclass
-class TrackingModeParams:
-    """Paramètres d'un mode de suivi."""
-    interval_sec: int
-    threshold_deg: float
-    motor_delay: float
-    
-    def calculate_speed(self, steps_per_dome_revolution: int) -> float:
-        """
-        Calcule la vitesse en °/min pour ce mode.
-        
-        Args:
-            steps_per_dome_revolution: Nombre de pas pour 360°
-            
-        Returns:
-            Vitesse en degrés par minute
-        """
-        if self.motor_delay <= 0:
-            return 0.0
-        steps_per_degree = steps_per_dome_revolution / 360.0
-        degrees_per_second = 1.0 / (self.motor_delay * steps_per_degree)
-        return degrees_per_second * 60.0
-
-
-@dataclass
-class AltitudeThresholds:
-    """Seuils d'altitude pour les modes adaptatifs (3 modes)."""
-    critical: float
-    zenith: float
-
-
-@dataclass
-class MovementThresholds:
-    """Seuils de mouvement pour les modes adaptatifs (3 modes)."""
-    critical: float
-    extreme: float
-
-
-@dataclass
-class CriticalZone:
-    """Définition d'une zone critique du ciel."""
-    name: str
-    alt_min: float
-    alt_max: float
-    az_min: float
-    az_max: float
-    enabled: bool
-
-
-@dataclass
-class AdaptiveConfig:
-    """Configuration du système adaptatif."""
-    altitudes: AltitudeThresholds
-    movements: MovementThresholds
-    modes: Dict[str, TrackingModeParams]
-    critical_zones: List[CriticalZone]
-    force_continuous: bool = False
-
-    def get_mode(self, mode_name: str) -> Optional[TrackingModeParams]:
-        """Récupère les paramètres d'un mode."""
-        return self.modes.get(mode_name)
-
-
-@dataclass
 class ThresholdsConfig:
     """Seuils de mouvement centralisés (remplace les constantes magiques)."""
     feedback_min_deg: float      # Delta min pour feedback (en-dessous = rotation directe)
@@ -218,19 +153,14 @@ class DriftAppConfig:
     """
     Configuration complète de DriftApp.
 
-    Cette classe unique remplace le tuple de 12 valeurs retourné par
-    l'ancienne fonction load_site_config().
-
     Usage:
         config = load_config()
         moteur = MoteurRP2040(config.motor, serial_port)
-        tracker = Tracker(config.site, config.tracking, config.adaptive)
     """
     site: SiteConfig
     motor: MotorConfig
     motor_driver: MotorDriverConfig
     tracking: TrackingConfig
-    adaptive: AdaptiveConfig
     encoder: EncoderConfig
     thresholds: ThresholdsConfig
     simulation: bool
@@ -241,7 +171,6 @@ class DriftAppConfig:
             f"  Site: {self.site}\n"
             f"  Motor: {self.motor}\n"
             f"  Driver: {self.motor_driver.type}\n"
-            f"  Adaptive: {len(self.adaptive.modes)} modes\n"
             f"  Encoder: {'ON' if self.encoder.enabled else 'OFF'}\n"
             f"  Simulation: {self.simulation}\n"
             f")"
@@ -295,7 +224,6 @@ class ConfigLoader:
             motor=self._parse_motor(),
             motor_driver=self._parse_motor_driver(),
             tracking=self._parse_tracking(),
-            adaptive=self._parse_adaptive(),
             encoder=self._parse_encoder(),
             thresholds=self._parse_thresholds(),
             simulation=bool(self.cfg.get("simulation", False))
@@ -358,58 +286,6 @@ class ConfigLoader:
             abaque_file=str(c.get("abaque_file", "data/Loi_coupole.xlsx"))
         )
 
-    def _parse_adaptive(self) -> AdaptiveConfig:
-        """Parse la section adaptive_tracking."""
-        c = self.cfg.get("adaptive_tracking", {})
-        return AdaptiveConfig(
-            altitudes=self._parse_altitudes(c.get("altitudes", {})),
-            movements=self._parse_movements(c.get("movements", {})),
-            modes=self._parse_modes(c.get("modes", {})),
-            critical_zones=self._parse_critical_zones(c.get("critical_zones", [])),
-            force_continuous=bool(c.get("force_continuous", False))
-        )
-
-    def _parse_altitudes(self, c: dict) -> AltitudeThresholds:
-        """Parse les seuils d'altitude."""
-        return AltitudeThresholds(
-            critical=float(c.get("critical", 68.0)),
-            zenith=float(c.get("zenith", 75.0))
-        )
-
-    def _parse_movements(self, c: dict) -> MovementThresholds:
-        """Parse les seuils de mouvement."""
-        return MovementThresholds(
-            critical=float(c.get("critical", 30.0)),
-            extreme=float(c.get("extreme", 50.0))
-        )
-
-    def _parse_modes(self, modes_cfg: dict) -> Dict[str, TrackingModeParams]:
-        """Parse les modes de tracking."""
-        modes = {}
-        for mode_name in ["normal", "critical", "continuous", "fast_track"]:
-            c = modes_cfg.get(mode_name, {})
-            modes[mode_name] = TrackingModeParams(
-                interval_sec=int(c.get("interval_sec", 60)),
-                threshold_deg=float(c.get("threshold_deg", 0.5)),
-                motor_delay=float(c.get("motor_delay", 0.002))
-            )
-        return modes
-
-    def _parse_critical_zones(self, zones_cfg: list) -> List[CriticalZone]:
-        """Parse les zones critiques."""
-        zones = []
-        for c in zones_cfg:
-            if isinstance(c, dict):
-                zones.append(CriticalZone(
-                    name=str(c.get("name", "Zone")),
-                    alt_min=float(c.get("alt_min", 0.0)),
-                    alt_max=float(c.get("alt_max", 90.0)),
-                    az_min=float(c.get("az_min", 0.0)),
-                    az_max=float(c.get("az_max", 360.0)),
-                    enabled=bool(c.get("enabled", True))
-                ))
-        return zones
-
     def _parse_encoder(self) -> EncoderConfig:
         """Parse la section encodeur."""
         c = self.cfg.get("encodeur", {})
@@ -447,7 +323,6 @@ class ConfigLoader:
         self.logger.info("Configuration chargée avec succès")
         self.logger.info(f"  Site: {config.site.nom}")
         self.logger.info(f"  Moteur: {config.motor.steps_per_dome_revolution} steps/tour")
-        self.logger.info(f"  Modes adaptatifs: {len(config.adaptive.modes)}")
         self.logger.info(f"  Encodeur: {'ON' if config.encoder.enabled else 'OFF'}")
         self.logger.info(f"  Driver: {config.motor_driver.type}")
         self.logger.info(f"  Mode: {'SIMULATION' if config.simulation else 'PRODUCTION'}")
@@ -474,104 +349,3 @@ def load_config(config_path: Path = Path(__file__).resolve().parent.parent.paren
     return ConfigLoader(config_path).load()
 
 
-# ============================================================================
-# COMPATIBILITÉ AVEC L'ANCIEN CODE
-# ============================================================================
-
-def load_site_config() -> tuple:
-    """
-    Fonction de compatibilité pour l'ancien code.
-    
-    DEPRECATED: Utilisez load_config() à la place.
-    
-    Returns:
-        Tuple de 12 valeurs (pour compatibilité ascendante)
-    """
-    import warnings
-    warnings.warn(
-        "load_site_config() est déprécié. Utilisez load_config() à la place.",
-        DeprecationWarning,
-        stacklevel=2
-    )
-    
-    config = load_config()
-    
-    # Conversion de l'objet en tuple pour compatibilité
-    motor_dict = {
-        'gpio_pins': {'dir': config.motor.gpio_pins.dir, 'step': config.motor.gpio_pins.step},
-        'steps_per_revolution': config.motor.steps_per_revolution,
-        'microsteps': config.motor.microsteps,
-        'gear_ratio': config.motor.gear_ratio,
-        'steps_correction_factor': config.motor.steps_correction_factor,
-        'motor_delay_base': config.motor.motor_delay_base,
-        'motor_delay_min': config.motor.motor_delay_min,
-        'motor_delay_max': config.motor.motor_delay_max,
-        'max_speed_steps_per_sec': config.motor.max_speed_steps_per_sec,
-        'acceleration_steps_per_sec2': config.motor.acceleration_steps_per_sec2
-    }
-    
-    tracking_dict = {
-        'seuil_correction_deg': config.tracking.seuil_correction_deg,
-        'intervalle_verification_sec': config.tracking.intervalle_verification_sec,
-        'abaque_file': config.tracking.abaque_file
-    }
-
-    # Conversion adaptive en dict
-    adaptive_dict = {
-        'altitudes': {
-            'critical': config.adaptive.altitudes.critical,
-            'zenith': config.adaptive.altitudes.zenith
-        },
-        'movements': {
-            'critical': config.adaptive.movements.critical,
-            'extreme': config.adaptive.movements.extreme
-        },
-        'modes': {
-            name: {
-                'interval_sec': params.interval_sec,
-                'threshold_deg': params.threshold_deg,
-                'motor_delay': params.motor_delay
-            }
-            for name, params in config.adaptive.modes.items()
-        },
-        'critical_zones': [
-            {
-                'name': zone.name,
-                'alt_min': zone.alt_min,
-                'alt_max': zone.alt_max,
-                'az_min': zone.az_min,
-                'az_max': zone.az_max,
-                'enabled': zone.enabled
-            }
-            for zone in config.adaptive.critical_zones
-        ]
-    }
-
-    # Conversion encodeur en dict
-    encoder_dict = {
-        'enabled': config.encoder.enabled,
-        'spi': {
-            'bus': config.encoder.spi.bus,
-            'device': config.encoder.spi.device,
-            'speed_hz': config.encoder.spi.speed_hz,
-            'mode': config.encoder.spi.mode
-        },
-        'mecanique': {
-            'wheel_diameter_mm': config.encoder.mecanique.wheel_diameter_mm,
-            'ring_diameter_mm': config.encoder.mecanique.ring_diameter_mm,
-            'counts_per_rev': config.encoder.mecanique.counts_per_rev
-        },
-        'calibration_factor': config.encoder.calibration_factor
-    }
-    
-    return (
-        config.site.latitude,
-        config.site.longitude,
-        config.site.tz_offset,
-        config.simulation,
-        config.tracking.abaque_file,
-        motor_dict,
-        tracking_dict,
-        adaptive_dict,
-        encoder_dict
-    )

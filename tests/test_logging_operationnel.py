@@ -66,7 +66,6 @@ def tracking_session():
         seuil=config.tracking.seuil_correction_deg,
         intervalle=config.tracking.intervalle_verification_sec,
         abaque_file=abaque_path,
-        adaptive_config=config.adaptive,
         motor_config=config.motor,
         encoder_config=config.encoder,
     )
@@ -199,16 +198,7 @@ class TestStructuredFormat:
 
         tracking_session._calculate_current_coords = MagicMock(return_value=(180.0, 45.0))
         tracking_session._calculate_target_position = MagicMock(return_value=(102.0, {}))
-        tracking_session.adaptive_manager.verify_shortest_path = MagicMock(
-            return_value=(2.0, {'direction': 'cw'})
-        )
         tracking_session._apply_correction = MagicMock()
-        tracking_session.adaptive_manager.evaluate_tracking_zone = MagicMock(
-            return_value=MagicMock(
-                correction_threshold=0.35, check_interval=60,
-                motor_delay=0.002, mode=MagicMock(value='normal'),
-            )
-        )
 
         with caplog.at_level(logging.INFO, logger='core.tracking.tracker'):
             tracking_session.check_and_correct()
@@ -233,16 +223,7 @@ class TestStructuredFormat:
 
         tracking_session._calculate_current_coords = MagicMock(return_value=(180.0, 45.0))
         tracking_session._calculate_target_position = MagicMock(return_value=(112.0, {}))
-        tracking_session.adaptive_manager.verify_shortest_path = MagicMock(
-            return_value=(-134.0, {'direction': 'ccw'})
-        )
         tracking_session._apply_correction = MagicMock()
-        tracking_session.adaptive_manager.evaluate_tracking_zone = MagicMock(
-            return_value=MagicMock(
-                correction_threshold=0.35, check_interval=5,
-                motor_delay=0.00012, mode=MagicMock(value='continuous'),
-            )
-        )
 
         with caplog.at_level(logging.INFO, logger='core.tracking.tracker'):
             tracking_session.check_and_correct()
@@ -253,27 +234,6 @@ class TestStructuredFormat:
         assert "delta=" in msg
         assert "from=" in msg
         assert "to=" in msg
-
-    def test_mode_change_format_no_emoji(self, caplog):
-        """Le changement de mode est structuré sans emoji."""
-        from core.tracking.adaptive_tracking import AdaptiveTrackingManager
-
-        manager = AdaptiveTrackingManager(base_interval=60, base_threshold=0.5)
-
-        with caplog.at_level(logging.INFO, logger='core.tracking.adaptive_tracking'):
-            # Forcer un changement de mode via evaluate_tracking_zone
-            # Première évaluation à altitude basse → normal
-            manager.evaluate_tracking_zone(40.0, 180.0, 1.0)
-            # Deuxième évaluation à altitude haute → critical
-            manager.evaluate_tracking_zone(70.0, 180.0, 1.0)
-
-        mode_logs = [r for r in caplog.records if "mode_change |" in r.message]
-        if mode_logs:
-            msg = mode_logs[0].message
-            assert "from=" in msg
-            assert "to=" in msg
-            assert "reason=" in msg
-            assert "🔄" not in msg
 
 
 # =============================================================================

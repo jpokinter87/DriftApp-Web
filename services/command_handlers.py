@@ -20,11 +20,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Tuple
 
+from core.config.config import SINGLE_SPEED_MOTOR_DELAY
 from core.hardware.moteur_simule import set_simulated_position, get_simulated_position
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
 from core.observatoire import AstronomicalCalculations
-from core.config.config import GEM_MERIDIAN_DELAY_MIN
 from core.utils.angle_utils import shortest_angular_distance
 
 logger = logging.getLogger(__name__)
@@ -48,42 +48,21 @@ def _get_rotate_log_func():
 # =============================================================================
 
 
-def _get_motor_speed(config, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
+def _get_motor_speed(config=None, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
     """
-    Retourne la vitesse optimale pour les commandes moteur.
-
-    Utilisé par GOTO, JOG et CONTINUOUS pour éviter la duplication de code.
+    Retourne la vitesse moteur (v5.10 : vitesse unique 260 µs).
 
     Args:
-        config: Configuration chargée
-        speed: Vitesse explicite (optionnelle)
-        delta: Déplacement en degrés (optionnel, pour ajuster la vitesse)
+        config: Conservé pour compat d'appel ; ignoré.
+        speed: Vitesse explicite (optionnelle, surcharge la vitesse unique).
+        delta: Conservé pour compat d'appel ; ignoré.
 
     Returns:
-        Délai moteur en secondes
-
-    Note v2.3: Pour les petits déplacements (≤ 3°), utilise CRITICAL (1ms) au lieu
-    de CONTINUOUS pour réduire le stress mécanique. Les grands déplacements (> 3°)
-    utilisent CONTINUOUS pour la rapidité.
+        Délai moteur en secondes.
     """
     if speed is not None:
         return speed
-
-    # Seuil pour choisir entre CRITICAL et CONTINUOUS
-    SMALL_MOVEMENT_THRESHOLD = 3.0  # degrés
-
-    if config.adaptive and config.adaptive.modes:
-        # Pour les petits déplacements, utiliser CRITICAL (plus doux)
-        if delta is not None and abs(delta) <= SMALL_MOVEMENT_THRESHOLD:
-            critical = config.adaptive.modes.get("critical")
-            if critical:
-                return critical.motor_delay
-        # Pour les grands déplacements, utiliser CONTINUOUS (rapide)
-        continuous = config.adaptive.modes.get("continuous")
-        if continuous:
-            return continuous.motor_delay
-
-    return 0.00026  # Fallback CONTINUOUS validé terrain 22/03/2026 (260µs)
+    return SINGLE_SPEED_MOTOR_DELAY
 
 
 def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):
@@ -545,7 +524,6 @@ class TrackingHandler:
                 seuil=self.config.tracking.seuil_correction_deg,
                 intervalle=self.config.tracking.intervalle_verification_sec,
                 abaque_file=str(Path(__file__).parent.parent / self.config.tracking.abaque_file),
-                adaptive_config=self.config.adaptive,
                 motor_config=self.config.motor,
                 encoder_config=self.config.encoder,
                 goto_callback=on_goto_info,
@@ -657,11 +635,9 @@ class TrackingHandler:
                     ha = self._calc.calculer_angle_horaire(
                         ra_deg, now, deja_jnow=False, declinaison=dec_deg
                     )
-                    gem_delay_sec = GEM_MERIDIAN_DELAY_MIN * 60
-                    tracking_info["meridian_seconds"] = round(-ha * 239.3447) + gem_delay_sec
+                    tracking_info["meridian_seconds"] = round(-ha * 239.3447)
                     passage = self._calc.calculer_heure_passage_meridien(
-                        ra_deg, now, declinaison=dec_deg,
-                        gem_delay_minutes=GEM_MERIDIAN_DELAY_MIN
+                        ra_deg, now, declinaison=dec_deg
                     )
                     tracking_info["meridian_time"] = passage.strftime('%Hh%M')
 

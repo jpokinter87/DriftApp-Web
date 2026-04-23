@@ -1,8 +1,8 @@
 {
-  "_comment": "Configuration complète DriftApp - Toutes les constantes centralisées",
-  "_version": "2.3",
-  "_date": "2025-12-24",
-  "_changes": "Ajout section thresholds pour centraliser les seuils de mouvement",
+  "_comment": "Configuration DriftApp v5.10 — vitesse unique (suppression mode adaptatif + gel méridien GEM)",
+  "_version": "5.10",
+  "_date": "2026-04-23",
+  "_changes": "Retrait sections adaptive_tracking et meridien. Vitesse unique 260 µs dans le code (core/config/config.py).",
 
   "thresholds": {
     "_comment": "Seuils de mouvement centralisés (degrés)",
@@ -11,7 +11,7 @@
     "_feedback_comment": "Delta minimum pour utiliser feedback. En-dessous, rotation directe plus fluide.",
 
     "large_movement_deg": 30.0,
-    "_large_comment": "Au-delà, utilise mode CONTINUOUS/FAST_TRACK pour les corrections.",
+    "_large_comment": "Seuil pour grands déplacements (logs, détection transit méridien).",
 
     "feedback_protection_deg": 20.0,
     "_protection_comment": "Protection contre mouvements anormaux dans boucle feedback. Abandon si erreur > seuil.",
@@ -32,12 +32,7 @@
     "seuil_correction_deg": 0.5,
     "intervalle_verification_sec": 60,
     "abaque_file": "data/Loi_coupole.xlsx",
-    "_intervalle_comment": "60s = valeur du mode adaptatif NORMAL"
-  },
-
-  "meridien": {
-    "gem_delay_minutes": 0,
-    "_gem_delay_comment": "Délai post-méridien GEM en minutes (0 = transit astronomique pur, 10-15 = typique ASIAIR)"
+    "_intervalle_comment": "Intervalle par défaut si non utilisé — vitesse unique v5.10 impose 30s (voir SINGLE_SPEED_CHECK_INTERVAL_S)"
   },
 
   "simulation": false,
@@ -54,7 +49,7 @@
 
   "moteur": {
     "_comment": "Configuration du moteur pas-à-pas",
-    
+
     "gpio_pins": {
       "_comment": "Numérotation BCM",
       "dir": 17,
@@ -77,93 +72,29 @@
     "acceleration_steps_per_sec2": 500,
     "motor_delay_base": 0.002
   },
-  
+
   "encodeur": {
     "_comment": "Configuration encodeur magnétique EMS22A",
-    
+
     "enabled": true,
     "_enabled_comment": "Activer la boucle fermée avec encodeur",
-    
+
     "spi": {
       "bus": 0,
       "device": 0,
       "speed_hz": 1000000,
       "mode": 0
     },
-    
+
     "mecanique": {
       "wheel_diameter_mm": 50.0,
       "ring_diameter_mm": 2303.0,
       "counts_per_rev": 1024,
       "_counts_comment": "Résolution 10 bits = 1024 positions"
     },
-    
+
     "calibration_factor": 0.010851,
     "_calibration_comment": "Facteur corrigé le 5 décembre 2025 - Valeur = 0.01077/0.9925 (cohérent avec script direct SPI)"
-  },
-  
-  "adaptive_tracking": {
-    "_comment": "Système de suivi adaptatif automatique - VERSION 2.2 (3 modes, FAST_TRACK supprimé)",
-
-    "force_continuous": false,
-    "_force_continuous_comment": "v5.7.0: si true, bypass la gestion adaptative et utilise toujours les params CONTINUOUS (vitesse max). Simplifie le comportement et résout les lenteurs pré-méridien. Réversible. Validation terrain requise.",
-
-    "altitudes": {
-      "_comment": "Seuils d'altitude pour changement de mode (degrés)",
-      "critical": 68.0,
-      "zenith": 75.0
-    },
-    
-    "movements": {
-      "_comment": "Seuils de mouvement pour détection (degrés)",
-      "critical": 30.0,
-      "extreme": 50.0,
-      "min_for_continuous": 1.0,
-      "_comment_min": "Mouvement minimum pour déclencher CONTINUOUS en haute altitude. Si < 1°, reste en CRITICAL."
-    },
-    
-    
-    "modes": {
-      "_comment": "3 modes de vitesse - FAST_TRACK supprimé (remplacé par CONTINUOUS pour GOTO)",
-
-      "normal": {
-        "_comment": "Altitude < 68° - Suivi standard",
-        "interval_sec": 60,
-        "threshold_deg": 0.5,
-        "motor_delay": 0.002,
-        "_speed": "~5°/min - Tracking standard"
-      },
-
-      "critical": {
-        "_comment": "68° ≤ Altitude < 75° - Suivi rapproché",
-        "interval_sec": 30,
-        "threshold_deg": 0.35,
-        "motor_delay": 0.00052,
-        "_speed": "~20°/min - Tracking rapproché (2× CONTINUOUS). Validé terrain 31/03/2026"
-      },
-
-      "continuous": {
-        "_comment": "Altitude ≥ 75° ou mouvement extrême - AUSSI UTILISÉ POUR GOTO",
-        "interval_sec": 30,
-        "threshold_deg": 0.3,
-        "motor_delay": 0.00026,
-        "_speed": "~40°/min - Limite hardware DM860T (270µs min). Validé terrain 28-31/03/2026",
-        "_usage": "Tracking continu + GOTO manuels/automatiques + CW/CCW",
-        "_note": "DM556T (UPAN) atteint 96°/min avec même moteur. Upgrade driver possible."
-      }
-    },
-    
-    "critical_zones": [
-      {
-        "_comment": "Zone problématique Nord-Est (haute altitude)",
-        "name": "Zone Nord-Est haute",
-        "alt_min": 68.0,
-        "alt_max": 73.0,
-        "az_min": 50.0,
-        "az_max": 70.0,
-        "enabled": true
-      }
-    ]
   },
 
   "logging": {

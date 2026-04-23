@@ -56,51 +56,6 @@ def temp_config_file(sample_config, tmp_path) -> Path:
     return config_file
 
 
-@pytest.fixture
-def adaptive_config():
-    """Configuration adaptive tracking simulée."""
-    class MockModeConfig:
-        def __init__(self, interval, threshold, delay):
-            self.interval_sec = interval
-            self.threshold_deg = threshold
-            self.motor_delay = delay
-
-    class MockModes:
-        def get(self, mode_name):
-            modes = {
-                'normal': MockModeConfig(60, 0.5, 0.002),
-                'critical': MockModeConfig(15, 0.25, 0.001),
-                'continuous': MockModeConfig(5, 0.1, 0.0001),
-                'fast_track': MockModeConfig(5, 0.5, 0.0002)
-            }
-            return modes.get(mode_name)
-
-    class MockAltitudes:
-        critical = 68.0
-        zenith = 75.0
-
-    class MockMovements:
-        critical = 30.0
-        extreme = 50.0
-        min_for_continuous = 1.0
-
-    class MockCriticalZone:
-        alt_min = 65.0
-        alt_max = 80.0
-        az_min = 45.0
-        az_max = 75.0
-        name = "Zone Test"
-        enabled = True
-
-    class MockAdaptiveConfig:
-        altitudes = MockAltitudes()
-        movements = MockMovements()
-        critical_zones = [MockCriticalZone()]
-        modes = MockModes()
-
-    return MockAdaptiveConfig()
-
-
 # =============================================================================
 # FIXTURES ASTRONOMIQUES
 # =============================================================================

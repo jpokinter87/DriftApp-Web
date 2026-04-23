@@ -15,8 +15,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from core.config.config import SINGLE_SPEED_MOTOR_DELAY
 from core.config.config_loader import load_config
 from core.hardware.moteur_rp2040 import MoteurRP2040
+
+
+class _ModeEntry:
+    """Stub léger pour compat historique de self.modes_config."""
+    def __init__(self, motor_delay: float):
+        self.motor_delay = motor_delay
 
 
 class MotorCalibrator:
@@ -31,11 +38,10 @@ class MotorCalibrator:
         )
         self.moteur = MoteurRP2040(self.config.motor, serial_port)
 
-        # Valeurs actuelles du config
+        # v5.10 : mode unique 260 µs — on garde la structure pour ne pas casser
+        # l'affichage du menu, mais le motor_delay unique est la seule valeur utile.
         self.modes_config = {
-            'normal': self.config.adaptive.modes['normal'],
-            'critical': self.config.adaptive.modes['critical'],
-            'continuous': self.config.adaptive.modes['continuous']
+            'continuous': _ModeEntry(SINGLE_SPEED_MOTOR_DELAY),
         }
 
         # Historique des mesures

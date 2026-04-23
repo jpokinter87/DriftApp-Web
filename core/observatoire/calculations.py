@@ -208,8 +208,7 @@ class AstronomicalCalculations:
         return altitude_deg + refraction_deg
 
     def calculer_heure_passage_meridien(self, ad_deg: float, date_reference: datetime,
-                                        declinaison: float = 0.0,
-                                        gem_delay_minutes: int = 0) -> datetime:
+                                        declinaison: float = 0.0) -> datetime:
         """Calcule l'heure exacte du passage au méridien pour un objet.
 
         Utilise le même calcul que le countdown (HA → secondes) pour
@@ -219,15 +218,12 @@ class AstronomicalCalculations:
             ad_deg: Ascension droite en degrés (J2000)
             date_reference: Date/heure de référence
             declinaison: Déclinaison en degrés (J2000), pour la précession
-            gem_delay_minutes: Délai post-méridien GEM (minutes), ajouté
-                               au transit astronomique pour aligner avec
-                               l'heure de flip monture (ASIAIR etc.)
         """
         ha = self.calculer_angle_horaire(
             ad_deg, date_reference, deja_jnow=False, declinaison=declinaison
         )
-        # Même formule que le countdown : secondes sidérales converties en solaires
-        seconds_to_transit = -ha * 239.3447 + gem_delay_minutes * 60
+        # Secondes sidérales converties en solaires (facteur 239.3447)
+        seconds_to_transit = -ha * 239.3447
         return date_reference + timedelta(seconds=round(seconds_to_transit))
 
     def calculer_coords_horizontales_coupole(self, ascension_droite: float,

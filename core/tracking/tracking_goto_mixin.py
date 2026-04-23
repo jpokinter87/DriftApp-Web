@@ -18,6 +18,7 @@ from typing import Tuple
 from core.hardware.daemon_encoder_reader import get_daemon_reader
 from core.observatoire import PlanetaryEphemerides
 from core.observatoire.catalogue import GestionnaireCatalogue
+from core.utils.angle_utils import shortest_angular_distance
 
 
 class TrackingGotoMixin:
@@ -67,9 +68,7 @@ class TrackingGotoMixin:
             real_position = get_daemon_reader().read_angle()
 
             # Calculer le delta via le chemin le plus court
-            delta, path_info = self.adaptive_manager.verify_shortest_path(
-                real_position, position_cible
-            )
+            delta = shortest_angular_distance(real_position, position_cible)
 
             # Si le delta est significatif (> seuil de correction), GOTO nécessaire
             if abs(delta) > self.seuil:
@@ -221,9 +220,7 @@ class TrackingGotoMixin:
 
             else:
                 # Sans feedback, utiliser rotation simple
-                delta, _ = self.adaptive_manager.verify_shortest_path(
-                    position_actuelle, position_cible
-                )
+                delta = shortest_angular_distance(position_actuelle, position_cible)
                 self.moteur.rotation(delta, motor_delay)
                 self.logger.info(f"GOTO initial (sans feedback): {delta:+.1f}°")
 

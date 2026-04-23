@@ -7,15 +7,21 @@ Ce module contient les méthodes liées à:
 - Correction sans feedback (fallback)
 - Gestion des erreurs et mode dégradé
 
-Date: Décembre 2025
-Version: 4.5
+Version: 5.10 — vitesse unique (260 µs) pour toutes les corrections,
+suppression du mode adaptatif, du gel méridien GEM et du rattrapage
+meridian_catchup.
 """
 
 import time
 from datetime import datetime, timedelta
 from typing import Tuple
 
-from core.config.config import GEM_MERIDIAN_DELAY_MIN
+from core.config.config import (
+    SINGLE_SPEED_CHECK_INTERVAL_S,
+    SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
+    SINGLE_SPEED_MOTOR_DELAY,
+)
+from core.utils.angle_utils import shortest_angular_distance
 
 
 class TrackingCorrectionsMixin:
@@ -37,14 +43,11 @@ class TrackingCorrectionsMixin:
     # Évite l'arrêt automatique lors de grands déplacements post-méridien
     ACCEPTABLE_ERROR_THRESHOLD = 2.0
 
-    # Seuil sous lequel le rattrapage méridien est considéré terminé
-    MERIDIAN_CATCHUP_DONE_THRESHOLD = 3.0
-
     def check_and_correct(self) -> Tuple[bool, str]:
         """
         Vérifie si une correction est nécessaire et l'applique.
-        VERSION ADAPTATIVE : Ajuste automatiquement les paramètres selon la zone.
-        VERSION AVEC LOGS ENRICHIS + MESURE DE DURÉE
+
+        v5.10 : vitesse unique 260 µs, intervalle et seuil fixes.
 
         Returns:
             Tuple (correction_applied, log_message)
@@ -65,71 +68,43 @@ class TrackingCorrectionsMixin:
         # Calculer la position actuelle de l'objet (méthode centralisée)
         azimut, altitude = self._calculate_current_coords(now)
 
-        # === Gel méridien GEM ===
-        # Quand l'azimut franchit 180° (transit astronomique), on clamp à 179.9°
-        # pendant gem_delay_minutes pour laisser la monture GEM flipper avant
-        # de déclencher le grand mouvement de la coupole.
-        azimut_abaque = self._apply_meridian_freeze(azimut, now)
+        # Calculer la position cible (abaque)
+        position_cible, infos = self._calculate_target_position(azimut, altitude)
 
-        # Calculer la position cible
-        position_cible, infos = self._calculate_target_position(azimut_abaque, altitude)
+        # Chemin le plus court
+        delta = shortest_angular_distance(self.position_relative, position_cible)
 
-        # === Vérification du chemin le plus court ===
-        delta, path_verification = self.adaptive_manager.verify_shortest_path(
-            self.position_relative,
-            position_cible
-        )
-
-        # === Évaluation de la zone et obtention des paramètres adaptatifs ===
-        tracking_params = self.adaptive_manager.evaluate_tracking_zone(
-            altitude,
-            azimut,
-            abs(delta)
-        )
-
-        # Détection explicite du transit méridien
+        # Détection explicite du transit méridien (log informatif)
         if abs(delta) > self.LARGE_MOVEMENT_THRESHOLD:
-            if not self._meridian_catchup_active:
-                self._meridian_catchup_active = True
-                self.logger.info(
-                    f"meridian_catchup | START delta={delta:+.1f} → forçage CONTINUOUS"
-                )
             self.logger.info(
                 f"meridian_transit | delta={delta:+.1f} az={azimut:.1f} alt={altitude:.1f} "
                 f"from={self.position_relative:.1f} to={position_cible:.1f}"
             )
             self._log_goto(self.position_relative, position_cible, delta, 'meridian_transit')
 
-        # Rattrapage méridien : forcer CONTINUOUS tant que le delta est significatif
-        if self._meridian_catchup_active:
-            if abs(delta) < self.MERIDIAN_CATCHUP_DONE_THRESHOLD:
-                self.logger.info(
-                    f"meridian_catchup | END delta={delta:+.1f} → retour mode adaptatif"
-                )
-                self._meridian_catchup_active = False
-            else:
-                continuous_params = self.adaptive_manager._get_continuous_params()
-                tracking_params = continuous_params
-
-        # Vérifier si la correction dépasse le seuil
-        if abs(delta) < tracking_params.correction_threshold:
-            # Mise à jour du temps de prochaine vérification
-            self.next_correction_time = now + timedelta(seconds=tracking_params.check_interval)
+        # Vérifier si la correction dépasse le seuil (vitesse unique)
+        if abs(delta) < SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:
+            self.next_correction_time = now + timedelta(seconds=SINGLE_SPEED_CHECK_INTERVAL_S)
             self.logger.debug(
-                f"correction_skip | delta={delta:+.2f} threshold={tracking_params.correction_threshold:.2f} "
-                f"next_check={tracking_params.check_interval}s"
+                f"correction_skip | delta={delta:+.2f} "
+                f"threshold={SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:.2f} "
+                f"next_check={SINGLE_SPEED_CHECK_INTERVAL_S}s"
             )
-            return False, f"correction_skip | delta={delta:+.2f} threshold={tracking_params.correction_threshold:.2f}"
+            return (
+                False,
+                f"correction_skip | delta={delta:+.2f} "
+                f"threshold={SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:.2f}",
+            )
 
-        # === APPLIQUER LA CORRECTION ===
-        self._apply_correction(delta, tracking_params.motor_delay)
+        # === APPLIQUER LA CORRECTION (vitesse unique) ===
+        self._apply_correction(delta, SINGLE_SPEED_MOTOR_DELAY)
 
-        # === LOGS STRUCTURÉS ===
-        mode_str = tracking_params.mode.value if hasattr(tracking_params.mode, 'value') else str(tracking_params.mode)
+        mode_str = 'continuous'
         log_message = (
             f"correction | delta={delta:+.2f} az={azimut:.1f} alt={altitude:.1f} "
             f"dome={position_cible:.1f} mode={mode_str} "
-            f"interval={tracking_params.check_interval} threshold={tracking_params.correction_threshold:.2f}"
+            f"interval={SINGLE_SPEED_CHECK_INTERVAL_S} "
+            f"threshold={SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:.2f}"
         )
 
         self.logger.info(log_message)
@@ -141,7 +116,7 @@ class TrackingCorrectionsMixin:
             'altitude': round(altitude, 2),
             'dome_position': round(position_cible, 2),
             'correction': round(delta, 2),
-            'mode': mode_str
+            'mode': mode_str,
         })
 
         # === Tracking direction des corrections (CW/CCW) ===
@@ -156,65 +131,12 @@ class TrackingCorrectionsMixin:
         # Enregistrer dans l'historique
         self.correction_history.append(delta)
 
-        # Mise à jour du temps de prochaine vérification
-        self.next_correction_time = now + timedelta(seconds=tracking_params.check_interval)
+        # Prochaine vérification
+        self.next_correction_time = now + timedelta(seconds=SINGLE_SPEED_CHECK_INTERVAL_S)
 
         return True, log_message
 
-    def _apply_meridian_freeze(self, azimut: float, now: datetime) -> float:
-        """
-        Gère le gel de l'azimut au méridien pour montures GEM.
-
-        Quand l'objet passe az=180° (transit astronomique), la coupole ne doit
-        PAS bouger immédiatement car la monture GEM ne flippe que plus tard.
-        On clamp l'azimut à 179.9° pendant gem_delay_minutes.
-
-        Args:
-            azimut: Azimut astronomique réel de l'objet
-            now: Timestamp actuel
-
-        Returns:
-            Azimut à utiliser pour la lookup abaque (clampé ou réel)
-        """
-        if GEM_MERIDIAN_DELAY_MIN <= 0:
-            return azimut
-
-        # Tracker le passage pré-méridien (évite de geler un objet déjà côté Ouest)
-        if azimut < 180.0:
-            self._seen_pre_meridian = True
-
-        # Détecter le franchissement du méridien (az passe de <180 à >=180)
-        if azimut >= 180.0 and self._meridian_freeze_until is None and self._seen_pre_meridian:
-            self._meridian_freeze_until = now + timedelta(minutes=GEM_MERIDIAN_DELAY_MIN)
-            self.logger.info(
-                f"meridian_freeze | az={azimut:.1f} gel={GEM_MERIDIAN_DELAY_MIN}min "
-                f"liberation={self._meridian_freeze_until.strftime('%H:%M:%S')}"
-            )
-
-        # Période de gel active : clamper l'azimut
-        if self._meridian_freeze_until is not None:
-            if now < self._meridian_freeze_until:
-                return 179.9
-            else:
-                # Libération : laisser passer l'azimut réel
-                self.logger.info(
-                    f"meridian_release | az={azimut:.1f} gel_termine"
-                )
-                self._meridian_freeze_until = None
-
-        return azimut
-
-    def _read_meridian_freeze(self, azimut: float, now: datetime) -> float:
-        """
-        Version lecture seule du gel méridien (pour get_status).
-
-        Ne déclenche ni ne libère le freeze, consulte seulement l'état actuel.
-        """
-        if self._meridian_freeze_until is not None and now < self._meridian_freeze_until:
-            return 179.9
-        return azimut
-
-    def _apply_correction(self, delta_deg: float, motor_delay: float = 0.002):
+    def _apply_correction(self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY):
         """
         Applique une correction AVEC FEEDBACK si encodeur disponible.
 
@@ -439,7 +361,7 @@ class TrackingCorrectionsMixin:
         except Exception as e:
             self.logger.debug(f"Re-sync encodeur non critique: {e}")
 
-    def _apply_correction_sans_feedback(self, delta_deg: float, motor_delay: float = 0.002):
+    def _apply_correction_sans_feedback(self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY):
         """
         Applique une correction SANS feedback (ancienne méthode).
 

@@ -43,11 +43,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.config.config_loader import ConfigLoader
 from core.hardware.daemon_encoder_reader import get_daemon_reader, set_daemon_reader
 from core.hardware.moteur_rp2040 import MoteurRP2040
-from core.hardware.moteur_simule import MoteurSimule
 from core.hardware.serial_simulator import SerialSimulator
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
-from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 
 from services.ipc_manager import IpcManager
 from services.simulation import SimulatedDaemonReader
@@ -282,11 +280,6 @@ class MotorService:
     def _init_managers(self):
         """Initialise les gestionnaires."""
         self.ipc = IpcManager()
-        self.adaptive_manager = AdaptiveTrackingManager(
-            base_interval=self.config.tracking.intervalle_verification_sec,
-            base_threshold=self.config.tracking.seuil_correction_deg,
-            adaptive_config=self.config.adaptive,
-        )
 
     def _init_handlers(self):
         """Initialise les handlers de commandes."""

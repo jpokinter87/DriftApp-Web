@@ -15,11 +15,15 @@ import logging
 from datetime import datetime, timedelta
 from typing import Tuple, Optional
 
+from core.config.config import (
+    SINGLE_SPEED_CHECK_INTERVAL_S,
+    SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
+    SINGLE_SPEED_MOTOR_DELAY,
+)
 from core.hardware.daemon_encoder_reader import get_daemon_reader
 from core.hardware.moteur_rp2040 import MoteurRP2040
 from core.hardware.moteur_simule import MoteurSimule
 from core.observatoire import AstronomicalCalculations
-from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 from core.tracking.tracking_logger import TrackingLogger
 
 # Mixins
@@ -32,7 +36,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     """
     Gère une session de suivi d'objet avec méthode abaque.
 
-    VERSION 4.5 : Refactorisé en mixins pour lisibilité et maintenabilité.
+    VERSION 5.10 : Vitesse unique (260 µs) — suppression du mode adaptatif.
 
     Mixins:
     - TrackingStateMixin: _init_tracking_state, _init_statistics, _smooth_position_cible, logs session
@@ -40,18 +44,18 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
     - TrackingCorrectionsMixin: check_and_correct, _apply_correction (avec/sans feedback)
     """
 
-    # Mapping des icônes de mode
-    MODE_ICONS = {"normal": "🟢", "critical": "🟠", "continuous": "🔴", "fast_track": "🟣"}
+    # Mapping des icônes de mode (conservé pour compat UI — un seul mode reste)
+    MODE_ICONS = {"continuous": "🔴"}
+    MODE_NAME = "continuous"
 
     def __init__(
         self,
         moteur: Optional[MoteurRP2040 | MoteurSimule],
         calc: AstronomicalCalculations,
         logger: TrackingLogger,
-        seuil: float = 0.5,
-        intervalle: int = 300,
+        seuil: float = SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
+        intervalle: int = SINGLE_SPEED_CHECK_INTERVAL_S,
         abaque_file: str = None,
-        adaptive_config=None,
         motor_config=None,
         encoder_config=None,
         goto_callback=None,
@@ -87,7 +91,6 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         # Initialisation par étapes
         self._init_encoder(encoder_config)
-        self._init_adaptive_manager(intervalle, seuil, adaptive_config)
         self._init_abaque(abaque_file)
         self._init_tracking_state()  # Mixin TrackingStateMixin
         self._init_statistics(motor_config)  # Mixin TrackingStateMixin
@@ -123,12 +126,6 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         if not self.encoder_available:
             self.logger.info("Mode position logicielle (relatif)")
-
-    def _init_adaptive_manager(self, intervalle, seuil, adaptive_config):
-        """Initialise le gestionnaire adaptatif."""
-        self.adaptive_manager = AdaptiveTrackingManager(
-            base_interval=intervalle, base_threshold=seuil, adaptive_config=adaptive_config
-        )
 
     def _init_abaque(self, abaque_file):
         """Charge le fichier d'abaque."""
@@ -254,18 +251,15 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             self._setup_initial_position(azimut, altitude, position_cible_init)
             self._sync_encoder(position_cible_init)
 
-        # Si GOTO nécessaire, toujours utiliser la vitesse CONTINUOUS (la plus rapide)
+        # Si GOTO nécessaire, utiliser la vitesse unique (260 µs)
         if goto_needed:
-            # Vitesse CONTINUOUS pour le GOTO initial (0.00015s = ~41°/min)
-            continuous_speed = self.adaptive_manager.get_continuous_motor_delay()
             self.logger.info(
-                f"🎯 GOTO initial requis: {goto_delta:+.1f}° en mode CONTINUOUS (vitesse max)"
+                f"🎯 GOTO initial requis: {goto_delta:+.1f}° "
+                f"(vitesse unique {SINGLE_SPEED_MOTOR_DELAY * 1_000_000:.0f} µs/pas)"
             )
             # Exécuter le GOTO initial (Mixin TrackingGotoMixin)
-            self._execute_initial_goto(position_cible_init, continuous_speed)
-            # Démarrer le suivi avec l'intervalle approprié au mode adaptatif (basé sur altitude)
-            tracking_params = self.adaptive_manager.evaluate_tracking_zone(altitude, azimut, 0)
-            self._start_tracking(objet_name, now, initial_interval=tracking_params.check_interval)
+            self._execute_initial_goto(position_cible_init, SINGLE_SPEED_MOTOR_DELAY)
+            self._start_tracking(objet_name, now, initial_interval=SINGLE_SPEED_CHECK_INTERVAL_S)
         else:
             self._start_tracking(objet_name, now)
 
@@ -298,13 +292,12 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         start_time = self.drift_tracking.get('start_time', now)
         duration_min = int((now - start_time).total_seconds() / 60)
-        mode = self.adaptive_manager.current_mode.value if hasattr(self.adaptive_manager, 'current_mode') else 'unknown'
         enc_status = 'ok' if self.encoder_available else 'lost'
 
         self.logger.info(
             f"session_health | object={self.objet} duration_min={duration_min} "
             f"corrections={self.total_corrections} total_movement={self.total_movement:.1f} "
-            f"mode={mode} encoder={enc_status} failed={self.failed_feedback_count}"
+            f"mode={self.MODE_NAME} encoder={enc_status} failed={self.failed_feedback_count}"
         )
         self._last_milestone_time = now
 
@@ -343,22 +336,12 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
 
         now = datetime.now()
         azimut, altitude = self._calculate_current_coords(now)
-        # Appliquer le gel méridien GEM pour l'affichage (lecture seule, pas de déclenchement)
-        azimut_abaque = self._read_meridian_freeze(azimut, now)
-        position_cible, infos = self._calculate_target_position(azimut_abaque, altitude)
+        position_cible, infos = self._calculate_target_position(azimut, altitude)
 
-        # log_large_movements=False car get_status() est appelé très fréquemment par le frontend
-        delta, _ = self.adaptive_manager.verify_shortest_path(
-            self.position_relative, position_cible, log_large_movements=False
-        )
-        # Réévaluer le mode adaptatif pour refléter l'état courant
-        # (sinon current_params garde le mode de la dernière correction)
-        self.adaptive_manager.evaluate_tracking_zone(altitude, azimut, abs(delta))
-        diag_info = self.adaptive_manager.get_diagnostic_info(altitude, azimut, delta)
         remaining = self._calculate_remaining_time(now)
 
         return self._build_status_dict(
-            azimut, altitude, position_cible, remaining, diag_info, infos
+            azimut, altitude, position_cible, remaining, infos
         )
 
     def _calculate_remaining_time(self, now: datetime) -> int:
@@ -372,7 +355,6 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         altitude: float,
         position_cible: float,
         remaining: int,
-        diag_info: dict,
         infos: dict,
     ) -> dict:
         """Construit le dictionnaire de statut."""
@@ -389,22 +371,18 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             "remaining_seconds": remaining,
             "total_corrections": self.total_corrections,
             "total_movement": self.total_movement,
-            # Informations adaptatives
-            "adaptive_mode": diag_info["mode"],
-            "adaptive_mode_description": diag_info["mode_description"],
-            "adaptive_interval": diag_info["check_interval"],
-            "adaptive_threshold": diag_info["correction_threshold"],
-            "adaptive_motor_delay": diag_info["motor_delay"],
-            "in_critical_zone": diag_info["in_critical_zone"],
-            "is_high_altitude": diag_info["is_high_altitude"],
-            "is_large_movement": diag_info["is_large_movement"],
-            "mode_icon": self.MODE_ICONS.get(diag_info["mode"], "⚪"),
+            # Mode unique v5.10 — clés conservées pour compat UI
+            "adaptive_mode": self.MODE_NAME,
+            "adaptive_mode_description": "Mode unique - Vitesse max (v5.10)",
+            "adaptive_interval": SINGLE_SPEED_CHECK_INTERVAL_S,
+            "adaptive_threshold": SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
+            "adaptive_motor_delay": SINGLE_SPEED_MOTOR_DELAY,
+            "mode_icon": self.MODE_ICONS.get(self.MODE_NAME, "⚪"),
             # Autres informations
             "steps_correction_factor": self.steps_correction_factor,
             "encoder_daemon": self.encoder_available,
             "abaque_method": infos.get("method", "interpolation"),
             "in_bounds": infos.get("in_bounds", True),
-            # Offset encodeur (différence entre position logique et encodeur)
             "encoder_offset": self.encoder_offset,
         }
 

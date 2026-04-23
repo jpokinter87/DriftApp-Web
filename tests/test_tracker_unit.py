@@ -72,7 +72,6 @@ def session(moteur, calc, tracker_logger, abaque_file, config):
         seuil=config.tracking.seuil_correction_deg,
         intervalle=config.tracking.intervalle_verification_sec,
         abaque_file=abaque_file,
-        adaptive_config=config.adaptive,
         motor_config=config.motor,
         encoder_config=config.encoder,
     )
@@ -98,9 +97,9 @@ class TestTrackingSessionConstruction:
         """L'abaque est chargé avec succès."""
         assert session.abaque_manager is not None
 
-    def test_adaptive_manager_created(self, session):
-        """Le gestionnaire adaptatif est initialisé."""
-        assert session.adaptive_manager is not None
+    def test_single_mode_name(self, session):
+        """v5.10 : MODE_NAME unique."""
+        assert session.MODE_NAME == 'continuous'
 
     def test_statistics_initialized(self, session):
         """Les statistiques sont initialisées à zéro."""
@@ -117,7 +116,6 @@ class TestTrackingSessionConstruction:
             TrackingSession(
                 moteur=moteur, calc=calc, logger=tracker_logger,
                 abaque_file="/nonexistent/file.xlsx",
-                adaptive_config=config.adaptive,
                 motor_config=config.motor,
                 encoder_config=config.encoder,
             )
@@ -128,7 +126,6 @@ class TestTrackingSessionConstruction:
             TrackingSession(
                 moteur=moteur, calc=calc, logger=tracker_logger,
                 abaque_file=None,
-                adaptive_config=config.adaptive,
                 motor_config=config.motor,
                 encoder_config=config.encoder,
             )
@@ -207,14 +204,8 @@ class TestTrackingState:
         assert len(session.correction_history) == 0
 
     def test_mode_icons_defined(self, session):
-        """Les icônes de mode sont définies."""
-        assert 'normal' in session.MODE_ICONS
-        assert 'critical' in session.MODE_ICONS
+        """L'icône du mode unique est définie (v5.10)."""
         assert 'continuous' in session.MODE_ICONS
-
-    def test_fast_track_in_icons(self, session):
-        """fast_track est présent dans MODE_ICONS (compatibilité legacy)."""
-        assert 'fast_track' in session.MODE_ICONS
 
 
 # =============================================================================

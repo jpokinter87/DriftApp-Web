@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from core.config.config_loader import load_config
 from core.observatoire import AstronomicalCalculations
 from core.tracking.abaque_manager import AbaqueManager
-from core.tracking.adaptive_tracking import AdaptiveTrackingManager
 from core.utils.angle_utils import shortest_angular_distance
 
 
@@ -76,7 +75,7 @@ def estimate_transit_time(calc, ra_deg, sim_date):
     return best_time
 
 
-def simulate_object(obj, calc, abaque, adaptive, sim_date):
+def simulate_object(obj, calc, abaque, sim_date):
     """Simule la trajectoire d'un objet sur 6 heures autour du transit."""
     name = obj["name"]
     ra = obj["ra_deg"]
@@ -130,11 +129,10 @@ def simulate_object(obj, calc, abaque, adaptive, sim_date):
         if dome_pos is None or math.isnan(dome_pos) or not (0 <= dome_pos <= 360):
             all_positions_valid = False
 
-        # Delta et mode
+        # Delta et mode (v5.10 : vitesse unique → mode toujours "continuous")
         if prev_dome_pos is not None:
             delta = shortest_angular_distance(prev_dome_pos, dome_pos)
-            params = adaptive.evaluate_tracking_zone(alt, az, abs(delta))
-            mode = params.mode.value
+            mode = "continuous"
         else:
             delta = 0.0
             mode = "—"
@@ -238,12 +236,6 @@ def main():
         print("ERREUR: Impossible de charger l'abaque")
         sys.exit(1)
 
-    adaptive = AdaptiveTrackingManager(
-        base_interval=config.tracking.intervalle_verification_sec,
-        base_threshold=config.tracking.seuil_correction_deg,
-        adaptive_config=config.adaptive,
-    )
-
     print(f"{'═' * 60}")
     print("  PROGRAMME DE TESTS TERRAIN — Simulation monture")
     print(f"  Date de simulation : {sim_date.strftime('%Y-%m-%d')}")
@@ -253,7 +245,7 @@ def main():
     # Exécuter les simulations
     results = {}
     for obj in OBJECTS:
-        passed = simulate_object(obj, calc, abaque, adaptive, sim_date)
+        passed = simulate_object(obj, calc, abaque, sim_date)
         results[obj["name"]] = passed
 
     # Résumé

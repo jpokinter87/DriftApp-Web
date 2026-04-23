@@ -195,8 +195,7 @@ class TestMotorServiceRP2040Integration:
         with patch('services.motor_service.HardwareDetector.detect_hardware',
                    return_value=(False, mock_hw_info)), \
              patch('services.motor_service.ConfigLoader') as mock_loader, \
-             patch('services.motor_service.IpcManager'), \
-             patch('services.motor_service.AdaptiveTrackingManager'):
+             patch('services.motor_service.IpcManager'):
 
             # Charger la vraie config depuis le fichier temporaire
             real_config = ConfigLoader(rp2040_config_file).load()

@@ -15,8 +15,6 @@ from pathlib import Path
 import pytest
 
 from core.config.config_loader import (
-    AdaptiveConfig,
-    AltitudeThresholds,
     ConfigLoader,
     DriftAppConfig,
     EncoderConfig,
@@ -25,12 +23,10 @@ from core.config.config_loader import (
     GPIOPins,
     MotorConfig,
     MotorDriverConfig,
-    MovementThresholds,
     SerialConfig,
     SiteConfig,
     ThresholdsConfig,
     TrackingConfig,
-    TrackingModeParams,
     load_config,
 )
 
@@ -66,25 +62,6 @@ def sample_config_dict():
             "seuil_correction_deg": 0.5,
             "intervalle_verification_sec": 60,
             "abaque_file": "data/Loi_coupole.xlsx",
-        },
-        "adaptive_tracking": {
-            "altitudes": {"critical": 68.0, "zenith": 75.0},
-            "movements": {"critical": 30.0, "extreme": 50.0},
-            "modes": {
-                "normal": {"interval_sec": 60, "threshold_deg": 0.5, "motor_delay": 0.002},
-                "critical": {"interval_sec": 15, "threshold_deg": 0.3, "motor_delay": 0.001},
-                "continuous": {"interval_sec": 5, "threshold_deg": 0.2, "motor_delay": 0.00015},
-            },
-            "critical_zones": [
-                {
-                    "name": "Zone Nord-Est haute",
-                    "alt_min": 68.0,
-                    "alt_max": 90.0,
-                    "az_min": 0.0,
-                    "az_max": 90.0,
-                    "enabled": True,
-                }
-            ],
         },
         "encodeur": {
             "enabled": True,
@@ -192,27 +169,6 @@ class TestTrackingConfig:
         assert tc.abaque_path == Path("data/Loi_coupole.xlsx")
 
 
-class TestTrackingModeParams:
-    def test_calculate_speed(self):
-        params = TrackingModeParams(
-            interval_sec=60, threshold_deg=0.5, motor_delay=0.002
-        )
-        speed = params.calculate_speed(1941866)
-        assert speed > 0
-
-    def test_calculate_speed_zero_delay(self):
-        params = TrackingModeParams(
-            interval_sec=60, threshold_deg=0.5, motor_delay=0.0
-        )
-        assert params.calculate_speed(1941866) == 0.0
-
-    def test_calculate_speed_negative_delay(self):
-        params = TrackingModeParams(
-            interval_sec=60, threshold_deg=0.5, motor_delay=-0.001
-        )
-        assert params.calculate_speed(1941866) == 0.0
-
-
 class TestDriftAppConfig:
     def test_is_production(self):
         config = DriftAppConfig(
@@ -223,11 +179,6 @@ class TestDriftAppConfig:
             ),
             motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, "data/Loi.xlsx"),
-            adaptive=AdaptiveConfig(
-                AltitudeThresholds(68.0, 75.0),
-                MovementThresholds(30.0, 50.0),
-                {}, []
-            ),
             encoder=EncoderConfig(
                 True, EncoderSPIConfig(0, 0, 1000000, 0),
                 EncoderMecaniqueConfig(50.0, 2303.0, 1024), 0.01
@@ -243,9 +194,6 @@ class TestDriftAppConfig:
             motor=MotorConfig(GPIOPins(0, 0), 200, 4, 2230, 1, 0, 0, 0, 0, 0),
             motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, ""),
-            adaptive=AdaptiveConfig(
-                AltitudeThresholds(68, 75), MovementThresholds(30, 50), {}, []
-            ),
             encoder=EncoderConfig(
                 False, EncoderSPIConfig(0, 0, 0, 0),
                 EncoderMecaniqueConfig(0, 0, 0), 0
@@ -254,22 +202,6 @@ class TestDriftAppConfig:
             simulation=True,
         )
         assert config.is_production is False
-
-class TestAdaptiveConfig:
-    def test_get_mode_exists(self):
-        modes = {"normal": TrackingModeParams(60, 0.5, 0.002)}
-        ac = AdaptiveConfig(
-            AltitudeThresholds(68, 75), MovementThresholds(30, 50),
-            modes, []
-        )
-        assert ac.get_mode("normal") is not None
-
-    def test_get_mode_not_exists(self):
-        ac = AdaptiveConfig(
-            AltitudeThresholds(68, 75), MovementThresholds(30, 50),
-            {}, []
-        )
-        assert ac.get_mode("nonexistent") is None
 
 
 # =============================================================================
@@ -342,31 +274,18 @@ class TestConfigLoader:
         assert config.encoder.mecanique.ring_diameter_mm == 2303.0
         assert config.encoder.calibration_factor == 0.010851
 
-    def test_parse_adaptive_modes(self, tmp_config_file):
-        loader = ConfigLoader(tmp_config_file)
-        config = loader.load()
-        assert "normal" in config.adaptive.modes
-        assert "critical" in config.adaptive.modes
-        assert "continuous" in config.adaptive.modes
-        assert config.adaptive.modes["normal"].motor_delay == 0.002
-        assert config.adaptive.modes["continuous"].motor_delay == 0.00015
-
-    def test_parse_adaptive_thresholds(self, tmp_config_file):
-        loader = ConfigLoader(tmp_config_file)
-        config = loader.load()
-        assert config.adaptive.altitudes.critical == 68.0
-        assert config.adaptive.altitudes.zenith == 75.0
-        assert config.adaptive.movements.critical == 30.0
-        assert config.adaptive.movements.extreme == 50.0
-
-    def test_parse_critical_zones(self, tmp_config_file):
-        loader = ConfigLoader(tmp_config_file)
-        config = loader.load()
-        assert len(config.adaptive.critical_zones) == 1
-        zone = config.adaptive.critical_zones[0]
-        assert zone.name == "Zone Nord-Est haute"
-        assert zone.alt_min == 68.0
-        assert zone.enabled is True
+    def test_legacy_adaptive_section_ignored(self, tmp_path, sample_config_dict):
+        """v5.10 : présence d'une section legacy adaptive_tracking ne casse pas le load."""
+        legacy = dict(sample_config_dict)
+        legacy["adaptive_tracking"] = {
+            "modes": {"normal": {"interval_sec": 60, "motor_delay": 0.002}},
+            "force_continuous": True,
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(legacy))
+        config = ConfigLoader(config_file).load()
+        assert isinstance(config, DriftAppConfig)
+        assert not hasattr(config, 'adaptive')
 
     def test_parse_simulation_flag(self, tmp_config_file):
         loader = ConfigLoader(tmp_config_file)
@@ -399,10 +318,6 @@ class TestConfigLoader:
         assert config.thresholds.feedback_protection_deg == 20.0
         assert config.thresholds.default_tolerance_deg == 0.5
 
-    def test_modes_include_fast_track(self, tmp_config_file):
-        """Parser inclut fast_track même si absent du JSON (valeur par défaut)."""
-        config = ConfigLoader(tmp_config_file).load()
-        assert "fast_track" in config.adaptive.modes
 
 
 # =============================================================================

@@ -57,15 +57,6 @@ class TrackingStateMixin:
         # Indicateur de grand déplacement (basculement méridien ou GOTO)
         self.is_large_movement_in_progress = False
 
-        # Rattrapage méridien : force CONTINUOUS tant que le delta n'est pas stabilisé
-        self._meridian_catchup_active = False
-
-        # Gel méridien GEM : empêche le saut abaque tant que le flip n'est pas attendu
-        # _meridian_freeze_until: datetime jusqu'à laquelle l'azimut est clampé à <180°
-        self._meridian_freeze_until = None
-        # On ne déclenche le freeze que si l'objet a d'abord été vu à az < 180°
-        self._seen_pre_meridian = False
-
         # Lissage position cible (voir _smooth_position_cible pour algorithme détaillé)
         # - _cached_position_cible: dernière valeur lissée retournée
         # - _position_cible_history: fenêtre glissante pour moyenne circulaire
@@ -84,12 +75,8 @@ class TrackingStateMixin:
         self._last_position_log_time = None
         self._position_log_interval = 30  # secondes
 
-        # Distribution du temps par mode (compteurs séparés des métadonnées)
-        self._mode_time_counters = {
-            'normal': 0,
-            'critical': 0,
-            'continuous': 0,
-        }
+        # Distribution du temps par mode (vitesse unique v5.10)
+        self._mode_time_counters = {'continuous': 0}
         self._mode_time_last_mode = None
         self._mode_time_last_time = None
 
@@ -240,28 +227,20 @@ class TrackingStateMixin:
 
     def _update_mode_time(self, current_mode: str):
         """
-        Met à jour le temps passé dans chaque mode.
+        Met à jour le temps passé en mode unique (v5.10).
 
-        Appelé à chaque changement de mode ou périodiquement.
+        Conservé pour compat historique : un seul compteur `continuous`.
         """
         now = datetime.now()
-        mode_key = current_mode.lower() if current_mode else 'normal'
+        mode_key = 'continuous'
 
-        # Si c'est le premier appel, initialiser
         if self._mode_time_last_time is None:
             self._mode_time_last_mode = mode_key
             self._mode_time_last_time = now
             return
 
-        # Calculer le temps écoulé dans le mode précédent
         elapsed = (now - self._mode_time_last_time).total_seconds()
-        prev_mode = self._mode_time_last_mode
-
-        if prev_mode and prev_mode in self._mode_time_counters:
-            self._mode_time_counters[prev_mode] += elapsed
-
-        # Mettre à jour pour le prochain appel
-        self._mode_time_last_mode = mode_key
+        self._mode_time_counters[mode_key] += elapsed
         self._mode_time_last_time = now
 
     def _track_correction_direction(self, correction_deg: float):
@@ -287,12 +266,8 @@ class TrackingStateMixin:
         start_time = self.drift_tracking.get('start_time', now)
         duration_seconds = (now - start_time).total_seconds()
 
-        # Finaliser le temps du mode courant
-        self._update_mode_time(
-            self.adaptive_manager.current_mode.value
-            if hasattr(self, 'adaptive_manager') and self.adaptive_manager
-            else 'normal'
-        )
+        # Finaliser le temps du mode courant (vitesse unique v5.10)
+        self._update_mode_time('continuous')
 
         return {
             'start_time': start_time.isoformat(),
@@ -306,8 +281,6 @@ class TrackingStateMixin:
                     self.total_movement / max(1, self.total_corrections), 2
                 ),
                 'mode_distribution': {
-                    'normal': int(self._mode_time_counters.get('normal', 0)),
-                    'critical': int(self._mode_time_counters.get('critical', 0)),
                     'continuous': int(self._mode_time_counters.get('continuous', 0)),
                 }
             },
@@ -341,7 +314,7 @@ class TrackingStateMixin:
     def _log_basic_stats(self, duration_hours: float, duration):
         """Log les statistiques de base."""
         self.logger.info(f"Objet: {self.objet}")
-        self.logger.info(f"Méthode: ABAQUE")
+        self.logger.info("Méthode: ABAQUE")
         self.logger.info(
             f"Durée: {duration_hours:.2f}h ({duration.total_seconds() / 60:.1f}min)"
         )
@@ -360,9 +333,6 @@ class TrackingStateMixin:
 
     def _log_additional_info(self):
         """Log les informations additionnelles."""
-        if hasattr(self.adaptive_manager, 'current_mode'):
-            self.logger.info(f"Mode final: {self.adaptive_manager.current_mode.value}")
-
         if self.steps_correction_factor != 1.0:
             self.logger.info(f"Facteur de correction: {self.steps_correction_factor:.4f}")
 

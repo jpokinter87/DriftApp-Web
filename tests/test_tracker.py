@@ -176,32 +176,6 @@ def tracking_session(
     mock_abaque_module = MagicMock()
     mock_abaque_module.AbaqueManager = MagicMock(return_value=mock_abaque_manager)
 
-    # Mock du AdaptiveTrackingManager
-    mock_adaptive = MagicMock()
-    mock_adaptive.current_mode = MagicMock()
-    mock_adaptive.current_mode.value = 'normal'
-    mock_adaptive.evaluate_tracking_zone.return_value = MagicMock(
-        mode=MagicMock(value='normal'),
-        check_interval=60,
-        correction_threshold=0.5,
-        motor_delay=0.002,
-        description="Test mode"
-    )
-    mock_adaptive.verify_shortest_path.return_value = (5.0, "horaire (5.0°)")
-    mock_adaptive.get_diagnostic_info.return_value = {
-        'mode': 'normal',
-        'mode_description': 'Normal',
-        'check_interval': 60,
-        'correction_threshold': 0.5,
-        'motor_delay': 0.002,
-        'in_critical_zone': False,
-        'is_high_altitude': False,
-        'is_large_movement': False
-    }
-
-    mock_adaptive_module = MagicMock()
-    mock_adaptive_module.AdaptiveTrackingManager = MagicMock(return_value=mock_adaptive)
-
     # Nettoyer le cache d'imports pour forcer le rechargement
     mods_to_remove = [m for m in sys.modules if m.startswith('core.tracking.tracker')]
     for m in mods_to_remove:
@@ -213,24 +187,21 @@ def tracking_session(
         'pandas': MagicMock(),
         'core.tracking.abaque_manager': mock_abaque_module,
     }):
-        # Patcher les imports au niveau du module tracker
-        with patch('core.tracking.tracker.AdaptiveTrackingManager', MagicMock(return_value=mock_adaptive)):
-            with patch('core.hardware.hardware_detector.HardwareDetector'):
-                # Import après le patching
-                from core.tracking.tracker import TrackingSession
+        with patch('core.hardware.hardware_detector.HardwareDetector'):
+            from core.tracking.tracker import TrackingSession
 
-                session = TrackingSession(
-                    moteur=mock_moteur,
-                    calc=mock_calc,
-                    logger=mock_tracking_logger,
-                    seuil=0.5,
-                    intervalle=60,
-                    abaque_file="data/Loi_coupole.xlsx",
-                    encoder_config=mock_encoder_config,
-                    motor_config=mock_motor_config
-                )
+            session = TrackingSession(
+                moteur=mock_moteur,
+                calc=mock_calc,
+                logger=mock_tracking_logger,
+                seuil=0.5,
+                intervalle=60,
+                abaque_file="data/Loi_coupole.xlsx",
+                encoder_config=mock_encoder_config,
+                motor_config=mock_motor_config
+            )
 
-                return session
+            return session
 
 
 # =============================================================================
@@ -298,19 +269,18 @@ class TestTrackingSessionEncoder:
             'pandas': MagicMock(),
             'core.tracking.abaque_manager': mock_abaque_module,
         }):
-            with patch('core.tracking.tracker.AdaptiveTrackingManager'):
-                from core.tracking.tracker import TrackingSession
+            from core.tracking.tracker import TrackingSession
 
-                session = TrackingSession(
-                    moteur=mock_moteur,
-                    calc=mock_calc,
-                    logger=mock_tracking_logger,
-                    abaque_file="data/Loi_coupole.xlsx",
-                    encoder_config=encoder_config,
-                    motor_config=mock_motor_config
-                )
+            session = TrackingSession(
+                moteur=mock_moteur,
+                calc=mock_calc,
+                logger=mock_tracking_logger,
+                abaque_file="data/Loi_coupole.xlsx",
+                encoder_config=encoder_config,
+                motor_config=mock_motor_config
+            )
 
-                assert session.encoder_available is False
+            assert session.encoder_available is False
 
     def test_encoder_active_et_disponible(
         self, mock_moteur, mock_calc, mock_tracking_logger,
@@ -329,30 +299,29 @@ class TestTrackingSessionEncoder:
             'pandas': MagicMock(),
             'core.tracking.abaque_manager': mock_abaque_module,
         }):
-            with patch('core.tracking.tracker.AdaptiveTrackingManager'):
-                with patch('core.hardware.hardware_detector.HardwareDetector') as mock_hw:
-                    mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
+            with patch('core.hardware.hardware_detector.HardwareDetector') as mock_hw:
+                mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
 
-                    mock_reader = MagicMock()
-                    mock_reader.read_angle.return_value = 45.0
-                    mock_reader.read_status.return_value = {
-                        'angle': 45.0, 'status': 'OK', 'calibrated': True
-                    }
+                mock_reader = MagicMock()
+                mock_reader.read_angle.return_value = 45.0
+                mock_reader.read_status.return_value = {
+                    'angle': 45.0, 'status': 'OK', 'calibrated': True
+                }
 
-                    with patch('core.tracking.tracker.get_daemon_reader',
-                               return_value=mock_reader):
-                        from core.tracking.tracker import TrackingSession
+                with patch('core.tracking.tracker.get_daemon_reader',
+                           return_value=mock_reader):
+                    from core.tracking.tracker import TrackingSession
 
-                        session = TrackingSession(
-                            moteur=mock_moteur,
-                            calc=mock_calc,
-                            logger=mock_tracking_logger,
-                            abaque_file="data/Loi_coupole.xlsx",
-                            encoder_config=encoder_config,
-                            motor_config=mock_motor_config
-                        )
+                    session = TrackingSession(
+                        moteur=mock_moteur,
+                        calc=mock_calc,
+                        logger=mock_tracking_logger,
+                        abaque_file="data/Loi_coupole.xlsx",
+                        encoder_config=encoder_config,
+                        motor_config=mock_motor_config
+                    )
 
-                        assert session.encoder_available is True
+                    assert session.encoder_available is True
 
 
 # =============================================================================
@@ -449,15 +418,15 @@ class TestAbaqueIntegration:
 
 
 # =============================================================================
-# TESTS INTÉGRATION ADAPTIVE
+# TESTS MODE UNIQUE v5.10
 # =============================================================================
 
-class TestAdaptiveIntegration:
-    """Tests pour l'intégration avec le système adaptatif."""
+class TestSingleModeTracking:
+    """Tests pour le mode unique (v5.10)."""
 
-    def test_adaptive_manager_cree(self, tracking_session):
-        """AdaptiveTrackingManager est créé."""
-        assert tracking_session.adaptive_manager is not None
+    def test_mode_name(self, tracking_session):
+        """La session expose MODE_NAME = 'continuous'."""
+        assert tracking_session.MODE_NAME == 'continuous'
 
 
 # =============================================================================

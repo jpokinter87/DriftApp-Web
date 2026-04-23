@@ -65,18 +65,7 @@ def motor_service(mock_hardware_info, tmp_path):
 
 @pytest.fixture
 def mock_config():
-    """Mock de la configuration."""
-    class MockModeConfig:
-        def __init__(self):
-            self.motor_delay = 0.00012
-
-    class MockModes:
-        def get(self, mode_name):
-            return MockModeConfig()
-
-    class MockAdaptive:
-        modes = MockModes()
-
+    """Mock de la configuration (v5.10 : plus de mode adaptatif)."""
     class MockTracking:
         seuil_correction_deg = 0.5
         intervalle_verification_sec = 60
@@ -100,7 +89,6 @@ def mock_config():
         enabled = False
 
     class MockConfig:
-        adaptive = MockAdaptive()
         tracking = MockTracking()
         thresholds = MockThresholds()
         site = MockSite()
@@ -134,7 +122,6 @@ def tracking_session():
         seuil=config.tracking.seuil_correction_deg,
         intervalle=config.tracking.intervalle_verification_sec,
         abaque_file=abaque_path,
-        adaptive_config=config.adaptive,
         motor_config=config.motor,
         encoder_config=config.encoder,
     )
@@ -393,28 +380,15 @@ class TestMeridianTransitDetection:
         assert entry['delta'] == -134.0
 
     def test_transit_detection_log_message(self, tracking_session, caplog):
-        """Le log TRANSIT MÉRIDIEN est émis quand delta > 30°."""
+        """Le log TRANSIT MÉRIDIEN est émis quand delta > LARGE_MOVEMENT_THRESHOLD."""
         tracking_session.running = True
         tracking_session.position_relative = 246.0
         tracking_session.next_correction_time = None
 
-        # Mock les calculs pour forcer un grand delta
+        # Mock pour forcer un grand delta (246° → 112° = -134°)
         tracking_session._calculate_current_coords = MagicMock(return_value=(180.0, 45.0))
         tracking_session._calculate_target_position = MagicMock(return_value=(112.0, {}))
-        tracking_session.adaptive_manager.verify_shortest_path = MagicMock(
-            return_value=(-134.0, {'direction': 'ccw'})
-        )
-
-        # Mock l'application de la correction pour ne rien faire
         tracking_session._apply_correction = MagicMock()
-        tracking_session.adaptive_manager.evaluate_tracking_zone = MagicMock(
-            return_value=MagicMock(
-                correction_threshold=0.35,
-                check_interval=5,
-                motor_delay=0.00012,
-                mode=MagicMock(value='continuous'),
-            )
-        )
 
         with caplog.at_level(logging.INFO, logger='core.tracking.tracker'):
             tracking_session.check_and_correct()
@@ -431,18 +405,7 @@ class TestMeridianTransitDetection:
 
         tracking_session._calculate_current_coords = MagicMock(return_value=(180.0, 45.0))
         tracking_session._calculate_target_position = MagicMock(return_value=(102.0, {}))
-        tracking_session.adaptive_manager.verify_shortest_path = MagicMock(
-            return_value=(2.0, {'direction': 'cw'})
-        )
         tracking_session._apply_correction = MagicMock()
-        tracking_session.adaptive_manager.evaluate_tracking_zone = MagicMock(
-            return_value=MagicMock(
-                correction_threshold=0.35,
-                check_interval=60,
-                motor_delay=0.002,
-                mode=MagicMock(value='normal'),
-            )
-        )
 
         initial_goto_count = len(tracking_session.drift_tracking['goto_log'])
         tracking_session.check_and_correct()

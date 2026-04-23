@@ -327,7 +327,6 @@ class TestGotoCommandFlow:
         mock_config = MagicMock()
         mock_config.thresholds.feedback_min_deg = 3.0
         mock_config.thresholds.default_tolerance_deg = 0.5
-        mock_config.adaptive.modes = {'continuous': MagicMock(motor_delay=0.00012)}
 
         statuses = []
 
@@ -451,7 +450,6 @@ class TestTrackingFlow:
         mock_config.tracking.seuil_correction_deg = 0.5
         mock_config.tracking.intervalle_verification_sec = 60
         mock_config.tracking.abaque_file = 'data/Loi_coupole.xlsx'
-        mock_config.adaptive = MagicMock()
         mock_config.motor = MagicMock()
         mock_config.encoder = MagicMock()
 

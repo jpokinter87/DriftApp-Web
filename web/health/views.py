@@ -290,7 +290,6 @@ def _load_config() -> dict:
             'site': config.get('site', {}),
             'thresholds': config.get('thresholds', {}),
             'suivi': config.get('suivi', {}),
-            'meridien': config.get('meridien', {}),
             'moteur': {
                 'steps_per_revolution': config.get('moteur', {}).get('steps_per_revolution'),
                 'microsteps': config.get('moteur', {}).get('microsteps'),
@@ -300,15 +299,6 @@ def _load_config() -> dict:
             'encodeur': {
                 'enabled': config.get('encodeur', {}).get('enabled'),
                 'calibration_factor': config.get('encodeur', {}).get('calibration_factor'),
-            },
-            'adaptive_modes': {
-                name: {
-                    'interval_sec': mode.get('interval_sec'),
-                    'threshold_deg': mode.get('threshold_deg'),
-                    'motor_delay': mode.get('motor_delay'),
-                }
-                for name, mode in config.get('adaptive_tracking', {}).get('modes', {}).items()
-                if isinstance(mode, dict) and 'interval_sec' in mode
             },
             'simulation': config.get('simulation', False),
         }

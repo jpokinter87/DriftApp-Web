@@ -240,45 +240,23 @@ class DiagnosticMoteur:
         return True
 
     def _extraire_vitesses_config(self):
-        """Extrait les vitesses depuis la configuration."""
+        """Extrait la vitesse unique (v5.10 : plus de mode adaptatif)."""
         print()
-        print("  📋 Vitesses configurées (depuis config.json):")
-        
-        # Essayer de lire depuis adaptive_tracking
+        print("  📋 Vitesse unique (v5.10) :")
+
         try:
-            if hasattr(self.config, 'adaptive_tracking'):
-                modes = self.config.adaptive_tracking.modes
-                
-                if hasattr(modes, 'normal'):
-                    delay = modes.normal.motor_delay
-                    self.vitesses_config['NORMAL'] = delay
-                    print(f"     NORMAL:     {delay*1000:.4f} ms ({delay:.5f} s)")
-                
-                if hasattr(modes, 'critical'):
-                    delay = modes.critical.motor_delay
-                    self.vitesses_config['CRITICAL'] = delay
-                    print(f"     CRITICAL:   {delay*1000:.4f} ms ({delay:.5f} s)")
-                
-                if hasattr(modes, 'continuous'):
-                    delay = modes.continuous.motor_delay
-                    self.vitesses_config['CONTINUOUS'] = delay
-                    print(f"     CONTINUOUS: {delay*1000:.4f} ms ({delay:.5f} s)")
+            from core.config.config import SINGLE_SPEED_MOTOR_DELAY
+            delay = SINGLE_SPEED_MOTOR_DELAY
+            self.vitesses_config['SINGLE'] = delay
+            print(f"     SINGLE:     {delay*1000:.4f} ms ({delay:.5f} s)")
         except Exception as e:
-            print_warning(f"Impossible de lire les vitesses depuis config: {e}")
-        
-        # Valeurs par défaut si non trouvées
-        if 'NORMAL' not in self.vitesses_config:
-            self.vitesses_config['NORMAL'] = 0.00110  # 1.1 ms
-            print(f"     NORMAL:     1.1000 ms (défaut)")
-        
-        if 'CRITICAL' not in self.vitesses_config:
-            self.vitesses_config['CRITICAL'] = 0.00055  # 0.55 ms
-            print(f"     CRITICAL:   0.5500 ms (défaut)")
-        
-        if 'CONTINUOUS' not in self.vitesses_config:
-            self.vitesses_config['CONTINUOUS'] = 0.00012  # 0.12 ms
-            print(f"     CONTINUOUS: 0.1200 ms (défaut)")
-        
+            print_warning(f"Impossible de lire la vitesse unique : {e}")
+
+        # Valeur par défaut si non trouvée
+        if 'SINGLE' not in self.vitesses_config:
+            self.vitesses_config['SINGLE'] = 0.00026
+            print(f"     SINGLE:     0.2600 ms (défaut)")
+
         print()
 
     def initialiser_moteur(self) -> bool:

@@ -19,7 +19,6 @@ pytestmark = pytest.mark.slow
 from core.config.config_loader import load_config
 from core.observatoire import AstronomicalCalculations
 from core.tracking.abaque_manager import AbaqueManager
-from core.tracking.adaptive_tracking import AdaptiveTrackingManager, TrackingMode
 from core.utils.angle_utils import shortest_angular_distance
 
 
@@ -45,15 +44,6 @@ def abaque(config):
     mgr = AbaqueManager(path)
     assert mgr.load_abaque(), "Échec chargement abaque"
     return mgr
-
-
-@pytest.fixture
-def adaptive(config):
-    return AdaptiveTrackingManager(
-        base_interval=config.tracking.intervalle_verification_sec,
-        base_threshold=config.tracking.seuil_correction_deg,
-        adaptive_config=config.adaptive,
-    )
 
 
 # Coordonnées J2000 réelles
@@ -121,24 +111,6 @@ class TestNGC5033MeridianTransit:
 
         delta = shortest_angular_distance(dome_before, dome_after)
         assert abs(delta) > 30, f"Delta au transit NGC 5033 devrait être > 30°: {delta:.1f}°"
-
-    def test_continuous_mode_at_flip(self, calc, abaque, adaptive):
-        """Le mode passe en CONTINUOUS au moment du flip NGC 5033."""
-        transit = find_transit_time(calc, NGC5033_RA, SIM_DATE)
-
-        before = transit - timedelta(minutes=10)
-        after = transit + timedelta(minutes=10)
-
-        az_before, alt_before = calc.calculer_coords_horizontales(NGC5033_RA, NGC5033_DEC, before)
-        az_after, alt_after = calc.calculer_coords_horizontales(NGC5033_RA, NGC5033_DEC, after)
-
-        dome_before, _ = abaque.get_dome_position(alt_before, az_before)
-        dome_after, _ = abaque.get_dome_position(alt_after, az_after)
-        delta = abs(shortest_angular_distance(dome_before, dome_after))
-
-        params = adaptive.evaluate_tracking_zone(alt_after, az_after, delta)
-        assert params.mode == TrackingMode.CONTINUOUS, \
-            f"Mode devrait être CONTINUOUS avec delta={delta:.1f}°, obtenu {params.mode}"
 
     def test_altitude_at_transit(self, calc):
         """NGC 5033 est à haute altitude (~82°) au transit depuis lat 44°."""
