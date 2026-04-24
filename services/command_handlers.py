@@ -526,6 +526,7 @@ class TrackingHandler:
                 abaque_file=str(Path(__file__).parent.parent / self.config.tracking.abaque_file),
                 motor_config=self.config.motor,
                 encoder_config=self.config.encoder,
+                meridian_anticipation_config=self.config.meridian_anticipation,
                 goto_callback=on_goto_info,
             )
 

@@ -257,6 +257,136 @@ class TestMoteurRP2040RotationAbsolue:
         assert direction == 1
 
 
+class TestForceDirection:
+    """Tests pour le paramètre force_direction (v5.9 Phase 2 Plan 01)."""
+
+    @staticmethod
+    def _capture_moves(serial_sim):
+        """Patch serial_sim.write pour capturer les commandes MOVE envoyées."""
+        commands_sent = []
+        original_write = serial_sim.write
+
+        def capture_write(data):
+            commands_sent.append(data.decode("utf-8").strip())
+            return original_write(data)
+
+        serial_sim.write = capture_write
+        return commands_sent
+
+    def test_rotation_default_force_direction_preserves_behavior(
+        self, moteur_rp2040, serial_sim
+    ):
+        """force_direction non passé (=0) → direction dérivée du signe de angle_deg."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation(30.0, 0.002)
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 1  # angle positif → direction firmware=1 (comportement actuel)
+
+    def test_rotation_force_direction_cw_overrides_sign(
+        self, moteur_rp2040, serial_sim
+    ):
+        """force_direction=-1 avec angle positif → direction firmware=0 (CW imposé)."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation(30.0, 0.002, force_direction=-1)
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 0
+
+    def test_rotation_force_direction_ccw_overrides_sign(
+        self, moteur_rp2040, serial_sim
+    ):
+        """force_direction=+1 avec angle négatif → direction firmware=1 (CCW imposé)."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation(-30.0, 0.002, force_direction=1)
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 1
+
+    def test_rotation_force_direction_zero_uses_angle_sign(
+        self, moteur_rp2040, serial_sim
+    ):
+        """force_direction=0 avec angle négatif → direction firmware=0 (comportement actuel)."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation(-30.0, 0.002, force_direction=0)
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 0
+
+    def test_rotation_force_direction_invalid_raises(self, moteur_rp2040):
+        """force_direction hors {-1,0,+1} → ValueError explicite."""
+        with pytest.raises(ValueError, match=r"force_direction"):
+            moteur_rp2040.rotation(30.0, 0.002, force_direction=2)
+
+    def test_rotation_force_direction_invalid_negative_raises(self, moteur_rp2040):
+        """force_direction=-2 → ValueError explicite."""
+        with pytest.raises(ValueError, match=r"force_direction"):
+            moteur_rp2040.rotation(30.0, 0.002, force_direction=-2)
+
+    def test_rotation_force_direction_preserves_steps_magnitude(
+        self, moteur_rp2040, serial_sim
+    ):
+        """Même force_direction, même |angle_deg| → même nombre de steps."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation(30.0, 0.002, force_direction=-1)
+        moteur_rp2040.rotation(-30.0, 0.002, force_direction=-1)
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 2
+        steps_pos = int(move_cmds[0].split()[1])
+        steps_neg = int(move_cmds[1].split()[1])
+        assert steps_pos == steps_neg
+        # Les deux commandes doivent avoir la même direction imposée
+        assert int(move_cmds[0].split()[2]) == 0
+        assert int(move_cmds[1].split()[2]) == 0
+
+    def test_rotation_force_direction_updates_direction_actuelle(
+        self, moteur_rp2040, serial_sim
+    ):
+        """Quand force_direction != 0, direction_actuelle est mise à la valeur forcée."""
+        moteur_rp2040.rotation(10.0, 0.002, force_direction=-1)
+        assert moteur_rp2040.direction_actuelle == -1
+        moteur_rp2040.rotation(10.0, 0.002, force_direction=+1)
+        assert moteur_rp2040.direction_actuelle == 1
+
+    def test_rotation_absolue_accepts_force_direction(
+        self, moteur_rp2040, serial_sim
+    ):
+        """rotation_absolue(force_direction=-1) → direction firmware=0 imposée
+        même si shortest path serait +1."""
+        cmds = self._capture_moves(serial_sim)
+        # De 10° vers 45° → shortest path +35° (direction firmware=1)
+        moteur_rp2040.rotation_absolue(
+            position_cible_deg=45.0,
+            position_actuelle_deg=10.0,
+            vitesse=0.002,
+            force_direction=-1,
+        )
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 0  # imposé CW
+
+    def test_rotation_absolue_default_force_direction_uses_shortest_path(
+        self, moteur_rp2040, serial_sim
+    ):
+        """rotation_absolue sans force_direction → comportement inchangé (shortest path)."""
+        cmds = self._capture_moves(serial_sim)
+        # De 350° vers 10° → shortest path +20° (direction firmware=1)
+        moteur_rp2040.rotation_absolue(
+            position_cible_deg=10.0,
+            position_actuelle_deg=350.0,
+            vitesse=0.002,
+        )
+        move_cmds = [c for c in cmds if c.startswith("MOVE")]
+        assert len(move_cmds) == 1
+        direction = int(move_cmds[0].split()[2])
+        assert direction == 1
+
+
 class TestMoteurRP2040Stop:
     """Tests d'arret."""
 

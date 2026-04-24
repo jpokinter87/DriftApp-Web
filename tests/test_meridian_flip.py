@@ -88,12 +88,16 @@ def mock_config():
     class MockEncoder:
         enabled = False
 
+    class MockMeridianAnticipation:
+        enabled = False
+
     class MockConfig:
         tracking = MockTracking()
         thresholds = MockThresholds()
         site = MockSite()
         motor = MockMotor()
         encoder = MockEncoder()
+        meridian_anticipation = MockMeridianAnticipation()
 
     return MockConfig()
 

@@ -250,7 +250,13 @@ class MoteurRP2040:
         """
         self.direction_actuelle = 1 if direction >= 0 else -1
 
-    def rotation(self, angle_deg: float, vitesse: float = 0.0015, use_ramp: bool = True):
+    def rotation(
+        self,
+        angle_deg: float,
+        vitesse: float = 0.0015,
+        use_ramp: bool = True,
+        force_direction: int = 0,
+    ):
         """
         Fait tourner la coupole d'un angle donne.
 
@@ -260,7 +266,16 @@ class MoteurRP2040:
             angle_deg: Angle en degres (positif = horaire)
             vitesse: Delai nominal entre les pas en secondes
             use_ramp: Si True, utilise la rampe S-curve du firmware
+            force_direction: 0 (defaut) = direction derivee du signe de angle_deg.
+                +1 = CCW imposee (direction firmware=1, azimut croissant).
+                -1 = CW imposee (direction firmware=0, azimut decroissant).
+                La grandeur du mouvement reste abs(angle_deg).
         """
+        if force_direction not in (-1, 0, 1):
+            raise ValueError(
+                f"force_direction doit être -1, 0 ou +1, reçu {force_direction}"
+            )
+
         self.clear_stop_request()
 
         deg_per_step = 360.0 / self.steps_per_dome_revolution
@@ -269,8 +284,15 @@ class MoteurRP2040:
         if steps == 0:
             return
 
-        direction = 1 if angle_deg >= 0 else 0
-        self.direction_actuelle = 1 if angle_deg >= 0 else -1
+        if force_direction != 0:
+            direction = 1 if force_direction > 0 else 0
+            self.direction_actuelle = force_direction
+            self.logger.debug(
+                f"rotation: direction forcée à {force_direction:+d} (ignore signe de angle_deg)"
+            )
+        else:
+            direction = 1 if angle_deg >= 0 else 0
+            self.direction_actuelle = 1 if angle_deg >= 0 else -1
         delay_us = max(1, int(vitesse * 1_000_000))
         ramp_type = "SCURVE" if use_ramp else "NONE"
 
@@ -309,6 +331,7 @@ class MoteurRP2040:
         position_actuelle_deg: float,
         vitesse: float = 0.0015,
         use_ramp: bool = True,
+        force_direction: int = 0,
     ):
         """
         Rotation vers une position absolue.
@@ -318,6 +341,8 @@ class MoteurRP2040:
             position_actuelle_deg: Position actuelle en degres (0-360)
             vitesse: Delai entre les pas
             use_ramp: Si True, utilise la rampe S-curve
+            force_direction: 0 (defaut) = chemin le plus court (comportement inchange).
+                +1/-1 = direction imposee, la grandeur reste abs(shortest_path).
         """
         position_cible = position_cible_deg % 360
         position_actuelle = position_actuelle_deg % 360
@@ -330,7 +355,10 @@ class MoteurRP2040:
         elif diff < -180:
             diff += 360
 
-        self.rotation(diff, vitesse, use_ramp=use_ramp)
+        if force_direction != 0:
+            diff = abs(diff)
+
+        self.rotation(diff, vitesse, use_ramp=use_ramp, force_direction=force_direction)
 
     # =========================================================================
     # CONTROLE D'ARRET

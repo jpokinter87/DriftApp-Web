@@ -21,6 +21,7 @@ from core.config.config_loader import (
     EncoderMecaniqueConfig,
     EncoderSPIConfig,
     GPIOPins,
+    MeridianAnticipationConfig,
     MotorConfig,
     MotorDriverConfig,
     SerialConfig,
@@ -318,6 +319,52 @@ class TestConfigLoader:
         assert config.thresholds.feedback_protection_deg == 20.0
         assert config.thresholds.default_tolerance_deg == 0.5
 
+
+# =============================================================================
+# MeridianAnticipationConfig (v5.9) — flag opt-in
+# =============================================================================
+
+class TestMeridianAnticipationConfig:
+    """Tests pour le flag meridian_anticipation (v5.9 Phase 2 Plan 01)."""
+
+    def test_meridian_anticipation_default_false_when_section_missing(
+        self, tmp_path, sample_config_dict
+    ):
+        """Section absente du JSON → enabled=False, pas d'exception."""
+        cfg = dict(sample_config_dict)
+        cfg.pop("meridian_anticipation", None)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert isinstance(config.meridian_anticipation, MeridianAnticipationConfig)
+        assert config.meridian_anticipation.enabled is False
+
+    def test_meridian_anticipation_enabled_true(self, tmp_path, sample_config_dict):
+        """Section avec enabled=true → flag à True."""
+        cfg = dict(sample_config_dict)
+        cfg["meridian_anticipation"] = {"enabled": True}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.meridian_anticipation.enabled is True
+
+    def test_meridian_anticipation_enabled_false_explicit(
+        self, tmp_path, sample_config_dict
+    ):
+        """Section avec enabled=false explicitement → flag à False."""
+        cfg = dict(sample_config_dict)
+        cfg["meridian_anticipation"] = {"enabled": False}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.meridian_anticipation.enabled is False
+
+    def test_meridian_anticipation_on_production_config(self, config_json_path):
+        """Le data/config.json versionné doit avoir enabled=False (verrou rétrocompat)."""
+        if not config_json_path.exists():
+            pytest.skip("config.json non trouvé")
+        config = load_config(config_json_path)
+        assert config.meridian_anticipation.enabled is False
 
 
 # =============================================================================

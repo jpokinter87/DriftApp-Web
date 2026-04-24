@@ -48,12 +48,24 @@ class TrackingCorrectionsMixin:
         Vérifie si une correction est nécessaire et l'applique.
 
         v5.10 : vitesse unique 260 µs, intervalle et seuil fixes.
+        v5.9 P2 : hook d'anticipation méridien en tête de boucle (no-op si flag off).
 
         Returns:
             Tuple (correction_applied, log_message)
         """
         if not self.running:
             return False, "Suivi non actif"
+
+        # Anticipation méridien (v5.9) — exécutée AVANT la logique abaque standard.
+        # Court-circuit silencieux si flag désactivé (schedule=None) ou déjà consommé.
+        now_utc = datetime.utcnow()
+        if self._should_execute_anticipatory_slew(now_utc):
+            self._execute_anticipatory_slew()
+            # Après un slew massif, consommer l'intervalle avant la prochaine correction.
+            self.next_correction_time = datetime.now() + timedelta(
+                seconds=SINGLE_SPEED_CHECK_INTERVAL_S
+            )
+            return True, "meridian_anticipation_slew_executed"
 
         # Session milestone (toutes les 5 min)
         self._check_session_milestone()

@@ -30,9 +30,17 @@ from core.tracking.tracking_logger import TrackingLogger
 from core.tracking.tracking_state_mixin import TrackingStateMixin
 from core.tracking.tracking_goto_mixin import TrackingGotoMixin
 from core.tracking.tracking_corrections_mixin import TrackingCorrectionsMixin
+from core.tracking.tracking_meridian_anticipation_mixin import (
+    TrackingMeridianAnticipationMixin,
+)
 
 
-class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrectionsMixin):
+class TrackingSession(
+    TrackingStateMixin,
+    TrackingGotoMixin,
+    TrackingCorrectionsMixin,
+    TrackingMeridianAnticipationMixin,
+):
     """
     Gère une session de suivi d'objet avec méthode abaque.
 
@@ -59,6 +67,7 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         motor_config=None,
         encoder_config=None,
         goto_callback=None,
+        meridian_anticipation_config=None,
     ):
         """
         Initialise une session de suivi.
@@ -94,6 +103,12 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
         self._init_abaque(abaque_file)
         self._init_tracking_state()  # Mixin TrackingStateMixin
         self._init_statistics(motor_config)  # Mixin TrackingStateMixin
+
+        # Anticipation méridien (v5.9 P2 Plan 02) — rétro-compat si config absente
+        if meridian_anticipation_config is None:
+            from core.config.config_loader import MeridianAnticipationConfig
+            meridian_anticipation_config = MeridianAnticipationConfig()
+        self._init_anticipation(meridian_anticipation_config)
 
     # =========================================================================
     # INITIALISATION (méthodes privées)
@@ -220,6 +235,9 @@ class TrackingSession(TrackingStateMixin, TrackingGotoMixin, TrackingCorrections
             success, error_msg = self._update_planet_coords(objet_name, now)
             if not success:
                 return False, error_msg
+
+        # Anticipation méridien (v5.9 P2) — calcul du schedule (no-op si flag off ou planète)
+        self._compute_anticipation_schedule()
 
         # Calculer positions initiales
         azimut, altitude = self._calculate_current_coords(now)

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -108,6 +108,12 @@ class ThresholdsConfig:
 
 
 @dataclass
+class MeridianAnticipationConfig:
+    """Configuration de l'anticipation méridien (v5.9)."""
+    enabled: bool = False
+
+
+@dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
     port: str
@@ -164,6 +170,9 @@ class DriftAppConfig:
     encoder: EncoderConfig
     thresholds: ThresholdsConfig
     simulation: bool
+    meridian_anticipation: MeridianAnticipationConfig = field(
+        default_factory=MeridianAnticipationConfig
+    )
 
     def __str__(self) -> str:
         return (
@@ -226,7 +235,8 @@ class ConfigLoader:
             tracking=self._parse_tracking(),
             encoder=self._parse_encoder(),
             thresholds=self._parse_thresholds(),
-            simulation=bool(self.cfg.get("simulation", False))
+            simulation=bool(self.cfg.get("simulation", False)),
+            meridian_anticipation=self._parse_meridian_anticipation(),
         )
 
     # =========================================================================
@@ -317,6 +327,11 @@ class ConfigLoader:
             feedback_protection_deg=float(c.get("feedback_protection_deg", 20.0)),
             default_tolerance_deg=float(c.get("default_tolerance_deg", 0.5))
         )
+
+    def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:
+        """Parse la section meridian_anticipation (v5.9, opt-in)."""
+        c = self.cfg.get("meridian_anticipation", {})
+        return MeridianAnticipationConfig(enabled=bool(c.get("enabled", False)))
 
     def _log_summary(self, config: DriftAppConfig):
         """Log le résumé de la configuration."""

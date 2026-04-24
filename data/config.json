@@ -35,6 +35,11 @@
     "_intervalle_comment": "Intervalle par défaut si non utilisé — vitesse unique v5.10 impose 30s (voir SINGLE_SPEED_CHECK_INTERVAL_S)"
   },
 
+  "meridian_anticipation": {
+    "_comment": "v5.9: anticipation du flip méridien (stratégie E). Quand enabled=true, le tracking lance un GOTO directif au moment optimal pour minimiser le lag maximal pendant le flip. Réversible, comportement v5.10 (vitesse unique sans anticipation) préservé si enabled=false. Validation terrain requise.",
+    "enabled": false
+  },
+
   "simulation": false,
 
   "motor_driver": {
