@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 5.10.0 (Avril 2026)
+**Version actuelle**: 5.11.0 (Avril 2026)
 
 ---
 
@@ -341,6 +341,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **5.11** | Avril 2026 | v5.9 Phase 2 : intégration runtime anticipation méridien (flag opt-in + force_direction moteur + mixin + hook `check_and_correct`). Rétro-compat stricte (flag default false = v5.10 identique). Validation terrain à suivre |
 | **5.10** | Avril 2026 | Vitesse unique 260 µs : suppression mode adaptatif, gel méridien GEM, flag force_continuous, rattrapage meridian_catchup |
 | **5.9** | Avril 2026 | Prédiction méridien Phase 1 (module pur `meridian_anticipation.py`) |
 | **5.8** | Avril 2026 | Refactor mise à jour UI (script 5 étapes, sudoers whitelist) |
