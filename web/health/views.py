@@ -396,6 +396,35 @@ def check_update(request):
         }, status=500)
 
 
+@api_view(['GET'])
+def config_diff_view(request):
+    """
+    Compare `data/config.json` local vs `origin/main:data/config.json`.
+
+    Sert à l'UI à afficher la modale de choix avant la MAJ OTA (v5.12.0) :
+    si le local diverge de l'upstream, l'utilisateur peut choisir explicitement
+    entre garder sa config (`config_strategy=keep`) ou prendre celle du dépôt
+    (`config_strategy=reset`). Voir `apply_update`.
+
+    Returns:
+        JSON {has_diff, diffs: [{path, op, local, upstream}], local_exists,
+              error: str|None, timestamp}
+    """
+    from .config_diff import get_config_diff
+
+    try:
+        result = get_config_diff(PROJECT_ROOT)
+    except Exception as e:  # pragma: no cover — defense-in-depth
+        logger.exception("Erreur inattendue dans config_diff_view")
+        return Response({
+            "has_diff": False, "diffs": [], "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+        }, status=500)
+
+    result["timestamp"] = datetime.now().isoformat()
+    return Response(result)
+
+
 @api_view(['POST'])
 def apply_update(request):
     """
@@ -403,6 +432,11 @@ def apply_update(request):
 
     Le script écrit sa progression dans logs/update_status.json que le
     frontend poll via /api/health/update/status/.
+
+    Body JSON optionnel (v5.12.0) :
+        config_strategy: "keep" (défaut) | "reset"
+            - "keep" : préserve `data/config.json` local (stash + priorité user)
+            - "reset" : remplace par la version upstream (backup en .user_backup.<ts>)
     """
     from .update_checker import get_local_commit
 
@@ -412,8 +446,18 @@ def apply_update(request):
             'error': f'Script introuvable : {UPDATE_SCRIPT}'
         }, status=500)
 
+    config_strategy = (request.data.get('config_strategy') or 'keep').lower()
+    if config_strategy not in ('keep', 'reset'):
+        return Response({
+            'success': False,
+            'error': f"config_strategy invalide : {config_strategy} "
+                     f"(attendu 'keep' ou 'reset')",
+        }, status=400)
+
     old_commit = get_local_commit()
-    logger.info(f"Lancement script MàJ depuis {old_commit}")
+    logger.info(
+        f"Lancement script MàJ depuis {old_commit} (config_strategy={config_strategy})"
+    )
 
     # Reset du fichier de status (au cas où une ancienne MàJ l'aurait laissé)
     try:
@@ -425,8 +469,10 @@ def apply_update(request):
     try:
         # Le script s'auto-détache (nohup en background). Retour immédiat
         # avec "UPDATE_STARTED pid=XXX" via stdout.
+        cmd = ['sudo', '-n', str(UPDATE_SCRIPT),
+               '--config-strategy', config_strategy]
         result = subprocess.run(
-            ['sudo', '-n', str(UPDATE_SCRIPT)],
+            cmd,
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
@@ -440,6 +486,7 @@ def apply_update(request):
                 'success': True,
                 'message': 'Mise à jour lancée',
                 'old_commit': old_commit,
+                'config_strategy': config_strategy,
                 'detach_info': output,
             })
 

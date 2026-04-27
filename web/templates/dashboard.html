@@ -255,6 +255,20 @@
                 </div>
             </div>
 
+            <!-- Diff config.json (v5.12.0) : affiché si origin/main:data/config.json
+                 diverge du local. Permet à l'utilisateur de choisir entre garder
+                 sa config ou la remplacer par celle du dépôt avant le pull. -->
+            <div id="update-config-diff-panel" class="update-config-warning hidden"
+                 role="alert" aria-live="polite">
+                <span class="warning-icon">&#x2699;</span>
+                <div class="warning-text">
+                    <strong>Différences sur <code>data/config.json</code></strong>
+                    <small>Choisissez ci-dessous quelle version garder. La version
+                    non retenue sera sauvegardée en <code>.user_backup.&lt;ts&gt;</code>.</small>
+                    <ul id="update-config-diff-list" class="update-config-diff-list"></ul>
+                </div>
+            </div>
+
             <!-- Bloc détails (dépliable) -->
             <div id="update-details" class="update-details hidden">
                 <div id="update-commit-messages" class="update-commit-messages">
@@ -293,6 +307,17 @@
                     :disabled="$store.dashboard.updateButtonsDisabled">Plus tard</button>
             <button id="btn-update-now" class="btn btn-primary"
                     :disabled="$store.dashboard.updateButtonsDisabled">Mettre a jour</button>
+            <!-- Boutons de choix config (v5.12.0) : visibles seulement si diff config détecté -->
+            <button id="btn-update-keep-config" class="btn btn-secondary hidden"
+                    :disabled="$store.dashboard.updateButtonsDisabled"
+                    title="Conserver la configuration locale (la version dépôt sera ignorée)">
+                Garder ma config
+            </button>
+            <button id="btn-update-reset-config" class="btn btn-primary hidden"
+                    :disabled="$store.dashboard.updateButtonsDisabled"
+                    title="Remplacer la config locale par celle du dépôt (backup automatique)">
+                Utiliser celle du dépôt
+            </button>
         </div>
     </div>
 </div>

@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# update_driftapp.sh - Mise à jour DriftApp Web (v5.8.0)
+# update_driftapp.sh - Mise à jour DriftApp Web (v5.12.0)
 # =============================================================================
 # Lancé par Django via `sudo` (NOPASSWD whitelist : setup/driftapp-updater.sudoers).
 # S'auto-détache en background et écrit sa progression dans :
@@ -14,15 +14,19 @@
 #   4. services      : install .service + daemon-reload
 #   5. restart       : start ems22d, motor_service, driftapp_web
 #
-# Préservation config utilisateur :
-#   - Fichiers trackés modifiés → backup en <file>.user_backup.<ts>
-#   - Stash + pop avec priorité user en cas de conflit
-#   - Version upstream conflictuelle disponible en <file>.upstream
+# Préservation config utilisateur (config_strategy, défaut "keep") :
+#   - "keep"  : stash + pop avec priorité user (comportement v5.8.0)
+#               Fichiers trackés modifiés → backup en <file>.user_backup.<ts>
+#               Version upstream conflictuelle disponible en <file>.upstream
+#   - "reset" : data/config.json est checkout sur origin/main AVANT le pull
+#               (l'ancien local est sauvé en data/config.json.user_backup.<ts>)
+#               Le reste du stash (autres fichiers user) est appliqué normalement.
 #
 # Usage :
-#   sudo ./scripts/update_driftapp.sh              # mode UI (détaché)
-#   sudo ./scripts/update_driftapp.sh --detached   # mode background
-#   sudo ./scripts/update_driftapp.sh --foreground # mode manuel (debug)
+#   sudo ./scripts/update_driftapp.sh                           # mode UI détaché, keep
+#   sudo ./scripts/update_driftapp.sh --config-strategy reset   # idem, reset config
+#   sudo ./scripts/update_driftapp.sh --detached                # mode background
+#   sudo ./scripts/update_driftapp.sh --foreground              # mode manuel (debug)
 # =============================================================================
 
 set -uo pipefail
@@ -39,13 +43,38 @@ TOTAL=5
 mkdir -p "$LOG_DIR"
 
 # =============================================================================
+# Parse args : --config-strategy {keep|reset}, --detached, --foreground
+# =============================================================================
+CONFIG_STRATEGY="keep"
+RUN_MODE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --config-strategy)
+            CONFIG_STRATEGY="${2:-keep}"
+            shift 2
+            ;;
+        --detached|--foreground)
+            RUN_MODE="$1"
+            shift
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+if [ "$CONFIG_STRATEGY" != "keep" ] && [ "$CONFIG_STRATEGY" != "reset" ]; then
+    echo "ERREUR : --config-strategy doit être 'keep' ou 'reset' (reçu: $CONFIG_STRATEGY)" >&2
+    exit 2
+fi
+
+# =============================================================================
 # Détachement automatique (sauf --detached ou --foreground)
 # =============================================================================
-MODE="${1:-}"
-if [ "$MODE" != "--detached" ] && [ "$MODE" != "--foreground" ]; then
+if [ "$RUN_MODE" != "--detached" ] && [ "$RUN_MODE" != "--foreground" ]; then
     # Réinitialiser le status + log pour cette session
     : > "$LOG_FILE"
-    nohup "$0" --detached >> "$LOG_FILE" 2>&1 &
+    nohup "$0" --detached --config-strategy "$CONFIG_STRATEGY" >> "$LOG_FILE" 2>&1 &
     echo "UPDATE_STARTED pid=$!"
     exit 0
 fi
@@ -138,7 +167,25 @@ cd "$PROJECT_DIR" || { write_status "fetch" 2 "cd échoué" false true "cd $PROJ
 chown -R "$REPO_OWNER:$REPO_OWNER" "$PROJECT_DIR/.git" 2>/dev/null || true
 
 OLD_COMMIT="$(run_as_owner git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-log "HEAD avant : $OLD_COMMIT"
+log "HEAD avant : $OLD_COMMIT | config_strategy : $CONFIG_STRATEGY"
+
+# Stratégie reset : checkout upstream de data/config.json AVANT le stash, pour que
+# le pull s'applique sans conflit sur ce fichier. L'ancien local est sauvegardé.
+# Pré-fetch indispensable pour avoir une référence origin/main à jour.
+if [ "$CONFIG_STRATEGY" = "reset" ]; then
+    log "config_strategy=reset : pré-fetch + checkout origin/main de data/config.json"
+    run_as_owner git fetch origin main >> "$LOG_FILE" 2>&1 || log "WARN : pré-fetch échoué"
+    if [ -f "$PROJECT_DIR/data/config.json" ]; then
+        cp -p "$PROJECT_DIR/data/config.json" \
+            "$PROJECT_DIR/data/config.json.user_backup.$TIMESTAMP" 2>/dev/null \
+            && log "Backup local : data/config.json.user_backup.$TIMESTAMP"
+    fi
+    if run_as_owner git checkout origin/main -- data/config.json >> "$LOG_FILE" 2>&1; then
+        log "data/config.json remplacé par la version upstream"
+    else
+        log "WARN : checkout upstream de data/config.json échoué"
+    fi
+fi
 
 # Liste des fichiers trackés modifiés (staged + unstaged)
 MODIFIED_FILES="$(run_as_owner git status --porcelain 2>/dev/null \
@@ -245,6 +292,26 @@ for svc in ems22d.service motor_service.service driftapp_web.service; do
 done
 systemctl daemon-reload
 log "daemon-reload OK"
+
+# v5.12.0 : redéploiement automatique du sudoers — évite que les MAJ futures
+# qui ajoutent des args au script soient bloquées par un sudoers obsolète.
+SUDOERS_SRC="$PROJECT_DIR/setup/driftapp-updater.sudoers"
+SUDOERS_DST="/etc/sudoers.d/driftapp-updater"
+if [ -f "$SUDOERS_SRC" ]; then
+    if ! cmp -s "$SUDOERS_SRC" "$SUDOERS_DST" 2>/dev/null; then
+        if cp "$SUDOERS_SRC" "$SUDOERS_DST" 2>/dev/null && chmod 0440 "$SUDOERS_DST" 2>/dev/null; then
+            if visudo -cf "$SUDOERS_DST" >> "$LOG_FILE" 2>&1; then
+                log "Sudoers mis à jour : $SUDOERS_DST"
+            else
+                log "WARN : visudo a rejeté le nouveau sudoers — restoration nécessaire"
+            fi
+        else
+            log "WARN : impossible de copier le sudoers (besoin root ?)"
+        fi
+    else
+        log "Sudoers : inchangé"
+    fi
+fi
 
 # Réalignement des permissions (logs et data accessibles à l'user Django)
 chown -R "$REPO_OWNER:$REPO_OWNER" "$LOG_DIR" 2>/dev/null || true

@@ -17,6 +17,7 @@ urlpatterns = [
 
     # Endpoints de mise à jour
     path('update/check/', views.check_update, name='update_check'),
+    path('update/config_diff/', views.config_diff_view, name='update_config_diff'),
     path('update/apply/', views.apply_update, name='update_apply'),
     path('update/status/', views.update_status, name='update_status'),
 

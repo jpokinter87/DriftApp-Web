@@ -762,6 +762,28 @@ header h1 span {
     line-height: 1.4;
 }
 
+/* Diff config (v5.12.0) */
+.update-config-diff-list {
+    margin-top: 0.5rem;
+    font-family: 'Fira Mono', 'Courier New', monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+.update-config-diff-list li {
+    padding: 0.1rem 0;
+}
+.update-config-diff-list em {
+    font-style: normal;
+    margin: 0 0.4rem;
+    color: var(--color-obs-text-secondary);
+}
+.update-config-diff-list .diff-local {
+    color: #d97757; /* orange : version locale */
+}
+.update-config-diff-list .diff-upstream {
+    color: #6c9b3f; /* vert : version dépôt */
+}
+
 /* Bloc détails dépliable */
 .update-details {
     margin-top: 0.75rem;

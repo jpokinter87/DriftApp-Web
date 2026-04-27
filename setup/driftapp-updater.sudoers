@@ -12,3 +12,9 @@
 
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached
+# v5.12.0 — accepte --config-strategy {keep|reset} en argument à la commande,
+# avec ou sans --detached. La whitelist est restrictive aux 4 combinaisons attendues.
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --config-strategy keep
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --config-strategy reset
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached --config-strategy keep
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached --config-strategy reset
