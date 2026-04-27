@@ -353,3 +353,116 @@ class TestCheckAndCorrectHook:
         # On vérifie qu'avant d'atteindre la logique abaque, le hook retourne False
         # (ici on s'arrête avant : _calculate_current_coords serait appelé ensuite).
         assert session._should_execute_anticipatory_slew(datetime.utcnow()) is False
+
+
+# ============================================================================
+# Re-scan glissant (v5.11.1)
+# ============================================================================
+
+
+class TestAnticipationRescan:
+    """Re-scan périodique de la fenêtre 1h tant qu'aucun schedule n'est armé."""
+
+    def test_rescan_noop_when_disabled(self):
+        stub = _SessionStub(enabled=False)
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(datetime.utcnow())
+        mock_compute.assert_not_called()
+
+    def test_rescan_first_call_runs_compute(self):
+        stub = _SessionStub(enabled=True)
+        # last_scan_at est None à l'init → le premier appel doit déclencher.
+        # `_compute_anticipation_schedule` (mocké ici) est responsable du set
+        # de `_anticipation_last_scan_at`, donc le test contractuel ne vérifie
+        # que l'appel à compute.
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(datetime.utcnow())
+        mock_compute.assert_called_once_with(log_no_flip=False)
+
+    def test_compute_sets_last_scan_at(self):
+        """Le compute (start ou rescan) initialise le timer pour le throttle."""
+        stub = _SessionStub(enabled=True)
+        assert stub._anticipation_last_scan_at is None
+        with patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+            return_value=[MagicMock()],
+        ), patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+        ) as DetCls:
+            DetCls.return_value.detect.return_value = None
+            stub._compute_anticipation_schedule()
+        assert stub._anticipation_last_scan_at is not None
+
+    def test_rescan_throttled_within_5_min(self):
+        stub = _SessionStub(enabled=True)
+        now = datetime.utcnow()
+        stub._anticipation_last_scan_at = now
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(now + timedelta(seconds=120))  # < 300s
+        mock_compute.assert_not_called()
+
+    def test_rescan_runs_after_5_min(self):
+        stub = _SessionStub(enabled=True)
+        now = datetime.utcnow()
+        stub._anticipation_last_scan_at = now
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(now + timedelta(seconds=301))  # > 300s
+        mock_compute.assert_called_once_with(log_no_flip=False)
+
+    def test_rescan_skips_when_schedule_armed(self, sample_schedule):
+        """Schedule armé non consommé → on ne re-scan pas (timing protégé)."""
+        stub = _SessionStub(enabled=True)
+        stub._anticipation_schedule = sample_schedule
+        stub._anticipation_anchor_utc = datetime.utcnow()
+        stub._anticipation_consumed = False
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(datetime.utcnow() + timedelta(seconds=600))
+        mock_compute.assert_not_called()
+
+    def test_rescan_runs_after_consumption(self, sample_schedule):
+        """Schedule consommé → re-scan permis pour ré-armement."""
+        stub = _SessionStub(enabled=True)
+        stub._anticipation_schedule = sample_schedule
+        stub._anticipation_consumed = True
+        with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
+            stub._maybe_rescan_anticipation(datetime.utcnow())
+        mock_compute.assert_called_once_with(log_no_flip=False)
+
+    def test_compute_resets_consumed_flag(self, sample_flip, sample_schedule):
+        """Un re-scan qui trouve un nouveau flip ré-arme _consumed=False."""
+        stub = _SessionStub(enabled=True)
+        # État post-consommation
+        stub._anticipation_schedule = sample_schedule
+        stub._anticipation_consumed = True
+        with patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+            return_value=[MagicMock()],
+        ), patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+        ) as DetCls, patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.MeridianSlewScheduler"
+        ) as SchCls:
+            DetCls.return_value.detect.return_value = sample_flip
+            SchCls.return_value.schedule.return_value = sample_schedule
+            stub._compute_anticipation_schedule(log_no_flip=False)
+
+        assert stub._anticipation_consumed is False
+        assert stub._anticipation_schedule is sample_schedule
+
+    def test_rescan_no_flip_logs_debug(self, caplog):
+        """Re-scan sans flip → DEBUG, pas INFO (évite spam log toutes les 5 min)."""
+        stub = _SessionStub(enabled=True)
+        with patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+            return_value=[MagicMock()],
+        ), patch(
+            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+        ) as DetCls:
+            DetCls.return_value.detect.return_value = None
+            with caplog.at_level(logging.DEBUG, logger="_SessionStub"):
+                stub._compute_anticipation_schedule(log_no_flip=False)
+
+        info_records = [r for r in caplog.records if r.levelno == logging.INFO]
+        debug_records = [r for r in caplog.records if r.levelno == logging.DEBUG]
+        assert not any("meridian_anticipation_no_flip" in r.message for r in info_records)
+        assert any("meridian_anticipation_rescan_no_flip" in r.message for r in debug_records)

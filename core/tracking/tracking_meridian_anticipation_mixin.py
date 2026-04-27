@@ -8,8 +8,11 @@ dans le cycle start() → check_and_correct() du TrackingSession.
 Principe :
 - Au start(), si le flag meridian_anticipation.enabled est True et l'objet n'est
   pas une planète, on calcule un SlewSchedule pour la fenêtre 1h à venir.
-- Pendant check_and_correct(), si l'instant optimal (schedule.t_start) est atteint,
-  on exécute un GOTO directif vers schedule.target avec force_direction imposé.
+- Pendant check_and_correct(), un re-scan glissant ré-évalue périodiquement la
+  fenêtre 1h tant qu'aucun schedule n'est armé (ou après consommation), pour
+  capter les flips qui n'étaient pas dans l'horizon initial.
+- Si l'instant optimal (schedule.t_start) est atteint, on exécute un GOTO
+  directif vers schedule.target avec force_direction imposé.
 - Le slew est consommé une seule fois ; la boucle abaque reprend ensuite.
 
 Flag OFF ou exception → fallback silencieux vers le comportement v5.10.
@@ -32,6 +35,7 @@ from core.utils.angle_utils import shortest_angular_distance
 
 _LOOKAHEAD_DURATION_SEC = 3600
 _LOOKAHEAD_SAMPLING_SEC = 10
+_RESCAN_INTERVAL_SEC = 300
 
 
 class TrackingMeridianAnticipationMixin:
@@ -45,6 +49,7 @@ class TrackingMeridianAnticipationMixin:
     _anticipation_schedule: Optional[SlewSchedule]
     _anticipation_anchor_utc: Optional[datetime]
     _anticipation_consumed: bool
+    _anticipation_last_scan_at: Optional[datetime]
 
     def _init_anticipation(self, anticipation_config) -> None:
         """Initialise l'état d'anticipation à partir de la config.
@@ -57,15 +62,19 @@ class TrackingMeridianAnticipationMixin:
         self._anticipation_schedule = None
         self._anticipation_anchor_utc = None
         self._anticipation_consumed = False
-        self.logger.debug(
+        self._anticipation_last_scan_at = None
+        self.logger.info(
             f"meridian_anticipation_init | enabled={self._anticipation_enabled}"
         )
 
-    def _compute_anticipation_schedule(self) -> None:
+    def _compute_anticipation_schedule(self, log_no_flip: bool = True) -> None:
         """Calcule le schedule pour la fenêtre 1h à venir.
 
         Appelé depuis TrackingSession.start() après que ra_deg/dec_deg/is_planet
-        soient connus. Écrit `self._anticipation_schedule` (ou le laisse None).
+        soient connus, et depuis `_maybe_rescan_anticipation()` pour les
+        ré-évaluations périodiques. Reset systématique de l'état avant calcul :
+        un re-scan ré-arme `_anticipation_consumed=False` quand un nouveau flip
+        est détecté.
         """
         if not self._anticipation_enabled:
             return
@@ -75,6 +84,15 @@ class TrackingMeridianAnticipationMixin:
                 f"meridian_anticipation_skipped_planet | object={getattr(self, 'objet', '?')}"
             )
             return
+
+        # Reset systématique : permet le ré-armement après consommation,
+        # ou la prise en compte d'un nouveau flip apparu dans la fenêtre.
+        self._anticipation_schedule = None
+        self._anticipation_anchor_utc = None
+        self._anticipation_consumed = False
+        # Tracker le timestamp pour throttler les re-scans : aussi mis à jour
+        # quand start() appelle directement (évite double-scan immédiat).
+        self._anticipation_last_scan_at = datetime.utcnow()
 
         try:
             steps_per_rev = self.moteur.steps_per_dome_revolution
@@ -93,10 +111,15 @@ class TrackingMeridianAnticipationMixin:
 
             flip = MeridianFlipDetector().detect(trajectory)
             if flip is None:
-                self.logger.debug(
-                    f"meridian_anticipation_no_flip | object={getattr(self, 'objet', '?')} "
-                    f"window={_LOOKAHEAD_DURATION_SEC}s"
-                )
+                if log_no_flip:
+                    self.logger.info(
+                        f"meridian_anticipation_no_flip | object={getattr(self, 'objet', '?')} "
+                        f"window={_LOOKAHEAD_DURATION_SEC}s"
+                    )
+                else:
+                    self.logger.debug(
+                        f"meridian_anticipation_rescan_no_flip | object={getattr(self, 'objet', '?')}"
+                    )
                 return
 
             schedule = MeridianSlewScheduler().schedule(flip, dome_speed)
@@ -116,6 +139,28 @@ class TrackingMeridianAnticipationMixin:
             )
             self._anticipation_schedule = None
             self._anticipation_anchor_utc = None
+
+    def _maybe_rescan_anticipation(self, now_utc: datetime) -> None:
+        """Ré-évalue le schedule sur fenêtre glissante 1h, throttlé à 5 min.
+
+        Ne perturbe jamais un schedule armé en attente : ne re-scan QUE si
+        aucun schedule n'est armé, ou s'il a déjà été consommé. Permet aux
+        sessions longues (>1h) de capter un flip qui n'était pas dans
+        l'horizon initial du `start()`.
+        """
+        if not self._anticipation_enabled:
+            return
+        # Skip si un schedule est armé en attente (ne pas perturber le timing).
+        if self._anticipation_schedule is not None and not self._anticipation_consumed:
+            return
+        # Throttle : 1 scan max toutes les _RESCAN_INTERVAL_SEC secondes.
+        # `_compute_anticipation_schedule` met lui-même `_anticipation_last_scan_at`
+        # à jour, donc start() initialise le timer et le rescan le rafraîchit.
+        if self._anticipation_last_scan_at is not None:
+            elapsed = (now_utc - self._anticipation_last_scan_at).total_seconds()
+            if elapsed < _RESCAN_INTERVAL_SEC:
+                return
+        self._compute_anticipation_schedule(log_no_flip=False)
 
     def _should_execute_anticipatory_slew(self, now_utc: datetime) -> bool:
         """True si un slew anticipatif est dû à l'instant `now_utc`."""

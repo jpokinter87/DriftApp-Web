@@ -12,6 +12,11 @@ de cas de référence.
 Vitesse moteur : 42°/min (max mesuré terrain 22-23/03, 96°/min UPAN non
 atteignable — firmware fermé).
 
+Convention horaire : aligné sur le runtime — tz_offset auto-DST via ZoneInfo
+("Europe/Paris") + datetime LOCAL naive. Les horodatages affichés (et ceux
+retournés par `find_meridian_time`) sont donc directement comparables aux
+timestamps des logs `motor_service_*.log`.
+
 Usage :
     uv run python scripts/diagnostics/simulate_meridian_anticipation.py
 """
@@ -19,8 +24,9 @@ Usage :
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -34,7 +40,18 @@ from core.utils.angle_utils import normalize_angle_180, normalize_angle_360
 
 SITE_LAT = 44.15
 SITE_LON = 5.23
-SIM_SEARCH_START = datetime(2026, 3, 28, 18, 0, 0, tzinfo=timezone.utc)  # début recherche méridien
+SITE_TZ_NAME = "Europe/Paris"
+
+
+def _site_tz_offset_hours(at: datetime) -> int:
+    """Offset UTC du site (DST-aware), arrondi à l'heure — aligné config_loader."""
+    off = at.replace(tzinfo=ZoneInfo(SITE_TZ_NAME)).utcoffset()
+    return int(round(off.total_seconds() / 3600.0))
+
+
+# Datetime LOCAL naive — interprété comme local CEST/CET par AstronomicalCalculations
+# (qui soustrait tz_offset en interne pour obtenir l'UTC astronomique).
+SIM_SEARCH_START = datetime(2026, 3, 28, 20, 0, 0)  # 20:00 local ≈ 18:00 UTC
 SEARCH_WINDOW_HOURS = 18
 SIM_DURATION_SEC = 3600   # 1 h autour du méridien
 PRE_MERIDIAN_SEC = 500    # sim commence 500s avant le transit détecté
@@ -423,13 +440,15 @@ def simulate(traj, strategy: str, debug: bool = False):
 # --- Rapport ------------------------------------------------------------------
 
 def main():
-    calc = AstronomicalCalculations(SITE_LAT, SITE_LON, tz_offset=0)
+    tz_offset = _site_tz_offset_hours(SIM_SEARCH_START)
+    calc = AstronomicalCalculations(SITE_LAT, SITE_LON, tz_offset=tz_offset)
     abaque = AbaqueManager()
     abaque.load_abaque()
 
     print("=" * 130)
     print(f"SIMULATION MULTI-ALTITUDES — A (actuel) / B (fixe {ANTICIPATION_HORIZON_SEC}s) / C (adaptatif) / E (timing optimal pré-calculé)")
-    print(f"Site : lat={SITE_LAT}° lon={SITE_LON}° | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min")
+    print(f"Site : lat={SITE_LAT}° lon={SITE_LON}° tz={SITE_TZ_NAME} (offset {tz_offset:+d}h, "
+          f"horodatages affichés en LOCAL) | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min")
     print("=" * 130)
 
     header = (f"{'Scénario':<22} {'alt_max':>7} | "
@@ -503,7 +522,7 @@ def main():
     if r_e["trigger"]:
         tr = r_e["trigger"]
         flip = tr["flip"]
-        print(f"Méridien UTC : {mer_t.strftime('%H:%M:%S')}")
+        print(f"Méridien (local {SITE_TZ_NAME}) : {mer_t.strftime('%H:%M:%S')}")
         print(f"Flip détecté : T+{flip['start']:.0f}s → T+{flip['end']:.0f}s "
               f"(durée {flip['duration']:.0f}s, Δ={flip['amplitude']:.1f}°)")
         print(f"              pre_target={flip['pre_target']:.1f}° → post_target={flip['post_target']:.1f}°")

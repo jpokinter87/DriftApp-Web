@@ -59,6 +59,9 @@ class TrackingCorrectionsMixin:
         # Anticipation méridien (v5.9) — exécutée AVANT la logique abaque standard.
         # Court-circuit silencieux si flag désactivé (schedule=None) ou déjà consommé.
         now_utc = datetime.utcnow()
+        # Re-scan glissant : ré-évalue la fenêtre 1h périodiquement (throttle 5 min)
+        # tant qu'aucun schedule n'est armé. No-op si schedule en attente.
+        self._maybe_rescan_anticipation(now_utc)
         if self._should_execute_anticipatory_slew(now_utc):
             self._execute_anticipatory_slew()
             # Après un slew massif, consommer l'intervalle avant la prochaine correction.
