@@ -109,8 +109,14 @@ class ThresholdsConfig:
 
 @dataclass
 class MeridianAnticipationConfig:
-    """Configuration de l'anticipation méridien (v5.9)."""
-    enabled: bool = False
+    """Configuration de l'anticipation méridien (v5.9).
+
+    Activé par défaut depuis v5.11.2 : retour terrain NGC 3690 (26-27/04) +
+    re-scan glissant 1h (v5.11.1) → couverture sessions longues, gains
+    théoriques −47% lag max au transit. Mettre `enabled=false` dans
+    `data/config.json` pour repasser au comportement v5.10 strict.
+    """
+    enabled: bool = True
 
 
 @dataclass
@@ -329,9 +335,9 @@ class ConfigLoader:
         )
 
     def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:
-        """Parse la section meridian_anticipation (v5.9, opt-in)."""
+        """Parse la section meridian_anticipation (v5.9, activé par défaut depuis v5.11.2)."""
         c = self.cfg.get("meridian_anticipation", {})
-        return MeridianAnticipationConfig(enabled=bool(c.get("enabled", False)))
+        return MeridianAnticipationConfig(enabled=bool(c.get("enabled", True)))
 
     def _log_summary(self, config: DriftAppConfig):
         """Log le résumé de la configuration."""

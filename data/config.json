@@ -36,8 +36,8 @@
   },
 
   "meridian_anticipation": {
-    "_comment": "v5.9: anticipation du flip méridien (stratégie E). Quand enabled=true, le tracking lance un GOTO directif au moment optimal pour minimiser le lag maximal pendant le flip. Réversible, comportement v5.10 (vitesse unique sans anticipation) préservé si enabled=false. Validation terrain requise.",
-    "enabled": false
+    "_comment": "v5.9: anticipation du flip méridien (stratégie E). Activé par défaut depuis v5.11.2 (re-scan glissant 1h v5.11.1 + retour terrain NGC 3690). Le tracking lance un GOTO directif au moment optimal pour minimiser le lag maximal pendant le flip. Mettre enabled=false pour repasser au comportement v5.10 strict.",
+    "enabled": true
   },
 
   "simulation": false,
