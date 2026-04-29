@@ -341,6 +341,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **5.12** | Avril 2026 | OTA robuste : diff config UI + choix utilisateur, redéploiement sudoers auto (5.12.0). Garde-fou UI anti-GOTO involontaire pendant tracking actif — JOG/Continu/GOTO grisés (5.12.1) |
 | **5.11** | Avril 2026 | v5.9 Phase 2 : intégration runtime anticipation méridien (flag opt-in + force_direction moteur + mixin + hook `check_and_correct`). Rétro-compat stricte (flag default false = v5.10 identique). Validation terrain à suivre |
 | **5.10** | Avril 2026 | Vitesse unique 260 µs : suppression mode adaptatif, gel méridien GEM, flag force_continuous, rattrapage meridian_catchup |
 | **5.9** | Avril 2026 | Prédiction méridien Phase 1 (module pur `meridian_anticipation.py`) |

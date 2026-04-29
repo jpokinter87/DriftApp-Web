@@ -717,6 +717,26 @@ function calculateEstimatedPosition(startPos, delta, startTime) {
     return estimatedPos;
 }
 
+// Grise/réactive les boutons de déplacement manuel + GOTO angulaire.
+// STOP reste toujours actif (sécurité).
+// Garde-fou anti-erreur (incident NGC 3675 24/04/2026) : empêche un GOTO ou JOG
+// involontaire pendant tracking actif (clic fantôme sur écran tactile).
+function setManualControlsDisabled(disabled) {
+    const buttons = [
+        elements.btnJogCCW10,
+        elements.btnJogCCW1,
+        elements.btnJogCW1,
+        elements.btnJogCW10,
+        elements.btnContCCW,
+        elements.btnContCW,
+        elements.btnGoto,
+    ];
+    for (const btn of buttons) {
+        if (btn) btn.disabled = disabled;
+    }
+    if (elements.gotoAngle) elements.gotoAngle.disabled = disabled;
+}
+
 function updateTrackingDisplay(motor) {
     // Afficher le panneau pendant l'initialisation (GOTO initial) OU pendant le tracking actif
     const isInitializing = motor.status === 'initializing' && motor.tracking_object;
@@ -744,6 +764,7 @@ function updateTrackingDisplay(motor) {
         elements.trackingInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = true;
         elements.btnStopTracking.disabled = false;
+        setManualControlsDisabled(true);
 
         // Afficher le nom de l'objet (simplifié - la modal gère les détails du GOTO)
         if (isInitializing) {
@@ -833,6 +854,7 @@ function updateTrackingDisplay(motor) {
         elements.trackingInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
+        setManualControlsDisabled(false);
 
         // Arrêter le countdown quand pas de suivi
         stopCountdown();
