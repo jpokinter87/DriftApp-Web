@@ -1,17 +1,17 @@
 """
 Firmware principal Pico W cimier — pilotage WiFi REST.
 
-Tourne sur un Raspberry Pi Pico W (RP2040 + WiFi).
+Tourne sur Raspberry Pi Pico W (RP2040 + WiFi).
 
 Architecture :
-  - WiFi (mode STA) connecte au reseau local, IP fixe via DHCP statique
-  - Mini-serveur HTTP via Microdot (asyncio)
-  - CimierController (logique metier, module partage testable)
-  - SoftwareStepGenerator (50 Hz suffit pour cycle 60 s)
+  - Mini serveur HTTP socket pur (aucune dependance externe a installer)
+  - Boucle principale : tick controller (~50 Hz) + accept HTTP non-bloquant + WDT
+  - Mode safe-boot : delai 3 sec au demarrage avec banner. Permet Ctrl-C dans
+    mpremote pour reprendre la main si le firmware bloque.
   - 2 fins de course NC sur GPIO 14/15 avec pull-up interne
-  - Watchdog hardware RP2040 200 ms = filet ultime
+  - Watchdog hardware RP2040 200 ms = filet ultime si firmware fige
 
-Endpoints REST (port 80) :
+Endpoints REST (port 80, JSON) :
   GET  /status   -> {state, open_switch, closed_switch, ...}
   POST /open     -> demarre cycle ouverture
   POST /close    -> demarre cycle fermeture
@@ -19,26 +19,23 @@ Endpoints REST (port 80) :
   GET  /info     -> {firmware_version, wifi_rssi, free_memory, ...}
   POST /config   -> {invert_direction: bool}
 
-Pre-requis :
-  - MicroPython 1.20+ avec asyncio
-  - Microdot installe : `mip install microdot`
-  - Fichier secrets.py local (WiFi credentials, non versionne)
+Pre-requis Pico W :
+  - MicroPython 1.20+
+  - Aucune lib externe (pas de microdot, pas de mip install)
+  - Fichier secrets.py local avec WIFI_SSID + WIFI_PASSWORD
 """
 
 import gc
-import network
+import json
+import socket
+import sys
 import time
-import uasyncio as asyncio
+import network
+
 from machine import Pin, WDT
 
-from microdot.microdot import Microdot, Response
 from cimier_controller import CimierController
 from step_generator import SoftwareStepGenerator
-
-try:
-    from secrets import WIFI_SSID, WIFI_PASSWORD
-except ImportError:
-    raise RuntimeError("secrets.py manquant : creer avec WIFI_SSID + WIFI_PASSWORD")
 
 
 # ------------------------------------------------------------------
@@ -50,13 +47,28 @@ PIN_DIR = 3           # GP3 -> DIR+ DM560T
 PIN_OPEN_SWITCH = 14  # GP14 -> fin de course NC OUVERT
 PIN_CLOSED_SWITCH = 15  # GP15 -> fin de course NC FERME
 
-# Pulse rate cible : 3200 steps / 60 s = ~53 Hz -> sleep 18750 us entre pas
-STEP_PERIOD_US = 18750
+# Cadence tick : 3200 steps / 60 s = ~53 Hz -> ~19 ms entre pas
+STEP_PERIOD_MS = 19
 
-# Watchdog hardware : timeout 200 ms ; on feed a chaque tick (~20 ms)
+# Watchdog hardware ; on feed a chaque iteration de boucle
 WDT_TIMEOUT_MS = 200
 
 HTTP_PORT = 80
+
+# Fenetre safe-boot : permet a l'operateur d'interrompre via Ctrl-C
+SAFE_BOOT_DELAY_S = 3
+
+
+# ------------------------------------------------------------------
+# Time provider compatible MicroPython
+# ------------------------------------------------------------------
+
+def now_seconds():
+    """Secondes depuis le boot (float). Wrappe ticks_ms (overflow ~49 jours).
+
+    Suffit pour timeouts cycle (60 s) et marker last_action_ts.
+    """
+    return time.ticks_ms() / 1000.0
 
 
 # ------------------------------------------------------------------
@@ -72,7 +84,7 @@ class PicoHardwareAdapter:
         self._sw_closed = Pin(closed_switch_pin, Pin.IN, Pin.PULL_UP)
 
     def read_open_switch(self):
-        # NC + pull-up : repos = 0 (contact ferme tire a GND), butee = 1
+        # NC + pull-up : repos = 0, butee ou cable coupe = 1
         return self._sw_open.value() == 1
 
     def read_closed_switch(self):
@@ -89,105 +101,206 @@ class PicoHardwareAdapter:
 # WiFi
 # ------------------------------------------------------------------
 
-def connect_wifi():
+def connect_wifi(ssid, password, timeout_s=30):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    if not wlan.isconnected():
-        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-        for _ in range(60):  # 30 s timeout
-            if wlan.isconnected():
-                break
-            time.sleep_ms(500)
-    if not wlan.isconnected():
-        raise RuntimeError("WiFi connection failed")
+    if wlan.isconnected():
+        return wlan
+    wlan.connect(ssid, password)
+    deadline_ms = time.ticks_add(time.ticks_ms(), timeout_s * 1000)
+    while not wlan.isconnected():
+        if time.ticks_diff(deadline_ms, time.ticks_ms()) <= 0:
+            raise RuntimeError("WiFi connection timeout")
+        time.sleep_ms(200)
     return wlan
 
 
 # ------------------------------------------------------------------
-# Initialisation globale
+# Mini serveur HTTP socket pur
 # ------------------------------------------------------------------
 
-_step_gen = SoftwareStepGenerator(PIN_STEP, PIN_DIR)
-_hw = PicoHardwareAdapter(_step_gen, PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
-_controller = CimierController(_hw, time.time)
-_wdt = WDT(timeout=WDT_TIMEOUT_MS)
-_wlan = None
+def parse_http_request(data):
+    """Parser HTTP minimaliste. Retourne (method, path, body_dict_or_None)."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeError:
+        return None, None, None
+    head, _, body_str = text.partition("\r\n\r\n")
+    lines = head.split("\r\n")
+    if not lines:
+        return None, None, None
+    parts = lines[0].split(" ")
+    if len(parts) < 2:
+        return None, None, None
+    method = parts[0]
+    path = parts[1]
+    body = None
+    if body_str.strip():
+        try:
+            body = json.loads(body_str)
+        except (ValueError, TypeError):
+            body = None
+    return method, path, body
 
 
-# ------------------------------------------------------------------
-# Endpoints REST (Microdot)
-# ------------------------------------------------------------------
-
-app = Microdot()
-Response.default_content_type = "application/json"
-
-
-@app.get("/status")
-def status(request):
-    return _controller.to_status_dict()
-
-
-@app.post("/open")
-def open_cmd(request):
-    _controller.start_open()
-    return _controller.to_status_dict()
+def build_response(status_code, body_dict):
+    body = json.dumps(body_dict).encode("utf-8")
+    status_text = "OK" if status_code == 200 else "Error"
+    headers = (
+        "HTTP/1.1 " + str(status_code) + " " + status_text + "\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + str(len(body)) + "\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode("utf-8")
+    return headers + body
 
 
-@app.post("/close")
-def close_cmd(request):
-    _controller.start_close()
-    return _controller.to_status_dict()
+def route_request(controller, wlan, method, path, body):
+    """Routage des endpoints. Retourne (status_code, response_dict)."""
+    if method == "GET" and path == "/status":
+        return 200, controller.to_status_dict()
+    if method == "POST" and path == "/open":
+        controller.start_open()
+        return 200, controller.to_status_dict()
+    if method == "POST" and path == "/close":
+        controller.start_close()
+        return 200, controller.to_status_dict()
+    if method == "POST" and path == "/stop":
+        controller.stop()
+        return 200, controller.to_status_dict()
+    if method == "GET" and path == "/info":
+        info = controller.to_info_dict()
+        info["wifi_rssi"] = wlan.status("rssi") if wlan else None
+        info["wifi_ip"] = wlan.ifconfig()[0] if wlan else None
+        info["free_memory"] = gc.mem_free()
+        return 200, info
+    if method == "POST" and path == "/config":
+        if isinstance(body, dict) and "invert_direction" in body:
+            controller.set_invert_direction(body["invert_direction"])
+        return 200, controller.to_info_dict()
+    return 404, {"error": "not_found", "method": method, "path": path}
 
 
-@app.post("/stop")
-def stop_cmd(request):
-    _controller.stop()
-    return _controller.to_status_dict()
+def serve_one_request(server_sock, controller, wlan):
+    """Tente d'accepter une connexion. Non-bloquant : ne fait rien si pas de client."""
+    try:
+        client, _addr = server_sock.accept()
+    except OSError:
+        return  # pas de client en attente, continue la boucle
+    try:
+        client.settimeout(2)
+        data = client.recv(2048)
+        if data:
+            method, path, body = parse_http_request(data)
+            if method:
+                status, payload = route_request(controller, wlan, method, path, body)
+            else:
+                status, payload = 400, {"error": "bad_request"}
+            client.send(build_response(status, payload))
+    except OSError as exc:
+        print("HTTP error:", exc)
+    finally:
+        try:
+            client.close()
+        except OSError:
+            pass
 
 
-@app.get("/info")
-def info(request):
-    info_dict = _controller.to_info_dict()
-    info_dict["wifi_rssi"] = _wlan.status("rssi") if _wlan else None
-    info_dict["wifi_ip"] = _wlan.ifconfig()[0] if _wlan else None
-    info_dict["free_memory"] = gc.mem_free()
-    return info_dict
+def run_server(controller, wlan, wdt, port):
+    sock = socket.socket()
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", port))
+    sock.listen(5)
+    sock.settimeout(0)  # accept non-bloquant
+    print("HTTP server listening on port", port)
 
-
-@app.post("/config")
-def config(request):
-    body = request.json or {}
-    if "invert_direction" in body:
-        _controller.set_invert_direction(body["invert_direction"])
-    return _controller.to_info_dict()
-
-
-# ------------------------------------------------------------------
-# Boucle de cycle (tick haute frequence)
-# ------------------------------------------------------------------
-
-async def cycle_runner():
-    """Tache asyncio en parallele du serveur HTTP.
-
-    Appelle controller.tick() a la cadence STEP_PERIOD_US et nourrit le WDT.
-    """
+    last_step = time.ticks_ms()
     while True:
-        _controller.tick()
-        _wdt.feed()
-        await asyncio.sleep_ms(STEP_PERIOD_US // 1000)
+        # 1. Tick controller a la cadence STEP_PERIOD_MS
+        if time.ticks_diff(time.ticks_ms(), last_step) >= STEP_PERIOD_MS:
+            controller.tick()
+            last_step = time.ticks_ms()
+
+        # 2. Watchdog : tant que la boucle tourne, on est vivant
+        wdt.feed()
+
+        # 3. Servir 1 requete HTTP si dispo
+        serve_one_request(sock, controller, wlan)
+
+        # 4. Yield un poil pour eviter de griller le CPU
+        time.sleep_ms(2)
+
+
+# ------------------------------------------------------------------
+# Safe boot — banner + delai d'interruption
+# ------------------------------------------------------------------
+
+def safe_boot_window():
+    """Banner + delai SAFE_BOOT_DELAY_S sec.
+
+    Pendant cette fenetre, l'operateur peut interrompre via Ctrl-C dans mpremote
+    pour acceder au REPL et debugger sans que la boucle principale se lance.
+    """
+    print("=" * 60)
+    print("DriftApp Cimier Firmware")
+    print("=" * 60)
+    print("Boot dans", SAFE_BOOT_DELAY_S, "secondes...")
+    print("(Ctrl-C dans mpremote pour interrompre et acceder au REPL)")
+    for remaining in range(SAFE_BOOT_DELAY_S, 0, -1):
+        print(" ", remaining, "s")
+        time.sleep(1)
+    print("Boot demarre.")
+    print()
 
 
 # ------------------------------------------------------------------
 # Main
 # ------------------------------------------------------------------
 
-async def main():
-    global _wlan
-    _wlan = connect_wifi()
-    print("WiFi connected:", _wlan.ifconfig()[0])
-    asyncio.create_task(cycle_runner())
-    await app.start_server(host="0.0.0.0", port=HTTP_PORT)
+def main():
+    safe_boot_window()
+
+    # 1. Imports retardes : si secrets.py manque, on tombe au REPL avec un msg clair
+    try:
+        from secrets import WIFI_SSID, WIFI_PASSWORD
+    except ImportError:
+        print("ERREUR: fichier secrets.py introuvable sur le Pico W.")
+        print("Cree le fichier avec WIFI_SSID + WIFI_PASSWORD et reflashe.")
+        return
+
+    # 2. Hardware
+    step_gen = SoftwareStepGenerator(PIN_STEP, PIN_DIR)
+    hw = PicoHardwareAdapter(step_gen, PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
+    controller = CimierController(hw, now_seconds)
+    wdt = WDT(timeout=WDT_TIMEOUT_MS)
+    print("Hardware initialise. Etat:", controller.state)
+
+    # 3. WiFi
+    print("Connexion WiFi a", WIFI_SSID, "...")
+    try:
+        wlan = connect_wifi(WIFI_SSID, WIFI_PASSWORD)
+    except RuntimeError as exc:
+        print("ERREUR WiFi:", exc)
+        print("Verifie SSID/mot de passe + reseau en 2.4 GHz (le Pico W ne fait pas le 5 GHz).")
+        return
+
+    ip = wlan.ifconfig()[0]
+    print()
+    print(">>> WiFi connected: " + ip + " <<<")
+    print(">>> Test rapide : curl http://" + ip + "/status <<<")
+    print()
+
+    # 4. Boucle principale
+    run_server(controller, wlan, wdt, HTTP_PORT)
 
 
-# Demarrage automatique au boot du Pico W
-asyncio.run(main())
+# Demarrage automatique avec garde-fou top-level
+try:
+    main()
+except KeyboardInterrupt:
+    print()
+    print("Boot interrompu (Ctrl-C). Acces REPL disponible.")
+except Exception as exc:
+    print("ERREUR FATALE:", exc)
+    sys.print_exception(exc)
+    print("Acces REPL disponible apres reset.")
