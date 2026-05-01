@@ -260,22 +260,32 @@ def safe_boot_window():
 def main():
     safe_boot_window()
 
-    # 1. Imports retardes : si secrets.py manque, on tombe au REPL avec un msg clair
+    # 1. Imports retardes : on distingue "module absent" de "noms absents"
+    #    pour donner un message d'erreur clair (c'etait pas le cas avant).
     try:
-        from secrets import WIFI_SSID, WIFI_PASSWORD
+        import secrets as _secrets
     except ImportError:
         print("ERREUR: fichier secrets.py introuvable sur le Pico W.")
-        print("Cree le fichier avec WIFI_SSID + WIFI_PASSWORD et reflashe.")
+        print("Cree-le avec WIFI_SSID + WIFI_PASSWORD puis : mpremote cp secrets.py :")
+        return
+    try:
+        WIFI_SSID = _secrets.WIFI_SSID
+        WIFI_PASSWORD = _secrets.WIFI_PASSWORD
+    except AttributeError as exc:
+        print("ERREUR: secrets.py present mais variable manquante:", exc)
+        print("Le fichier doit contenir EXACTEMENT :")
+        print('  WIFI_SSID = "TonReseauWiFi"')
+        print('  WIFI_PASSWORD = "MotDePasse"')
         return
 
-    # 2. Hardware
+    # 2. Hardware (le WDT est arme plus tard, apres WiFi : la connexion peut
+    #    prendre plusieurs secondes et un WDT 200 ms reset le Pico avant la fin)
     step_gen = SoftwareStepGenerator(PIN_STEP, PIN_DIR)
     hw = PicoHardwareAdapter(step_gen, PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
     controller = CimierController(hw, now_seconds)
-    wdt = WDT(timeout=WDT_TIMEOUT_MS)
     print("Hardware initialise. Etat:", controller.state)
 
-    # 3. WiFi
+    # 3. WiFi (avant WDT : connexion peut prendre 2-15 s)
     print("Connexion WiFi a", WIFI_SSID, "...")
     try:
         wlan = connect_wifi(WIFI_SSID, WIFI_PASSWORD)
@@ -290,7 +300,10 @@ def main():
     print(">>> Test rapide : curl http://" + ip + "/status <<<")
     print()
 
-    # 4. Boucle principale
+    # 4. WDT arme juste avant la boucle principale (run_server feed a chaque tick)
+    wdt = WDT(timeout=WDT_TIMEOUT_MS)
+
+    # 5. Boucle principale
     run_server(controller, wlan, wdt, HTTP_PORT)
 
 
