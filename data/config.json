@@ -108,5 +108,22 @@
     "log_dir": "logs",
     "max_file_size_mb": 10,
     "backup_count": 5
+  },
+
+  "cimier": {
+    "_comment": "v6.0 Phase 1 — pilotage cimier motorisé via Pico W + cascade Shelly 220V/12V. Opt-in (enabled=false par défaut). IPs DHCP fixées 2026-05-01.",
+    "enabled": false,
+    "host": "192.168.1.84",
+    "port": 80,
+    "invert_direction": false,
+    "cycle_timeout_s": 90.0,
+    "boot_poll_timeout_s": 30.0,
+    "post_off_quiet_s": 10.0,
+    "power_switch": {
+      "_comment": "type ∈ {shelly_gen2, shelly_gen1, noop}. noop = pas de hardware (dev/tests).",
+      "type": "noop",
+      "host": "192.168.1.83",
+      "switch_id": 0
+    }
   }
 }

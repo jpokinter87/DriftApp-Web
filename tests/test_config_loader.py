@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from core.config.config_loader import (
+    CimierConfig,
     ConfigLoader,
     DriftAppConfig,
     EncoderConfig,
@@ -24,6 +25,7 @@ from core.config.config_loader import (
     MeridianAnticipationConfig,
     MotorConfig,
     MotorDriverConfig,
+    PowerSwitchConfig,
     SerialConfig,
     SiteConfig,
     ThresholdsConfig,
@@ -365,6 +367,109 @@ class TestMeridianAnticipationConfig:
             pytest.skip("config.json non trouvé")
         config = load_config(config_json_path)
         assert config.meridian_anticipation.enabled is True
+
+
+# =============================================================================
+# CimierConfig (v6.0 Phase 1) — opt-in + rétro-compat stricte
+# =============================================================================
+
+class TestCimierConfig:
+    """Tests pour la section cimier (v6.0 Phase 1, sub-plan 02)."""
+
+    def test_cimier_config_default_when_missing(self, tmp_path, sample_config_dict):
+        """Section absente du JSON → defaults appliqués, pas d'exception (rétro-compat)."""
+        cfg = dict(sample_config_dict)
+        cfg.pop("cimier", None)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert isinstance(config.cimier, CimierConfig)
+        assert config.cimier.enabled is False
+        assert config.cimier.host == ""
+        assert config.cimier.port == 80
+        assert config.cimier.invert_direction is False
+        assert config.cimier.cycle_timeout_s == 90.0
+        assert config.cimier.boot_poll_timeout_s == 30.0
+        assert config.cimier.post_off_quiet_s == 10.0
+        assert isinstance(config.cimier.power_switch, PowerSwitchConfig)
+        assert config.cimier.power_switch.type == "noop"
+        assert config.cimier.power_switch.host == ""
+        assert config.cimier.power_switch.switch_id == 0
+
+    def test_cimier_config_full_section(self, tmp_path, sample_config_dict):
+        """Section complète → toutes les valeurs reflétées dans la dataclass."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {
+            "enabled": True,
+            "host": "10.0.0.42",
+            "port": 8080,
+            "invert_direction": True,
+            "cycle_timeout_s": 60.0,
+            "boot_poll_timeout_s": 20.0,
+            "post_off_quiet_s": 5.0,
+            "power_switch": {
+                "type": "shelly_gen2",
+                "host": "10.0.0.43",
+                "switch_id": 1,
+            },
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.enabled is True
+        assert config.cimier.host == "10.0.0.42"
+        assert config.cimier.port == 8080
+        assert config.cimier.invert_direction is True
+        assert config.cimier.cycle_timeout_s == 60.0
+        assert config.cimier.boot_poll_timeout_s == 20.0
+        assert config.cimier.post_off_quiet_s == 5.0
+        assert config.cimier.power_switch.type == "shelly_gen2"
+        assert config.cimier.power_switch.host == "10.0.0.43"
+        assert config.cimier.power_switch.switch_id == 1
+
+    def test_cimier_config_partial_section(self, tmp_path, sample_config_dict):
+        """Section partielle → defaults pour clés absentes, override pour les autres."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True, "host": "10.0.0.99"}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.enabled is True
+        assert config.cimier.host == "10.0.0.99"
+        # Defaults pour les autres champs
+        assert config.cimier.port == 80
+        assert config.cimier.invert_direction is False
+        assert config.cimier.cycle_timeout_s == 90.0
+        assert config.cimier.power_switch.type == "noop"
+
+    def test_cimier_power_switch_nested_default(self, tmp_path, sample_config_dict):
+        """Section cimier sans power_switch imbriqué → PowerSwitchConfig() par défaut."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True, "host": "10.0.0.99"}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.power_switch.type == "noop"
+        assert config.cimier.power_switch.host == ""
+        assert config.cimier.power_switch.switch_id == 0
+
+    def test_cimier_power_switch_shelly_gen2(self, tmp_path, sample_config_dict):
+        """type=shelly_gen2 + host renseigné → reflété dans la dataclass."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {
+            "enabled": False,
+            "power_switch": {
+                "type": "shelly_gen2",
+                "host": "10.0.0.43",
+                "switch_id": 2,
+            },
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.power_switch.type == "shelly_gen2"
+        assert config.cimier.power_switch.host == "10.0.0.43"
+        assert config.cimier.power_switch.switch_id == 2
 
 
 # =============================================================================

@@ -120,6 +120,41 @@ class MeridianAnticipationConfig:
 
 
 @dataclass
+class PowerSwitchConfig:
+    """Configuration du switch d'alimentation cimier (Shelly 220V).
+
+    type:
+      - "shelly_gen2"  → API moderne RPC `/rpc/Switch.Set?id=<id>&on=...`
+      - "shelly_gen1"  → API legacy `/relay/<id>?turn=on|off`
+      - "noop"         → no-op pour dev/tests sans hardware
+
+    IP réelle uniquement dans `data/config.json` (terrain) — code Python neutre.
+    """
+    type: str = "noop"
+    host: str = ""
+    switch_id: int = 0
+
+
+@dataclass
+class CimierConfig:
+    """Configuration du cimier motorisé (v6.0 Phase 1).
+
+    Le service `cimier_service` orchestre un cycle complet (cascade Shelly
+    220V/12V → polling Pico W ready → re-push invert si non-défaut → /open
+    ou /close → polling final → turn_off → anti-bounce). IPs réelles
+    uniquement dans `data/config.json` (terrain) — code Python neutre.
+    """
+    enabled: bool = False
+    host: str = ""
+    port: int = 80
+    invert_direction: bool = False
+    cycle_timeout_s: float = 90.0
+    boot_poll_timeout_s: float = 30.0
+    post_off_quiet_s: float = 10.0
+    power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
+
+
+@dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
     port: str
@@ -179,6 +214,7 @@ class DriftAppConfig:
     meridian_anticipation: MeridianAnticipationConfig = field(
         default_factory=MeridianAnticipationConfig
     )
+    cimier: CimierConfig = field(default_factory=CimierConfig)
 
     def __str__(self) -> str:
         return (
@@ -243,6 +279,7 @@ class ConfigLoader:
             thresholds=self._parse_thresholds(),
             simulation=bool(self.cfg.get("simulation", False)),
             meridian_anticipation=self._parse_meridian_anticipation(),
+            cimier=self._parse_cimier(),
         )
 
     # =========================================================================
@@ -338,6 +375,27 @@ class ConfigLoader:
         """Parse la section meridian_anticipation (v5.9, activé par défaut depuis v5.11.2)."""
         c = self.cfg.get("meridian_anticipation", {})
         return MeridianAnticipationConfig(enabled=bool(c.get("enabled", True)))
+
+    def _parse_cimier(self) -> CimierConfig:
+        """Parse la section cimier (v6.0 Phase 1, opt-in : enabled=False par défaut)."""
+        c = self.cfg.get("cimier", {})
+        defaults = CimierConfig()
+        ps_defaults = PowerSwitchConfig()
+        ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
+        return CimierConfig(
+            enabled=bool(c.get("enabled", defaults.enabled)),
+            host=str(c.get("host", defaults.host)),
+            port=int(c.get("port", defaults.port)),
+            invert_direction=bool(c.get("invert_direction", defaults.invert_direction)),
+            cycle_timeout_s=float(c.get("cycle_timeout_s", defaults.cycle_timeout_s)),
+            boot_poll_timeout_s=float(c.get("boot_poll_timeout_s", defaults.boot_poll_timeout_s)),
+            post_off_quiet_s=float(c.get("post_off_quiet_s", defaults.post_off_quiet_s)),
+            power_switch=PowerSwitchConfig(
+                type=str(ps.get("type", ps_defaults.type)),
+                host=str(ps.get("host", ps_defaults.host)),
+                switch_id=int(ps.get("switch_id", ps_defaults.switch_id)),
+            ),
+        )
 
     def _log_summary(self, config: DriftAppConfig):
         """Log le résumé de la configuration."""
