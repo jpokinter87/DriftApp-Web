@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/hardware/', include('hardware.urls')),
     path('api/health/', include('health.urls')),
     path('api/session/', include('session.urls')),
+    path('api/cimier/', include('cimier.urls')),
 
     # Interface web principale
     path('', TemplateView.as_view(template_name='dashboard.html'), name='dashboard'),

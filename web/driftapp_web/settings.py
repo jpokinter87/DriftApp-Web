@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "hardware",
     "health",
     "session",
+    "cimier",
 ]
 
 MIDDLEWARE = [
@@ -115,6 +116,12 @@ MOTOR_SERVICE_IPC = {
     "COMMAND_FILE": "/dev/shm/motor_command.json",
     "STATUS_FILE": "/dev/shm/motor_status.json",
     "ENCODER_FILE": "/dev/shm/ems22_position.json",
+}
+
+# Chemins IPC pour la communication avec le Cimier Service (v6.0 Phase 1)
+CIMIER_SERVICE_IPC = {
+    "COMMAND_FILE": "/dev/shm/cimier_command.json",
+    "STATUS_FILE": "/dev/shm/cimier_status.json",
 }
 
 # Configuration DriftApp

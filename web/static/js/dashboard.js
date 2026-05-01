@@ -21,6 +21,8 @@ document.addEventListener('alpine:init', () => {
         updateButtonsDisabled: false,
         // Tracking panel visibility
         trackingVisible: false,
+        // Cimier state (v6.0 Phase 1) — payload brut de /api/cimier/status/
+        cimier: null,
         // Logs (reactive array)
         logs: [],
 
@@ -142,7 +144,13 @@ const elements = {
     gotoChevrons: document.getElementById('goto-chevrons'),
     gotoProgressFill: document.getElementById('goto-progress-fill'),
     gotoProgressText: document.getElementById('goto-progress-text'),
-    gotoModalDelta: document.getElementById('goto-modal-delta')
+    gotoModalDelta: document.getElementById('goto-modal-delta'),
+
+    // Cimier (v6.0 Phase 1)
+    btnCimierOpen: document.getElementById('btn-cimier-open'),
+    btnCimierClose: document.getElementById('btn-cimier-close'),
+    btnCimierStop: document.getElementById('btn-cimier-stop'),
+    cimierDetail: document.getElementById('cimier-detail')
 };
 
 // État mouvement continu
@@ -200,6 +208,17 @@ function initEventListeners() {
     }
     if (elements.btnContCW) {
         elements.btnContCW.addEventListener('click', () => toggleContinuous('cw'));
+    }
+
+    // Cimier (v6.0 Phase 1) — pilotage Pico W via Shelly
+    if (elements.btnCimierOpen) {
+        elements.btnCimierOpen.addEventListener('click', () => sendCimierAction('open'));
+    }
+    if (elements.btnCimierClose) {
+        elements.btnCimierClose.addEventListener('click', () => sendCimierAction('close'));
+    }
+    if (elements.btnCimierStop) {
+        elements.btnCimierStop.addEventListener('click', () => sendCimierAction('stop'));
     }
 }
 
@@ -544,7 +563,89 @@ function updateGotoModalPosition(currentPos, startPos, targetPos) {
 
 function startPolling() {
     updateStatus();
+    pollCimierStatus();
     setInterval(updateStatus, POLL_INTERVAL);
+    setInterval(pollCimierStatus, POLL_INTERVAL);
+}
+
+// =========================================================================
+// Cimier — pilotage cycle ouverture/fermeture (v6.0 Phase 1)
+// =========================================================================
+
+// Étiquettes humaines pour les états/phases publiés par cimier_service.
+const CIMIER_STATE_LABELS = {
+    open: 'Ouvert',
+    closed: 'Fermé',
+    cycle: 'Cycle en cours',
+    cooldown: 'Anti-rebond',
+    error: 'Erreur',
+    idle: 'Inactif',
+    disabled: 'Désactivé',
+    unknown: 'Inconnu'
+};
+
+const CIMIER_PHASE_LABELS = {
+    idle: 'idle',
+    power_on: 'Mise sous tension',
+    boot_poll: 'Démarrage Pico',
+    push_config: 'Config push',
+    command_pico: 'Commande Pico',
+    cycle_poll: 'Cycle moteur',
+    power_off: 'Coupure',
+    cooldown: 'Anti-rebond'
+};
+
+// Grise/réactive Ouvrir+Fermer pendant un cycle (pattern v5.12.1).
+// STOP reste TOUJOURS actif (sécurité — interrompt le cycle en cours).
+function setCimierControlsDisabled(disabled) {
+    if (elements.btnCimierOpen) elements.btnCimierOpen.disabled = disabled;
+    if (elements.btnCimierClose) elements.btnCimierClose.disabled = disabled;
+}
+
+async function pollCimierStatus() {
+    const status = await apiCall('/api/cimier/status/');
+    if (!status || status.error && status.state === undefined) {
+        // Service Django KO complet — on reset à null sans spammer les logs.
+        Alpine.store('dashboard').cimier = null;
+        setCimierControlsDisabled(true);
+        if (elements.cimierDetail) elements.cimierDetail.textContent = '';
+        return;
+    }
+
+    Alpine.store('dashboard').cimier = status;
+
+    // Disable Ouvrir/Fermer pendant cycle/cooldown/disabled/unknown.
+    const lockedStates = ['cycle', 'cooldown', 'disabled', 'unknown'];
+    setCimierControlsDisabled(lockedStates.includes(status.state));
+
+    // Ligne détail : phase + pico_state + erreur éventuelle.
+    if (elements.cimierDetail) {
+        const parts = [];
+        if (status.state === 'error' && status.error_message) {
+            parts.push(`Erreur : ${status.error_message}`);
+        } else {
+            if (status.last_action) {
+                parts.push(`Dernière action : ${status.last_action}`);
+            }
+            if (status.pico_state && status.pico_state !== 'unknown') {
+                parts.push(`Pico : ${status.pico_state}`);
+            }
+            if (status.remaining_quiet_s !== undefined && status.remaining_quiet_s > 0) {
+                parts.push(`Anti-rebond ${status.remaining_quiet_s.toFixed(0)}s`);
+            }
+        }
+        elements.cimierDetail.textContent = parts.join('  •  ');
+    }
+}
+
+async function sendCimierAction(action) {
+    const labels = { open: 'Ouverture', close: 'Fermeture', stop: 'Arrêt cycle' };
+    log(`Cimier : ${labels[action]} demandée`, 'info');
+    const result = await apiCall(`/api/cimier/${action}/`, 'POST');
+    if (result && result.error) {
+        log(`Cimier : échec (${result.error})`, 'error');
+    }
+    // Le polling 1s rafraîchit l'état affiché ; pas besoin de poll immédiat.
 }
 
 async function updateStatus() {

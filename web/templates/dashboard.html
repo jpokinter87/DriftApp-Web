@@ -8,6 +8,17 @@
 {% endblock %}
 
 {% block status_indicator %}
+<span x-data id="cimier-header-icon" class="text-base font-mono mr-1 leading-none transition-colors duration-300"
+      :class="{
+        'text-accent-green': $store.dashboard.cimier?.state === 'open',
+        'text-accent-amber-light animate-pulse': $store.dashboard.cimier?.state === 'cycle',
+        'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
+        'text-accent-red':   $store.dashboard.cimier?.state === 'error',
+        'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+      }"
+      x-text="({open:'●', closed:'○', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.cimier?.state] || '○'"
+      :title="'Cimier — ' + ($store.dashboard.cimier?.state ?? 'unknown')"
+      aria-label="État du cimier"></span>
 <button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
     <span class="update-check-icon">&#x21BB;</span>
     <span class="update-check-text">MAJ</span>
@@ -160,6 +171,37 @@
                        placeholder="Angle (0-360)">
                 <button id="btn-goto" class="btn btn-secondary">GOTO</button>
             </div>
+        </div>
+
+        <!-- Cimier — pilotage Pico W via cascade Shelly (v6.0 Phase 1) -->
+        <div x-data class="panel panel-astro">
+            <h3 class="section-title section-title-fire mb-3">Cimier</h3>
+            <div class="grid grid-cols-2 gap-2 text-xs font-mono mb-3">
+                <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
+                    <label class="font-bold text-obs-text-secondary">&Eacute;TAT&nbsp;:</label>
+                    <span id="cimier-state-text"
+                          class="font-bold uppercase tracking-wider transition-colors duration-300"
+                          :class="{
+                              'text-accent-green': $store.dashboard.cimier?.state === 'open',
+                              'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
+                              'text-accent-amber-light': $store.dashboard.cimier?.state === 'cycle',
+                              'text-accent-red': $store.dashboard.cimier?.state === 'error',
+                              'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+                          }"
+                          x-text="$store.dashboard.cimier?.state ? $store.dashboard.cimier.state.toUpperCase() : '--'">--</span>
+                </div>
+                <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
+                    <label class="font-bold text-obs-text-secondary">PHASE&nbsp;:</label>
+                    <span id="cimier-phase-text" class="font-bold text-accent-amber-light"
+                          x-text="$store.dashboard.cimier?.phase || '--'">--</span>
+                </div>
+            </div>
+            <div class="button-group">
+                <button id="btn-cimier-open" class="btn btn-primary">Ouvrir</button>
+                <button id="btn-cimier-close" class="btn btn-secondary">Fermer</button>
+                <button id="btn-cimier-stop" class="btn btn-stop">STOP</button>
+            </div>
+            <div id="cimier-detail" class="mt-2 text-[0.7rem] text-obs-text-muted font-mono min-h-[1rem]"></div>
         </div>
     </section>
 </div>

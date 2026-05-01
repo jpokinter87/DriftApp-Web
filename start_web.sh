@@ -108,6 +108,41 @@ start_motor_service() {
     fi
 }
 
+start_cimier_service() {
+    # Priorité au service systemd s'il est installé
+    if systemctl list-unit-files cimier_service.service &>/dev/null; then
+        if systemctl is-active --quiet cimier_service.service 2>/dev/null; then
+            log_info "Cimier Service déjà en cours (systemd)"
+        else
+            log_info "Démarrage du Cimier Service via systemd..."
+            systemctl start cimier_service.service
+            sleep 2
+            if systemctl is-active --quiet cimier_service.service 2>/dev/null; then
+                log_info "Cimier Service démarré (systemd)"
+            else
+                log_error "Échec du démarrage du Cimier Service (systemd)"
+                journalctl -u cimier_service.service -n 5 --no-pager 2>/dev/null
+            fi
+        fi
+    else
+        # Fallback : mode manuel si l'unit systemd n'est pas installée
+        if pgrep -f "services.cimier_service" > /dev/null; then
+            log_info "Cimier Service déjà en cours (manuel)"
+        else
+            log_info "Démarrage du Cimier Service (mode manuel)..."
+            log_warn "Unit systemd cimier_service.service non installée"
+            nohup "$PYTHON" -m services.cimier_service >> "$PROJECT_DIR/logs/cimier_service.log" 2>&1 &
+            disown
+            sleep 2
+            if pgrep -f "services.cimier_service" > /dev/null; then
+                log_info "Cimier Service démarré"
+            else
+                log_error "Échec du démarrage du Cimier Service"
+            fi
+        fi
+    fi
+}
+
 start_django() {
     # Priorité au service systemd s'il est installé
     if systemctl list-unit-files driftapp_web.service &>/dev/null; then
@@ -156,6 +191,15 @@ stop_all() {
         log_info "Django arrêté (manuel)"
     fi
 
+    # Arrêt Cimier Service (systemd ou manuel)
+    if systemctl is-active --quiet cimier_service.service 2>/dev/null; then
+        systemctl stop cimier_service.service
+        log_info "Cimier Service arrêté (systemd)"
+    elif pgrep -f "services.cimier_service" > /dev/null; then
+        pkill -f "services.cimier_service"
+        log_info "Cimier Service arrêté (manuel)"
+    fi
+
     if pgrep -f "motor_service.py" > /dev/null; then
         pkill -f "motor_service.py"
         log_info "Motor Service arrêté"
@@ -199,6 +243,26 @@ status() {
         echo -e "Motor Service:    ${RED}ARRÊTÉ${NC}"
     fi
 
+    # Cimier Service (systemd prioritaire)
+    if systemctl is-active --quiet cimier_service.service 2>/dev/null; then
+        echo -e "Cimier Service:   ${GREEN}EN COURS${NC} (systemd)"
+        if [[ -f /dev/shm/cimier_status.json ]]; then
+            cimier_state=$(python3 -c "import json; print(json.load(open('/dev/shm/cimier_status.json'))['state'])" 2>/dev/null)
+            echo "  État: ${cimier_state:-???}"
+        fi
+    elif pgrep -f "services.cimier_service" > /dev/null; then
+        echo -e "Cimier Service:   ${YELLOW}EN COURS${NC} (manuel)"
+        if [[ -f /dev/shm/cimier_status.json ]]; then
+            cimier_state=$(python3 -c "import json; print(json.load(open('/dev/shm/cimier_status.json'))['state'])" 2>/dev/null)
+            echo "  État: ${cimier_state:-???}"
+        fi
+    else
+        echo -e "Cimier Service:   ${RED}ARRÊTÉ${NC}"
+        if systemctl list-unit-files cimier_service.service &>/dev/null; then
+            echo "  → sudo systemctl start cimier_service"
+        fi
+    fi
+
     # Status Django (systemd prioritaire)
     if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
         echo -e "Django Web:       ${GREEN}EN COURS${NC} (systemd)"
@@ -231,6 +295,7 @@ case "${1:-start}" in
         encoder_ok=$?
 
         start_motor_service
+        start_cimier_service
         start_django
         echo
 
@@ -259,6 +324,7 @@ case "${1:-start}" in
         check_encoder_daemon
         encoder_ok=$?
         start_motor_service
+        start_cimier_service
         start_django
         echo
         if [[ $encoder_ok -eq 0 ]]; then

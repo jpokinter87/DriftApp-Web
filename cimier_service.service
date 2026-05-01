@@ -1,0 +1,29 @@
+[Unit]
+Description=DriftApp Cimier Service - Pico W cimier control via Shelly cascade
+Documentation=https://github.com/jpokinter87/DriftApp-Web
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/slenk/DriftApp
+ExecStart=/home/slenk/DriftApp/.venv/bin/python -m services.cimier_service
+
+# Politique de redémarrage
+Restart=on-failure
+RestartSec=5
+
+# Utilisateur root cohérent avec motor_service (autorise un futur trigger
+# udev ou pilotage GPIO si besoin Phase 2). Peut être ramené à User=slenk
+# après validation terrain (le service ne touche pas au GPIO directement).
+User=root
+
+# Variables d'environnement
+Environment=PYTHONUNBUFFERED=1
+
+# Timeout de démarrage
+TimeoutStartSec=15
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
