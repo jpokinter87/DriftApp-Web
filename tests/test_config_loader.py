@@ -15,6 +15,8 @@ from pathlib import Path
 import pytest
 
 from core.config.config_loader import (
+    VALID_AUTOMATION_MODES,
+    CimierAutomationConfig,
     CimierConfig,
     ConfigLoader,
     DriftAppConfig,
@@ -470,6 +472,80 @@ class TestCimierConfig:
         assert config.cimier.power_switch.type == "shelly_gen2"
         assert config.cimier.power_switch.host == "10.0.0.43"
         assert config.cimier.power_switch.switch_id == 2
+
+
+# =============================================================================
+# CimierAutomationConfig modes (v6.0 Phase 4) — enum mode + rétro-compat
+# =============================================================================
+
+
+class TestCimierAutomationMode:
+    """AC-1 du sub-plan v6.0-04-01.
+
+    Couvre la migration `enabled: bool` → `mode: str` (manual|semi|full) avec
+    rétro-compat stricte sur la clé legacy `enabled` (v6.2).
+    """
+
+    def _load_with_automation(self, tmp_path, sample_config_dict, automation_dict):
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True, "automation": automation_dict}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        return ConfigLoader(config_file).load()
+
+    def test_default_mode_is_manual_when_section_absent(self, tmp_path, sample_config_dict):
+        """Section automation absente → mode='manual' (default-safe)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True}  # pas de section automation
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert isinstance(config.cimier.automation, CimierAutomationConfig)
+        assert config.cimier.automation.mode == "manual"
+
+    def test_legacy_enabled_true_maps_to_full(self, tmp_path, sample_config_dict):
+        """Rétro-compat v6.2 : enabled=true (sans mode) → mode='full'."""
+        config = self._load_with_automation(
+            tmp_path, sample_config_dict, {"enabled": True}
+        )
+        assert config.cimier.automation.mode == "full"
+
+    def test_legacy_enabled_false_maps_to_manual(self, tmp_path, sample_config_dict):
+        """Rétro-compat v6.2 : enabled=false (sans mode) → mode='manual'."""
+        config = self._load_with_automation(
+            tmp_path, sample_config_dict, {"enabled": False}
+        )
+        assert config.cimier.automation.mode == "manual"
+
+    def test_explicit_mode_semi_loaded_directly(self, tmp_path, sample_config_dict):
+        """Lecture directe : mode='semi' → mode='semi' (pas de fallback enabled)."""
+        config = self._load_with_automation(
+            tmp_path, sample_config_dict, {"mode": "semi"}
+        )
+        assert config.cimier.automation.mode == "semi"
+
+    def test_mode_takes_priority_over_legacy_enabled(self, tmp_path, sample_config_dict):
+        """mode + enabled cohabitent → mode prime (warning log mais pas d'exception)."""
+        config = self._load_with_automation(
+            tmp_path, sample_config_dict, {"mode": "semi", "enabled": True}
+        )
+        assert config.cimier.automation.mode == "semi"
+
+    def test_invalid_mode_falls_back_to_default_manual(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """mode invalide ('yolo') → fallback default-safe sur 'manual', warning loggé."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_automation(
+            tmp_path, sample_config_dict, {"mode": "yolo"}
+        )
+        assert config.cimier.automation.mode == "manual"
+        assert any("yolo" in record.message for record in caplog.records)
+
+    def test_valid_modes_constant_exposes_all_three(self):
+        """Sanity check : VALID_AUTOMATION_MODES doit contenir exactement les 3 niveaux."""
+        assert set(VALID_AUTOMATION_MODES) == {"manual", "semi", "full"}
 
 
 # =============================================================================

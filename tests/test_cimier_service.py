@@ -1082,7 +1082,7 @@ class TestSchedulerWiring:
 
     def _make_config_with_automation(
         self,
-        enabled: bool = True,
+        mode: str = "full",
         scheduler_interval_seconds: int = 60,
     ) -> CimierConfig:
         from core.config.config_loader import CimierAutomationConfig
@@ -1095,7 +1095,7 @@ class TestSchedulerWiring:
             post_off_quiet_s=10.0,
             power_switch=PowerSwitchConfig(type="noop"),
             automation=CimierAutomationConfig(
-                enabled=enabled,
+                mode=mode,
                 scheduler_interval_seconds=scheduler_interval_seconds,
             ),
         )
@@ -1103,7 +1103,7 @@ class TestSchedulerWiring:
     def test_scheduler_disabled_when_automation_off(
         self, ipc_manager: RecordingIpcManager
     ) -> None:
-        cfg = self._make_config_with_automation(enabled=False)
+        cfg = self._make_config_with_automation(mode="manual")
         service = CimierService(
             cimier_config=cfg,
             power_switch=NoopPowerSwitch(),
@@ -1121,7 +1121,7 @@ class TestSchedulerWiring:
         from services.cimier_scheduler import CimierScheduler
         site = SiteConfig(latitude=44.15, longitude=5.23, altitude=800.0,
                           nom="Test", fuseau="Europe/Paris")
-        cfg = self._make_config_with_automation(enabled=True)
+        cfg = self._make_config_with_automation(mode="full")
         service = CimierService(
             cimier_config=cfg,
             power_switch=NoopPowerSwitch(),
@@ -1134,7 +1134,7 @@ class TestSchedulerWiring:
         self, ipc_manager: RecordingIpcManager
     ) -> None:
         """Sans site_config, on log un warning et on n'instancie pas le scheduler."""
-        cfg = self._make_config_with_automation(enabled=True)
+        cfg = self._make_config_with_automation(mode="full")
         service = CimierService(
             cimier_config=cfg,
             power_switch=NoopPowerSwitch(),
@@ -1159,7 +1159,7 @@ class TestSchedulerWiring:
                 return SchedulerDecision("skip:state", float("nan"), "flat",
                                          datetime.now(timezone.utc))
 
-        cfg = self._make_config_with_automation(enabled=True, scheduler_interval_seconds=60)
+        cfg = self._make_config_with_automation(mode="full", scheduler_interval_seconds=60)
         clock = MockClock(start=1000.0)
         scheduler = CountingScheduler()
         service = CimierService(
@@ -1191,7 +1191,7 @@ class TestSchedulerWiring:
             def maybe_trigger(self, current_state: str):
                 raise RuntimeError("boom")
 
-        cfg = self._make_config_with_automation(enabled=True)
+        cfg = self._make_config_with_automation(mode="full")
         service = CimierService(
             cimier_config=cfg,
             power_switch=NoopPowerSwitch(),
@@ -1216,7 +1216,7 @@ class TestSchedulerWiring:
             CIMIER_STATE_OPEN,
         )
 
-        cfg = self._make_config_with_automation(enabled=False)  # pas besoin du scheduler
+        cfg = self._make_config_with_automation(mode="manual")  # pas besoin du scheduler
         service = CimierService(
             cimier_config=cfg,
             power_switch=NoopPowerSwitch(),
@@ -1251,3 +1251,98 @@ class TestSchedulerWiring:
         service._last_pico_state = "open"
         service._cooldown_end_ts = 999999.0
         assert service._derive_current_cimier_state() == CIMIER_STATE_COOLDOWN
+
+
+# ======================================================================
+# Section 10 : v6.0 Phase 4 sub-plan 04-01 — IPC enrichi (mode + next_*)
+# ======================================================================
+
+
+class TestSchedulerIpcEnrichmentPhase4:
+    """AC-3 du sub-plan v6.0-04-01 : cimier_status.json contient mode +
+    next_open_at + next_close_at (ISO 8601 UTC ou null) après un tick scheduler.
+    """
+
+    def _make_config(self, mode: str) -> CimierConfig:
+        from core.config.config_loader import CimierAutomationConfig
+        return CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=2.0,
+            boot_poll_timeout_s=2.0,
+            post_off_quiet_s=10.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+            automation=CimierAutomationConfig(
+                mode=mode,
+                scheduler_interval_seconds=60,
+            ),
+        )
+
+    def _make_scheduler_stub(self, next_open=None, next_close=None):
+        from datetime import datetime, timezone
+        from services.cimier_scheduler import SchedulerDecision
+
+        class StubScheduler:
+            def __init__(self):
+                self.compute_calls = 0
+
+            def maybe_trigger(self, current_state):
+                return SchedulerDecision(
+                    "skip:state", float("nan"), "flat", datetime.now(timezone.utc)
+                )
+
+            def compute_next_triggers(self, now):
+                self.compute_calls += 1
+                return (next_open, next_close)
+        return StubScheduler()
+
+    def test_status_payload_contains_mode_and_next_triggers_iso(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Mode != manual + scheduler retourne datetime → ISO 8601 dans cimier_status.json."""
+        from datetime import datetime, timezone
+
+        next_open = datetime(2026, 5, 15, 21, 30, tzinfo=timezone.utc)
+        next_close = datetime(2026, 5, 16, 4, 45, tzinfo=timezone.utc)
+        cfg = self._make_config(mode="full")
+        scheduler = self._make_scheduler_stub(next_open=next_open, next_close=next_close)
+        clock = MockClock(start=1000.0)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            scheduler=scheduler,  # type: ignore[arg-type]
+            clock=clock,
+            sleep=clock.sleep,
+        )
+
+        # 1er tick → scheduler appelé (1ère fenêtre, gating ouvert)
+        service.tick()
+        # IPC publiée
+        assert len(ipc_manager.history) >= 1
+        last_status = ipc_manager.history[-1]
+        assert last_status["mode"] == "full"
+        assert last_status["next_open_at"] == next_open.isoformat()
+        assert last_status["next_close_at"] == next_close.isoformat()
+        assert scheduler.compute_calls == 1
+
+    def test_status_payload_next_triggers_null_when_mode_manual(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """mode=manual → scheduler None côté service → mode='manual' + next_*=null."""
+        cfg = self._make_config(mode="manual")
+        # Aucun scheduler injecté, automation.mode == "manual" → service._scheduler reste None
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+        )
+        assert service._scheduler is None  # sanity
+        # tick() force une publication idle (pas de scheduler appelé)
+        service.tick()
+        assert len(ipc_manager.history) >= 1
+        last_status = ipc_manager.history[-1]
+        assert last_status["mode"] == "manual"
+        assert last_status["next_open_at"] is None
+        assert last_status["next_close_at"] is None

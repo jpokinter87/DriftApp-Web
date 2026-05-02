@@ -10,8 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
-import pytest
-
 from core.config.config_loader import CimierAutomationConfig, SiteConfig
 from services.cimier_scheduler import (
     CimierScheduler,
@@ -31,7 +29,7 @@ def _site():
 
 
 def _automation(**overrides):
-    cfg = CimierAutomationConfig(enabled=True)
+    cfg = CimierAutomationConfig(mode="full")
     for k, v in overrides.items():
         setattr(cfg, k, v)
     return cfg
@@ -108,7 +106,7 @@ def _scheduler(automation, alt_fn, dir_fn, weather=None, clock_now=None):
 
 def test_disabled_returns_skip_disabled():
     sched, cimier, motor, _ = _scheduler(
-        automation=CimierAutomationConfig(enabled=False),
+        automation=CimierAutomationConfig(mode="manual"),
         alt_fn=lambda *a, **kw: -15.0,
         dir_fn=lambda *a, **kw: "descending",
     )
@@ -360,3 +358,234 @@ def test_close_uses_configured_parking_azimuth():
     decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
     assert decision.trigger == "close"
     assert ("goto", 180.0) in motor.calls
+
+
+# ----------------------------------------------------------------------
+# AC-2 (sub-plan v6.0-04-01) : matrice 3 modes × 2 conditions (OPEN / CLOSE)
+# ----------------------------------------------------------------------
+
+
+class TestSchedulerModes:
+    """Couvre les 3 modes (manual, semi, full) face aux 2 conditions astropy
+    (OPEN remplies, CLOSE remplies). Total : 6 cas + 1 sanity check semi+OPEN+open_state.
+    """
+
+    @staticmethod
+    def _make(mode, alt_fn, dir_fn):
+        return _scheduler(
+            automation=CimierAutomationConfig(mode=mode),
+            alt_fn=alt_fn,
+            dir_fn=dir_fn,
+        )
+
+    @staticmethod
+    def _close_alt_fn():
+        """alt(now)=-10 < target -6, alt(future)=-5 ≥ target -6 → CLOSE remplies."""
+        alt_values = [-10.0, -5.0]
+        idx = [0]
+
+        def fn(*a, **kw):
+            i = idx[0]
+            idx[0] += 1
+            return alt_values[i] if i < len(alt_values) else -10.0
+        return fn
+
+    def test_mode_manual_open_conditions_skipped(self):
+        sched, cimier, motor, _ = self._make(
+            "manual",
+            alt_fn=lambda *a, **kw: -15.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_CLOSED)
+        assert decision.trigger == "skip:disabled"
+        assert cimier.commands == []
+        assert motor.calls == []
+
+    def test_mode_manual_close_conditions_skipped(self):
+        sched, cimier, motor, _ = self._make(
+            "manual",
+            alt_fn=self._close_alt_fn(),
+            dir_fn=lambda *a, **kw: "rising",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert decision.trigger == "skip:disabled"
+        assert cimier.commands == []
+        assert motor.calls == []
+
+    def test_mode_semi_open_conditions_skipped(self):
+        """semi : OPEN cond remplies → skip:semi_no_open, IPC unchanged."""
+        sched, cimier, motor, weather = self._make(
+            "semi",
+            alt_fn=lambda *a, **kw: -15.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_CLOSED)
+        assert decision.trigger == "skip:semi_no_open"
+        assert cimier.commands == []
+        assert motor.calls == []
+        # WeatherProvider PAS consulté en semi (court-circuit avant)
+        assert weather.call_count == 0
+
+    def test_mode_semi_close_conditions_triggers_close(self):
+        """semi : CLOSE cond remplies → trigger close (3 IPC writes)."""
+        sched, cimier, motor, _ = self._make(
+            "semi",
+            alt_fn=self._close_alt_fn(),
+            dir_fn=lambda *a, **kw: "rising",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert decision.trigger == "close"
+        assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
+        assert len(cimier.commands) == 1
+        assert cimier.commands[0]["action"] == "close"
+
+    def test_mode_full_open_conditions_triggers_open(self):
+        """full : OPEN cond remplies → trigger open (cimier IPC + motor jog)."""
+        sched, cimier, motor, _ = self._make(
+            "full",
+            alt_fn=lambda *a, **kw: -15.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_CLOSED)
+        assert decision.trigger == "open"
+        assert len(cimier.commands) == 1
+        assert cimier.commands[0]["action"] == "open"
+        assert ("jog", 1.0) in motor.calls
+
+    def test_mode_full_close_conditions_triggers_close(self):
+        """full : CLOSE cond remplies → trigger close (3 IPC writes)."""
+        sched, cimier, motor, _ = self._make(
+            "full",
+            alt_fn=self._close_alt_fn(),
+            dir_fn=lambda *a, **kw: "rising",
+        )
+        decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert decision.trigger == "close"
+        assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
+        assert len(cimier.commands) == 1
+
+
+# ----------------------------------------------------------------------
+# AC-3 (sub-plan v6.0-04-01) : compute_next_triggers prévisionnel
+# ----------------------------------------------------------------------
+
+
+class TestComputeNextTriggers:
+    """Couvre la méthode pure compute_next_triggers(now) pour countdown UI."""
+
+    @staticmethod
+    def _build(mode, alt_fn, dir_fn, clock_now=None):
+        sched, _, _, _ = _scheduler(
+            automation=CimierAutomationConfig(mode=mode),
+            alt_fn=alt_fn,
+            dir_fn=dir_fn,
+            clock_now=clock_now,
+        )
+        return sched
+
+    def test_mode_manual_returns_none_none(self):
+        """mode=manual → court-circuit (None, None) sans appeler astropy."""
+        astropy_calls = [0]
+
+        def alt_fn(*a, **kw):
+            astropy_calls[0] += 1
+            return -10.0
+
+        sched = self._build("manual", alt_fn, lambda *a, **kw: "descending")
+        next_open, next_close = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 21, 0, tzinfo=timezone.utc)
+        )
+        assert (next_open, next_close) == (None, None)
+        assert astropy_calls[0] == 0
+
+    def test_mode_semi_open_is_always_none(self):
+        """mode=semi → next_open=None toujours (ouverture manuelle), next_close calculé."""
+        # alt(t)=-15 (toujours sous le seuil ouverture, mais on s'en fout en semi)
+        # alt(t+offset)=-5 (au-dessus du target -6) → close conditions remplies
+        sched = self._build(
+            "semi",
+            alt_fn=lambda when, *a, **kw: -5.0,  # peu importe, on cherche rising
+            dir_fn=lambda *a, **kw: "rising",
+        )
+        next_open, next_close = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 4, 0, tzinfo=timezone.utc)
+        )
+        assert next_open is None
+        # next_close trouvé dans l'horizon 24h
+        assert next_close is not None
+        assert next_close.tzinfo is not None
+
+    def test_mode_full_returns_both_when_horizon_covers_them(self):
+        """mode=full : alt et direction varient → next_open ET next_close trouvés."""
+        # Stratégie : 1ère moitié horizon = descending sous seuil, 2e moitié = rising.
+        # On utilise un compteur pour simuler la trajectoire.
+        anchor = datetime(2026, 5, 15, 18, 0, tzinfo=timezone.utc)
+
+        def dir_fn(when, before, *a, **kw):
+            # premières 6h après anchor → descending, puis rising
+            return "descending" if (when - anchor).total_seconds() < 6 * 3600 else "rising"
+
+        def alt_fn(when, *a, **kw):
+            elapsed_h = (when - anchor).total_seconds() / 3600
+            # descend de 0 à -20, puis remonte
+            if elapsed_h < 6:
+                return -elapsed_h * 3.5  # va de 0 à -21°
+            else:
+                return -21.0 + (elapsed_h - 6) * 3.5  # remonte
+
+        sched = self._build("full", alt_fn, dir_fn, clock_now=anchor)
+        next_open, next_close = sched.compute_next_triggers(anchor)
+        assert next_open is not None
+        assert next_close is not None
+        assert next_open < next_close  # ouverture précède fermeture
+
+    def test_returns_tz_aware_utc_datetimes(self):
+        """Garantie : les datetime retournés sont UTC tz-aware."""
+        sched = self._build(
+            "full",
+            alt_fn=lambda *a, **kw: -15.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        next_open, _ = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 18, 0, tzinfo=timezone.utc)
+        )
+        assert next_open is not None
+        assert next_open.tzinfo == timezone.utc
+
+    def test_naive_now_is_assumed_utc(self):
+        """now naive (sans tzinfo) → assumé UTC silencieusement."""
+        sched = self._build(
+            "full",
+            alt_fn=lambda *a, **kw: -15.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        # naive datetime
+        next_open, _ = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 18, 0)  # pas de tzinfo
+        )
+        assert next_open is not None
+        assert next_open.tzinfo == timezone.utc
+
+    def test_astropy_runtime_error_returns_none_none(self):
+        """RuntimeError astropy → (None, None) silencieusement (warning loggé)."""
+        def raise_astropy(*a, **kw):
+            raise RuntimeError("astropy down")
+
+        sched = self._build("full", raise_astropy, lambda *a, **kw: "descending")
+        next_open, next_close = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 18, 0, tzinfo=timezone.utc)
+        )
+        assert (next_open, next_close) == (None, None)
+
+    def test_no_match_within_24h_returns_none(self):
+        """Si aucun match dans l'horizon 24h → None (pas de plantage)."""
+        # alt toujours positif et flat → ni open ni close ne matchent
+        sched = self._build(
+            "full",
+            alt_fn=lambda *a, **kw: 30.0,
+            dir_fn=lambda *a, **kw: "flat",
+        )
+        next_open, next_close = sched.compute_next_triggers(
+            datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+        )
+        assert (next_open, next_close) == (None, None)

@@ -89,11 +89,19 @@ class CimierScheduler:
     def maybe_trigger(self, current_cimier_state: str) -> SchedulerDecision:
         """Évalue les conditions et émet open/close si nécessaire.
 
+        Trois modes (v6.0 Phase 4) :
+          - `manual` : court-circuit total → skip:disabled (aucun trigger).
+          - `semi`   : skip OPEN inconditionnellement, garde la branche CLOSE.
+                       L'utilisateur démarre manuellement la session, le
+                       scheduler ne déclenche que la séquence fin de nuit.
+          - `full`   : comportement v6.2 — déclenche OPEN et CLOSE selon les
+                       éphémérides solaires.
+
         `current_cimier_state` : un des labels CIMIER_STATE_* ci-dessus.
         Retourne une `SchedulerDecision` avec le trigger résolu (ou skip:*).
         """
         now = self._clock()
-        if not self._cfg.enabled:
+        if self._cfg.mode == "manual":
             return SchedulerDecision("skip:disabled", float("nan"), "flat", now)
 
         before = now - timedelta(seconds=60)
@@ -116,7 +124,10 @@ class CimierScheduler:
             return SchedulerDecision("skip:none", float("nan"), "flat", now)
 
         # 1. OPEN trigger : descendant + alt <= seuil + cimier fermé
+        #    En mode "semi", l'ouverture est manuelle → on saute ce bloc en bloc.
         if direction == "descending" and alt_now <= self._cfg.opening_sun_altitude_deg:
+            if self._cfg.mode == "semi":
+                return SchedulerDecision("skip:semi_no_open", alt_now, direction, now)
             if current_cimier_state == CIMIER_STATE_CLOSED:
                 if self._is_in_cooldown(self._last_open_trigger_ts, now):
                     return SchedulerDecision("skip:cooldown", alt_now, direction, now)
@@ -155,6 +166,93 @@ class CimierScheduler:
                     return SchedulerDecision("close", alt_now, direction, now)
 
         return SchedulerDecision("skip:state", alt_now, direction, now)
+
+    # ------------------------------------------------------------------
+    # Prévisions (countdown UI v6.0 Phase 4)
+    # ------------------------------------------------------------------
+
+    # Pas d'échantillonnage du balayage 24h. 5 min = 288 itérations sur 24h,
+    # résolution largement suffisante pour un countdown UI affiché en "1h 23min".
+    # Choix performance vs spec PLAN ("minute-par-minute") : sampling 5 min
+    # acceptable car astropy.get_body coûte ~50-200ms par call, et la méthode
+    # est appelée 1× par fenêtre `scheduler_interval_seconds` (60s par défaut).
+    _NEXT_TRIGGER_SAMPLING_MINUTES = 5
+    _NEXT_TRIGGER_HORIZON_HOURS = 24
+
+    def compute_next_triggers(self, now: datetime) -> tuple[Optional[datetime], Optional[datetime]]:
+        """Calcule les prochains triggers OPEN et CLOSE attendus dans les 24h.
+
+        Retourne `(next_open_at, next_close_at)` en datetime UTC tz-aware,
+        ou `None` si :
+          - mode == "manual"  → (None, None)  (court-circuit total).
+          - mode == "semi"    → next_open=None, next_close=datetime|None
+          - mode == "full"    → les deux datetime|None selon disponibilité.
+
+        Algo : échantillonne minute-par-(_NEXT_TRIGGER_SAMPLING_MINUTES) sur
+        l'horizon `_NEXT_TRIGGER_HORIZON_HOURS`. À chaque échantillon t :
+          - direction = sun_direction(t, t-60s)
+          - si descending et alt(t) <= opening_threshold → 1er match = next_open
+          - si rising et alt(t + advance + safety) >= closing_target → 1er match = next_close
+        Court-circuite chaque condition dès trouvée.
+
+        Si astropy indisponible ou erreur runtime : retourne (None, None) silencieusement.
+        Consommée 1×/scheduler_interval côté `cimier_service.tick()` puis
+        publiée dans `cimier_status.json` pour countdown UI dashboard.
+        """
+        if self._cfg.mode == "manual":
+            return (None, None)
+
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
+
+        next_open: Optional[datetime] = None
+        next_close: Optional[datetime] = None
+        # En mode semi, next_open reste None (ouverture manuelle uniquement).
+        skip_open = self._cfg.mode == "semi"
+
+        sampling = timedelta(minutes=self._NEXT_TRIGGER_SAMPLING_MINUTES)
+        horizon = timedelta(hours=self._NEXT_TRIGGER_HORIZON_HOURS)
+        close_offset = timedelta(
+            minutes=self._cfg.closing_advance_minutes
+            + self._cfg.clock_safety_margin_minutes
+        )
+        delta_for_dir = timedelta(seconds=60)
+
+        t = now + sampling  # premier sample dans le futur (pas inclure now)
+        end = now + horizon
+        while t <= end and (next_open is None or next_close is None):
+            try:
+                if not skip_open and next_open is None:
+                    direction = self._sun_direction_fn(
+                        t, t - delta_for_dir,
+                        self._site.latitude, self._site.longitude, self._site.altitude,
+                    )
+                    if direction == "descending":
+                        alt = self._sun_altitude_fn(
+                            t,
+                            self._site.latitude, self._site.longitude, self._site.altitude,
+                        )
+                        if alt <= self._cfg.opening_sun_altitude_deg:
+                            next_open = t
+                if next_close is None:
+                    direction = self._sun_direction_fn(
+                        t, t - delta_for_dir,
+                        self._site.latitude, self._site.longitude, self._site.altitude,
+                    )
+                    if direction == "rising":
+                        alt_future = self._sun_altitude_fn(
+                            t + close_offset,
+                            self._site.latitude, self._site.longitude, self._site.altitude,
+                        )
+                        if alt_future >= self._cfg.closing_target_sun_altitude_deg:
+                            next_close = t
+            except RuntimeError as exc:
+                logger.warning("scheduler_event=compute_next_triggers_astropy_error exc=%s", exc)
+                return (None, None)
+            t += sampling
+        return (next_open, next_close)
 
     # ------------------------------------------------------------------
     # Triggers (writes IPC)

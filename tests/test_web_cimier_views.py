@@ -184,3 +184,212 @@ class TestNoHardcodedIps:
             "doivent vivre dans data/config.json (CimierConfig) et "
             "settings.CIMIER_SERVICE_IPC, jamais dans le code Python."
         )
+
+
+# =============================================================================
+# AC-4 (sub-plan v6.0-04-01) — AutomationView GET + POST
+# =============================================================================
+
+
+@pytest.fixture
+def writable_config_file(tmp_path, monkeypatch):
+    """Pointe settings.DRIFTAPP_CONFIG vers un fichier tmp + payload réaliste."""
+    from django.conf import settings as dj_settings
+    cfg = {
+        "site": {
+            "latitude": 44.15, "longitude": 5.23, "altitude": 800,
+            "nom": "Test", "fuseau": "Europe/Paris",
+        },
+        "moteur": {
+            "gpio_pins": {"dir": 17, "step": 18},
+            "steps_per_revolution": 200, "microsteps": 4,
+            "gear_ratio": 2230, "steps_correction_factor": 1.08849,
+            "motor_delay_base": 0.002, "motor_delay_min": 0.00001,
+            "motor_delay_max": 0.01,
+            "max_speed_steps_per_sec": 1000,
+            "acceleration_steps_per_sec2": 500,
+        },
+        "suivi": {
+            "seuil_correction_deg": 0.5, "intervalle_verification_sec": 60,
+            "abaque_file": "data/Loi_coupole.xlsx",
+        },
+        "encodeur": {"enabled": True, "spi": {}, "mecanique": {}},
+        "cimier": {
+            "enabled": True,
+            "automation": {"mode": "manual"},
+        },
+    }
+    config_file = tmp_path / "config.json"
+    config_file.write_text(json.dumps(cfg, indent=2))
+    monkeypatch.setattr(dj_settings, "DRIFTAPP_CONFIG", str(config_file))
+    return config_file
+
+
+class TestAutomationView:
+    def test_get_returns_mode_and_next_triggers_from_status(
+        self, api_client, mock_cimier_ipc
+    ):
+        status_payload = {
+            "state": "idle",
+            "mode": "full",
+            "next_open_at": "2026-05-15T21:30:00+00:00",
+            "next_close_at": "2026-05-16T04:45:00+00:00",
+        }
+        mock_cimier_ipc["status_file"].write_text(json.dumps(status_payload))
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "full"
+        assert body["next_open_at"] == "2026-05-15T21:30:00+00:00"
+        assert body["next_close_at"] == "2026-05-16T04:45:00+00:00"
+
+    def test_get_returns_manual_default_when_status_missing(
+        self, api_client, mock_cimier_ipc
+    ):
+        # status_file absent → cimier_client.get_status retourne {state: unknown, ...}
+        assert not mock_cimier_ipc["status_file"].exists()
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        body = response.json()
+        # Pas de mode dans le payload "unknown" → fallback "manual"
+        assert body["mode"] == "manual"
+        assert body["next_open_at"] is None
+        assert body["next_close_at"] is None
+
+    def test_post_valid_mode_persists_to_config_json(
+        self, api_client, writable_config_file
+    ):
+        response = api_client.post(
+            "/api/cimier/automation/", {"mode": "semi"}, format="json"
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body == {"mode": "semi", "applied": True, "restart_required": True}
+        # Fichier réécrit avec mode="semi"
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["automation"]["mode"] == "semi"
+        # Reste de la config préservé
+        assert cfg["site"]["nom"] == "Test"
+        assert cfg["moteur"]["gear_ratio"] == 2230
+
+    def test_post_invalid_mode_returns_400_and_does_not_modify_config(
+        self, api_client, writable_config_file
+    ):
+        original = writable_config_file.read_text()
+        response = api_client.post(
+            "/api/cimier/automation/", {"mode": "yolo"}, format="json"
+        )
+        assert response.status_code == 400
+        body = response.json()
+        assert "error" in body
+        assert set(body["valid"]) == {"manual", "semi", "full"}
+        # Config inchangée
+        assert writable_config_file.read_text() == original
+
+    def test_post_missing_mode_returns_400(self, api_client, writable_config_file):
+        response = api_client.post(
+            "/api/cimier/automation/", {}, format="json"
+        )
+        assert response.status_code == 400
+
+    def test_post_strips_legacy_enabled_key(
+        self, api_client, writable_config_file
+    ):
+        # Pré-écriture : config legacy avec enabled
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"] = {"enabled": True}
+        writable_config_file.write_text(json.dumps(cfg))
+        response = api_client.post(
+            "/api/cimier/automation/", {"mode": "semi"}, format="json"
+        )
+        assert response.status_code == 200
+        cfg_after = json.loads(writable_config_file.read_text())
+        assert cfg_after["cimier"]["automation"]["mode"] == "semi"
+        assert "enabled" not in cfg_after["cimier"]["automation"]
+
+
+# =============================================================================
+# AC-5 (sub-plan v6.0-04-01) — ParkingSessionView POST atomique
+# =============================================================================
+
+
+@pytest.fixture
+def mock_motor_ipc(tmp_path, monkeypatch):
+    """Pointe settings.MOTOR_SERVICE_IPC['COMMAND_FILE'] vers tmp."""
+    from django.conf import settings as dj_settings
+    motor_cmd = tmp_path / "motor_command.json"
+    new_ipc = dict(dj_settings.MOTOR_SERVICE_IPC)
+    new_ipc["COMMAND_FILE"] = str(motor_cmd)
+    monkeypatch.setattr(dj_settings, "MOTOR_SERVICE_IPC", new_ipc)
+    return motor_cmd
+
+
+class TestParkingSessionView:
+    def test_post_emits_three_ipc_writes_and_returns_200(
+        self,
+        api_client,
+        mock_cimier_ipc,
+        mock_motor_ipc,
+        writable_config_file,
+    ):
+        # ParkingSessionView lit parking_target_azimuth_deg de config.json (45.0 default)
+        response = api_client.post("/api/cimier/parking-session/", {}, format="json")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["applied"] is True
+        assert body["tracking_stopped"] is True
+        assert body["goto_45_sent"] is True
+        assert body["cimier_close_sent"] is True
+        assert body["parking_target_deg"] == 45.0
+        # IPC cimier : last write = close
+        cimier_payload = json.loads(mock_cimier_ipc["cmd_file"].read_text())
+        assert cimier_payload["action"] == "close"
+        # IPC motor : dernier write = goto 45 (writes successifs au même fichier,
+        # tracking_stop puis goto, donc on lit le dernier).
+        motor_payload = json.loads(mock_motor_ipc.read_text())
+        assert motor_payload["command"] == "goto"
+        assert motor_payload["angle"] == 45.0
+
+    def test_post_uses_configured_parking_target_azimuth(
+        self,
+        api_client,
+        mock_cimier_ipc,
+        mock_motor_ipc,
+        writable_config_file,
+    ):
+        # Override du parking target dans la config
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"]["parking_target_azimuth_deg"] = 180.0
+        writable_config_file.write_text(json.dumps(cfg))
+        response = api_client.post("/api/cimier/parking-session/", {}, format="json")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["parking_target_deg"] == 180.0
+        motor_payload = json.loads(mock_motor_ipc.read_text())
+        assert motor_payload["angle"] == 180.0
+
+    def test_post_returns_503_when_cimier_close_fails(
+        self,
+        api_client,
+        mock_cimier_ipc,
+        mock_motor_ipc,
+        writable_config_file,
+    ):
+        from web.common.cimier_client import cimier_client
+        # cimier IPC down (send_command renvoie False)
+        with patch.object(cimier_client, "send_command", return_value=False):
+            response = api_client.post(
+                "/api/cimier/parking-session/", {}, format="json"
+            )
+        assert response.status_code == 503
+        body = response.json()
+        assert body["applied"] is False
+        # Motor commands quand même envoyées (best-effort)
+        assert body["tracking_stopped"] is True
+        assert body["goto_45_sent"] is True
+        assert body["cimier_close_sent"] is False
+        assert "error" in body
+
+    def test_get_method_not_allowed(self, api_client):
+        response = api_client.get("/api/cimier/parking-session/")
+        assert response.status_code == 405

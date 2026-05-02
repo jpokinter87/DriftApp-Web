@@ -147,28 +147,44 @@ class WeatherProviderConfig:
     type: str = "noop"
 
 
+VALID_AUTOMATION_MODES = ("manual", "semi", "full")
+
+
 @dataclass
 class CimierAutomationConfig:
-    """Configuration scheduler astropy cimier (v6.0 Phase 3).
+    """Configuration scheduler astropy cimier (v6.0 Phase 3 + Phase 4).
 
-    Opt-in (`enabled=False` par défaut). Quand actif, `cimier_service` polle
-    toutes les `scheduler_interval_seconds` (60 s par défaut) pour déclencher
-    automatiquement l'ouverture au crépuscule (sun_alt = `opening_sun_altitude_deg`
-    descendant) et la fermeture à l'aube (~`closing_advance_minutes` +
-    `clock_safety_margin_minutes` avant `closing_target_sun_altitude_deg` montant).
+    Trois niveaux d'automatisation (v6.0 Phase 4) :
+      - `manual` : aucune automatisation cimier (équivalent v6.2 `enabled=False`).
+      - `semi`   : démarrage manuel par l'utilisateur, fermeture auto en fin de
+                   nuit. Le scheduler ne déclenche QUE l'événement CLOSE.
+      - `full`   : ouverture auto au crépuscule + fermeture auto avant l'aube
+                   (équivalent v6.2 `enabled=True`).
+
+    Quand le mode est `semi` ou `full`, `cimier_service` polle toutes les
+    `scheduler_interval_seconds` (60 s par défaut) pour évaluer les triggers.
+    Ouverture (mode `full` uniquement) : `sun_alt <= opening_sun_altitude_deg`
+    en descente. Fermeture (modes `semi` et `full`) : ~`closing_advance_minutes`
+    + `clock_safety_margin_minutes` avant `closing_target_sun_altitude_deg` en
+    montée.
 
     `deparking_nudge_deg` : petit déplacement post-ouverture pour faire passer
     la couronne sur le microswitch de calibration à 45° (référence absolue
     encodeur EMS22A).
 
     `parking_target_azimuth_deg` : cible GOTO en fin de session (parallèle à
-    la fermeture cimier).
+    la fermeture cimier). Aussi consommé par l'endpoint manuel
+    `POST /api/cimier/parking-session/`.
 
     `retrigger_cooldown_hours` : idempotence intra-jour. Au reboot, l'état est
     perdu (mémoire seulement) → re-trigger si les conditions sont toujours
     remplies (état désiré, pas event-driven).
+
+    Rétro-compat (v6.2 → v6.3) : la clé legacy `enabled: bool` est lue par le
+    parser si `mode` est absent (`enabled=true` → `mode="full"`,
+    `enabled=false` ou absent → `mode="manual"`). Cf. `_parse_cimier()`.
     """
-    enabled: bool = False
+    mode: str = "manual"
     opening_sun_altitude_deg: float = -12.0
     closing_target_sun_altitude_deg: float = -6.0
     closing_advance_minutes: int = 10
@@ -457,7 +473,7 @@ class ConfigLoader:
                 type=str(wp.get("type", wp_defaults.type)),
             ),
             automation=CimierAutomationConfig(
-                enabled=bool(au.get("enabled", au_defaults.enabled)),
+                mode=self._resolve_automation_mode(au, au_defaults.mode),
                 opening_sun_altitude_deg=float(au.get("opening_sun_altitude_deg", au_defaults.opening_sun_altitude_deg)),
                 closing_target_sun_altitude_deg=float(au.get("closing_target_sun_altitude_deg", au_defaults.closing_target_sun_altitude_deg)),
                 closing_advance_minutes=int(au.get("closing_advance_minutes", au_defaults.closing_advance_minutes)),
@@ -469,6 +485,47 @@ class ConfigLoader:
                 retrigger_cooldown_hours=int(au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)),
             ),
         )
+
+    def _resolve_automation_mode(self, au: dict, default_mode: str) -> str:
+        """Résout `cimier.automation.mode` avec rétro-compat sur la clé legacy `enabled` (v6.0 Phase 4).
+
+        Règles (testées par AC-1 du sub-plan v6.0-04-01) :
+          - Si `mode` présent et valide (∈ VALID_AUTOMATION_MODES) → retourne `mode`.
+          - Si `mode` présent ET `enabled` aussi → `mode` prime ; warning si incohérent
+            (ex. `mode="manual"` avec `enabled=true`).
+          - Si `mode` présent mais invalide (ex. "yolo") → warning + fallback `default_mode`
+            (default-safe : "manual").
+          - Si `mode` absent et `enabled` présent → `enabled=True` → "full",
+            `enabled=False` → "manual".
+          - Si `mode` ET `enabled` absents → `default_mode`.
+        """
+        mode = au.get("mode")
+        legacy_enabled = au.get("enabled")
+        if mode is not None:
+            mode = str(mode)
+            if mode not in VALID_AUTOMATION_MODES:
+                self.logger.warning(
+                    "cimier.automation.mode invalide '%s' — fallback sur '%s' "
+                    "(valeurs valides : %s)",
+                    mode,
+                    default_mode,
+                    list(VALID_AUTOMATION_MODES),
+                )
+                return default_mode
+            if legacy_enabled is not None:
+                expected_enabled = mode == "full"
+                if bool(legacy_enabled) != expected_enabled:
+                    self.logger.warning(
+                        "cimier.automation : mode='%s' et enabled=%s incohérents — "
+                        "mode prime sur enabled (la clé enabled est legacy v6.2)",
+                        mode,
+                        legacy_enabled,
+                    )
+            return mode
+        # mode absent → rétro-compat sur enabled
+        if legacy_enabled is not None:
+            return "full" if bool(legacy_enabled) else "manual"
+        return default_mode
 
     def _log_summary(self, config: DriftAppConfig):
         """Log le résumé de la configuration."""

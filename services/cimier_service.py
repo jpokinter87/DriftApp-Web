@@ -28,6 +28,7 @@ import signal
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from core.config.config_loader import (
@@ -192,7 +193,11 @@ class CimierService:
         # Phase 3 : scheduler astropy. Court-circuit complet si automation off.
         self._scheduler: Optional[CimierScheduler] = scheduler
         self._last_scheduler_check_ts: Optional[float] = None
-        if self._scheduler is None and cimier_config.automation.enabled:
+        # Phase 4 : prochains horaires de trigger (pour countdown UI dashboard).
+        # Mis à jour dans tick() après maybe_trigger, lus dans _publish_status().
+        self._last_next_open_at: Optional[Any] = None  # datetime UTC ou None
+        self._last_next_close_at: Optional[Any] = None  # datetime UTC ou None
+        if self._scheduler is None and cimier_config.automation.mode != "manual":
             if site_config is None:
                 logger.warning(
                     "cimier_event=automation_disabled reason=site_config_missing"
@@ -288,6 +293,22 @@ class CimierService:
                     )
                 except Exception as exc:  # noqa: BLE001 — robustesse runtime, on log et on continue
                     logger.error("cimier_event=scheduler_exception exc=%s", exc)
+                # Phase 4 : prochains horaires de trigger pour countdown UI.
+                # Calculé 1× par scheduler_interval (gated comme maybe_trigger).
+                # compute_next_triggers est défensif (retourne (None, None) sur exception).
+                try:
+                    if hasattr(self._scheduler, "compute_next_triggers"):
+                        next_open, next_close = self._scheduler.compute_next_triggers(
+                            datetime.now(timezone.utc)
+                        )
+                        self._last_next_open_at = next_open
+                        self._last_next_close_at = next_close
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "cimier_event=compute_next_triggers_exception exc=%s", exc
+                    )
+                    self._last_next_open_at = None
+                    self._last_next_close_at = None
                 self._last_scheduler_check_ts = now_mono
 
         # 1. Cooldown : republier remaining_quiet_s ; si expiré, débloquer.
@@ -650,6 +671,19 @@ class CimierService:
             "command_id": command_id,
             "error_message": error_message,
             "pico_state": self._last_pico_state,
+            # v6.0 Phase 4 : mode automation + prochains horaires de trigger
+            # (consommés par GET /api/cimier/automation/ + countdown UI dashboard).
+            "mode": self._config.automation.mode,
+            "next_open_at": (
+                self._last_next_open_at.isoformat()
+                if self._last_next_open_at is not None
+                else None
+            ),
+            "next_close_at": (
+                self._last_next_close_at.isoformat()
+                if self._last_next_close_at is not None
+                else None
+            ),
         }
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))

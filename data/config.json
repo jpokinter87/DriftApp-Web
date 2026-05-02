@@ -130,8 +130,8 @@
       "type": "noop"
     },
     "automation": {
-      "_comment": "v6.0 Phase 3 — scheduler astropy opt-in. Ouverture sun_alt = -12° descendant + déparking +1° (microswitch calib 45°) + check WeatherProvider. Fermeture ~15 min avant sun_alt = -6° montant : tracking_stop + GOTO 45° + close cimier en parallèle.",
-      "enabled": false,
+      "_comment": "v6.0 Phase 4 — scheduler astropy avec 3 modes. mode ∈ {manual, semi, full}. manual = aucune auto. semi = utilisateur démarre, fermeture auto. full = ouverture + fermeture auto. Rétro-compat : ancienne clé enabled (v6.2) toujours lue (true→full, false→manual) si mode absent.",
+      "mode": "manual",
       "opening_sun_altitude_deg": -12.0,
       "closing_target_sun_altitude_deg": -6.0,
       "closing_advance_minutes": 10,
