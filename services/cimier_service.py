@@ -34,6 +34,7 @@ from core.config.config_loader import (
     CimierConfig,
     ConfigLoader,
     PowerSwitchConfig,
+    SiteConfig,
     load_config,
 )
 from core.hardware.power_switch import (
@@ -47,6 +48,15 @@ from core.hardware.weather_provider import (
     make_weather_provider,
 )
 from services.cimier_ipc_manager import CimierIpcManager
+from services.cimier_scheduler import (
+    CIMIER_STATE_CLOSED,
+    CIMIER_STATE_COOLDOWN,
+    CIMIER_STATE_CYCLE,
+    CIMIER_STATE_ERROR,
+    CIMIER_STATE_OPEN,
+    CimierScheduler,
+)
+from services.motor_ipc_writer import MotorIpcWriter
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +164,9 @@ class CimierService:
         http_client: Optional[HttpClient] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
+        site_config: Optional[SiteConfig] = None,
+        scheduler: Optional[CimierScheduler] = None,
+        motor_ipc: Optional[MotorIpcWriter] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         boot_poll_interval_s: float = DEFAULT_BOOT_POLL_INTERVAL_S,
@@ -175,6 +188,25 @@ class CimierService:
         self._cooldown_end_ts: Optional[float] = None
         self._pending_command: Optional[Dict[str, Any]] = None
         self._last_pico_state: str = "unknown"
+
+        # Phase 3 : scheduler astropy. Court-circuit complet si automation off.
+        self._scheduler: Optional[CimierScheduler] = scheduler
+        self._last_scheduler_check_ts: Optional[float] = None
+        if self._scheduler is None and cimier_config.automation.enabled:
+            if site_config is None:
+                logger.warning(
+                    "cimier_event=automation_disabled reason=site_config_missing"
+                )
+            else:
+                motor_ipc = motor_ipc or MotorIpcWriter()
+                self._scheduler = CimierScheduler(
+                    automation_config=cimier_config.automation,
+                    site_config=site_config,
+                    weather_provider=self._weather_provider,
+                    cimier_ipc=self._ipc,
+                    motor_ipc=motor_ipc,
+                )
+
         self._publish_status(
             state=STATE_IDLE,
             phase=PHASE_IDLE,
@@ -236,6 +268,28 @@ class CimierService:
 
         Découplé pour les tests (avancer la clock entre ticks).
         """
+        # 0. Phase 3 : scheduler astropy (toutes les scheduler_interval_seconds,
+        #    pas à chaque tick). Court-circuit si scheduler None (automation off).
+        if self._scheduler is not None:
+            interval = self._config.automation.scheduler_interval_seconds
+            now_mono = self._clock()
+            if (
+                self._last_scheduler_check_ts is None
+                or (now_mono - self._last_scheduler_check_ts) >= interval
+            ):
+                current_state = self._derive_current_cimier_state()
+                try:
+                    decision = self._scheduler.maybe_trigger(current_state)
+                    logger.debug(
+                        "scheduler_decision trigger=%s alt=%s dir=%s",
+                        decision.trigger,
+                        decision.sun_alt_deg,
+                        decision.direction,
+                    )
+                except Exception as exc:  # noqa: BLE001 — robustesse runtime, on log et on continue
+                    logger.error("cimier_event=scheduler_exception exc=%s", exc)
+                self._last_scheduler_check_ts = now_mono
+
         # 1. Cooldown : republier remaining_quiet_s ; si expiré, débloquer.
         if self._cooldown_end_ts is not None:
             remaining = self._cooldown_end_ts - self._clock()
@@ -607,6 +661,30 @@ class CimierService:
     def _last_command_id_for_status(self) -> str:
         return getattr(self, "_last_command_id_value", "")
 
+    def _derive_current_cimier_state(self) -> str:
+        """Mappe l'état interne du service vers les labels CIMIER_STATE_* du scheduler.
+
+        - Cooldown actif → CIMIER_STATE_COOLDOWN
+        - Pico state ∈ {open, opening} → CIMIER_STATE_OPEN (opening = en train de s'ouvrir)
+        - Pico state == closed → CIMIER_STATE_CLOSED
+        - Pico state == closing → CIMIER_STATE_CYCLE (cycle de fermeture en cours)
+        - Pico state == error → CIMIER_STATE_ERROR
+        - Pico state == unknown (boot) → "unknown" (ne matche aucun CIMIER_STATE_* →
+          le scheduler retourne skip:state, comportement default-safe au boot)
+        """
+        if self._cooldown_end_ts is not None:
+            return CIMIER_STATE_COOLDOWN
+        state = self._last_pico_state
+        if state in ("open", "opening"):
+            return CIMIER_STATE_OPEN
+        if state == "closing":
+            return CIMIER_STATE_CYCLE
+        if state == "closed":
+            return CIMIER_STATE_CLOSED
+        if state == "error":
+            return CIMIER_STATE_ERROR
+        return "unknown"
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -643,6 +721,7 @@ def _build_service_from_config(config_path=None) -> CimierService:
         cimier_config=cfg.cimier,
         power_switch=power_switch,
         weather_provider=weather_provider,
+        site_config=cfg.site,
     )
 
 

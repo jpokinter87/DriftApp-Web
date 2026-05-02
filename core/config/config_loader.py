@@ -148,6 +148,39 @@ class WeatherProviderConfig:
 
 
 @dataclass
+class CimierAutomationConfig:
+    """Configuration scheduler astropy cimier (v6.0 Phase 3).
+
+    Opt-in (`enabled=False` par défaut). Quand actif, `cimier_service` polle
+    toutes les `scheduler_interval_seconds` (60 s par défaut) pour déclencher
+    automatiquement l'ouverture au crépuscule (sun_alt = `opening_sun_altitude_deg`
+    descendant) et la fermeture à l'aube (~`closing_advance_minutes` +
+    `clock_safety_margin_minutes` avant `closing_target_sun_altitude_deg` montant).
+
+    `deparking_nudge_deg` : petit déplacement post-ouverture pour faire passer
+    la couronne sur le microswitch de calibration à 45° (référence absolue
+    encodeur EMS22A).
+
+    `parking_target_azimuth_deg` : cible GOTO en fin de session (parallèle à
+    la fermeture cimier).
+
+    `retrigger_cooldown_hours` : idempotence intra-jour. Au reboot, l'état est
+    perdu (mémoire seulement) → re-trigger si les conditions sont toujours
+    remplies (état désiré, pas event-driven).
+    """
+    enabled: bool = False
+    opening_sun_altitude_deg: float = -12.0
+    closing_target_sun_altitude_deg: float = -6.0
+    closing_advance_minutes: int = 10
+    clock_safety_margin_minutes: int = 5
+    parking_target_azimuth_deg: float = 45.0
+    parking_timeout_minutes: int = 5
+    deparking_nudge_deg: float = 1.0
+    scheduler_interval_seconds: int = 60
+    retrigger_cooldown_hours: int = 12
+
+
+@dataclass
 class CimierConfig:
     """Configuration du cimier motorisé (v6.0 Phase 1).
 
@@ -159,6 +192,9 @@ class CimierConfig:
     Phase 2 ajoute `weather_provider` : interface logique no-op par défaut,
     consommée pour log structuré au démarrage de chaque cycle (pas de
     blocage runtime — Phase 3 décidera).
+
+    Phase 3 ajoute `automation` : scheduler astropy opt-in qui déclenche
+    automatiquement open/close selon les éphémérides solaires.
     """
     enabled: bool = False
     host: str = ""
@@ -169,6 +205,7 @@ class CimierConfig:
     post_off_quiet_s: float = 10.0
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
+    automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
 
 
 @dataclass
@@ -399,8 +436,10 @@ class ConfigLoader:
         defaults = CimierConfig()
         ps_defaults = PowerSwitchConfig()
         wp_defaults = WeatherProviderConfig()
+        au_defaults = CimierAutomationConfig()
         ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
         wp = c.get("weather_provider", {}) if isinstance(c, dict) else {}
+        au = c.get("automation", {}) if isinstance(c, dict) else {}
         return CimierConfig(
             enabled=bool(c.get("enabled", defaults.enabled)),
             host=str(c.get("host", defaults.host)),
@@ -416,6 +455,18 @@ class ConfigLoader:
             ),
             weather_provider=WeatherProviderConfig(
                 type=str(wp.get("type", wp_defaults.type)),
+            ),
+            automation=CimierAutomationConfig(
+                enabled=bool(au.get("enabled", au_defaults.enabled)),
+                opening_sun_altitude_deg=float(au.get("opening_sun_altitude_deg", au_defaults.opening_sun_altitude_deg)),
+                closing_target_sun_altitude_deg=float(au.get("closing_target_sun_altitude_deg", au_defaults.closing_target_sun_altitude_deg)),
+                closing_advance_minutes=int(au.get("closing_advance_minutes", au_defaults.closing_advance_minutes)),
+                clock_safety_margin_minutes=int(au.get("clock_safety_margin_minutes", au_defaults.clock_safety_margin_minutes)),
+                parking_target_azimuth_deg=float(au.get("parking_target_azimuth_deg", au_defaults.parking_target_azimuth_deg)),
+                parking_timeout_minutes=int(au.get("parking_timeout_minutes", au_defaults.parking_timeout_minutes)),
+                deparking_nudge_deg=float(au.get("deparking_nudge_deg", au_defaults.deparking_nudge_deg)),
+                scheduler_interval_seconds=int(au.get("scheduler_interval_seconds", au_defaults.scheduler_interval_seconds)),
+                retrigger_cooldown_hours=int(au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)),
             ),
         )
 

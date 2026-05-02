@@ -1071,3 +1071,183 @@ class TestWeatherProviderWiring:
         }))
         service = _build_service_from_config(config_path=config_path)
         assert isinstance(service._weather_provider, NoopWeatherProvider)
+
+
+# ======================================================================
+# Section 9 : v6.0 Phase 3 — câblage scheduler astropy
+# ======================================================================
+
+class TestSchedulerWiring:
+    """Sub-plan v6.0-03-01 : scheduler astropy intégré à tick()."""
+
+    def _make_config_with_automation(
+        self,
+        enabled: bool = True,
+        scheduler_interval_seconds: int = 60,
+    ) -> CimierConfig:
+        from core.config.config_loader import CimierAutomationConfig
+        return CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=2.0,
+            boot_poll_timeout_s=2.0,
+            post_off_quiet_s=10.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+            automation=CimierAutomationConfig(
+                enabled=enabled,
+                scheduler_interval_seconds=scheduler_interval_seconds,
+            ),
+        )
+
+    def test_scheduler_disabled_when_automation_off(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        cfg = self._make_config_with_automation(enabled=False)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+        )
+        assert service._scheduler is None
+        # tick() ne doit pas crash sans scheduler
+        service.tick()  # juste un tick safe
+
+    def test_scheduler_built_when_automation_on_with_site_config(
+        self,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        from core.config.config_loader import SiteConfig
+        from services.cimier_scheduler import CimierScheduler
+        site = SiteConfig(latitude=44.15, longitude=5.23, altitude=800.0,
+                          nom="Test", fuseau="Europe/Paris")
+        cfg = self._make_config_with_automation(enabled=True)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            site_config=site,
+        )
+        assert isinstance(service._scheduler, CimierScheduler)
+
+    def test_scheduler_skipped_when_automation_on_without_site_config(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Sans site_config, on log un warning et on n'instancie pas le scheduler."""
+        cfg = self._make_config_with_automation(enabled=True)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            site_config=None,  # explicite
+        )
+        assert service._scheduler is None
+
+    def test_scheduler_called_once_per_interval_window(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Avec interval=60s, scheduler.maybe_trigger appelé 1× par fenêtre 60s, pas chaque tick."""
+        from services.cimier_scheduler import SchedulerDecision
+
+        class CountingScheduler:
+            def __init__(self) -> None:
+                self.call_count = 0
+
+            def maybe_trigger(self, current_state: str) -> SchedulerDecision:
+                self.call_count += 1
+                from datetime import datetime, timezone
+                return SchedulerDecision("skip:state", float("nan"), "flat",
+                                         datetime.now(timezone.utc))
+
+        cfg = self._make_config_with_automation(enabled=True, scheduler_interval_seconds=60)
+        clock = MockClock(start=1000.0)
+        scheduler = CountingScheduler()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            scheduler=scheduler,  # type: ignore[arg-type]
+            clock=clock,
+            sleep=clock.sleep,
+        )
+
+        # 5 ticks rapides (delta < interval) → 1 seul appel scheduler
+        for _ in range(5):
+            service.tick()
+            clock.advance(0.5)
+        assert scheduler.call_count == 1
+
+        # Avancer > interval → prochain tick → 2e appel
+        clock.advance(70.0)
+        service.tick()
+        assert scheduler.call_count == 2
+
+    def test_scheduler_exception_does_not_crash_tick(
+        self, ipc_manager: RecordingIpcManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Si scheduler.maybe_trigger lève → log error, tick continue."""
+
+        class BrokenScheduler:
+            def maybe_trigger(self, current_state: str):
+                raise RuntimeError("boom")
+
+        cfg = self._make_config_with_automation(enabled=True)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            scheduler=BrokenScheduler(),  # type: ignore[arg-type]
+        )
+
+        with caplog.at_level("ERROR", logger="services.cimier_service"):
+            service.tick()  # ne doit pas remonter l'exception
+
+        assert any("scheduler_exception" in r.getMessage() for r in caplog.records)
+
+    def test_derive_current_cimier_state_mappings(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Vérifie le mapping pico_state → CIMIER_STATE_*."""
+        from services.cimier_scheduler import (
+            CIMIER_STATE_CLOSED,
+            CIMIER_STATE_COOLDOWN,
+            CIMIER_STATE_CYCLE,
+            CIMIER_STATE_ERROR,
+            CIMIER_STATE_OPEN,
+        )
+
+        cfg = self._make_config_with_automation(enabled=False)  # pas besoin du scheduler
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+        )
+
+        # unknown (boot) → "unknown" (default-safe : pas de trigger)
+        service._last_pico_state = "unknown"
+        assert service._derive_current_cimier_state() == "unknown"
+
+        # closed → CIMIER_STATE_CLOSED
+        service._last_pico_state = "closed"
+        assert service._derive_current_cimier_state() == CIMIER_STATE_CLOSED
+
+        # open → CIMIER_STATE_OPEN
+        service._last_pico_state = "open"
+        assert service._derive_current_cimier_state() == CIMIER_STATE_OPEN
+
+        # opening → CIMIER_STATE_OPEN (en train de s'ouvrir)
+        service._last_pico_state = "opening"
+        assert service._derive_current_cimier_state() == CIMIER_STATE_OPEN
+
+        # closing → CIMIER_STATE_CYCLE (cycle de fermeture)
+        service._last_pico_state = "closing"
+        assert service._derive_current_cimier_state() == CIMIER_STATE_CYCLE
+
+        # error → CIMIER_STATE_ERROR
+        service._last_pico_state = "error"
+        assert service._derive_current_cimier_state() == CIMIER_STATE_ERROR
+
+        # cooldown actif → CIMIER_STATE_COOLDOWN (priorité sur pico_state)
+        service._last_pico_state = "open"
+        service._cooldown_end_ts = 999999.0
+        assert service._derive_current_cimier_state() == CIMIER_STATE_COOLDOWN
