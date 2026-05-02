@@ -363,6 +363,42 @@
         </div>
     </div>
 </div>
+
+<!-- ═══ Modal Confirmation Fermeture Cimier (v6.0 Phase 2 sub-plan 01) ═══ -->
+<div id="cimier-close-confirm-modal" x-data class="goto-modal"
+     x-show="$store.dashboard.cimierCloseConfirmVisible" x-cloak
+     role="dialog" aria-modal="true"
+     aria-labelledby="cimier-close-confirm-title"
+     aria-describedby="cimier-close-confirm-body">
+    <div class="goto-modal-content">
+        <div class="goto-modal-header">
+            <span class="goto-icon">&#x26A0;</span>
+            <h3 id="cimier-close-confirm-title">Fermer le cimier maintenant&nbsp;?</h3>
+        </div>
+        <div id="cimier-close-confirm-body"
+             class="text-sm text-obs-text-secondary mb-5 px-2 leading-relaxed text-center">
+            Le suivi de
+            <span class="text-accent-amber font-semibold"
+                  x-text="$store.dashboard.cimierCloseConfirmObject || 'l\'objet en cours'"></span>
+            est en cours. Fermer le cimier maintenant
+            <strong class="text-obs-text">interrompra la session</strong>.
+        </div>
+        <div class="button-group">
+            <button id="btn-cimier-close-cancel" class="btn btn-secondary"
+                    x-init="$watch('$store.dashboard.cimierCloseConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
+                Annuler
+            </button>
+            <button id="btn-cimier-close-confirm" class="btn btn-danger"
+                    aria-live="polite"
+                    :disabled="$store.dashboard.cimierCloseConfirmCountdown > 0"
+                    x-text="$store.dashboard.cimierCloseConfirmCountdown > 0
+                            ? `Confirmer (${$store.dashboard.cimierCloseConfirmCountdown})`
+                            : 'Confirmer la fermeture'">
+                Confirmer la fermeture
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block footer_extra %}

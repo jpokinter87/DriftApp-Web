@@ -23,6 +23,10 @@ document.addEventListener('alpine:init', () => {
         trackingVisible: false,
         // Cimier state (v6.0 Phase 1) — payload brut de /api/cimier/status/
         cimier: null,
+        // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
+        cimierCloseConfirmVisible: false,
+        cimierCloseConfirmObject: null,
+        cimierCloseConfirmCountdown: 0,
         // Logs (reactive array)
         logs: [],
 
@@ -150,8 +154,14 @@ const elements = {
     btnCimierOpen: document.getElementById('btn-cimier-open'),
     btnCimierClose: document.getElementById('btn-cimier-close'),
     btnCimierStop: document.getElementById('btn-cimier-stop'),
-    cimierDetail: document.getElementById('cimier-detail')
+    cimierDetail: document.getElementById('cimier-detail'),
+    // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
+    btnCimierCloseCancel: document.getElementById('btn-cimier-close-cancel'),
+    btnCimierCloseConfirm: document.getElementById('btn-cimier-close-confirm')
 };
+
+// Countdown interval handle for the cimier close confirmation modal.
+let cimierCloseConfirmInterval = null;
 
 // État mouvement continu
 let continuousMovement = null;
@@ -215,10 +225,25 @@ function initEventListeners() {
         elements.btnCimierOpen.addEventListener('click', () => sendCimierAction('open'));
     }
     if (elements.btnCimierClose) {
-        elements.btnCimierClose.addEventListener('click', () => sendCimierAction('close'));
+        // Phase 2 sub-plan 01 : intercept conditionnel — modale de confirmation
+        // si tracking actif, sinon action immédiate (anti clic-fantôme NGC 3675).
+        elements.btnCimierClose.addEventListener('click', confirmCimierClose);
     }
     if (elements.btnCimierStop) {
         elements.btnCimierStop.addEventListener('click', () => sendCimierAction('stop'));
+    }
+
+    // Cimier close confirmation modal — handlers Cancel/Confirm (v6.0 Phase 2 sub-plan 01).
+    if (elements.btnCimierCloseCancel) {
+        elements.btnCimierCloseCancel.addEventListener('click', closeCimierCloseConfirmModal);
+    }
+    if (elements.btnCimierCloseConfirm) {
+        elements.btnCimierCloseConfirm.addEventListener('click', () => {
+            // Double-garde côté code en plus du :disabled du template.
+            if (Alpine.store('dashboard').cimierCloseConfirmCountdown > 0) return;
+            closeCimierCloseConfirmModal();
+            sendCimierAction('close');
+        });
     }
 }
 
@@ -321,6 +346,11 @@ async function startTracking(skipGoto = false) {
         log('Aucun objet sélectionné', 'warning');
         return;
     }
+
+    // Cascade auto cimier (v6.0 Phase 2 sub-plan 01) — ouvre le cimier si fermé,
+    // attend state="open" (timeout 30 s). Abort propre sur cycle/cooldown/error.
+    const cimierReady = await ensureCimierOpenForTracking();
+    if (!cimierReady) return;
 
     if (skipGoto) {
         log(`Démarrage du suivi de ${name} (position actuelle conservée)...`);
@@ -646,6 +676,99 @@ async function sendCimierAction(action) {
         log(`Cimier : échec (${result.error})`, 'error');
     }
     // Le polling 1s rafraîchit l'état affiché ; pas besoin de poll immédiat.
+}
+
+// Ferme la modale de confirmation et nettoie le compteur (v6.0 Phase 2 sub-plan 01).
+function closeCimierCloseConfirmModal() {
+    const store = Alpine.store('dashboard');
+    store.cimierCloseConfirmVisible = false;
+    store.cimierCloseConfirmObject = null;
+    store.cimierCloseConfirmCountdown = 0;
+    if (cimierCloseConfirmInterval) {
+        clearInterval(cimierCloseConfirmInterval);
+        cimierCloseConfirmInterval = null;
+    }
+}
+
+// Intercept conditionnel sur Fermer cimier : si tracking actif, ouvrir la modale
+// de confirmation avec compteur anti-double-clic 2 s ; sinon, action immédiate
+// (pas de friction inutile). v6.0 Phase 2 sub-plan 01 — pattern incident NGC 3675.
+function confirmCimierClose() {
+    const trackingActive = ['tracking', 'initializing'].includes(state.status)
+                           && state.trackingObject;
+    if (!trackingActive) {
+        sendCimierAction('close');
+        return;
+    }
+
+    const store = Alpine.store('dashboard');
+    store.cimierCloseConfirmObject = state.trackingObject;
+    store.cimierCloseConfirmCountdown = 2;
+    store.cimierCloseConfirmVisible = true;
+
+    if (cimierCloseConfirmInterval) clearInterval(cimierCloseConfirmInterval);
+    cimierCloseConfirmInterval = setInterval(() => {
+        const remaining = Alpine.store('dashboard').cimierCloseConfirmCountdown - 1;
+        Alpine.store('dashboard').cimierCloseConfirmCountdown = Math.max(0, remaining);
+        if (remaining <= 0) {
+            clearInterval(cimierCloseConfirmInterval);
+            cimierCloseConfirmInterval = null;
+        }
+    }, 1000);
+}
+
+// Cascade auto avant démarrage du tracking : si cimier fermé, l'ouvrir d'abord
+// puis attendre state="open" (timeout 30 s). Short-circuits gracieux pour
+// open/disabled/unknown (passent direct) et cycle/cooldown/error (abort).
+// v6.0 Phase 2 sub-plan 01 — cadrage interview thème B/D.
+async function ensureCimierOpenForTracking() {
+    const cimier = Alpine.store('dashboard').cimier;
+    const cimierState = cimier?.state ?? 'unknown';
+
+    // Pass-through : déjà ouvert, désactivé (machine dev) ou inconnu (service éteint).
+    if (['open', 'disabled', 'unknown'].includes(cimierState)) return true;
+
+    // États transitoires bloquants — abort propre avec log explicite.
+    if (cimierState === 'cycle') {
+        log('Cycle cimier en cours, attendez la fin', 'warning');
+        return false;
+    }
+    if (cimierState === 'cooldown') {
+        const remaining = cimier?.remaining_quiet_s !== undefined
+            ? cimier.remaining_quiet_s.toFixed(0)
+            : '?';
+        log(`Anti-rebond cimier actif (${remaining}s), réessayez`, 'warning');
+        return false;
+    }
+    if (cimierState === 'error') {
+        const err = cimier?.error_message || 'inconnue';
+        log(`Cimier en erreur : ${err}. Tracking annulé.`, 'error');
+        return false;
+    }
+
+    // cimierState === 'closed' → cascade ouverture.
+    log('Cimier fermé : ouverture avant démarrage du suivi…', 'info');
+    const openResult = await apiCall('/api/cimier/open/', 'POST');
+    if (openResult && openResult.error) {
+        log(`Échec ouverture cimier : ${openResult.error}. Tracking annulé.`, 'error');
+        return false;
+    }
+
+    // Polling 1 s jusqu'à state="open", timeout 30 s. Réutilise le store
+    // mis à jour par pollCimierStatus (pas de polling parallèle).
+    for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const current = Alpine.store('dashboard').cimier?.state;
+        if (current === 'open') return true;
+        if (current === 'error') {
+            const err = Alpine.store('dashboard').cimier?.error_message || 'inconnue';
+            log(`Cimier en erreur pendant ouverture : ${err}. Tracking annulé.`, 'error');
+            return false;
+        }
+    }
+
+    log('Timeout : cimier non ouvert après 30 s. Tracking annulé.', 'error');
+    return false;
 }
 
 async function updateStatus() {
