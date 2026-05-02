@@ -6,6 +6,7 @@ mocks pour cimier_ipc + motor_ipc + weather_provider.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
@@ -499,19 +500,30 @@ class TestComputeNextTriggers:
         assert astropy_calls[0] == 0
 
     def test_mode_semi_open_is_always_none(self):
-        """mode=semi → next_open=None toujours (ouverture manuelle), next_close calculé."""
-        # alt(t)=-15 (toujours sous le seuil ouverture, mais on s'en fout en semi)
-        # alt(t+offset)=-5 (au-dessus du target -6) → close conditions remplies
+        """mode=semi → next_open=None toujours (ouverture manuelle), next_close calculé.
+
+        Setup transitionnel pour fix « détection de transition » 2026-05-02 :
+        alt(now+offset)<-6 (False), alt(now+sample+offset)>=-6 (True) → 1ère transition."""
+        anchor = datetime(2026, 5, 15, 4, 0, tzinfo=timezone.utc)
+
+        # alt(t) = -15 + 0.4*minutes_elapsed, linéaire
+        # → alt(now+0)=-15, alt(now+20min)=-7 (encore <-6), alt(now+25min)=-5 (>=-6).
+        # close_offset ≈ closing_advance(15) + safety_margin(0 par défaut) = 15min.
+        # → à now (sample 0) : close_match = rising AND alt(15min)=-9 → False.
+        # → à now+5min : close_match = rising AND alt(20min)=-7 → False.
+        # → à now+10min : close_match = rising AND alt(25min)=-5 ≥ -6 → True. TRANSITION.
+        def alt_fn(when, *a, **kw):
+            elapsed_min = (when - anchor).total_seconds() / 60
+            return -15.0 + elapsed_min * 0.4
+
         sched = self._build(
             "semi",
-            alt_fn=lambda when, *a, **kw: -5.0,  # peu importe, on cherche rising
+            alt_fn=alt_fn,
             dir_fn=lambda *a, **kw: "rising",
         )
-        next_open, next_close = sched.compute_next_triggers(
-            datetime(2026, 5, 15, 4, 0, tzinfo=timezone.utc)
-        )
+        next_open, next_close = sched.compute_next_triggers(anchor)
         assert next_open is None
-        # next_close trouvé dans l'horizon 24h
+        # next_close trouvé via la transition False→True détectée
         assert next_close is not None
         assert next_close.tzinfo is not None
 
@@ -540,29 +552,42 @@ class TestComputeNextTriggers:
         assert next_open < next_close  # ouverture précède fermeture
 
     def test_returns_tz_aware_utc_datetimes(self):
-        """Garantie : les datetime retournés sont UTC tz-aware."""
+        """Garantie : les datetime retournés sont UTC tz-aware.
+
+        Setup transitionnel : alt commence > seuil (condition False à now) puis
+        descend sous le seuil → 1ère transition détectée = next_open."""
+        anchor = datetime(2026, 5, 15, 18, 0, tzinfo=timezone.utc)
+
+        def alt_fn(when, *a, **kw):
+            elapsed_min = (when - anchor).total_seconds() / 60
+            return -10.0 - elapsed_min * 0.1  # de -10 (>seuil -12) descend
+
         sched = self._build(
             "full",
-            alt_fn=lambda *a, **kw: -15.0,
+            alt_fn=alt_fn,
             dir_fn=lambda *a, **kw: "descending",
         )
-        next_open, _ = sched.compute_next_triggers(
-            datetime(2026, 5, 15, 18, 0, tzinfo=timezone.utc)
-        )
+        next_open, _ = sched.compute_next_triggers(anchor)
         assert next_open is not None
         assert next_open.tzinfo == timezone.utc
 
     def test_naive_now_is_assumed_utc(self):
-        """now naive (sans tzinfo) → assumé UTC silencieusement."""
+        """now naive (sans tzinfo) → assumé UTC silencieusement.
+
+        Setup identique au test précédent (transition descendante)."""
+        anchor_naive = datetime(2026, 5, 15, 18, 0)
+        anchor_utc = anchor_naive.replace(tzinfo=timezone.utc)
+
+        def alt_fn(when, *a, **kw):
+            elapsed_min = (when - anchor_utc).total_seconds() / 60
+            return -10.0 - elapsed_min * 0.1
+
         sched = self._build(
             "full",
-            alt_fn=lambda *a, **kw: -15.0,
+            alt_fn=alt_fn,
             dir_fn=lambda *a, **kw: "descending",
         )
-        # naive datetime
-        next_open, _ = sched.compute_next_triggers(
-            datetime(2026, 5, 15, 18, 0)  # pas de tzinfo
-        )
+        next_open, _ = sched.compute_next_triggers(anchor_naive)
         assert next_open is not None
         assert next_open.tzinfo == timezone.utc
 
@@ -577,6 +602,30 @@ class TestComputeNextTriggers:
         )
         assert (next_open, next_close) == (None, None)
 
+    def test_already_in_open_window_returns_next_transition_not_immediate(self):
+        """Bug fix 2026-05-02 : si la condition d'ouverture est déjà vraie à `now`
+        (pleine nuit, alt déjà sous -12° descendant), `compute_next_triggers` ne doit
+        PAS retourner now+sampling (1er sample où la condition est vraie). Il doit
+        chercher la prochaine **transition** = soit la prochaine descente après une
+        remontée intermédiaire, soit None si pas de transition dans l'horizon.
+
+        Avant fix : retournait systématiquement now+5min en pleine nuit.
+        Après fix : transition détectée seulement quand False→True."""
+        anchor = datetime(2026, 5, 15, 23, 0, tzinfo=timezone.utc)  # pleine nuit
+
+        # alt = -20° en permanence + descending → condition open déjà vraie.
+        # Attendu : pas de transition False→True détectée → next_open = None.
+        sched = self._build(
+            "full",
+            alt_fn=lambda *a, **kw: -20.0,
+            dir_fn=lambda *a, **kw: "descending",
+        )
+        next_open, _ = sched.compute_next_triggers(anchor)
+        assert next_open is None, (
+            "next_open ne doit pas être retourné quand la condition est déjà "
+            "vraie à now (sinon UI countdown affiche 4 min en boucle)"
+        )
+
     def test_no_match_within_24h_returns_none(self):
         """Si aucun match dans l'horizon 24h → None (pas de plantage)."""
         # alt toujours positif et flat → ni open ni close ne matchent
@@ -589,3 +638,79 @@ class TestComputeNextTriggers:
             datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
         )
         assert (next_open, next_close) == (None, None)
+
+
+# ----------------------------------------------------------------------
+# Hot-reload mode (v6.0 Phase 4 sub-plan 04-02 fix UX)
+# ----------------------------------------------------------------------
+
+
+class TestRefreshModeFromConfig:
+    """`CimierScheduler.refresh_mode_from_config` permet de propager au prochain
+    tick scheduler un changement de mode persisté dans data/config.json (typiquement
+    suite à un POST /api/cimier/automation/), sans nécessiter de redémarrage du
+    cimier_service. Évite l'UX cryptique « ⚠ redémarrage cimier_service requis »."""
+
+    @staticmethod
+    def _build(initial_mode):
+        sched, _, _, _ = _scheduler(
+            automation=CimierAutomationConfig(mode=initial_mode),
+            alt_fn=lambda *a, **kw: 0.0,
+            dir_fn=lambda *a, **kw: "flat",
+        )
+        return sched
+
+    def test_refresh_returns_true_when_mode_changes(self, tmp_path):
+        sched = self._build("manual")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": {"automation": {"mode": "full"}}}))
+        changed = sched.refresh_mode_from_config(config_file)
+        assert changed is True
+        assert sched._cfg.mode == "full"
+
+    def test_refresh_returns_false_when_mode_unchanged(self, tmp_path):
+        sched = self._build("semi")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": {"automation": {"mode": "semi"}}}))
+        changed = sched.refresh_mode_from_config(config_file)
+        assert changed is False
+        assert sched._cfg.mode == "semi"
+
+    def test_refresh_handles_legacy_enabled_true_as_full(self, tmp_path):
+        sched = self._build("manual")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": {"automation": {"enabled": True}}}))
+        assert sched.refresh_mode_from_config(config_file) is True
+        assert sched._cfg.mode == "full"
+
+    def test_refresh_handles_legacy_enabled_false_as_manual(self, tmp_path):
+        sched = self._build("full")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": {"automation": {"enabled": False}}}))
+        assert sched.refresh_mode_from_config(config_file) is True
+        assert sched._cfg.mode == "manual"
+
+    def test_refresh_returns_false_on_io_error(self, tmp_path):
+        """Fichier absent → log warning + return False, mode in-memory inchangé."""
+        sched = self._build("full")
+        missing_file = tmp_path / "missing.json"
+        changed = sched.refresh_mode_from_config(missing_file)
+        assert changed is False
+        assert sched._cfg.mode == "full"
+
+    def test_refresh_returns_false_on_invalid_json(self, tmp_path):
+        sched = self._build("semi")
+        config_file = tmp_path / "config.json"
+        config_file.write_text("{not json")
+        changed = sched.refresh_mode_from_config(config_file)
+        assert changed is False
+        assert sched._cfg.mode == "semi"
+
+    def test_refresh_falls_back_to_manual_for_invalid_mode(self, tmp_path):
+        """Mode invalide ('yolo') et pas de legacy enabled → fallback 'manual'."""
+        sched = self._build("full")
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": {"automation": {"mode": "yolo"}}}))
+        changed = sched.refresh_mode_from_config(config_file)
+        assert changed is True
+        assert sched._cfg.mode == "manual"

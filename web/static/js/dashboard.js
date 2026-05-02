@@ -27,6 +27,24 @@ document.addEventListener('alpine:init', () => {
         cimierCloseConfirmVisible: false,
         cimierCloseConfirmObject: null,
         cimierCloseConfirmCountdown: 0,
+        // Cimier automation lifecycle (v6.0 Phase 4 sub-plan 04-02)
+        automationMode: 'manual',                  // 'manual' | 'semi' | 'full'
+        automationRestartHint: '',                 // hint affiché 8s après POST mode
+        automationNextOpenAt: null,                // ISO 8601 UTC string ou null
+        automationNextCloseAt: null,               // ISO 8601 UTC string ou null
+        automationCountdownLabel: '',              // libellé contextualisé pré-calculé
+        parkingConfirmVisible: false,
+        parkingConfirmObject: null,
+        parkingConfirmCountdown: 0,
+        // Suivi progression parking session (v6.0 Phase 4 sub-plan 04-02 fix UX) —
+        // banner permanent dashboard tant que la séquence stop+goto+close n'est pas terminée.
+        parkingInProgress: false,
+        parkingTargetDeg: 45,
+        parkingStepTracking: 'pending',  // 'pending' | 'done'
+        parkingStepGoto: 'pending',      // 'pending' | 'in_progress' | 'done'
+        parkingStepCimier: 'pending',    // 'pending' | 'cycle' | 'closed' | 'failed'
+        parkingStartedAt: null,          // epoch ms
+        cimierTimeline: [],                        // FIFO buffer max 50 entrées
         // Logs (reactive array)
         logs: [],
 
@@ -126,7 +144,6 @@ const elements = {
     meridianValue: document.getElementById('meridian-value'),
 
     // Nouveaux cartouches
-    trackingModeIndicator: document.getElementById('tracking-mode-indicator'),
     correctionsCount: document.getElementById('corrections-count'),
     correctionsTotal: document.getElementById('corrections-total'),
     encItem: document.getElementById('enc-item'),
@@ -157,11 +174,32 @@ const elements = {
     cimierDetail: document.getElementById('cimier-detail'),
     // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
     btnCimierCloseCancel: document.getElementById('btn-cimier-close-cancel'),
-    btnCimierCloseConfirm: document.getElementById('btn-cimier-close-confirm')
+    btnCimierCloseConfirm: document.getElementById('btn-cimier-close-confirm'),
+    // Cimier automation + parking session (v6.0 Phase 4 sub-plan 04-02)
+    selectAutomationMode: document.getElementById('cimier-automation-mode'),
+    btnCimierParking: document.getElementById('btn-cimier-parking'),
+    btnParkingCancel: document.getElementById('btn-parking-cancel'),
+    btnParkingConfirm: document.getElementById('btn-parking-confirm')
 };
 
 // Countdown interval handle for the cimier close confirmation modal.
 let cimierCloseConfirmInterval = null;
+// Countdown interval handle for the parking confirmation modal (v6.0 Phase 4 sub-plan 04-02).
+let parkingConfirmInterval = null;
+// Compteur monotonique pour les IDs Alpine x-for de la timeline cimier.
+let cimierTimelineSeq = 0;
+// Hint « Redémarrage cimier_service requis » timeout handle (v6.0 Phase 4 sub-plan 04-02).
+let automationRestartHintTimeout = null;
+// Watcher progression parking session (setInterval handle).
+let parkingWatcherInterval = null;
+// Position tracking pour détection « coupole arrivée à 45° ».
+let parkingLastObservedPosition = null;
+// Verrou utilisateur sur le mode auto : tant que le service ne rapporte pas le mode
+// que l'utilisateur vient de choisir (cimier_service non redémarré), on n'écrase pas
+// le sélecteur depuis pollCimierStatus. Reset automatiquement quand le service confirme.
+// Fix smoke 2026-05-02 : sans ce verrou, le sélecteur revenait à MANUAL après chaque
+// poll car cimier_service garde sa config en mémoire jusqu'au restart.
+let lastUserSelectedMode = null;
 
 // État mouvement continu
 let continuousMovement = null;
@@ -245,6 +283,26 @@ function initEventListeners() {
             sendCimierAction('close');
         });
     }
+
+    // Bouton Parking session (v6.0 Phase 4 sub-plan 04-02) — séquence
+    // tracking_stop + GOTO 45° + close cimier. Modale conditionnelle si tracking actif.
+    if (elements.btnCimierParking) {
+        elements.btnCimierParking.addEventListener('click', triggerParkingSession);
+    }
+    if (elements.btnParkingCancel) {
+        elements.btnParkingCancel.addEventListener('click', closeParkingConfirmModal);
+    }
+    if (elements.btnParkingConfirm) {
+        elements.btnParkingConfirm.addEventListener('click', () => {
+            if (Alpine.store('dashboard').parkingConfirmCountdown > 0) return;
+            closeParkingConfirmModal();
+            executeParkingSession();
+        });
+    }
+
+    // Hydratation initiale du sélecteur mode auto + countdown depuis l'API
+    // (avant le 1er pollCimierStatus qui n'arrive qu'à T+1s).
+    fetchAutomationState();
 }
 
 // =========================================================================
@@ -596,6 +654,12 @@ function startPolling() {
     pollCimierStatus();
     setInterval(updateStatus, POLL_INTERVAL);
     setInterval(pollCimierStatus, POLL_INTERVAL);
+    // Tick local 1s pour décrémenter le countdown automation (v6.0 Phase 4 sub-plan 04-02).
+    // Indépendant du polling /status/ pour fluidité visuelle (sinon countdown saute par seconds).
+    setInterval(recomputeAutomationCountdown, 1000);
+    // Re-hydratation périodique du sélecteur mode depuis /api/cimier/automation/
+    // (au cas où le mode est changé depuis un autre onglet/device).
+    setInterval(fetchAutomationState, 30_000);
 }
 
 // =========================================================================
@@ -634,15 +698,49 @@ function setCimierControlsDisabled(disabled) {
 
 async function pollCimierStatus() {
     const status = await apiCall('/api/cimier/status/');
+    const store = Alpine.store('dashboard');
+
     if (!status || status.error && status.state === undefined) {
         // Service Django KO complet — on reset à null sans spammer les logs.
-        Alpine.store('dashboard').cimier = null;
+        store.cimier = null;
         setCimierControlsDisabled(true);
         if (elements.cimierDetail) elements.cimierDetail.textContent = '';
         return;
     }
 
-    Alpine.store('dashboard').cimier = status;
+    // Détection changement d'état cimier pour timeline (avant assignation).
+    const prevState = store.cimier?.state;
+    if (prevState && prevState !== status.state) {
+        const from = (CIMIER_STATE_LABELS[prevState] || prevState).toLowerCase();
+        const to = (CIMIER_STATE_LABELS[status.state] || status.state).toLowerCase();
+        const level = status.state === 'error' ? 'ERROR' : 'INFO';
+        pushCimierTimeline(level, `Cimier : ${from} → ${to}`);
+    }
+
+    store.cimier = status;
+
+    // Hydratation des `next_*_at` depuis le status (calculés par le scheduler
+    // du service, donc seul le status fait foi) — UNIQUEMENT si le service
+    // n'est pas stale (sinon on conserve les valeurs venues du fallback Django
+    // via fetchAutomationState, qui sont calculées on-demand).
+    // NOTE : on n'hydrate **plus** `automationMode` depuis status — il est
+    // désormais piloté uniquement par `fetchAutomationState()` qui interroge
+    // `/api/cimier/automation/` (source vérité = data/config.json côté backend
+    // depuis fix smoke 2026-05-02).
+    const lastUpdate = status?.last_update;
+    const statusStale = !lastUpdate ||
+        !Number.isFinite(Date.parse(lastUpdate)) ||
+        (Date.now() - Date.parse(lastUpdate)) > 90_000;
+    if (!statusStale) {
+        // Service vivant : ses calculs prennent priorité.
+        store.automationNextOpenAt = status.next_open_at || null;
+        store.automationNextCloseAt = status.next_close_at || null;
+    }
+    // Si stale (typiquement dev avec cimier.enabled=false), on ne touche PAS
+    // automationNextOpenAt/CloseAt — laisse le fallback Django (fetchAutomationState
+    // toutes les 30s) hydrater ces valeurs.
+    // Recalcule immédiatement le countdown sans attendre le tick 1s.
+    recomputeAutomationCountdown();
 
     // Disable Ouvrir/Fermer pendant cycle/cooldown/disabled/unknown.
     const lockedStates = ['cycle', 'cooldown', 'disabled', 'unknown'];
@@ -670,10 +768,27 @@ async function pollCimierStatus() {
 
 async function sendCimierAction(action) {
     const labels = { open: 'Ouverture', close: 'Fermeture', stop: 'Arrêt cycle' };
+
+    // Détection cimier service inactif (status stale > 90 s) : la commande sera
+    // écrite dans /dev/shm/cimier_command.json mais jamais consommée. On émet
+    // un message timeline clair pour éviter à l'utilisateur de se demander
+    // pourquoi ÉTAT/PHASE ne changent pas.
+    const cimier = Alpine.store('dashboard').cimier;
+    const lastUpdate = cimier?.last_update;
+    const cimierStale = !lastUpdate ||
+        !Number.isFinite(Date.parse(lastUpdate)) ||
+        (Date.now() - Date.parse(lastUpdate)) > 90_000;
+
     log(`Cimier : ${labels[action]} demandée`, 'info');
+    if (cimierStale) {
+        pushCimierTimeline('INFO', `${labels[action]} demandée (service inactif — commande non exécutée)`);
+    } else {
+        pushCimierTimeline('INFO', `${labels[action]} demandée`);
+    }
     const result = await apiCall(`/api/cimier/${action}/`, 'POST');
     if (result && result.error) {
         log(`Cimier : échec (${result.error})`, 'error');
+        pushCimierTimeline('ERROR', `${labels[action]} échouée : ${result.error}`);
     }
     // Le polling 1s rafraîchit l'état affiché ; pas besoin de poll immédiat.
 }
@@ -728,6 +843,20 @@ async function ensureCimierOpenForTracking() {
     // Pass-through : déjà ouvert, désactivé (machine dev) ou inconnu (service éteint).
     if (['open', 'disabled', 'unknown'].includes(cimierState)) return true;
 
+    // Détection service silencieux (cimier_status.json non rafraîchi depuis >60s) :
+    // typiquement machine dev sans cimier_service qui tourne, ou prod avec service
+    // crashé/figé. On bypass la cascade pour éviter un timeout gratuit de 30 s.
+    // Fix smoke 2026-05-02 : sur dev, /dev/shm/cimier_status.json traînait en "idle"
+    // depuis un ancien run, ce qui déclenchait à tort la cascade ouverture.
+    if (cimier?.last_update) {
+        const lastUpdateMs = Date.parse(cimier.last_update);
+        if (Number.isFinite(lastUpdateMs) && (Date.now() - lastUpdateMs) > 60_000) {
+            log('Cimier Service inactif — tracking lancé sans cascade ouverture cimier', 'info');
+            pushCimierTimeline('INFO', 'Cimier service inactif — tracking sans cascade');
+            return true;
+        }
+    }
+
     // États transitoires bloquants — abort propre avec log explicite.
     if (cimierState === 'cycle') {
         log('Cycle cimier en cours, attendez la fin', 'warning');
@@ -769,6 +898,353 @@ async function ensureCimierOpenForTracking() {
 
     log('Timeout : cimier non ouvert après 30 s. Tracking annulé.', 'error');
     return false;
+}
+
+// =========================================================================
+// Cimier — Automatisation lifecycle session (v6.0 Phase 4 sub-plan 04-02)
+// =========================================================================
+
+// Push une entrée dans la timeline notifications cimier (FIFO, max 50).
+// level ∈ {'INFO','WARNING','ERROR'}.
+function pushCimierTimeline(level, message) {
+    const store = Alpine.store('dashboard');
+    if (!store.cimierTimeline) store.cimierTimeline = [];
+    cimierTimelineSeq += 1;
+    const now = new Date();
+    store.cimierTimeline.unshift({
+        id: cimierTimelineSeq,
+        level,
+        message,
+        timeLabel: now.toLocaleTimeString('fr-FR', { hour12: false })
+    });
+    if (store.cimierTimeline.length > 50) {
+        store.cimierTimeline.length = 50;
+    }
+}
+
+// Formate une durée en ms restantes en libellé compact « Xh Ymin » ou « Ymin Zs »
+// pour les fenêtres < 1 min, identique au pattern countdown méridien dynamique
+// adopté en v5.6 P2 (décision session 2026-04-27).
+function formatRemainingMs(ms) {
+    if (ms == null || ms <= 0) return null;
+    const totalSec = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes.toString().padStart(2, '0')}min`;
+    if (minutes > 0) return `${minutes}min ${(totalSec % 60).toString().padStart(2, '0')}s`;
+    return `${totalSec}s`;
+}
+
+// Recalcule le libellé contextualisé du countdown selon mode + fenêtre.
+// 4 cas : manual, semi (close-only), full (open puis close), hors-fenêtre.
+// Référence AC-3 du PLAN-04-02. Comparaisons en epoch ms UTC (Date.now()) —
+// pas de mélange UTC / local (rigueur cohérente avec décision v5.9 P2 sur datetime).
+function recomputeAutomationCountdown() {
+    const store = Alpine.store('dashboard');
+    const mode = store.automationMode;
+
+    if (mode === 'manual') {
+        store.automationCountdownLabel = 'Mode manuel — auto désactivée';
+        return;
+    }
+
+    const now = Date.now();
+    const openMs = store.automationNextOpenAt ? Date.parse(store.automationNextOpenAt) : NaN;
+    const closeMs = store.automationNextCloseAt ? Date.parse(store.automationNextCloseAt) : NaN;
+    const openValid = Number.isFinite(openMs) && openMs > now;
+    const closeValid = Number.isFinite(closeMs) && closeMs > now;
+
+    if (mode === 'semi') {
+        if (closeValid) {
+            store.automationCountdownLabel = `Fermeture auto dans ${formatRemainingMs(closeMs - now)}`;
+        } else {
+            // Fallback rare : le calcul backend n'a pas (encore) abouti.
+            store.automationCountdownLabel = 'Calcul des éphémérides…';
+        }
+        return;
+    }
+
+    if (mode === 'full') {
+        if (openValid && (!closeValid || openMs < closeMs)) {
+            store.automationCountdownLabel = `Ouverture auto dans ${formatRemainingMs(openMs - now)}`;
+        } else if (closeValid) {
+            store.automationCountdownLabel = `Fermeture auto dans ${formatRemainingMs(closeMs - now)}`;
+        } else {
+            store.automationCountdownLabel = 'Calcul des éphémérides…';
+        }
+        return;
+    }
+
+    // Mode inconnu (rétro-compat / corruption) — fallback safe.
+    store.automationCountdownLabel = '';
+}
+
+// Hydratation du sélecteur mode (source vérité = data/config.json côté backend).
+// Appelée au boot ET sur intervalle (30 s) pour capter une éventuelle modif
+// venue d'un autre onglet/device.
+// Utilise la vue 04-01 enrichie post-smoke : retourne {mode, service_mode,
+// restart_required, next_open_at, next_close_at}.
+async function fetchAutomationState() {
+    try {
+        const data = await apiCall('/api/cimier/automation/');
+        if (!data || data.error) return;
+        const store = Alpine.store('dashboard');
+        if (data.mode && ['manual', 'semi', 'full'].includes(data.mode)) {
+            // Si l'user vient de POSTer un mode (verrou actif), on ne contredit
+            // pas tant que le backend ne confirme pas le choix.
+            if (lastUserSelectedMode === null) {
+                store.automationMode = data.mode;
+            } else if (lastUserSelectedMode === data.mode) {
+                store.automationMode = data.mode;
+                lastUserSelectedMode = null;
+            }
+            // Si data.mode != lastUserSelectedMode : on garde le choix user
+            // (verrou — le backend reflète désormais config.json donc ça ne
+            // devrait normalement pas arriver, mais belt-and-suspenders).
+        }
+        store.automationNextOpenAt = data.next_open_at || null;
+        store.automationNextCloseAt = data.next_close_at || null;
+        recomputeAutomationCountdown();
+    } catch (_e) {
+        // Silencieux : retry au prochain cycle.
+    }
+}
+
+// Persiste un nouveau mode auto via POST /api/cimier/automation/.
+// Sur 200 : timeline INFO + hint « Redémarrage cimier_service requis » 8s.
+// Sur erreur : timeline ERROR + restore sélecteur sur valeur précédente.
+// Exposée en window.* pour le @change Alpine du <select>.
+async function updateAutomationMode(newMode) {
+    const store = Alpine.store('dashboard');
+    const previousMode = store.cimier?.mode || store.automationMode;
+
+    if (!['manual', 'semi', 'full'].includes(newMode)) {
+        pushCimierTimeline('ERROR', `Mode auto invalide : ${newMode}`);
+        store.automationMode = previousMode;
+        return;
+    }
+
+    const result = await apiCall('/api/cimier/automation/', 'POST', { mode: newMode });
+
+    if (result && result.applied) {
+        const labels = { manual: 'Manuel', semi: 'Semi-auto', full: 'Full auto' };
+        pushCimierTimeline('INFO', `Mode auto → ${labels[newMode]} (prise en compte au prochain tick, max 60s)`);
+        log(`Cimier : mode auto changé à ${labels[newMode]}`, 'info');
+
+        // Pose le verrou utilisateur : pollCimierStatus n'écrasera pas le sélecteur
+        // tant que le service ne rapporte pas ce mode. Le hot-reload du scheduler
+        // (Phase 4 fix UX) propage automatiquement le mode au prochain tick (60s).
+        lastUserSelectedMode = newMode;
+        store.automationMode = newMode;
+
+        store.automationRestartHint = '⏳ Application au prochain tick (max 60 s)';
+        if (automationRestartHintTimeout) clearTimeout(automationRestartHintTimeout);
+        automationRestartHintTimeout = setTimeout(() => {
+            Alpine.store('dashboard').automationRestartHint = '';
+            automationRestartHintTimeout = null;
+        }, 8000);
+    } else {
+        const err = (result && (result.error || result.detail)) || 'erreur inconnue';
+        pushCimierTimeline('ERROR', `Changement mode auto échoué : ${err}`);
+        log(`Cimier : changement mode auto échoué (${err})`, 'error');
+        // Restore le sélecteur sur l'ancienne valeur (le x-model sera réajusté
+        // à la prochaine hydratation par pollCimierStatus, mais on remet tout de
+        // suite pour éviter un flash visuel).
+        store.automationMode = previousMode;
+    }
+}
+window.updateAutomationMode = updateAutomationMode;
+
+// Ferme la modale parking et nettoie le compteur (pattern modale fermeture cimier).
+function closeParkingConfirmModal() {
+    const store = Alpine.store('dashboard');
+    store.parkingConfirmVisible = false;
+    store.parkingConfirmObject = null;
+    store.parkingConfirmCountdown = 0;
+    if (parkingConfirmInterval) {
+        clearInterval(parkingConfirmInterval);
+        parkingConfirmInterval = null;
+    }
+}
+
+// Bouton Parking session : si tracking actif, ouvre la modale de confirmation
+// (countdown 3 s anti-clic-fantôme) ; sinon, action immédiate.
+// Pattern incident NGC 3675 (v5.12.1) + modale fermeture cimier (Phase 2 sub-plan 01).
+function triggerParkingSession() {
+    const trackingActive = ['tracking', 'initializing'].includes(state.status)
+                           && state.trackingObject;
+    if (!trackingActive) {
+        executeParkingSession();
+        return;
+    }
+
+    const store = Alpine.store('dashboard');
+    store.parkingConfirmObject = state.trackingObject;
+    store.parkingConfirmCountdown = 3;
+    store.parkingConfirmVisible = true;
+
+    if (parkingConfirmInterval) clearInterval(parkingConfirmInterval);
+    parkingConfirmInterval = setInterval(() => {
+        const remaining = Alpine.store('dashboard').parkingConfirmCountdown - 1;
+        Alpine.store('dashboard').parkingConfirmCountdown = Math.max(0, remaining);
+        if (remaining <= 0) {
+            clearInterval(parkingConfirmInterval);
+            parkingConfirmInterval = null;
+        }
+    }, 1000);
+}
+
+// Lance effectivement la séquence parking session via POST /api/cimier/parking-session/
+// (backend best-effort 3 IPC : tracking_stop + GOTO 45° + close cimier — v6.0 sub-plan 04-01).
+// Démarre un watcher de progression qui surveille motor.status + cimier.state pour
+// donner un feedback étape par étape côté UI (banner + timeline).
+async function executeParkingSession() {
+    log('Parking session : séquence stop + GOTO 45° + close cimier demandée', 'info');
+    pushCimierTimeline('INFO', 'Parking session : séquence demandée');
+
+    const store = Alpine.store('dashboard');
+    // Reset état banner.
+    store.parkingInProgress = true;
+    store.parkingStepTracking = 'pending';
+    store.parkingStepGoto = 'pending';
+    store.parkingStepCimier = 'pending';
+    store.parkingStartedAt = Date.now();
+    parkingLastObservedPosition = null;
+
+    const result = await apiCall('/api/cimier/parking-session/', 'POST');
+    if (result && result.error && !result.applied) {
+        const msg = result.error || result.detail || 'erreur';
+        log(`Parking session : échec (${msg})`, 'error');
+        pushCimierTimeline('ERROR', `Parking session échouée : ${msg}`);
+        store.parkingInProgress = false;
+        return;
+    }
+
+    // Hydrate la cible depuis la réponse backend (peut différer de 45° si
+    // override config parking_target_azimuth_deg). Default 45° en fallback.
+    if (result && typeof result.parking_target_deg === 'number') {
+        store.parkingTargetDeg = result.parking_target_deg;
+    } else {
+        store.parkingTargetDeg = 45;
+    }
+
+    // Étape 1 (immédiate) : tracking_stop OK selon backend.
+    if (result && result.tracking_stopped) {
+        store.parkingStepTracking = 'done';
+        pushCimierTimeline('INFO', '1/3 ✓ Tracking arrêté');
+    } else {
+        pushCimierTimeline('WARNING', '1/3 ⚠ Tracking_stop IPC échoué');
+    }
+
+    // Étape 2 (en cours) : GOTO émis, on attend que motor passe par
+    // initializing/idle ET position ≈ target.
+    if (result && result.goto_45_sent) {
+        store.parkingStepGoto = 'in_progress';
+        pushCimierTimeline('INFO', `2/3 ⏳ GOTO ${store.parkingTargetDeg}° en cours…`);
+    } else {
+        store.parkingStepGoto = 'failed';
+        pushCimierTimeline('WARNING', `2/3 ⚠ GOTO ${store.parkingTargetDeg}° IPC échoué`);
+    }
+
+    // Étape 3 (en cours) : close cimier émis, on attend cimier.state == 'closed'.
+    // Détection d'un service cimier inactif (status stale > 90s ou absent) :
+    // dans ce cas on skip l'attente — le watcher timeoutait sinon à 2 min sans
+    // gain (ex: machine dev avec cimier.enabled=false).
+    const cimierLastUpdate = store.cimier?.last_update;
+    const cimierIsStale = !cimierLastUpdate ||
+        !Number.isFinite(Date.parse(cimierLastUpdate)) ||
+        (Date.now() - Date.parse(cimierLastUpdate)) > 90_000;
+    if (result && result.cimier_close_sent && !cimierIsStale) {
+        store.parkingStepCimier = 'cycle';
+        pushCimierTimeline('INFO', '3/3 ⏳ Fermeture cimier en cours…');
+    } else if (cimierIsStale) {
+        // Cimier service inactif (typiquement dev avec cimier.enabled=false)
+        // → la commande a été écrite mais ne sera jamais consommée. On marque
+        // l'étape comme « skip » (pas failed) avec un message INFO calme.
+        store.parkingStepCimier = 'skipped';
+        pushCimierTimeline('INFO', '3/3 ⊘ Cimier service inactif — étape passée');
+    } else {
+        store.parkingStepCimier = 'failed';
+        pushCimierTimeline('ERROR', '3/3 ⚠ Close cimier IPC échoué');
+    }
+
+    // Démarre le watcher de progression (1 Hz, max 120 s = 2 min timeout).
+    if (parkingWatcherInterval) clearInterval(parkingWatcherInterval);
+    parkingWatcherInterval = setInterval(checkParkingProgress, 1000);
+}
+
+// Watcher tick : observe motor.status / position + cimier.state pour conclure
+// chaque étape du parking. Timeout 120 s (2 min) max.
+function checkParkingProgress() {
+    const store = Alpine.store('dashboard');
+    if (!store.parkingInProgress) {
+        clearInterval(parkingWatcherInterval);
+        parkingWatcherInterval = null;
+        return;
+    }
+
+    const elapsedMs = Date.now() - (store.parkingStartedAt || 0);
+    const target = store.parkingTargetDeg;
+
+    // Étape 2 : motor a fini son GOTO ? On considère terminé si :
+    //   - motor.status est 'idle' (plus de mouvement),
+    //   - et la position est proche de la cible (±2°).
+    if (store.parkingStepGoto === 'in_progress') {
+        const pos = state.position;
+        const motorStatus = state.status;
+        if (motorStatus === 'idle' && Number.isFinite(pos)) {
+            const delta = Math.abs(((pos - target + 540) % 360) - 180);
+            if (delta < 2.0) {
+                store.parkingStepGoto = 'done';
+                pushCimierTimeline('INFO', `2/3 ✓ Coupole à ${pos.toFixed(1)}° (cible ${target}°)`);
+            }
+        }
+    }
+
+    // Étape 3 : cimier fermé ?
+    if (store.parkingStepCimier === 'cycle') {
+        const cimierState = store.cimier?.state;
+        if (cimierState === 'closed') {
+            store.parkingStepCimier = 'closed';
+            pushCimierTimeline('INFO', '3/3 ✓ Cimier fermé');
+        } else if (cimierState === 'error') {
+            store.parkingStepCimier = 'failed';
+            pushCimierTimeline('ERROR', '3/3 ⚠ Cimier en erreur');
+        }
+    }
+
+    // Conclusion : toutes les étapes terminales atteintes ?
+    // Étape 2 terminale = 'done' | 'failed'.
+    // Étape 3 terminale = 'closed' | 'failed' | 'skipped' (service cimier inactif).
+    const allDone = store.parkingStepGoto === 'done' || store.parkingStepGoto === 'failed';
+    const cimierDone = ['closed', 'failed', 'skipped'].includes(store.parkingStepCimier);
+
+    if (allDone && cimierDone) {
+        const elapsedSec = Math.round(elapsedMs / 1000);
+        const fullSuccess = store.parkingStepGoto === 'done' && store.parkingStepCimier === 'closed';
+        const partialOk = store.parkingStepGoto === 'done' && store.parkingStepCimier === 'skipped';
+        if (fullSuccess) {
+            pushCimierTimeline('INFO', `✓ Parking terminé en ${elapsedSec}s`);
+            log(`Parking session terminé en ${elapsedSec}s`, 'success');
+        } else if (partialOk) {
+            pushCimierTimeline('INFO', `✓ Parking coupole terminé en ${elapsedSec}s (cimier non vérifié)`);
+            log(`Parking : coupole à 45° en ${elapsedSec}s, cimier service inactif`, 'info');
+        } else {
+            pushCimierTimeline('WARNING', `Parking terminé partiellement (${elapsedSec}s) — vérifier les étapes`);
+        }
+        store.parkingInProgress = false;
+        clearInterval(parkingWatcherInterval);
+        parkingWatcherInterval = null;
+        return;
+    }
+
+    // Timeout 2 min : abandon du watcher (la séquence peut continuer côté backend).
+    if (elapsedMs > 120_000) {
+        pushCimierTimeline('WARNING', 'Parking : timeout watcher 2 min — état final non vérifié');
+        store.parkingInProgress = false;
+        clearInterval(parkingWatcherInterval);
+        parkingWatcherInterval = null;
+    }
 }
 
 async function updateStatus() {
@@ -1012,12 +1488,8 @@ function updateTrackingDisplay(motor) {
         const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
         elements.trackingMode.textContent = `${modeEmoji[mode] || ''} ${mode.toUpperCase()}`;
         elements.trackingMode.className = `hidden mode-${mode}`;
-
-        // Cartouche MODE avec couleur (dans la section position)
-        if (elements.trackingModeIndicator) {
-            elements.trackingModeIndicator.textContent = mode.toUpperCase();
-            elements.trackingModeIndicator.className = `mode-value ${mode}`;
-        }
+        // Cartouche MODE retiré du dashboard (vitesse unique v5.10) — le bloc
+        // hidden tracking-mode reste pour le bookkeeping JS interne uniquement.
 
         elements.trackingCorrections.textContent = info.total_corrections || '0';
 
@@ -1088,11 +1560,7 @@ function updateTrackingDisplay(motor) {
         const timerWidget = document.getElementById('timer-widget');
         if (timerWidget) timerWidget.classList.add('hidden');
 
-        // Réinitialiser les cartouches MODE et CORRECTIONS
-        if (elements.trackingModeIndicator) {
-            elements.trackingModeIndicator.textContent = '--';
-            elements.trackingModeIndicator.className = 'mode-value';
-        }
+        // Réinitialiser les cartouches CORRECTIONS (cartouche MODE retiré v6.3.0).
         if (elements.correctionsCount) {
             elements.correctionsCount.textContent = '0';
         }

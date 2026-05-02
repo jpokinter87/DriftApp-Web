@@ -91,6 +91,26 @@ check_encoder_daemon() {
     fi
 }
 
+cleanup_ipc_stale() {
+    # Wipe les fichiers IPC traînants d'un run précédent (motor + cimier
+    # command/status). Évite que l'UI lise un status figé d'une ancienne
+    # session avant que les services aient eu le temps de publier leur
+    # premier status frais. Cohérent avec start_dev.sh.
+    # ems22_position.json est PRÉSERVÉ (cycle de vie séparé via démon
+    # ems22d.service indépendant de ce script).
+    local stale_files=(
+        "/dev/shm/motor_status.json"
+        "/dev/shm/motor_command.json"
+        "/dev/shm/cimier_status.json"
+        "/dev/shm/cimier_command.json"
+    )
+    for f in "${stale_files[@]}"; do
+        if [[ -f "$f" ]]; then
+            rm -f "$f" 2>/dev/null && log_info "Cleanup IPC : $f supprimé"
+        fi
+    done
+}
+
 start_motor_service() {
     if pgrep -f "motor_service.py" > /dev/null; then
         log_info "Motor Service déjà en cours d'exécution"
@@ -290,6 +310,9 @@ case "${1:-start}" in
         # Préparer les dossiers avec les bonnes permissions
         setup_permissions
 
+        # Wipe IPC stale d'un run précédent (cohérence avec start_dev.sh)
+        cleanup_ipc_stale
+
         # Vérifier que le daemon encodeur tourne (géré par systemd)
         check_encoder_daemon
         encoder_ok=$?
@@ -321,6 +344,7 @@ case "${1:-start}" in
         log_info "Démarrage de DriftApp Web..."
         echo
         setup_permissions
+        cleanup_ipc_stale
         check_encoder_daemon
         encoder_ok=$?
         start_motor_service

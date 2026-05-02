@@ -29,6 +29,24 @@ document.addEventListener('alpine:init', () => {
         motor: { badgeText: '--', badgeClass: '', cardClass: '' },
         // Encoder Daemon badge
         encoder: { badgeText: '--', badgeClass: '', cardClass: '' },
+        // Cimier — Automatisation (v6.0 Phase 4 sub-plan 04-02).
+        // Hydraté par fetchCimierAutomation toutes les REFRESH_INTERVAL.
+        cimierAutomation: {
+            mode: null,                    // 'manual' | 'semi' | 'full' | null (config.json)
+            serviceMode: null,             // mode chargé en mémoire par cimier_service
+            serviceRunning: false,         // true si cimier_service vivant (last_update < 90s)
+            applyPending: false,           // true si mode != serviceMode ET service vivant
+            modeLabel: '--',
+            // ISO bruts conservés pour tick local 1s (recalcul du Restant entre fetches).
+            nextOpenIso: null,
+            nextCloseIso: null,
+            nextOpenLabel: '--',           // 'HH:MM' local ou '--'
+            nextOpenRemaining: '--',       // 'Xh Ymin' ou '--'
+            nextCloseLabel: '--',
+            nextCloseRemaining: '--',
+            lastEventLabel: '--',          // 'HH:MM:SS' local ou '--'
+            lastEventMessage: '--',        // message court ou '--'
+        },
     });
 });
 
@@ -40,6 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     fetchDiagnostic();
     startAutoRefresh();
+    // Tick local 1s pour décrémenter le « Restant » des cards Cimier — Automatisation
+    // sans attendre le prochain fetch (qui peut être lent / throttlé en arrière-plan).
+    setInterval(recomputeAutomationLabels, 1000);
 
     // Watch Alpine store autoRefresh pour sync avec polling
     const checkAutoRefresh = () => {
@@ -145,6 +166,143 @@ async function fetchDiagnostic() {
         console.error('Erreur fetch diagnostic:', error);
         updateGlobalStatus(false, 'Erreur connexion');
     }
+    // Fetch parallèle de l'état automation cimier (vue 04-01).
+    fetchCimierAutomation();
+}
+
+/**
+ * Récupère l'état automation cimier depuis /api/cimier/automation/
+ * et hydrate Alpine.store('system').cimierAutomation. (v6.0 Phase 4 sub-plan 04-02)
+ */
+async function fetchCimierAutomation() {
+    const store = Alpine.store('system');
+    try {
+        const response = await fetch('/api/cimier/automation/');
+        if (!response.ok) {
+            // Service indisponible — fallback sans spammer les logs.
+            store.cimierAutomation.mode = 'unknown';
+            store.cimierAutomation.modeLabel = 'Service indisponible';
+            store.cimierAutomation.nextOpenLabel = '--';
+            store.cimierAutomation.nextOpenRemaining = '--';
+            store.cimierAutomation.nextCloseLabel = '--';
+            store.cimierAutomation.nextCloseRemaining = '--';
+            return;
+        }
+        const data = await response.json();
+        const labels = { manual: 'Manuel', semi: 'Semi-auto', full: 'Full auto' };
+        const mode = data.mode || 'unknown';
+        const serviceMode = data.service_mode || mode;
+        const serviceRunning = !!data.service_running;
+        const applyPending = !!(data.mode_apply_pending ?? data.restart_required);
+        store.cimierAutomation.mode = mode;
+        store.cimierAutomation.serviceMode = serviceMode;
+        store.cimierAutomation.serviceRunning = serviceRunning;
+        store.cimierAutomation.applyPending = applyPending;
+        // ISO bruts conservés pour tick local (cf. recomputeAutomationRemaining).
+        store.cimierAutomation.nextOpenIso = data.next_open_at || null;
+        store.cimierAutomation.nextCloseIso = data.next_close_at || null;
+        // Badge contextualisé selon vivacité service + apply_pending.
+        if (!serviceRunning) {
+            store.cimierAutomation.modeLabel = `${labels[mode] || mode} ⊘ service arrêté`;
+        } else if (applyPending) {
+            store.cimierAutomation.modeLabel = `${labels[mode] || mode} ⏳ application…`;
+        } else {
+            store.cimierAutomation.modeLabel = labels[mode] || '--';
+        }
+
+        const openLabel = formatTriggerLabel(data.next_open_at);
+        const closeLabel = formatTriggerLabel(data.next_close_at);
+
+        // Message contextuel selon mode (au lieu de '--' partout en mode manual/semi).
+        // Fix smoke 2026-05-02 : cards "vides" quand mode=manual.
+        // Délègue le formatage absolute/relative au tick local pour avoir un
+        // affichage à jour entre les fetches (un fetch toutes les 2s ne suffit
+        // pas si le browser throttle setInterval ou si le backend est lent).
+        recomputeAutomationLabels();
+
+        // lastEventLabel/Message : pas d'agrégation cross-page (Alpine stores
+        // scoped par page — décision plan 04-02). On laisse '--' tant que pas
+        // d'endpoint Django dédié /api/cimier/timeline/.
+    } catch (error) {
+        console.error('Erreur fetch cimier automation:', error);
+        store.cimierAutomation.mode = 'unknown';
+        store.cimierAutomation.modeLabel = 'Erreur connexion';
+    }
+}
+
+/**
+ * Recalcule les libellés absolute (HH:MM) + relative (Xh Ymin) pour next_open
+ * et next_close à partir des ISO bruts stockés dans le store.
+ *
+ * Appelé :
+ *   1. Après chaque fetchCimierAutomation (hydratation immédiate).
+ *   2. Tick local 1s (pour faire décrémenter le Restant entre fetches sans
+ *      attendre la prochaine requête backend).
+ *
+ * Fix UX 2026-05-02 : Restant figé à 4min même 10min plus tard — cause :
+ * formatTriggerLabel n'était calculé qu'au fetch (2s) et le browser throttle
+ * setInterval quand l'onglet est en arrière-plan. Tick local visible élimine
+ * cette dérive.
+ */
+function recomputeAutomationLabels() {
+    const store = Alpine.store('system');
+    const auto = store.cimierAutomation;
+    if (!auto) return;
+
+    const mode = auto.mode || 'unknown';
+    const openLabel = formatTriggerLabel(auto.nextOpenIso);
+    const closeLabel = formatTriggerLabel(auto.nextCloseIso);
+
+    if (mode === 'manual') {
+        auto.nextOpenLabel = '— (mode manuel)';
+        auto.nextOpenRemaining = 'Aucun trigger automatique';
+        auto.nextCloseLabel = '— (mode manuel)';
+        auto.nextCloseRemaining = 'Aucun trigger automatique';
+    } else if (mode === 'semi') {
+        auto.nextOpenLabel = '— (semi : manuel)';
+        auto.nextOpenRemaining = 'Démarrage manuel utilisateur';
+        auto.nextCloseLabel = closeLabel.absolute;
+        auto.nextCloseRemaining = closeLabel.relative !== '--'
+            ? closeLabel.relative
+            : 'Calcul des éphémérides…';
+    } else if (mode === 'full') {
+        auto.nextOpenLabel = openLabel.absolute;
+        auto.nextOpenRemaining = openLabel.relative !== '--'
+            ? openLabel.relative
+            : 'Calcul des éphémérides…';
+        auto.nextCloseLabel = closeLabel.absolute;
+        auto.nextCloseRemaining = closeLabel.relative !== '--'
+            ? closeLabel.relative
+            : 'Calcul des éphémérides…';
+    } else {
+        auto.nextOpenLabel = '--';
+        auto.nextOpenRemaining = '--';
+        auto.nextCloseLabel = '--';
+        auto.nextCloseRemaining = '--';
+    }
+}
+
+/**
+ * Formate un instant ISO 8601 UTC en {absolute: 'HH:MM' local, relative: 'Xh Ymin'}.
+ * Retourne {absolute: '--', relative: '--'} si null/invalide/passé.
+ */
+function formatTriggerLabel(isoUtc) {
+    if (!isoUtc) return { absolute: '--', relative: '--' };
+    const ms = Date.parse(isoUtc);
+    if (!Number.isFinite(ms)) return { absolute: '--', relative: '--' };
+    const dt = new Date(ms);
+    const absolute = dt.toLocaleTimeString('fr-FR', {
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const remainingMs = ms - Date.now();
+    if (remainingMs <= 0) return { absolute, relative: '--' };
+    const totalMin = Math.floor(remainingMs / 60000);
+    const hours = Math.floor(totalMin / 60);
+    const minutes = totalMin % 60;
+    const relative = hours > 0
+        ? `${hours}h ${minutes.toString().padStart(2, '0')}min`
+        : `${minutes}min`;
+    return { absolute, relative };
 }
 
 /**

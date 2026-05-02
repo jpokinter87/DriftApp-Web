@@ -32,7 +32,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Optional
 
-from core.config.config_loader import CimierAutomationConfig, SiteConfig
+import json
+from pathlib import Path
+
+from core.config.config_loader import (
+    VALID_AUTOMATION_MODES,
+    CimierAutomationConfig,
+    SiteConfig,
+)
 from core.hardware.weather_provider import WeatherProvider
 from core.observatoire.sun_altitude import compute_sun_altitude, sun_direction
 from services.cimier_ipc_manager import CimierIpcManager
@@ -85,6 +92,52 @@ class CimierScheduler:
         self._sun_direction_fn = sun_direction_fn
         self._last_open_trigger_ts: Optional[datetime] = None
         self._last_close_trigger_ts: Optional[datetime] = None
+
+    def refresh_mode_from_config(self, config_path: Path) -> bool:
+        """Hot-reload du mode auto depuis data/config.json.
+
+        Re-lit `cimier.automation.mode` du fichier (et la rétro-compat lecture
+        `enabled` legacy : true→full, false→manual). Si le mode a changé vs
+        `self._cfg.mode`, met à jour la valeur in-memory et retourne True.
+
+        Permet aux changements UI (POST /api/cimier/automation/) d'être pris
+        en compte au prochain tick (max `scheduler_interval_seconds` plus tard,
+        60s par défaut) **sans redémarrer cimier_service**.
+
+        Fix UX 2026-05-02 : avant ce hot-reload, l'UI affichait
+        « ⚠ redémarrage cimier_service requis » et l'utilisateur devait
+        relancer le service à la main, ce qui était cryptique et inutilement
+        contraignant.
+
+        Returns:
+            True si le mode a changé (à logger côté caller), False sinon.
+        """
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+        except (IOError, OSError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "scheduler_event=mode_refresh_skip reason=config_read_error exc=%s",
+                exc,
+            )
+            return False
+        automation = cfg.get("cimier", {}).get("automation", {})
+        explicit = automation.get("mode")
+        if explicit in VALID_AUTOMATION_MODES:
+            new_mode = explicit
+        else:
+            legacy_enabled = automation.get("enabled")
+            new_mode = "full" if legacy_enabled is True else "manual"
+        if new_mode == self._cfg.mode:
+            return False
+        old_mode = self._cfg.mode
+        self._cfg.mode = new_mode
+        logger.info(
+            "scheduler_event=mode_refresh from=%s to=%s source=config_hot_reload",
+            old_mode,
+            new_mode,
+        )
+        return True
 
     def maybe_trigger(self, current_cimier_state: str) -> SchedulerDecision:
         """Évalue les conditions et émet open/close si nécessaire.
@@ -189,11 +242,17 @@ class CimierScheduler:
           - mode == "full"    → les deux datetime|None selon disponibilité.
 
         Algo : échantillonne minute-par-(_NEXT_TRIGGER_SAMPLING_MINUTES) sur
-        l'horizon `_NEXT_TRIGGER_HORIZON_HOURS`. À chaque échantillon t :
-          - direction = sun_direction(t, t-60s)
-          - si descending et alt(t) <= opening_threshold → 1er match = next_open
-          - si rising et alt(t + advance + safety) >= closing_target → 1er match = next_close
-        Court-circuite chaque condition dès trouvée.
+        l'horizon `_NEXT_TRIGGER_HORIZON_HOURS`. **Détecte les transitions**
+        (et non les conditions immédiates) : un trigger est émis seulement
+        quand la condition passe de False (sample précédent) à True (sample
+        courant). Cela évite le bug où, en pleine nuit, `next_open_at` se
+        décalait de 4-5 min à chaque recalcul (la condition étant déjà vraie
+        au sample 1, le code retournait now+sampling en boucle).
+
+        - next_open : transition descending+alt<=opening_threshold passe de
+          False à True (typiquement franchissement crépuscule du soir).
+        - next_close : transition rising+alt(future)>=closing_target passe de
+          False à True (typiquement franchissement crépuscule du matin).
 
         Si astropy indisponible ou erreur runtime : retourne (None, None) silencieusement.
         Consommée 1×/scheduler_interval côté `cimier_service.tick()` puis
@@ -220,39 +279,67 @@ class CimierScheduler:
         )
         delta_for_dir = timedelta(seconds=60)
 
+        # Évalue la condition au temps t=now (sample 0) pour initialiser le
+        # tracking de transition. Si la condition est déjà vraie à now, on
+        # attendra qu'elle redevienne fausse puis vraie à nouveau (= prochaine
+        # transition légitime).
+        try:
+            prev_open_match = self._open_condition_at(now, delta_for_dir) if not skip_open else False
+            prev_close_match = self._close_condition_at(now, delta_for_dir, close_offset)
+        except RuntimeError as exc:
+            logger.warning("scheduler_event=compute_next_triggers_astropy_error exc=%s", exc)
+            return (None, None)
+
         t = now + sampling  # premier sample dans le futur (pas inclure now)
         end = now + horizon
         while t <= end and (next_open is None or next_close is None):
             try:
                 if not skip_open and next_open is None:
-                    direction = self._sun_direction_fn(
-                        t, t - delta_for_dir,
-                        self._site.latitude, self._site.longitude, self._site.altitude,
-                    )
-                    if direction == "descending":
-                        alt = self._sun_altitude_fn(
-                            t,
-                            self._site.latitude, self._site.longitude, self._site.altitude,
-                        )
-                        if alt <= self._cfg.opening_sun_altitude_deg:
-                            next_open = t
+                    cur_open_match = self._open_condition_at(t, delta_for_dir)
+                    if cur_open_match and not prev_open_match:
+                        next_open = t  # transition False → True détectée
+                    prev_open_match = cur_open_match
                 if next_close is None:
-                    direction = self._sun_direction_fn(
-                        t, t - delta_for_dir,
-                        self._site.latitude, self._site.longitude, self._site.altitude,
-                    )
-                    if direction == "rising":
-                        alt_future = self._sun_altitude_fn(
-                            t + close_offset,
-                            self._site.latitude, self._site.longitude, self._site.altitude,
-                        )
-                        if alt_future >= self._cfg.closing_target_sun_altitude_deg:
-                            next_close = t
+                    cur_close_match = self._close_condition_at(t, delta_for_dir, close_offset)
+                    if cur_close_match and not prev_close_match:
+                        next_close = t  # transition False → True détectée
+                    prev_close_match = cur_close_match
             except RuntimeError as exc:
                 logger.warning("scheduler_event=compute_next_triggers_astropy_error exc=%s", exc)
                 return (None, None)
             t += sampling
         return (next_open, next_close)
+
+    def _open_condition_at(self, t: datetime, delta_for_dir: timedelta) -> bool:
+        """True si la condition d'ouverture (descending + alt<=threshold) est
+        remplie au temps t. Helper pour détection de transition."""
+        direction = self._sun_direction_fn(
+            t, t - delta_for_dir,
+            self._site.latitude, self._site.longitude, self._site.altitude,
+        )
+        if direction != "descending":
+            return False
+        alt = self._sun_altitude_fn(
+            t,
+            self._site.latitude, self._site.longitude, self._site.altitude,
+        )
+        return alt <= self._cfg.opening_sun_altitude_deg
+
+    def _close_condition_at(self, t: datetime, delta_for_dir: timedelta,
+                            close_offset: timedelta) -> bool:
+        """True si la condition de fermeture (rising + alt(t+offset)>=target)
+        est remplie au temps t. Helper pour détection de transition."""
+        direction = self._sun_direction_fn(
+            t, t - delta_for_dir,
+            self._site.latitude, self._site.longitude, self._site.altitude,
+        )
+        if direction != "rising":
+            return False
+        alt_future = self._sun_altitude_fn(
+            t + close_offset,
+            self._site.latitude, self._site.longitude, self._site.altitude,
+        )
+        return alt_future >= self._cfg.closing_target_sun_altitude_deg
 
     # ------------------------------------------------------------------
     # Triggers (writes IPC)

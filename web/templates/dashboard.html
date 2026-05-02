@@ -52,26 +52,40 @@
         </div>
 
         <!-- Position Info Grid -->
-        <div class="grid grid-cols-2 gap-2 text-xs font-mono">
-            <!-- CIMIER -->
+        <!-- Disposition v6.3.0 fix UX 2026-05-02 :
+             ligne 1 : CIMIER position | CIMIER état (OUVERT/FERMÉ/...)
+             ligne 2 : ENC             | CIBLE
+             ligne 3 : MÉRIDIEN (col-span-2, conditionnel)
+             ligne 4 : CORRECTIONS (col-span-2)
+             Le cartouche MODE (CONTINUOUS) est retiré (vitesse unique v5.10). -->
+        <div x-data class="grid grid-cols-2 gap-2 text-xs font-mono">
+            <!-- CIMIER position -->
             <div class="coupole-item flex justify-between items-center p-2 bg-obs-input rounded-button">
                 <label class="text-accent-amber font-bold">CIMIER:</label>
                 <span id="dome-position" class="coupole-value font-bold text-accent-amber-light">--&deg;</span>
             </div>
-            <!-- CIBLE -->
-            <div class="telescope-item flex justify-between items-center p-2 bg-obs-input rounded-button">
-                <label class="text-accent-green font-bold">CIBLE &#x1F3AF;:</label>
-                <span id="dome-target" class="telescope-value font-bold text-accent-green">--&deg;</span>
+            <!-- CIMIER état (OUVERT/FERMÉ/CYCLE/...) — labels via CIMIER_STATE_LABELS -->
+            <div class="cimier-state-cartouche flex justify-between items-center p-2 bg-obs-input rounded-button">
+                <label class="text-accent-amber font-bold">CIMIER:</label>
+                <span class="font-bold uppercase tracking-wider transition-colors duration-300"
+                      :class="{
+                          'text-accent-green': $store.dashboard.cimier?.state === 'open',
+                          'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
+                          'text-accent-amber-light animate-pulse': $store.dashboard.cimier?.state === 'cycle',
+                          'text-accent-red': $store.dashboard.cimier?.state === 'error',
+                          'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+                      }"
+                      x-text="({open:'OUVERT',closed:'FERMÉ',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.cimier?.state] || '--'">--</span>
             </div>
             <!-- ENC -->
             <div class="enc-item flex justify-between items-center p-2 bg-obs-input rounded-button border-3 border-obs-border" id="enc-item">
                 <label class="font-bold text-obs-text-secondary">ENC:</label>
                 <span id="encoder-calibrated" class="font-bold">--&deg;</span>
             </div>
-            <!-- MODE -->
-            <div class="mode-item flex justify-between items-center p-2 bg-obs-input rounded-button">
-                <label class="font-bold">MODE:</label>
-                <span id="tracking-mode-indicator" class="mode-value">--</span>
+            <!-- CIBLE -->
+            <div class="telescope-item flex justify-between items-center p-2 bg-obs-input rounded-button">
+                <label class="text-accent-green font-bold">CIBLE &#x1F3AF;:</label>
+                <span id="dome-target" class="telescope-value font-bold text-accent-green">--&deg;</span>
             </div>
             <!-- MÉRIDIEN -->
             <div id="meridian-cartouche" class="meridian-item col-span-2 flex justify-between items-center p-2 bg-obs-input rounded-button border-3 border-obs-border hidden">
@@ -173,6 +187,72 @@
             </div>
         </div>
 
+        <!-- ─── Banner Parking session en cours (v6.0 Phase 4 sub-plan 04-02 fix UX) ─── -->
+        <!-- Affiché uniquement pendant la séquence parking (stop+goto+close). -->
+        <div x-data x-show="$store.dashboard.parkingInProgress" x-cloak
+             class="panel panel-astro border-l-4 border-accent-amber-light"
+             role="status" aria-live="polite">
+            <h3 class="section-title section-title-fire mb-2 flex items-center gap-2">
+                <span class="animate-pulse">&#x1F17F;</span>
+                Parking session en cours&hellip;
+            </h3>
+            <ul class="text-xs font-mono space-y-1">
+                <li class="flex items-center gap-2">
+                    <span class="w-5 inline-block text-center"
+                          x-text="$store.dashboard.parkingStepTracking === 'done' ? '✓'
+                                  : $store.dashboard.parkingStepTracking === 'failed' ? '⚠'
+                                  : '⏳'"
+                          :class="{
+                              'text-accent-green': $store.dashboard.parkingStepTracking === 'done',
+                              'text-accent-red': $store.dashboard.parkingStepTracking === 'failed',
+                              'text-obs-text-muted': $store.dashboard.parkingStepTracking === 'pending',
+                          }"></span>
+                    <span>1/3 — Arrêt du suivi</span>
+                </li>
+                <li class="flex items-center gap-2">
+                    <span class="w-5 inline-block text-center"
+                          x-text="$store.dashboard.parkingStepGoto === 'done' ? '✓'
+                                  : $store.dashboard.parkingStepGoto === 'failed' ? '⚠'
+                                  : $store.dashboard.parkingStepGoto === 'in_progress' ? '⏳' : '·'"
+                          :class="{
+                              'text-accent-green': $store.dashboard.parkingStepGoto === 'done',
+                              'text-accent-red': $store.dashboard.parkingStepGoto === 'failed',
+                              'text-accent-amber-light animate-pulse': $store.dashboard.parkingStepGoto === 'in_progress',
+                              'text-obs-text-muted': $store.dashboard.parkingStepGoto === 'pending',
+                          }"></span>
+                    <span>2/3 — GOTO
+                        <span class="text-accent-green"
+                              x-text="$store.dashboard.parkingTargetDeg + '°'"></span>
+                        (parking)
+                    </span>
+                </li>
+                <li class="flex items-center gap-2">
+                    <span class="w-5 inline-block text-center"
+                          x-text="$store.dashboard.parkingStepCimier === 'closed' ? '✓'
+                                  : $store.dashboard.parkingStepCimier === 'failed' ? '⚠'
+                                  : $store.dashboard.parkingStepCimier === 'skipped' ? '⊘'
+                                  : $store.dashboard.parkingStepCimier === 'cycle' ? '⏳' : '·'"
+                          :class="{
+                              'text-accent-green': $store.dashboard.parkingStepCimier === 'closed',
+                              'text-accent-red': $store.dashboard.parkingStepCimier === 'failed',
+                              'text-obs-text-muted italic': $store.dashboard.parkingStepCimier === 'skipped',
+                              'text-accent-amber-light animate-pulse': $store.dashboard.parkingStepCimier === 'cycle',
+                          }"></span>
+                    <span>3/3 — Fermeture cimier
+                        <span x-show="$store.dashboard.parkingStepCimier === 'skipped'"
+                              class="text-obs-text-muted italic text-[0.7rem]"
+                              x-cloak>
+                            (service inactif — non vérifiable)
+                        </span>
+                    </span>
+                </li>
+            </ul>
+            <div class="mt-2 text-[0.7rem] text-obs-text-muted italic">
+                Suivez la progression dans la timeline cimier ci-dessous. La séquence se
+                conclut automatiquement quand toutes les étapes sont terminées.
+            </div>
+        </div>
+
         <!-- Cimier — pilotage Pico W via cascade Shelly (v6.0 Phase 1) -->
         <div x-data class="panel panel-astro">
             <h3 class="section-title section-title-fire mb-3">Cimier</h3>
@@ -202,6 +282,78 @@
                 <button id="btn-cimier-stop" class="btn btn-stop">STOP</button>
             </div>
             <div id="cimier-detail" class="mt-2 text-[0.7rem] text-obs-text-muted font-mono min-h-[1rem]"></div>
+
+            <!-- ─── Automatisation lifecycle session (v6.0 Phase 4 sub-plan 04-02) ─── -->
+            <div class="section-divider mt-3"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+
+                <!-- Colonne gauche : commandes Mode Auto + Parking + countdown -->
+                <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2 text-xs">
+                        <label for="cimier-automation-mode"
+                               class="text-obs-text-muted uppercase tracking-wider whitespace-nowrap">
+                            Mode auto&nbsp;:
+                        </label>
+                        <select id="cimier-automation-mode"
+                                class="bg-obs-input border border-obs-border rounded-button px-2 py-1
+                                       text-obs-text font-mono uppercase tracking-wider
+                                       focus-visible:outline focus-visible:outline-2
+                                       focus-visible:outline-accent-amber focus-visible:outline-offset-2"
+                                x-model="$store.dashboard.automationMode"
+                                @change="window.updateAutomationMode && window.updateAutomationMode($event.target.value)"
+                                aria-label="Mode automatisation cimier">
+                            <option value="manual">Manuel</option>
+                            <option value="semi">Semi-auto</option>
+                            <option value="full">Full auto</option>
+                        </select>
+                        <button id="btn-cimier-parking"
+                                class="btn btn-secondary ml-auto whitespace-nowrap"
+                                title="Stop tracking + GOTO 45° + close cimier"
+                                aria-label="Lancer la séquence parking session">
+                            &#x1F17F;&nbsp;Parking
+                        </button>
+                    </div>
+                    <div id="cimier-automation-hint"
+                         class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem]"
+                         x-text="$store.dashboard.automationRestartHint"
+                         x-cloak></div>
+                    <div id="cimier-countdown"
+                         class="text-xs font-mono text-obs-text-muted"
+                         aria-live="polite"
+                         x-text="$store.dashboard.automationCountdownLabel || '—'"></div>
+                </div>
+
+                <!-- Colonne droite : timeline notifications cimier (buffer 50 mémoire) -->
+                <!-- Pattern Journal : toujours visible, scroll interne, fond bg-obs-dark. -->
+                <div class="flex flex-col">
+                    <div class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1
+                                flex items-center justify-between">
+                        <span>Activité cimier</span>
+                        <span class="text-accent-amber-light font-mono"
+                              x-text="$store.dashboard.cimierTimeline?.length || 0"></span>
+                    </div>
+                    <div id="cimier-timeline-list"
+                         class="bg-obs-dark border border-obs-border rounded-button p-2
+                                font-mono text-[0.65rem] h-16 overflow-y-auto leading-tight">
+                        <template x-for="entry in $store.dashboard.cimierTimeline" :key="entry.id">
+                            <div class="flex gap-1.5 py-0.5">
+                                <span class="text-obs-text-muted shrink-0"
+                                      x-text="entry.timeLabel"></span>
+                                <span class="shrink-0 font-bold"
+                                      :class="{
+                                          'text-accent-green': entry.level === 'INFO',
+                                          'text-accent-amber-light': entry.level === 'WARNING',
+                                          'text-accent-red': entry.level === 'ERROR'
+                                      }"
+                                      x-text="entry.level"></span>
+                                <span class="text-obs-text truncate" x-text="entry.message"></span>
+                            </div>
+                        </template>
+                        <div x-show="!$store.dashboard.cimierTimeline?.length"
+                             class="text-obs-text-muted italic">Aucun événement enregistré.</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </section>
 </div>
@@ -359,6 +511,43 @@
                     :disabled="$store.dashboard.updateButtonsDisabled"
                     title="Remplacer la config locale par celle du dépôt (backup automatique)">
                 Utiliser celle du dépôt
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Modal Confirmation Parking Session (v6.0 Phase 4 sub-plan 04-02) ═══ -->
+<div id="parking-confirm-modal" x-data class="goto-modal"
+     x-show="$store.dashboard.parkingConfirmVisible" x-cloak
+     role="dialog" aria-modal="true"
+     aria-labelledby="parking-confirm-title"
+     aria-describedby="parking-confirm-body">
+    <div class="goto-modal-content">
+        <div class="goto-modal-header">
+            <span class="goto-icon">&#x1F17F;</span>
+            <h3 id="parking-confirm-title">Lancer la séquence parking maintenant&nbsp;?</h3>
+        </div>
+        <div id="parking-confirm-body"
+             class="text-sm text-obs-text-secondary mb-5 px-2 leading-relaxed text-center">
+            Le suivi de
+            <span class="text-accent-amber font-semibold"
+                  x-text="$store.dashboard.parkingConfirmObject || 'l\'objet en cours'"></span>
+            est en cours.
+            <strong class="text-obs-text">Stop tracking &rsaquo; GOTO 45° &rsaquo; fermeture cimier</strong>
+            seront enchaînés automatiquement.
+        </div>
+        <div class="button-group">
+            <button id="btn-parking-cancel" class="btn btn-secondary"
+                    x-init="$watch('$store.dashboard.parkingConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
+                Annuler
+            </button>
+            <button id="btn-parking-confirm" class="btn btn-warning"
+                    aria-live="polite"
+                    :disabled="$store.dashboard.parkingConfirmCountdown > 0"
+                    x-text="$store.dashboard.parkingConfirmCountdown > 0
+                            ? `Confirmer (${$store.dashboard.parkingConfirmCountdown})`
+                            : 'Confirmer le parking'">
+                Confirmer le parking
             </button>
         </div>
     </div>

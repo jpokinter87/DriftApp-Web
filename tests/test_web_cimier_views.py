@@ -226,35 +226,118 @@ def writable_config_file(tmp_path, monkeypatch):
 
 
 class TestAutomationView:
-    def test_get_returns_mode_and_next_triggers_from_status(
-        self, api_client, mock_cimier_ipc
+    def test_get_returns_configured_mode_and_status_triggers(
+        self, api_client, mock_cimier_ipc, writable_config_file
     ):
+        # Config user choice = full ; service confirme = full → cohérents.
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"] = {"mode": "full"}
+        writable_config_file.write_text(json.dumps(cfg))
+        # Service vivant : last_update = datetime.now() (heure locale naive,
+        # format service via cimier_ipc_manager.py:118 et motor_service.py:393).
+        from datetime import datetime as _dt
+        fresh_iso = _dt.now().isoformat()
         status_payload = {
             "state": "idle",
             "mode": "full",
             "next_open_at": "2026-05-15T21:30:00+00:00",
             "next_close_at": "2026-05-16T04:45:00+00:00",
+            "last_update": fresh_iso,
+        }
+        mock_cimier_ipc["status_file"].write_text(json.dumps(status_payload))
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "full"  # source = config.json (choix user)
+        assert body["service_mode"] == "full"  # service en mémoire
+        assert body["service_running"] is True  # last_update frais
+        assert body["mode_apply_pending"] is False  # mêmes valeurs → pas de restart
+        assert body["next_open_at"] == "2026-05-15T21:30:00+00:00"
+        assert body["next_close_at"] == "2026-05-16T04:45:00+00:00"
+
+    def test_get_returns_restart_required_when_config_differs_from_service_mode(
+        self, api_client, mock_cimier_ipc, writable_config_file
+    ):
+        # Config user choice = full (vient de POSTer) ; service en mémoire = manual
+        # (pas redémarré) → l'UI doit afficher le choix user + apply_pending=True.
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"] = {"mode": "full"}
+        writable_config_file.write_text(json.dumps(cfg))
+        from datetime import datetime as _dt
+        fresh_iso = _dt.now().isoformat()
+        status_payload = {
+            "state": "idle",
+            "mode": "manual",
+            "next_open_at": None,
+            "next_close_at": None,
+            "last_update": fresh_iso,
         }
         mock_cimier_ipc["status_file"].write_text(json.dumps(status_payload))
         response = api_client.get("/api/cimier/automation/")
         assert response.status_code == 200
         body = response.json()
         assert body["mode"] == "full"
-        assert body["next_open_at"] == "2026-05-15T21:30:00+00:00"
-        assert body["next_close_at"] == "2026-05-16T04:45:00+00:00"
+        assert body["service_mode"] == "manual"
+        assert body["service_running"] is True
+        assert body["mode_apply_pending"] is True
 
-    def test_get_returns_manual_default_when_status_missing(
-        self, api_client, mock_cimier_ipc
+    def test_get_apply_pending_false_when_service_down(
+        self, api_client, mock_cimier_ipc, writable_config_file
     ):
-        # status_file absent → cimier_client.get_status retourne {state: unknown, ...}
+        """Service arrêté (last_update absent ou stale > 90s) → apply_pending=False
+        car le hot-reload ne se fera jamais. Évite l'UX "application en cours" qui
+        ne se résout jamais quand cimier_service est down."""
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"] = {"mode": "full"}
+        writable_config_file.write_text(json.dumps(cfg))
+        # Status présent mais last_update vieux de 5 min.
+        from datetime import datetime as _dt, timedelta
+        stale_iso = (_dt.now() - timedelta(minutes=5)).isoformat()
+        status_payload = {
+            "state": "idle",
+            "mode": "manual",
+            "last_update": stale_iso,
+        }
+        mock_cimier_ipc["status_file"].write_text(json.dumps(status_payload))
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "full"
+        assert body["service_mode"] == "manual"
+        assert body["service_running"] is False  # stale > 90s
+        # Apply pending est False car le service ne va pas appliquer.
+        assert body["mode_apply_pending"] is False
+
+    def test_get_returns_manual_default_when_config_section_absent(
+        self, api_client, mock_cimier_ipc, writable_config_file
+    ):
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"].pop("automation", None)
+        writable_config_file.write_text(json.dumps(cfg))
+        # status_file absent → service rapporte aussi 'manual' (fallback unknown).
         assert not mock_cimier_ipc["status_file"].exists()
         response = api_client.get("/api/cimier/automation/")
         assert response.status_code == 200
         body = response.json()
-        # Pas de mode dans le payload "unknown" → fallback "manual"
         assert body["mode"] == "manual"
+        assert body["service_mode"] == "manual"
+        assert body["service_running"] is False
+        assert body["mode_apply_pending"] is False
         assert body["next_open_at"] is None
         assert body["next_close_at"] is None
+
+    def test_get_handles_legacy_enabled_true(
+        self, api_client, mock_cimier_ipc, writable_config_file
+    ):
+        # Rétro-compat : config legacy avec enabled=true (sans clé `mode`)
+        # doit être lue comme "full".
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"]["automation"] = {"enabled": True}
+        writable_config_file.write_text(json.dumps(cfg))
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["mode"] == "full"
 
     def test_post_valid_mode_persists_to_config_json(
         self, api_client, writable_config_file

@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.2.0 (Mai 2026)
+**Version actuelle**: 6.3.0 (Mai 2026)
 
 ---
 
@@ -21,8 +21,19 @@ uv sync
 # Demarrage complet (Raspberry Pi)
 sudo ./start_web.sh
 
-# Mode developpement (simulation auto-detectee)
-cd web && python manage.py runserver 0.0.0.0:8000
+# Démarrage dev complet (recommandé) — 4 processus en parallèle :
+#   - cimier_simulator.py  (Pico W simulé, port localhost:8001)
+#   - motor_service.py     (mode SIMULATION auto-détecté)
+#   - cimier_service.py    (skip silencieux si cimier.enabled=false dans config.json)
+#   - Django runserver     (port 0.0.0.0:8000 par défaut, configurable)
+./start_dev.sh start            # Port Django par défaut 8000
+./start_dev.sh start 8080       # Port Django alternatif (utile si 8000 occupé)
+DJANGO_PORT=8080 ./start_dev.sh start   # Équivalent via env var
+./start_dev.sh status           # État des 4 processus + URL Django
+./start_dev.sh stop             # Arrêt propre
+
+# Démarrage Django seul (debug minimal — tracking ET cimier inactifs)
+cd web && uv run python manage.py runserver 0.0.0.0:8000
 
 # Tests
 uv run pytest -v                                    # Tous les tests (820+)
@@ -276,6 +287,21 @@ uv run pytest tests/test_moteur.py::TestMoteurCoupoleControl -v
 
 ## Debugging Courant
 
+### Tracking ne démarre pas en dev
+**Symptôme** : clic « Démarrer le suivi » → bouton STOPPER s'allume brièvement, le cartouche
+vert « Suivi Actif » n'apparaît jamais. La timeline cimier peut afficher
+`WARNING Service silencieux — cascade ouverture bypassée`.
+
+**Cause** : `motor_service.py` ne tourne pas → `motor_status.json` figé en `idle` →
+les commandes écrites dans `motor_command.json` ne sont jamais consommées.
+
+**Fix** :
+```bash
+./start_dev.sh stop && ./start_dev.sh start
+./start_dev.sh status   # Vérifier les 4 processus EN COURS
+```
+Puis recharger le dashboard (Ctrl+F5).
+
 ### Encodeur indisponible
 ```bash
 cat /dev/shm/ems22_position.json  # Verifier fichier
@@ -341,6 +367,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.3** | Mai 2026 | Phase 4 cimier autonome — UI session lifecycle complète. Sélecteur 3 modes auto (`manual` / `semi` / `full`) sur dashboard avec persistance via `POST /api/cimier/automation/`, bouton « Parking session » (modale de confirmation conditionnelle si tracking actif → POST `/api/cimier/parking-session/`), countdown contextualisé tick local 1 s (4 cas : manuel inactif / semi fermeture / full ouverture+fermeture / hors-fenêtre), timeline notifications cimier (buffer 50 entrées en mémoire client, FIFO, panneau repliable INFO/WARNING/ERROR), carte « Cimier — Automatisation » sur la page Système (mode courant, prochaine ouverture/fermeture HH:MM + restant). Frontend pur (4 fichiers UI). Régression baseline backend 1021/1021 maintenue. Clôture milestone v6.0 côté code. |
 | **6.2** | Mai 2026 | Phase 3 cimier autonome — scheduler astropy intégré à `cimier_service` (polling 60 s, opt-in `cimier.automation.enabled`). Trigger ouverture sun_alt = -12° descendant + déparking +1° (microswitch calibration 45°) + consultation `WeatherProvider.is_safe_to_open()` (1er consommateur effectif). Trigger fermeture ~15 min avant sun_alt = -6° montant : `tracking_stop` + `goto 45°` (parking) + `close` cimier en parallèle. Helper `core/observatoire/sun_altitude.py` + writer Python neutre `services/motor_ipc_writer.py`. Préalable Phase 4 (UI lifecycle session) |
 | **6.1** | Mai 2026 | Phase 2 cimier autonome — garde-fous UI (modale anti-clic-fantôme + cascade auto tracking↔cimier livrées sub-plan 02-01) + interface logique `WeatherProvider` (Strategy + `NoopWeatherProvider`) câblée dans `cimier_service` (log structuré au démarrage de cycle, pas de blocage runtime). Préalable à Phase 3 (scheduler éphémérides) et milestone capteurs ultérieur (v6.4+) |
 | **6.0** | Mai 2026 | Cimier autonome v1 — firmware Pico W (Phase 0) + cascade Shelly 220V/12V + `cimier_service` autonome + IPC `/dev/shm/cimier_*.json` + endpoints Django `/api/cimier/{open,close,stop,status}/` + panel UI dashboard cimier (Alpine.js + Tailwind). Phase 1 du milestone v6.0 |

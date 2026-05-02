@@ -3,23 +3,17 @@
   "_version": "5.10",
   "_date": "2026-04-23",
   "_changes": "Retrait sections adaptive_tracking et meridien. Vitesse unique 260 µs dans le code (core/config/config.py).",
-
   "thresholds": {
     "_comment": "Seuils de mouvement centralisés (degrés)",
-
     "feedback_min_deg": 3.0,
     "_feedback_comment": "Delta minimum pour utiliser feedback. En-dessous, rotation directe plus fluide.",
-
     "large_movement_deg": 30.0,
     "_large_comment": "Seuil pour grands déplacements (logs, détection transit méridien).",
-
     "feedback_protection_deg": 20.0,
     "_protection_comment": "Protection contre mouvements anormaux dans boucle feedback. Abandon si erreur > seuil.",
-
     "default_tolerance_deg": 0.5,
     "_tolerance_comment": "Tolérance par défaut pour rotation avec feedback (précision cible)."
   },
-
   "site": {
     "latitude": 44.15,
     "longitude": 5.23,
@@ -27,21 +21,17 @@
     "nom": "Observatoire Ubik",
     "fuseau": "Europe/Paris"
   },
-
   "suivi": {
     "seuil_correction_deg": 0.5,
     "intervalle_verification_sec": 60,
     "abaque_file": "data/Loi_coupole.xlsx",
     "_intervalle_comment": "Intervalle par défaut si non utilisé — vitesse unique v5.10 impose 30s (voir SINGLE_SPEED_CHECK_INTERVAL_S)"
   },
-
   "meridian_anticipation": {
     "_comment": "v5.9: anticipation du flip méridien (stratégie E). Activé par défaut depuis v5.11.2 (re-scan glissant 1h v5.11.1 + retour terrain NGC 3690). Le tracking lance un GOTO directif au moment optimal pour minimiser le lag maximal pendant le flip. Mettre enabled=false pour repasser au comportement v5.10 strict.",
     "enabled": true
   },
-
   "simulation": false,
-
   "motor_driver": {
     "type": "rp2040",
     "serial": {
@@ -51,57 +41,44 @@
       "_port_comment": "Port serie USB CDC du Pico (generalement /dev/ttyACM0)"
     }
   },
-
   "moteur": {
     "_comment": "Configuration du moteur pas-à-pas",
-
     "gpio_pins": {
       "_comment": "Numérotation BCM",
       "dir": 17,
       "step": 18
     },
-
     "steps_per_revolution": 200,
     "_steps_comment": "200 en full step, 400 avec microstep 2, 800 avec microstep 4",
-
     "microsteps": 4,
     "_microsteps_comment": "Valeurs possibles: 1, 2, 4, 8, 16, 32 (selon driver)",
-
     "gear_ratio": 2230,
     "_gear_ratio_comment": "Rapport de réduction mécanique",
-
     "steps_correction_factor": 1.08849,
     "_correction_comment": "Facteur de correction mesuré (1.0 = pas de correction)",
-
     "max_speed_steps_per_sec": 1000,
     "acceleration_steps_per_sec2": 500,
     "motor_delay_base": 0.002
   },
-
   "encodeur": {
     "_comment": "Configuration encodeur magnétique EMS22A",
-
     "enabled": true,
     "_enabled_comment": "Activer la boucle fermée avec encodeur",
-
     "spi": {
       "bus": 0,
       "device": 0,
       "speed_hz": 1000000,
       "mode": 0
     },
-
     "mecanique": {
       "wheel_diameter_mm": 50.0,
       "ring_diameter_mm": 2303.0,
       "counts_per_rev": 1024,
       "_counts_comment": "Résolution 10 bits = 1024 positions"
     },
-
     "calibration_factor": 0.010851,
     "_calibration_comment": "Facteur corrigé le 5 décembre 2025 - Valeur = 0.01077/0.9925 (cohérent avec script direct SPI)"
   },
-
   "logging": {
     "_comment": "Configuration des logs (optionnel)",
     "level": "INFO",
@@ -109,7 +86,6 @@
     "max_file_size_mb": 10,
     "backup_count": 5
   },
-
   "cimier": {
     "_comment": "v6.0 Phase 1 — pilotage cimier motorisé via Pico W + cascade Shelly 220V/12V. Opt-in (enabled=false par défaut). IPs DHCP fixées 2026-05-01.",
     "enabled": false,
@@ -131,7 +107,7 @@
     },
     "automation": {
       "_comment": "v6.0 Phase 4 — scheduler astropy avec 3 modes. mode ∈ {manual, semi, full}. manual = aucune auto. semi = utilisateur démarre, fermeture auto. full = ouverture + fermeture auto. Rétro-compat : ancienne clé enabled (v6.2) toujours lue (true→full, false→manual) si mode absent.",
-      "mode": "manual",
+      "mode": "full",
       "opening_sun_altitude_deg": -12.0,
       "closing_target_sun_altitude_deg": -6.0,
       "closing_advance_minutes": 10,

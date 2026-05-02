@@ -212,6 +212,108 @@
     </div>
 </section>
 
+<!-- ═══ Section Cimier — Automatisation (v6.0 Phase 4 sub-plan 04-02) ═══ -->
+<section class="panel panel-astro mb-4" x-data>
+    <h2 class="section-title section-title-fire mb-3">Cimier &mdash; Automatisation</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+
+        <!-- Mode courant -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Mode courant</h3>
+            <div class="flex items-center justify-between">
+                <span class="sys-badge"
+                      :class="{
+                          'sys-badge-ok': $store.system.cimierAutomation.mode === 'full',
+                          'sys-badge-stale': $store.system.cimierAutomation.mode === 'semi',
+                          'sys-badge-error': $store.system.cimierAutomation.mode === 'unknown',
+                      }"
+                      x-text="$store.system.cimierAutomation.modeLabel">--</span>
+                <span class="font-mono text-[0.7rem] text-obs-text-muted"
+                      x-text="$store.system.cimierAutomation.mode || '--'"></span>
+            </div>
+            <!-- Bloc 1 : Service arrêté (cimier.enabled=false ou crash). -->
+            <!-- Priorité visuelle car couvre le cas dev classique. -->
+            <div x-show="!$store.system.cimierAutomation.serviceRunning"
+                 x-cloak
+                 class="mt-2 text-[0.7rem] leading-snug text-obs-text-muted
+                        border-t border-obs-border pt-2">
+                <div class="font-bold mb-1 text-accent-amber-light">⊘ Service cimier arrêté</div>
+                <div>
+                    Le mode persiste dans <code>data/config.json</code> mais ne sera
+                    pris en compte qu'au démarrage de <code>cimier_service</code>.
+                </div>
+                <div class="mt-1 text-obs-text-secondary">
+                    Causes typiques : <code>cimier.enabled=false</code> dans la config (mode dev),
+                    ou crash du service.
+                </div>
+            </div>
+            <!-- Bloc 2 : Application en cours (mode != service_mode ET service vivant). -->
+            <!-- Le scheduler hot-reload le mode à chaque tick (max 60s) — plus de redémarrage manuel. -->
+            <div x-show="$store.system.cimierAutomation.applyPending"
+                 x-cloak
+                 class="mt-2 text-[0.7rem] leading-snug text-accent-amber-light
+                        border-t border-obs-border pt-2">
+                <div class="font-bold mb-1">⏳ Application en cours&hellip;</div>
+                <div class="text-obs-text-muted">
+                    Le service tourne encore avec l'ancien mode
+                    (<span class="font-mono"
+                           x-text="$store.system.cimierAutomation.serviceMode || '?'"></span>).
+                    Le nouveau choix
+                    (<span class="font-mono"
+                           x-text="$store.system.cimierAutomation.mode"></span>)
+                    sera pris en compte automatiquement au prochain tick scheduler
+                    (max 60&nbsp;s).
+                </div>
+            </div>
+        </div>
+
+        <!-- Prochaine ouverture -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Prochaine ouverture</h3>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Heure&nbsp;:</span>
+                    <span class="font-mono text-obs-text"
+                          x-text="$store.system.cimierAutomation.nextOpenLabel">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Restant&nbsp;:</span>
+                    <span class="font-mono text-obs-text"
+                          x-text="$store.system.cimierAutomation.nextOpenRemaining">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prochaine fermeture -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Prochaine fermeture</h3>
+            <div class="flex flex-col gap-1">
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Heure&nbsp;:</span>
+                    <span class="font-mono text-obs-text"
+                          x-text="$store.system.cimierAutomation.nextCloseLabel">--</span>
+                </div>
+                <div class="flex justify-between text-xs">
+                    <span class="text-obs-text-secondary">Restant&nbsp;:</span>
+                    <span class="font-mono text-obs-text"
+                          x-text="$store.system.cimierAutomation.nextCloseRemaining">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dernier événement -->
+        <div class="bg-obs-dark rounded-button border border-obs-border p-3">
+            <h3 class="text-xs font-display text-accent-amber mb-2 font-medium">Dernier événement</h3>
+            <div class="flex flex-col gap-1">
+                <div class="font-mono text-[0.7rem] text-obs-text-muted leading-tight"
+                     x-text="$store.system.cimierAutomation.lastEventLabel">--</div>
+                <div class="font-mono text-xs text-obs-text leading-tight"
+                     x-text="$store.system.cimierAutomation.lastEventMessage">--</div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ Section Configuration (placeholder — Plan 03-02) ═══ -->
 <section class="panel panel-astro mb-4">
     <h2 class="section-title section-title-fire mb-3">Configuration Active</h2>

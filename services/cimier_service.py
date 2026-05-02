@@ -29,6 +29,7 @@ import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from core.config.config_loader import (
@@ -282,6 +283,18 @@ class CimierService:
                 self._last_scheduler_check_ts is None
                 or (now_mono - self._last_scheduler_check_ts) >= interval
             ):
+                # Hot-reload du mode auto depuis data/config.json (v6.0 Phase 4
+                # fix UX) — évite à l'utilisateur d'avoir à redémarrer
+                # cimier_service après un POST /api/cimier/automation/.
+                # Pas critique si ça échoue (mode courant gardé).
+                try:
+                    if hasattr(self._scheduler, "refresh_mode_from_config"):
+                        config_path = Path(__file__).resolve().parents[1] / "data" / "config.json"
+                        self._scheduler.refresh_mode_from_config(config_path)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "cimier_event=mode_refresh_exception exc=%s", exc
+                    )
                 current_state = self._derive_current_cimier_state()
                 try:
                     decision = self._scheduler.maybe_trigger(current_state)
