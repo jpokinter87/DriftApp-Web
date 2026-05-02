@@ -945,3 +945,129 @@ class TestNoHardcodedIps:
         cfg = CimierConfig()
         assert cfg.host == ""
         assert cfg.power_switch.host == ""
+
+
+# ======================================================================
+# Section 8 : v6.0 Phase 2 — câblage WeatherProvider
+# ======================================================================
+
+class TestWeatherProviderWiring:
+    """Sub-plan v6.0-02-02 : provider injecte + log au demarrage de cycle."""
+
+    def test_default_constructor_uses_noop_weather_provider(
+        self,
+        cimier_config_default: CimierConfig,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        """Sans provider explicite, le service doit retomber sur NoopWeatherProvider.
+
+        Garantie de retro-compat pour tous les tests existants qui n'ont pas
+        l'argument weather_provider=.
+        """
+        from core.hardware.weather_provider import NoopWeatherProvider
+        ps = CountingPowerSwitch()
+        service = CimierService(
+            cimier_config=cimier_config_default,
+            power_switch=ps,
+            ipc_manager=ipc_manager,
+        )
+        assert isinstance(service._weather_provider, NoopWeatherProvider)
+
+    def test_cycle_logs_weather_on_start(
+        self,
+        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """`_run_cycle` doit emettre `cimier_event=cycle_start ... weather=<json>`."""
+        service, _, _ = service_with_simulator
+        with caplog.at_level("INFO", logger="services.cimier_service"):
+            ipc_manager.write_command({"id": "weather-test-1", "action": "open"})
+            service.tick()
+
+        starts = [
+            rec for rec in caplog.records
+            if "cimier_event=cycle_start" in rec.getMessage()
+        ]
+        assert len(starts) == 1
+        msg = starts[0].getMessage()
+        assert "weather=" in msg
+        assert '{"provider":"noop"}' in msg
+        assert "action=open" in msg
+        assert "id=weather-test-1" in msg
+
+    def test_cycle_logs_describe_from_custom_provider(
+        self,
+        cimier_config_default: CimierConfig,
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Un provider custom voit son describe() serialise dans le log cycle_start."""
+
+        class FakeWeatherProvider:
+            def is_safe_to_open(self) -> bool:
+                return True
+
+            def is_safe_to_keep_open(self) -> bool:
+                return True
+
+            def describe(self) -> Dict[str, Any]:
+                return {"provider": "fake", "wind": 42}
+
+        ps = CountingPowerSwitch()
+        fake_http = AutoFakeHttpClient()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cimier_config_default,
+            power_switch=ps,
+            http_client=fake_http,
+            ipc_manager=ipc_manager,
+            weather_provider=FakeWeatherProvider(),
+            clock=clock,
+            sleep=clock.sleep,
+            boot_poll_interval_s=0.05,
+            cycle_poll_interval_s=0.05,
+        )
+        with caplog.at_level("INFO", logger="services.cimier_service"):
+            ipc_manager.write_command({"id": "fake-weather-1", "action": "open"})
+            service.tick()
+
+        starts = [
+            rec for rec in caplog.records
+            if "cimier_event=cycle_start" in rec.getMessage()
+        ]
+        assert len(starts) == 1
+        msg = starts[0].getMessage()
+        # JSON sort_keys=True → "provider" avant "wind"
+        assert '"provider":"fake"' in msg
+        assert '"wind":42' in msg
+
+    def test_build_service_from_config_uses_factory(
+        self, tmp_path: Path
+    ) -> None:
+        """`_build_service_from_config` doit instancier le provider via la factory.
+
+        Cas par defaut (config.json sans section weather_provider) → Noop.
+        """
+        from core.hardware.weather_provider import NoopWeatherProvider
+        from services.cimier_service import _build_service_from_config
+
+        config_path = tmp_path / "config.json"
+        # Config minimale qui passe le loader sans erreur.
+        config_path.write_text(json.dumps({
+            "site": {"latitude": 0, "longitude": 0, "altitude": 0,
+                     "nom": "Test", "fuseau": "Europe/Paris"},
+            "moteur": {},
+            "motor_driver": {"type": "rp2040", "serial": {}},
+            "suivi": {},
+            "encodeur": {"enabled": False, "spi": {}, "mecanique": {}},
+            "thresholds": {},
+            "simulation": True,
+            "cimier": {
+                "enabled": False,
+                "host": "127.0.0.1",
+                "port": 80,
+            },
+        }))
+        service = _build_service_from_config(config_path=config_path)
+        assert isinstance(service._weather_provider, NoopWeatherProvider)

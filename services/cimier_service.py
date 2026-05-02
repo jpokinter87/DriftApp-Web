@@ -41,6 +41,11 @@ from core.hardware.power_switch import (
     PowerSwitchError,
     ShellyPowerSwitch,
 )
+from core.hardware.weather_provider import (
+    NoopWeatherProvider,
+    WeatherProvider,
+    make_weather_provider,
+)
 from services.cimier_ipc_manager import CimierIpcManager
 
 logger = logging.getLogger(__name__)
@@ -148,6 +153,7 @@ class CimierService:
         power_switch: PowerSwitchProtocol,
         http_client: Optional[HttpClient] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
+        weather_provider: Optional[WeatherProvider] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         boot_poll_interval_s: float = DEFAULT_BOOT_POLL_INTERVAL_S,
@@ -158,6 +164,7 @@ class CimierService:
         self._power_switch = power_switch
         self._http = http_client or HttpClient()
         self._ipc = ipc_manager or CimierIpcManager()
+        self._weather_provider = weather_provider or NoopWeatherProvider()
         self._clock = clock
         self._sleep = sleep
         self._boot_poll_interval_s = float(boot_poll_interval_s)
@@ -308,6 +315,16 @@ class CimierService:
         """
         cycle_start = self._clock()
         error_message = ""
+
+        # Snapshot meteo au demarrage (Phase 2 : log seulement, pas de blocage).
+        # Phase 3 consultera is_safe_to_open() pour refuser une ouverture auto.
+        weather_desc = self._weather_provider.describe()
+        logger.info(
+            "cimier_event=cycle_start action=%s id=%s weather=%s",
+            action,
+            cmd_id,
+            json.dumps(weather_desc, separators=(",", ":"), sort_keys=True),
+        )
 
         try:
             # Phase 1 : power_on
@@ -621,7 +638,12 @@ def _build_service_from_config(config_path=None) -> CimierService:
     """Construit un service depuis le config.json local (entry-point réel)."""
     cfg = load_config(config_path) if config_path else ConfigLoader().load()
     power_switch = make_power_switch(cfg.cimier.power_switch)
-    return CimierService(cimier_config=cfg.cimier, power_switch=power_switch)
+    weather_provider = make_weather_provider(cfg.cimier.weather_provider)
+    return CimierService(
+        cimier_config=cfg.cimier,
+        power_switch=power_switch,
+        weather_provider=weather_provider,
+    )
 
 
 def main() -> int:

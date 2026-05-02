@@ -124,6 +124,10 @@
       "type": "noop",
       "host": "192.168.1.83",
       "switch_id": 0
+    },
+    "weather_provider": {
+      "_comment": "v6.0 Phase 2 — interface logique météo. type=noop (toujours OK). Pas de capteur réel, pas de seuils. Un type 'pico_w_sensor' arrivera dans un milestone capteurs ultérieur (v6.4+).",
+      "type": "noop"
     }
   }
 }

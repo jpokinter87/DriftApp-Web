@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.0.0 (Mai 2026)
+**Version actuelle**: 6.1.0 (Mai 2026)
 
 ---
 
@@ -341,6 +341,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.1** | Mai 2026 | Phase 2 cimier autonome — garde-fous UI (modale anti-clic-fantôme + cascade auto tracking↔cimier livrées sub-plan 02-01) + interface logique `WeatherProvider` (Strategy + `NoopWeatherProvider`) câblée dans `cimier_service` (log structuré au démarrage de cycle, pas de blocage runtime). Préalable à Phase 3 (scheduler éphémérides) et milestone capteurs ultérieur (v6.4+) |
 | **6.0** | Mai 2026 | Cimier autonome v1 — firmware Pico W (Phase 0) + cascade Shelly 220V/12V + `cimier_service` autonome + IPC `/dev/shm/cimier_*.json` + endpoints Django `/api/cimier/{open,close,stop,status}/` + panel UI dashboard cimier (Alpine.js + Tailwind). Phase 1 du milestone v6.0 |
 | **5.12** | Avril 2026 | OTA robuste : diff config UI + choix utilisateur, redéploiement sudoers auto (5.12.0). Garde-fou UI anti-GOTO involontaire pendant tracking actif — JOG/Continu/GOTO grisés (5.12.1) |
 | **5.11** | Avril 2026 | v5.9 Phase 2 : intégration runtime anticipation méridien (flag opt-in + force_direction moteur + mixin + hook `check_and_correct`). Rétro-compat stricte (flag default false = v5.10 identique). Validation terrain à suivre |

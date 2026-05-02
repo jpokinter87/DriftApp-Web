@@ -136,6 +136,18 @@ class PowerSwitchConfig:
 
 
 @dataclass
+class WeatherProviderConfig:
+    """Configuration du provider météo cimier (v6.0 Phase 2).
+
+    Phase 2 ne livre que `type="noop"` (interface logique, pas de capteur).
+    Les types réels (ex. `"pico_w_sensor"`) arriveront avec un milestone
+    capteurs ultérieur (v6.4+). Aucun seuil dans la config tant qu'aucun
+    capteur réel n'existe — le contrat figure dans `core.hardware.weather_provider`.
+    """
+    type: str = "noop"
+
+
+@dataclass
 class CimierConfig:
     """Configuration du cimier motorisé (v6.0 Phase 1).
 
@@ -143,6 +155,10 @@ class CimierConfig:
     220V/12V → polling Pico W ready → re-push invert si non-défaut → /open
     ou /close → polling final → turn_off → anti-bounce). IPs réelles
     uniquement dans `data/config.json` (terrain) — code Python neutre.
+
+    Phase 2 ajoute `weather_provider` : interface logique no-op par défaut,
+    consommée pour log structuré au démarrage de chaque cycle (pas de
+    blocage runtime — Phase 3 décidera).
     """
     enabled: bool = False
     host: str = ""
@@ -152,6 +168,7 @@ class CimierConfig:
     boot_poll_timeout_s: float = 30.0
     post_off_quiet_s: float = 10.0
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
+    weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
 
 
 @dataclass
@@ -381,7 +398,9 @@ class ConfigLoader:
         c = self.cfg.get("cimier", {})
         defaults = CimierConfig()
         ps_defaults = PowerSwitchConfig()
+        wp_defaults = WeatherProviderConfig()
         ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
+        wp = c.get("weather_provider", {}) if isinstance(c, dict) else {}
         return CimierConfig(
             enabled=bool(c.get("enabled", defaults.enabled)),
             host=str(c.get("host", defaults.host)),
@@ -394,6 +413,9 @@ class ConfigLoader:
                 type=str(ps.get("type", ps_defaults.type)),
                 host=str(ps.get("host", ps_defaults.host)),
                 switch_id=int(ps.get("switch_id", ps_defaults.switch_id)),
+            ),
+            weather_provider=WeatherProviderConfig(
+                type=str(wp.get("type", wp_defaults.type)),
             ),
         )
 
