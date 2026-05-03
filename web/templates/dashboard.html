@@ -11,12 +11,12 @@
 <span x-data id="cimier-header-icon" class="text-base font-mono mr-1 leading-none transition-colors duration-300"
       :class="{
         'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
-        'text-accent-amber-light animate-pulse': $store.dashboard.displayedCimierState() === 'cycle',
+        'text-accent-amber-light animate-pulse': ['cycle','opening','closing'].includes($store.dashboard.displayedCimierState()),
         'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
         'text-accent-red':   $store.dashboard.displayedCimierState() === 'error',
         'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
       }"
-      x-text="({open:'●', closed:'○', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.displayedCimierState()] || '○'"
+      x-text="({open:'●', closed:'○', opening:'↑', closing:'↓', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.displayedCimierState()] || '○'"
       :title="'Cimier — ' + ($store.dashboard.displayedCimierState() ?? 'unknown')"
       aria-label="État du cimier"></span>
 <button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
@@ -59,25 +59,24 @@
              ligne 4 : CORRECTIONS (col-span-2)
              Le cartouche MODE (CONTINUOUS) est retiré (vitesse unique v5.10). -->
         <div x-data class="grid grid-cols-2 gap-2 text-xs font-mono">
-            <!-- CIMIER position -->
-            <div class="coupole-item flex justify-between items-center p-2 bg-obs-input rounded-button">
+            <!-- CIMIER unifié (azimut + état/phase) — col-span-2 (v6.3.3).
+                 Format : « CIMIER : 192.73° / OUVERTURE ». Évite la
+                 redondance des 2 anciens cartouches « CIMIER : ». -->
+            <div class="cimier-state-cartouche col-span-2 flex justify-between items-center p-2 bg-obs-input rounded-button">
                 <label class="text-accent-amber font-bold">CIMIER:</label>
-                <span id="dome-position" class="coupole-value font-bold text-accent-amber-light">--&deg;</span>
-            </div>
-            <!-- CIMIER état (OUVERT/FERMÉ/CYCLE/...) — labels via CIMIER_STATE_LABELS -->
-            <!-- v6.3.2 : displayedCimierState() préfère pico_state quand state=idle
-                 (sinon on voit IDLE après un cycle terminé au lieu de OUVERT/FERMÉ). -->
-            <div class="cimier-state-cartouche flex justify-between items-center p-2 bg-obs-input rounded-button">
-                <label class="text-accent-amber font-bold">CIMIER:</label>
-                <span class="font-bold uppercase tracking-wider transition-colors duration-300"
-                      :class="{
-                          'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
-                          'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
-                          'cimier-cycle-shimmer': $store.dashboard.displayedCimierState() === 'cycle',
-                          'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
-                          'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
-                      }"
-                      x-text="({open:'OUVERT',closed:'FERMÉ',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
+                <div class="flex items-center gap-2 font-bold">
+                    <span id="dome-position" class="coupole-value text-accent-amber-light">--&deg;</span>
+                    <span class="text-obs-text-muted">/</span>
+                    <span class="uppercase tracking-wider transition-colors duration-300"
+                          :class="{
+                              'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
+                              'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
+                              'cimier-cycle-shimmer': ['cycle','opening','closing'].includes($store.dashboard.displayedCimierState()),
+                              'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
+                              'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
+                          }"
+                          x-text="({open:'OUVERT',closed:'FERMÉ',opening:'OUVERTURE',closing:'FERMETURE',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
+                </div>
             </div>
             <!-- ENC -->
             <div class="enc-item flex justify-between items-center p-2 bg-obs-input rounded-button border-3 border-obs-border" id="enc-item">
@@ -266,11 +265,11 @@
                           :class="{
                               'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
                               'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
-                              'cimier-cycle-shimmer': $store.dashboard.displayedCimierState() === 'cycle',
+                              'cimier-cycle-shimmer': ['cycle','opening','closing'].includes($store.dashboard.displayedCimierState()),
                               'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
                               'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
                           }"
-                          x-text="$store.dashboard.displayedCimierState() ? $store.dashboard.displayedCimierState().toUpperCase() : '--'">--</span>
+                          x-text="({open:'OUVERT',closed:'FERMÉ',opening:'CYCLE OUVERTURE',closing:'CYCLE FERMETURE',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
                 </div>
                 <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
                     <label class="font-bold text-obs-text-secondary">PHASE&nbsp;:</label>
@@ -526,7 +525,7 @@
      aria-describedby="parking-confirm-body">
     <div class="goto-modal-content">
         <div class="goto-modal-header">
-            <span class="goto-icon">&#x1F17F;</span>
+            <span class="goto-icon">&#x26A0;</span>
             <h3 id="parking-confirm-title">Lancer la séquence parking maintenant&nbsp;?</h3>
         </div>
         <div id="parking-confirm-body"
@@ -534,16 +533,16 @@
             Le suivi de
             <span class="text-accent-amber font-semibold"
                   x-text="$store.dashboard.parkingConfirmObject || 'l\'objet en cours'"></span>
-            est en cours.
-            <strong class="text-obs-text">Stop tracking &rsaquo; GOTO 45° &rsaquo; fermeture cimier</strong>
-            seront enchaînés automatiquement.
+            est en cours. Lancer le parking
+            <strong class="text-obs-text">interrompra la session</strong>
+            (Stop tracking &rsaquo; GOTO 45° &rsaquo; fermeture cimier seront enchaînés automatiquement).
         </div>
         <div class="button-group">
             <button id="btn-parking-cancel" class="btn btn-secondary"
                     x-init="$watch('$store.dashboard.parkingConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
                 Annuler
             </button>
-            <button id="btn-parking-confirm" class="btn btn-warning"
+            <button id="btn-parking-confirm" class="btn btn-danger"
                     aria-live="polite"
                     :disabled="$store.dashboard.parkingConfirmCountdown > 0"
                     x-text="$store.dashboard.parkingConfirmCountdown > 0

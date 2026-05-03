@@ -59,16 +59,20 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // v6.3.2 — État cimier dérivé pour affichage UI.
-        // Le service publie state=idle quand sa boucle est passive (pas de
-        // cycle en cours). L'état physique du toit vit dans pico_state.
-        // Quand state=idle ET pico_state ∈ {open, closed}, on préfère
-        // afficher l'état physique (« OUVERT »/« FERMÉ ») plutôt que IDLE.
-        // Sinon (cycle/cooldown/error/disabled/transition), on garde state.
+        // v6.3.2 / v6.3.3 — État cimier dérivé pour affichage UI.
+        // Le service publie state=idle quand sa boucle est passive et state=cycle
+        // pendant un cycle d'ouverture/fermeture. L'état physique précis vit dans
+        // pico_state. Stratégie :
+        //   - state=idle + pico_state ∈ {open,closed} → pico (OUVERT/FERMÉ)
+        //   - state=cycle + pico_state ∈ {opening,closing} → pico (CYCLE détaillé)
+        //   - sinon → state (cooldown/error/disabled/etc.)
         displayedCimierState() {
             const c = this.cimier;
             if (!c) return null;
             if (c.state === 'idle' && (c.pico_state === 'open' || c.pico_state === 'closed')) {
+                return c.pico_state;
+            }
+            if (c.state === 'cycle' && (c.pico_state === 'opening' || c.pico_state === 'closing')) {
                 return c.pico_state;
             }
             return c.state;
@@ -1214,8 +1218,12 @@ function checkParkingProgress() {
     }
 
     // Étape 3 : cimier fermé ?
+    // v6.3.2 fix : utilise displayedCimierState() (dérive pico_state quand
+    // service.state=idle) car le service publie state=idle après cycle de
+    // fermeture, pas state=closed. Sans cela, le watcher reste en 'cycle'
+    // jusqu'au timeout 2 min même quand pico_state=closed.
     if (store.parkingStepCimier === 'cycle') {
-        const cimierState = store.cimier?.state;
+        const cimierState = store.displayedCimierState();
         if (cimierState === 'closed') {
             store.parkingStepCimier = 'closed';
             pushCimierTimeline('INFO', '3/3 ✓ Cimier fermé');

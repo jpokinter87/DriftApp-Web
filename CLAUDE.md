@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.3.2 (Mai 2026)
+**Version actuelle**: 6.3.3 (Mai 2026)
 
 ---
 
@@ -382,6 +382,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.3.3** | Mai 2026 | UX cimier dashboard : (1) parking watcher utilise `displayedCimierState()` (correction phase 3/3 bloquée 2 min sur timeout après cycle de fermeture réussi) ; (2) modale Parking alignée sur Fermer cimier (icon ⚠, btn-danger rouge, message « interrompra la session » explicite) ; (3) cartouches CIMIER sous boussole fusionnés en cartouche unifié col-span-2 (« CIMIER : 192.73° / OUVERT ») — supprime la redondance du label CIMIER ; (4) helper `displayedCimierState()` étendu pour mapper `state=cycle + pico_state ∈ {opening, closing}` → libellés OUVERTURE / FERMETURE / CYCLE OUVERTURE / CYCLE FERMETURE selon le cartouche, avec effet shimmer ambre sur les 3 phases de mouvement ; (5) header icon : flèches ↑/↓ pour opening/closing. Frontend pur, 0 backend touché. |
 | **6.3.2** | Mai 2026 | Dev-mode cimier : env-var `CIMIER_DEV_MODE=1` (exportée par `start_dev.sh`) patche en mémoire `cimier.{enabled, host, port, power_switch.type}` pour pointer le simulateur localhost:8001 (au lieu du Pico W 192.168.1.84). Permet aux indicateurs UI cimier (cartouche position OUVERT/FERMÉ sous boussole + cartouche bas ÉTAT/PHASE + timeline activité) d'être vivants en dev sans modifier `data/config.json`. **Aucune incidence prod** : sans env var, comportement strictement inchangé. `start_web.sh` PROD intact (gating config strict). +5 tests pytest TestDevModeOverrides. |
 | **6.3.1** | Mai 2026 | Patch UI : countdown cartouche méridien tick local 1 s — corrige le compteur figé côté client quand le polling `/status/` ne renvoie plus `meridian_seconds` (issue ouverte pré-existante terrain NGC 4151 16-17/04). Pattern réutilisé du countdown automation cimier (v6.0 P4 04-02). Frontend pur (`web/static/js/dashboard.js` ~40 LOC), 0 backend, 0 nouveau test pytest, **1032/1032 tests régression verts**. Ferme l'issue Deferred « Countdown méridien fige côté client quand suivi arrêté ». |
 | **6.3** | Mai 2026 | Phase 4 cimier autonome — UI session lifecycle complète. Sélecteur 3 modes auto (`manual` / `semi` / `full`) sur dashboard avec persistance via `POST /api/cimier/automation/`, bouton « Parking session » (modale de confirmation conditionnelle si tracking actif → POST `/api/cimier/parking-session/`), countdown contextualisé tick local 1 s (4 cas : manuel inactif / semi fermeture / full ouverture+fermeture / hors-fenêtre), timeline notifications cimier (buffer 50 entrées en mémoire client, FIFO, panneau repliable INFO/WARNING/ERROR), carte « Cimier — Automatisation » sur la page Système (mode courant, prochaine ouverture/fermeture HH:MM + restant). Frontend pur (4 fichiers UI). Régression baseline backend 1021/1021 maintenue. Clôture milestone v6.0 côté code. |
