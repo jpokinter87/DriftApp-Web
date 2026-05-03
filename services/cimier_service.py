@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import signal
 import time
 import urllib.error
@@ -759,9 +760,47 @@ class CimierService:
 # Entry-point
 # ----------------------------------------------------------------------
 
+# ----------------------------------------------------------------------
+# Dev-mode overrides (v6.3.2)
+# ----------------------------------------------------------------------
+# Activées uniquement quand CIMIER_DEV_MODE=1 (ou autre valeur truthy) dans
+# l'environnement. Ne touchent jamais data/config.json sur disque — patch
+# en mémoire seulement. Permettent à `start_dev.sh` de lancer
+# `cimier_service` contre le simulateur HTTP local (`localhost:8001`)
+# au lieu du Pico W réel (cimier.host de data/config.json) sans modifier le template repo.
+_DEV_MODE_TRUTHY = {"1", "true", "yes", "on"}
+
+
+def _is_dev_mode_enabled() -> bool:
+    raw = os.environ.get("CIMIER_DEV_MODE", "").strip().lower()
+    return raw in _DEV_MODE_TRUTHY
+
+
+def _apply_dev_mode_overrides(cimier_cfg) -> None:
+    """Patche en place la config cimier pour pointer le simulateur dev.
+
+    Force enabled=True (sinon court-circuit boot), host=127.0.0.1 port=8001
+    (cimier_simulator localhost), power_switch.type="noop" (pas de Shelly
+    réelle). Les autres champs (cycle_timeout_s, automation, weather_provider)
+    sont préservés tels quels de data/config.json.
+    """
+    cimier_cfg.enabled = True
+    cimier_cfg.host = "127.0.0.1"
+    cimier_cfg.port = 8001
+    cimier_cfg.power_switch.type = "noop"
+
+
 def _build_service_from_config(config_path=None) -> CimierService:
     """Construit un service depuis le config.json local (entry-point réel)."""
     cfg = load_config(config_path) if config_path else ConfigLoader().load()
+    if _is_dev_mode_enabled():
+        _apply_dev_mode_overrides(cfg.cimier)
+        logger.info(
+            "cimier_dev_mode=on host=%s:%d power_switch=%s",
+            cfg.cimier.host,
+            cfg.cimier.port,
+            cfg.cimier.power_switch.type,
+        )
     power_switch = make_power_switch(cfg.cimier.power_switch)
     weather_provider = make_weather_provider(cfg.cimier.weather_provider)
     return CimierService(

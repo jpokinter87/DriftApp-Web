@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM556T (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.3.1 (Mai 2026)
+**Version actuelle**: 6.3.2 (Mai 2026)
 
 ---
 
@@ -302,6 +302,21 @@ les commandes écrites dans `motor_command.json` ne sont jamais consommées.
 ```
 Puis recharger le dashboard (Ctrl+F5).
 
+### Indicateurs cimier vides en dev (UNKNOWN / --)
+**Symptôme** : cartouche « CIMIER : INCONNU » sous la boussole + cartouche bas
+« ÉTAT : UNKNOWN | PHASE : -- » + activité cimier vide. Le mode auto et le
+countdown ouverture/fermeture s'affichent (alimentés par fallback Django).
+
+**Cause** : avant v6.3.2, `cimier_service` skip silencieusement quand
+`cimier.enabled=false` dans `data/config.json` (template repo).
+
+**Fix v6.3.2** : `start_dev.sh` exporte `CIMIER_DEV_MODE=1` automatiquement →
+`cimier_service` patche en mémoire enabled=True + host=127.0.0.1:8001
+(simulateur) + power_switch=noop. `data/config.json` reste intact (template
+repo respecté pour la prod). Si l'UI reste vide après `./start_dev.sh restart`,
+vérifier `cat /dev/shm/cimier_status.json` (présent + state non-null) et
+`logs/cimier_service.log` (ligne `cimier_dev_mode=on host=127.0.0.1:8001`).
+
 ### Encodeur indisponible
 ```bash
 cat /dev/shm/ems22_position.json  # Verifier fichier
@@ -367,6 +382,7 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.3.2** | Mai 2026 | Dev-mode cimier : env-var `CIMIER_DEV_MODE=1` (exportée par `start_dev.sh`) patche en mémoire `cimier.{enabled, host, port, power_switch.type}` pour pointer le simulateur localhost:8001 (au lieu du Pico W 192.168.1.84). Permet aux indicateurs UI cimier (cartouche position OUVERT/FERMÉ sous boussole + cartouche bas ÉTAT/PHASE + timeline activité) d'être vivants en dev sans modifier `data/config.json`. **Aucune incidence prod** : sans env var, comportement strictement inchangé. `start_web.sh` PROD intact (gating config strict). +5 tests pytest TestDevModeOverrides. |
 | **6.3.1** | Mai 2026 | Patch UI : countdown cartouche méridien tick local 1 s — corrige le compteur figé côté client quand le polling `/status/` ne renvoie plus `meridian_seconds` (issue ouverte pré-existante terrain NGC 4151 16-17/04). Pattern réutilisé du countdown automation cimier (v6.0 P4 04-02). Frontend pur (`web/static/js/dashboard.js` ~40 LOC), 0 backend, 0 nouveau test pytest, **1032/1032 tests régression verts**. Ferme l'issue Deferred « Countdown méridien fige côté client quand suivi arrêté ». |
 | **6.3** | Mai 2026 | Phase 4 cimier autonome — UI session lifecycle complète. Sélecteur 3 modes auto (`manual` / `semi` / `full`) sur dashboard avec persistance via `POST /api/cimier/automation/`, bouton « Parking session » (modale de confirmation conditionnelle si tracking actif → POST `/api/cimier/parking-session/`), countdown contextualisé tick local 1 s (4 cas : manuel inactif / semi fermeture / full ouverture+fermeture / hors-fenêtre), timeline notifications cimier (buffer 50 entrées en mémoire client, FIFO, panneau repliable INFO/WARNING/ERROR), carte « Cimier — Automatisation » sur la page Système (mode courant, prochaine ouverture/fermeture HH:MM + restant). Frontend pur (4 fichiers UI). Régression baseline backend 1021/1021 maintenue. Clôture milestone v6.0 côté code. |
 | **6.2** | Mai 2026 | Phase 3 cimier autonome — scheduler astropy intégré à `cimier_service` (polling 60 s, opt-in `cimier.automation.enabled`). Trigger ouverture sun_alt = -12° descendant + déparking +1° (microswitch calibration 45°) + consultation `WeatherProvider.is_safe_to_open()` (1er consommateur effectif). Trigger fermeture ~15 min avant sun_alt = -6° montant : `tracking_stop` + `goto 45°` (parking) + `close` cimier en parallèle. Helper `core/observatoire/sun_altitude.py` + writer Python neutre `services/motor_ipc_writer.py`. Préalable Phase 4 (UI lifecycle session) |

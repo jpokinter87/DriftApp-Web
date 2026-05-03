@@ -57,6 +57,21 @@ document.addEventListener('alpine:init', () => {
             if (this.logs.length > 50) {
                 this.logs.length = 50;
             }
+        },
+
+        // v6.3.2 — État cimier dérivé pour affichage UI.
+        // Le service publie state=idle quand sa boucle est passive (pas de
+        // cycle en cours). L'état physique du toit vit dans pico_state.
+        // Quand state=idle ET pico_state ∈ {open, closed}, on préfère
+        // afficher l'état physique (« OUVERT »/« FERMÉ ») plutôt que IDLE.
+        // Sinon (cycle/cooldown/error/disabled/transition), on garde state.
+        displayedCimierState() {
+            const c = this.cimier;
+            if (!c) return null;
+            if (c.state === 'idle' && (c.pico_state === 'open' || c.pico_state === 'closed')) {
+                return c.pico_state;
+            }
+            return c.state;
         }
     });
 });
@@ -287,6 +302,11 @@ function initEventListeners() {
             // Double-garde côté code en plus du :disabled du template.
             if (Alpine.store('dashboard').cimierCloseConfirmCountdown > 0) return;
             closeCimierCloseConfirmModal();
+            // v6.3.2 fix : la modale promet d'interrompre la session — on
+            // doit donc stopper le tracking avant de fermer le cimier.
+            // confirmCimierClose ne s'affiche que si tracking actif (cf.
+            // ligne 837), donc trackingActive=true à ce point.
+            stopTracking();
             sendCimierAction('close');
         });
     }
@@ -842,22 +862,17 @@ function confirmCimierClose() {
     }, 1000);
 }
 
-// Cascade auto avant démarrage du tracking : si cimier fermé, l'ouvrir d'abord
-// puis attendre state="open" (timeout 30 s). Short-circuits gracieux pour
-// open/disabled/unknown (passent direct) et cycle/cooldown/error (abort).
-// v6.0 Phase 2 sub-plan 01 — cadrage interview thème B/D.
+// Cascade auto avant démarrage du tracking — fire-and-forget (v6.3.2).
+// Politique : tout état différent de 'open' déclenche une ouverture en
+// parallèle (POST /api/cimier/open/), sauf error qui bloque. Le tracking
+// lance immédiatement — son GOTO initial coupole (~10-30 s) laisse le
+// temps au cimier de cycler en arrière-plan.
 async function ensureCimierOpenForTracking() {
-    const cimier = Alpine.store('dashboard').cimier;
-    const cimierState = cimier?.state ?? 'unknown';
+    const store = Alpine.store('dashboard');
+    const cimier = store.cimier;
+    const cimierState = store.displayedCimierState() ?? 'unknown';
 
-    // Pass-through : déjà ouvert, désactivé (machine dev) ou inconnu (service éteint).
-    if (['open', 'disabled', 'unknown'].includes(cimierState)) return true;
-
-    // Détection service silencieux (cimier_status.json non rafraîchi depuis >60s) :
-    // typiquement machine dev sans cimier_service qui tourne, ou prod avec service
-    // crashé/figé. On bypass la cascade pour éviter un timeout gratuit de 30 s.
-    // Fix smoke 2026-05-02 : sur dev, /dev/shm/cimier_status.json traînait en "idle"
-    // depuis un ancien run, ce qui déclenchait à tort la cascade ouverture.
+    // Service silencieux (status non rafraîchi >60 s) : tracking direct.
     if (cimier?.last_update) {
         const lastUpdateMs = Date.parse(cimier.last_update);
         if (Number.isFinite(lastUpdateMs) && (Date.now() - lastUpdateMs) > 60_000) {
@@ -867,47 +882,34 @@ async function ensureCimierOpenForTracking() {
         }
     }
 
-    // États transitoires bloquants — abort propre avec log explicite.
-    if (cimierState === 'cycle') {
-        log('Cycle cimier en cours, attendez la fin', 'warning');
-        return false;
-    }
-    if (cimierState === 'cooldown') {
-        const remaining = cimier?.remaining_quiet_s !== undefined
-            ? cimier.remaining_quiet_s.toFixed(0)
-            : '?';
-        log(`Anti-rebond cimier actif (${remaining}s), réessayez`, 'warning');
-        return false;
-    }
+    // Erreur explicite : bloquant.
     if (cimierState === 'error') {
         const err = cimier?.error_message || 'inconnue';
         log(`Cimier en erreur : ${err}. Tracking annulé.`, 'error');
         return false;
     }
 
-    // cimierState === 'closed' → cascade ouverture.
-    log('Cimier fermé : ouverture avant démarrage du suivi…', 'info');
-    const openResult = await apiCall('/api/cimier/open/', 'POST');
-    if (openResult && openResult.error) {
-        log(`Échec ouverture cimier : ${openResult.error}. Tracking annulé.`, 'error');
-        return false;
+    // Déjà ouvert : pas d'action nécessaire.
+    if (cimierState === 'open') return true;
+
+    // Cycle déjà en cours ou cooldown post-cycle : pas de POST (le service
+    // est déjà occupé, un POST supplémentaire serait ignoré ou rejeté).
+    if (cimierState === 'cycle' || cimierState === 'cooldown') {
+        log(`Cimier ${cimierState} — tracking lancé en parallèle`, 'info');
+        return true;
     }
 
-    // Polling 1 s jusqu'à state="open", timeout 30 s. Réutilise le store
-    // mis à jour par pollCimierStatus (pas de polling parallèle).
-    for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        const current = Alpine.store('dashboard').cimier?.state;
-        if (current === 'open') return true;
-        if (current === 'error') {
-            const err = Alpine.store('dashboard').cimier?.error_message || 'inconnue';
-            log(`Cimier en erreur pendant ouverture : ${err}. Tracking annulé.`, 'error');
-            return false;
+    // Tous les autres états (closed/idle/unknown/disabled/etc.) : déclenche
+    // une ouverture par précaution. Fire-and-forget — le tracking lance
+    // immédiatement son GOTO initial pendant que le cimier cycle.
+    log('Ouverture cimier déclenchée en parallèle du démarrage du suivi…', 'info');
+    pushCimierTimeline('INFO', 'Cimier : ouverture déclenchée (parallèle au tracking)');
+    apiCall('/api/cimier/open/', 'POST').then((r) => {
+        if (r && r.error) {
+            log(`Note : échec ouverture cimier en parallèle (${r.error})`, 'warning');
         }
-    }
-
-    log('Timeout : cimier non ouvert après 30 s. Tracking annulé.', 'error');
-    return false;
+    });
+    return true;
 }
 
 // =========================================================================

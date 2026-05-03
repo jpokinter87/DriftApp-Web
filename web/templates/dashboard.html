@@ -10,14 +10,14 @@
 {% block status_indicator %}
 <span x-data id="cimier-header-icon" class="text-base font-mono mr-1 leading-none transition-colors duration-300"
       :class="{
-        'text-accent-green': $store.dashboard.cimier?.state === 'open',
-        'text-accent-amber-light animate-pulse': $store.dashboard.cimier?.state === 'cycle',
-        'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
-        'text-accent-red':   $store.dashboard.cimier?.state === 'error',
-        'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+        'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
+        'text-accent-amber-light animate-pulse': $store.dashboard.displayedCimierState() === 'cycle',
+        'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
+        'text-accent-red':   $store.dashboard.displayedCimierState() === 'error',
+        'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
       }"
-      x-text="({open:'●', closed:'○', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.cimier?.state] || '○'"
-      :title="'Cimier — ' + ($store.dashboard.cimier?.state ?? 'unknown')"
+      x-text="({open:'●', closed:'○', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.displayedCimierState()] || '○'"
+      :title="'Cimier — ' + ($store.dashboard.displayedCimierState() ?? 'unknown')"
       aria-label="État du cimier"></span>
 <button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
     <span class="update-check-icon">&#x21BB;</span>
@@ -65,17 +65,19 @@
                 <span id="dome-position" class="coupole-value font-bold text-accent-amber-light">--&deg;</span>
             </div>
             <!-- CIMIER état (OUVERT/FERMÉ/CYCLE/...) — labels via CIMIER_STATE_LABELS -->
+            <!-- v6.3.2 : displayedCimierState() préfère pico_state quand state=idle
+                 (sinon on voit IDLE après un cycle terminé au lieu de OUVERT/FERMÉ). -->
             <div class="cimier-state-cartouche flex justify-between items-center p-2 bg-obs-input rounded-button">
                 <label class="text-accent-amber font-bold">CIMIER:</label>
                 <span class="font-bold uppercase tracking-wider transition-colors duration-300"
                       :class="{
-                          'text-accent-green': $store.dashboard.cimier?.state === 'open',
-                          'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
-                          'text-accent-amber-light animate-pulse': $store.dashboard.cimier?.state === 'cycle',
-                          'text-accent-red': $store.dashboard.cimier?.state === 'error',
-                          'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+                          'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
+                          'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
+                          'cimier-cycle-shimmer': $store.dashboard.displayedCimierState() === 'cycle',
+                          'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
+                          'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
                       }"
-                      x-text="({open:'OUVERT',closed:'FERMÉ',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.cimier?.state] || '--'">--</span>
+                      x-text="({open:'OUVERT',closed:'FERMÉ',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
             </div>
             <!-- ENC -->
             <div class="enc-item flex justify-between items-center p-2 bg-obs-input rounded-button border-3 border-obs-border" id="enc-item">
@@ -262,13 +264,13 @@
                     <span id="cimier-state-text"
                           class="font-bold uppercase tracking-wider transition-colors duration-300"
                           :class="{
-                              'text-accent-green': $store.dashboard.cimier?.state === 'open',
-                              'text-accent-amber': $store.dashboard.cimier?.state === 'closed',
-                              'text-accent-amber-light': $store.dashboard.cimier?.state === 'cycle',
-                              'text-accent-red': $store.dashboard.cimier?.state === 'error',
-                              'text-obs-text-muted': !$store.dashboard.cimier?.state || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.cimier?.state)
+                              'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
+                              'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
+                              'cimier-cycle-shimmer': $store.dashboard.displayedCimierState() === 'cycle',
+                              'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
+                              'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
                           }"
-                          x-text="$store.dashboard.cimier?.state ? $store.dashboard.cimier.state.toUpperCase() : '--'">--</span>
+                          x-text="$store.dashboard.displayedCimierState() ? $store.dashboard.displayedCimierState().toUpperCase() : '--'">--</span>
                 </div>
                 <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
                     <label class="font-bold text-obs-text-secondary">PHASE&nbsp;:</label>

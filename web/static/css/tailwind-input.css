@@ -419,6 +419,33 @@
   animation: shared-pulse 2s ease-in-out infinite;
 }
 
+/* ── v6.3.2 : effet shimmer pour cartouche cimier en phase CYCLE ──
+   Anime un gradient ambre balayant le texte de gauche à droite, via
+   background-clip:text (les caractères agissent comme un masque).
+   Chaque caractère reste visible — ce sont les nuances qui défilent. */
+@keyframes cimier-cycle-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.cimier-cycle-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-accent-amber) 0%,
+    var(--color-accent-amber-light) 25%,
+    #ffffff 50%,
+    var(--color-accent-amber-light) 75%,
+    var(--color-accent-amber) 100%
+  );
+  background-size: 200% 100%;
+  background-position: -200% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: cimier-cycle-shimmer 1.8s linear infinite;
+}
+
 /* ── Accessibility: reduced motion ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

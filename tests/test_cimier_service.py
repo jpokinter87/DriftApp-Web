@@ -1346,3 +1346,70 @@ class TestSchedulerIpcEnrichmentPhase4:
         assert last_status["mode"] == "manual"
         assert last_status["next_open_at"] is None
         assert last_status["next_close_at"] is None
+
+
+class TestDevModeOverrides:
+    """v6.3.2 — CIMIER_DEV_MODE=1 patche la config cimier en mémoire pour
+    pointer le simulateur localhost:8001, sans toucher data/config.json.
+    """
+
+    def test_dev_mode_off_no_override(self, monkeypatch):
+        """Sans env var, _is_dev_mode_enabled retourne False."""
+        from services.cimier_service import _is_dev_mode_enabled
+
+        monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        assert _is_dev_mode_enabled() is False
+
+    def test_dev_mode_on_truthy_values(self, monkeypatch):
+        """Valeurs truthy : 1, true, yes, on (case-insensitive)."""
+        from services.cimier_service import _is_dev_mode_enabled
+
+        for val in ("1", "true", "TRUE", "yes", "on", "On"):
+            monkeypatch.setenv("CIMIER_DEV_MODE", val)
+            assert _is_dev_mode_enabled() is True, f"Failed for {val!r}"
+
+    def test_dev_mode_on_falsy_values(self, monkeypatch):
+        """Valeurs non-truthy → False."""
+        from services.cimier_service import _is_dev_mode_enabled
+
+        for val in ("0", "false", "no", "off", ""):
+            monkeypatch.setenv("CIMIER_DEV_MODE", val)
+            assert _is_dev_mode_enabled() is False, f"Failed for {val!r}"
+
+    def test_apply_dev_mode_overrides_patches_cimier_config(self):
+        """L'override patche enabled/host/port/power_switch.type en place."""
+        from services.cimier_service import _apply_dev_mode_overrides
+
+        cfg = CimierConfig(
+            enabled=False,
+            host="prod-pico.example.local",
+            port=80,
+        )
+        cfg.power_switch.type = "shelly_gen2"
+
+        _apply_dev_mode_overrides(cfg)
+
+        assert cfg.enabled is True
+        assert cfg.host == "127.0.0.1"
+        assert cfg.port == 8001
+        assert cfg.power_switch.type == "noop"
+
+    def test_apply_dev_mode_overrides_preserves_other_fields(self):
+        """Les champs hors scope (timeouts, automation, weather) ne bougent pas."""
+        from services.cimier_service import _apply_dev_mode_overrides
+
+        cfg = CimierConfig(
+            enabled=False,
+            host="prod-pico.example.local",
+            port=80,
+            cycle_timeout_s=120.0,
+            boot_poll_timeout_s=45.0,
+        )
+        original_automation_mode = cfg.automation.mode
+
+        _apply_dev_mode_overrides(cfg)
+
+        assert cfg.cycle_timeout_s == 120.0
+        assert cfg.boot_poll_timeout_s == 45.0
+        assert cfg.automation.mode == original_automation_mode
+        assert cfg.weather_provider.type == "noop"

@@ -119,33 +119,21 @@ start_motor_service() {
 }
 
 start_cimier_service() {
-    if pgrep -f "services.cimier_service\|services/cimier_service.py" > /dev/null; then
+    if pgrep -f "services\.cimier_service|services/cimier_service\.py" > /dev/null; then
         log_info "Cimier Service déjà en cours d'exécution"
         return
     fi
 
-    # Lire cimier.enabled depuis data/config.json. Si false (défaut), le
-    # cimier_service.py exit immédiatement (run_forever observe enabled=false
-    # et termine). Inutile de le lancer dans ce cas — log un info clair.
-    local cimier_enabled
-    cimier_enabled=$("$PYTHON" -c "import json; print(json.load(open('$PROJECT_DIR/data/config.json')).get('cimier', {}).get('enabled', False))" 2>/dev/null)
-    if [[ "$cimier_enabled" != "True" ]]; then
-        log_warn "Cimier Service NON démarré : cimier.enabled=false dans data/config.json"
-        log_info "  → Pour activer (smoke Phase 4 cimier complet) :"
-        log_info "    éditer data/config.json → \"cimier.enabled\": true, puis ./start_dev.sh restart"
-        return
-    fi
-
-    log_info "Démarrage du Cimier Service..."
-    # En dev, cimier_service consomme cimier.host:port depuis data/config.json
-    # qui pointe vers l'IP terrain (192.168.1.84). Il loguera des erreurs
-    # réseau — non bloquant grâce au bypass staleness frontend Phase 4
-    # (cf. ensureCimierOpenForTracking dashboard.js).
-    "$PYTHON" -m services.cimier_service \
+    # v6.3.2 : CIMIER_DEV_MODE=1 patche en mémoire enabled=True +
+    # host=127.0.0.1:8001 (simulateur) + power_switch=noop. Aucune
+    # modification de data/config.json sur disque. Permet à l'UI cimier
+    # (cartouche état/phase, timeline) d'être vivante en dev.
+    log_info "Démarrage du Cimier Service (CIMIER_DEV_MODE=1 → simulateur localhost:8001)..."
+    CIMIER_DEV_MODE=1 "$PYTHON" -m services.cimier_service \
         > "$PROJECT_DIR/logs/cimier_service.log" 2>&1 &
     sleep 2
-    if pgrep -f "services.cimier_service\|services/cimier_service.py" > /dev/null; then
-        log_info "Cimier Service démarré (PID: $(pgrep -f 'services.cimier_service\|services/cimier_service.py'))"
+    if pgrep -f "services\.cimier_service|services/cimier_service\.py" > /dev/null; then
+        log_info "Cimier Service démarré (PID: $(pgrep -f 'services\.cimier_service|services/cimier_service\.py'))"
     else
         log_error "Échec du démarrage du Cimier Service"
         log_info "Vérifiez les logs: tail -f logs/cimier_service.log"
@@ -194,8 +182,8 @@ stop_all() {
         log_info "Django arrêté"
     fi
 
-    if pgrep -f "services.cimier_service\|services/cimier_service.py" > /dev/null; then
-        pkill -f "services.cimier_service\|services/cimier_service.py"
+    if pgrep -f "services\.cimier_service|services/cimier_service\.py" > /dev/null; then
+        pkill -f "services\.cimier_service|services/cimier_service\.py"
         log_info "Cimier Service arrêté"
     fi
 
@@ -244,8 +232,8 @@ status() {
     fi
 
     # Cimier Service
-    if pgrep -f "services.cimier_service\|services/cimier_service.py" > /dev/null; then
-        cimier_pid=$(pgrep -f 'services.cimier_service\|services/cimier_service.py')
+    if pgrep -f "services\.cimier_service|services/cimier_service\.py" > /dev/null; then
+        cimier_pid=$(pgrep -f 'services\.cimier_service|services/cimier_service\.py')
         echo -e "Cimier Service:   ${GREEN}EN COURS${NC} (PID: $cimier_pid)"
         if [[ -f /dev/shm/cimier_status.json ]]; then
             cimier_state=$("$PYTHON" -c "import json; print(json.load(open('/dev/shm/cimier_status.json')).get('state', '?'))" 2>/dev/null)
@@ -253,13 +241,9 @@ status() {
             echo "  État: $cimier_state | Mode auto: $cimier_mode"
         fi
     else
-        # Distingue désactivé (config) vs arrêté (crash/non lancé).
-        cimier_enabled=$("$PYTHON" -c "import json; print(json.load(open('$PROJECT_DIR/data/config.json')).get('cimier', {}).get('enabled', False))" 2>/dev/null)
-        if [[ "$cimier_enabled" != "True" ]]; then
-            echo -e "Cimier Service:   ${YELLOW}DÉSACTIVÉ${NC} (cimier.enabled=false dans config.json)"
-        else
-            echo -e "Cimier Service:   ${RED}ARRÊTÉ${NC}"
-        fi
+        # v6.3.2 : start_dev.sh lance toujours cimier_service en mode dev
+        # (CIMIER_DEV_MODE=1 → simulateur). Si absent, c'est un crash.
+        echo -e "Cimier Service:   ${RED}ARRÊTÉ${NC} (crash ? voir logs/cimier_service.log)"
     fi
 
     # Django
