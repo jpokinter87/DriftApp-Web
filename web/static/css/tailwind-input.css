@@ -396,7 +396,13 @@
   }
 
   /* ── Section title fire gradient ── */
+  /* display:inline-block + width:fit-content : le gradient s'étire sur la
+     largeur du texte, pas du conteneur. Sans ça, sur un panneau large (~1100px)
+     les courts titres (~150px) ne montrent que les premiers % du gradient
+     (orange uniforme), alors qu'un panneau étroit (350px) laisse voir l'effet. */
   .section-title-fire {
+    display: inline-block;
+    width: fit-content;
     font-size: 1rem !important;
     text-transform: uppercase;
     letter-spacing: 0.05em;

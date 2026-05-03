@@ -1866,6 +1866,9 @@ function drawCompass() {
     ctx.arc(cx, cy, domeRadius - 7, 0, 2 * Math.PI);
     ctx.stroke();
 
+    // Marqueur Parking à 45° (parking_target_azimuth_deg dans data/config.json)
+    drawParkingMarker(ctx, cx, cy, domeRadius + 22, 45);
+
     // =========================================================================
     // COUCHE 7: Télescope au centre avec timer
     // =========================================================================
@@ -1904,6 +1907,38 @@ function drawStarField(ctx, cx, cy, outerR, innerR) {
     }
 
     ctx.globalAlpha = 1.0;
+}
+
+// Marqueur parking : cadre ambre arrondi + "P" sombre, façon icône bouton 🅿 mais aux couleurs du thème.
+function drawParkingMarker(ctx, cx, cy, radius, deg) {
+    const rad = (deg - 90) * Math.PI / 180;
+    const px = cx + radius * Math.cos(rad);
+    const py = cy + radius * Math.sin(rad);
+
+    const boxSize = 16;
+    const corner = 3;
+    const x = px - boxSize / 2;
+    const y = py - boxSize / 2;
+
+    ctx.fillStyle = '#d4a055';
+    ctx.beginPath();
+    ctx.moveTo(x + corner, y);
+    ctx.lineTo(x + boxSize - corner, y);
+    ctx.quadraticCurveTo(x + boxSize, y, x + boxSize, y + corner);
+    ctx.lineTo(x + boxSize, y + boxSize - corner);
+    ctx.quadraticCurveTo(x + boxSize, y + boxSize, x + boxSize - corner, y + boxSize);
+    ctx.lineTo(x + corner, y + boxSize);
+    ctx.quadraticCurveTo(x, y + boxSize, x, y + boxSize - corner);
+    ctx.lineTo(x, y + corner);
+    ctx.quadraticCurveTo(x, y, x + corner, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillText('P', px, py + 0.5);
 }
 
 // Dessiner la flèche de direction calculée (🎯) avec décompte au-dessus du compass

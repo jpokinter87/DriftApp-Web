@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}DriftApp{% endblock %} — Observatoire Ubik</title>
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg?v={{ APP_VERSION }}">
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,6 +31,12 @@
 
             <!-- Logo & Title -->
             <div class="flex items-center gap-3">
+                <img src="/static/img/logo.svg?v={{ APP_VERSION }}"
+                     alt=""
+                     width="32"
+                     height="32"
+                     class="h-8 w-8"
+                     style="width: 32px; height: 32px;">
                 <h1 class="text-lg font-display font-bold tracking-tight">
                     <span class="bg-gradient-to-r from-accent-amber to-accent-amber-light bg-clip-text text-transparent">
                         DriftApp
