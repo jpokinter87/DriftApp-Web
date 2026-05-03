@@ -83,6 +83,13 @@ let countdownValue = null;
 let countdownInterval = null;
 let lastRemainingFromApi = null;
 
+// Cartouche méridien — pattern timestamp cible + tick local 1 s (v6.3.1).
+// Calqué sur recomputeAutomationCountdown (v6.0 Phase 4 sub-plan 04-02).
+// Permet la décrémentation visible y compris quand le polling /status/ ne renvoie
+// plus meridian_seconds (ex. tracking arrêté avec objet conservé).
+let meridianTargetTimestamp = null;  // epoch ms cible, ou null si masqué
+let meridianTimeStr = '';             // HH:MM affiché, conservé entre ticks
+
 // Logs tracking (Correction 3)
 let displayedLogs = new Set();
 
@@ -358,7 +365,7 @@ async function searchObject() {
         elements.objectInfo.classList.add('hidden');
         elements.btnStartTracking.disabled = true;
         state.searchedObject = null;
-        updateMeridianCartouche(null);
+        setMeridianFromApi(null);
     } else {
         const raHMS = formatHMS(result.ra_deg ?? null);
         const decDMS = formatDMS(result.dec_deg ?? null);
@@ -372,7 +379,7 @@ async function searchObject() {
         log(`Trouvé: ${state.searchedObject}`, 'success');
 
         // Afficher le cartouche méridien dès la recherche
-        updateMeridianCartouche(result.meridian_seconds, result.meridian_time);
+        setMeridianFromApi(result.meridian_seconds, result.meridian_time);
 
         // Effet clignotement vert du bouton pendant 5 secondes
         flashButtonSuccess(elements.btnStartTracking, 5000);
@@ -442,7 +449,7 @@ async function stopTracking() {
         elements.btnStopTracking.disabled = true;
         elements.trackingInfo.classList.add('hidden');
         state.searchedObject = null;
-        updateMeridianCartouche(null);
+        setMeridianFromApi(null);
 
         // Fermer la modal GOTO si ouverte
         hideGotoModal();
@@ -657,6 +664,9 @@ function startPolling() {
     // Tick local 1s pour décrémenter le countdown automation (v6.0 Phase 4 sub-plan 04-02).
     // Indépendant du polling /status/ pour fluidité visuelle (sinon countdown saute par seconds).
     setInterval(recomputeAutomationCountdown, 1000);
+    // Tick local 1s pour décrémenter le countdown cartouche méridien (v6.3.1).
+    // Indépendant du polling /status/ : reste vivant après tracking arrêté.
+    setInterval(recomputeMeridianCartouche, 1000);
     // Re-hydratation périodique du sélecteur mode depuis /api/cimier/automation/
     // (au cas où le mode est changé depuis un autre onglet/device).
     setInterval(fetchAutomationState, 30_000);
@@ -1530,7 +1540,7 @@ function updateTrackingDisplay(motor) {
 
         // Cartouche méridien (ne pas masquer si absent — garder état précédent)
         if (info.meridian_seconds !== undefined) {
-            updateMeridianCartouche(info.meridian_seconds, info.meridian_time);
+            setMeridianFromApi(info.meridian_seconds, info.meridian_time);
         }
 
         // Timer intégré dans la boussole - redessiner
@@ -1570,7 +1580,7 @@ function updateTrackingDisplay(motor) {
 
         // Masquer le cartouche méridien seulement si aucun objet recherché
         if (!state.searchedObject) {
-            updateMeridianCartouche(null);
+            setMeridianFromApi(null);
         }
 
         // Reset du flag de sync pour permettre la reconnexion à une future session
@@ -1579,8 +1589,32 @@ function updateTrackingDisplay(motor) {
     }
 }
 
-// Mise à jour du cartouche méridien
-function updateMeridianCartouche(meridianSeconds, meridianTime) {
+// Cartouche méridien — pattern timestamp cible + tick local 1 s (v6.3.1).
+//
+// setMeridianFromApi : appelée sur retour API (search ok / poll status / resets).
+// Ancre le timestamp cible et délègue le rendering immédiat.
+function setMeridianFromApi(meridianSeconds, meridianTime) {
+    if (meridianSeconds === null || meridianSeconds === undefined) {
+        meridianTargetTimestamp = null;
+        meridianTimeStr = '';
+        renderMeridianCartouche(null, '');
+        return;
+    }
+    meridianTargetTimestamp = Date.now() + meridianSeconds * 1000;
+    meridianTimeStr = meridianTime || '';
+    renderMeridianCartouche(meridianSeconds, meridianTimeStr);
+}
+
+// recomputeMeridianCartouche : appelée par tick setInterval 1 s.
+// Recalcule sec depuis le timestamp cible et redessine.
+function recomputeMeridianCartouche() {
+    if (meridianTargetTimestamp === null) return;
+    const sec = Math.round((meridianTargetTimestamp - Date.now()) / 1000);
+    renderMeridianCartouche(sec, meridianTimeStr);
+}
+
+// renderMeridianCartouche : rendering pur (DOM only).
+function renderMeridianCartouche(meridianSeconds, timeStr) {
     const cart = elements.meridianCartouche;
     const val = elements.meridianValue;
     if (!cart || !val) return;
@@ -1596,7 +1630,6 @@ function updateMeridianCartouche(meridianSeconds, meridianTime) {
 
     const sec = meridianSeconds;
     const minutes = sec / 60;
-    const timeStr = meridianTime || '';
 
     if (sec <= 0) {
         // Méridien passé
