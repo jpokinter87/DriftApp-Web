@@ -16,6 +16,7 @@ import pytest
 
 from core.config.config_loader import (
     VALID_AUTOMATION_MODES,
+    CalibrationConfig,
     CimierAutomationConfig,
     CimierConfig,
     ConfigLoader,
@@ -546,6 +547,72 @@ class TestCimierAutomationMode:
     def test_valid_modes_constant_exposes_all_three(self):
         """Sanity check : VALID_AUTOMATION_MODES doit contenir exactement les 3 niveaux."""
         assert set(VALID_AUTOMATION_MODES) == {"manual", "semi", "full"}
+
+
+# =============================================================================
+# CalibrationConfig — v6.4 Phase 1 (persistance position absolue)
+# =============================================================================
+
+class TestCalibrationConfig:
+    """v6.4 Phase 1 : section `calibration` rétro-compatible (AC-5)."""
+
+    def _load_with_calibration(self, tmp_path, sample_config_dict, calibration_dict):
+        cfg = dict(sample_config_dict)
+        if calibration_dict is not None:
+            cfg["calibration"] = calibration_dict
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        return ConfigLoader(config_file).load()
+
+    def test_calibration_defaults_when_section_missing(self, tmp_path, sample_config_dict):
+        """Section calibration absente → defaults (AC-5 rétro-compat stricte)."""
+        config = self._load_with_calibration(tmp_path, sample_config_dict, None)
+        assert isinstance(config.calibration, CalibrationConfig)
+        assert config.calibration.persist_path == "data/last_known_position.json"
+        assert config.calibration.write_threshold_deg == 1.0
+        assert config.calibration.write_interval_sec == 30.0
+
+    def test_calibration_partial_override(self, tmp_path, sample_config_dict):
+        """Override partiel : seule la clé fournie est modifiée."""
+        config = self._load_with_calibration(
+            tmp_path, sample_config_dict, {"write_threshold_deg": 2.5}
+        )
+        assert config.calibration.write_threshold_deg == 2.5
+        assert config.calibration.write_interval_sec == 30.0
+        assert config.calibration.persist_path == "data/last_known_position.json"
+
+    def test_calibration_invalid_threshold_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """write_threshold_deg <= 0 → log WARNING + defaults."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_calibration(
+            tmp_path, sample_config_dict, {"write_threshold_deg": -1.0}
+        )
+        assert config.calibration.write_threshold_deg == 1.0
+        assert any("calibration config invalide" in r.message for r in caplog.records)
+
+    def test_calibration_invalid_interval_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """write_interval_sec <= 0 → log WARNING + defaults."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_calibration(
+            tmp_path, sample_config_dict, {"write_interval_sec": 0}
+        )
+        assert config.calibration.write_interval_sec == 30.0
+        assert any("calibration config invalide" in r.message for r in caplog.records)
+
+    def test_calibration_persist_path_empty_falls_back(
+        self, tmp_path, sample_config_dict
+    ):
+        """persist_path chaîne vide → fallback sur default."""
+        config = self._load_with_calibration(
+            tmp_path, sample_config_dict, {"persist_path": ""}
+        )
+        assert config.calibration.persist_path == "data/last_known_position.json"
 
 
 # =============================================================================

@@ -224,6 +224,22 @@ class CimierConfig:
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
 
 
+@dataclass(frozen=True)
+class CalibrationConfig:
+    """Configuration de la persistance position absolue (v6.4 Phase 1).
+
+    Le daemon `ems22d_calibrated` sauvegarde régulièrement la position calibrée
+    sur disque (`persist_path`) afin que le `motor_service` puisse, au boot,
+    calculer le trajet le plus court vers le microswitch de calibration à 45°.
+    Throttling : on n'écrit que si la coupole a bougé d'au moins
+    `write_threshold_deg` OU si `write_interval_sec` s'est écoulé avec un
+    mouvement actif (delta > 0.05°).
+    """
+    persist_path: str = "data/last_known_position.json"
+    write_threshold_deg: float = 1.0
+    write_interval_sec: float = 30.0
+
+
 @dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
@@ -285,6 +301,7 @@ class DriftAppConfig:
         default_factory=MeridianAnticipationConfig
     )
     cimier: CimierConfig = field(default_factory=CimierConfig)
+    calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
 
     def __str__(self) -> str:
         return (
@@ -350,6 +367,7 @@ class ConfigLoader:
             simulation=bool(self.cfg.get("simulation", False)),
             meridian_anticipation=self._parse_meridian_anticipation(),
             cimier=self._parse_cimier(),
+            calibration=self._parse_calibration(),
         )
 
     # =========================================================================
@@ -484,6 +502,32 @@ class ConfigLoader:
                 scheduler_interval_seconds=int(au.get("scheduler_interval_seconds", au_defaults.scheduler_interval_seconds)),
                 retrigger_cooldown_hours=int(au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)),
             ),
+        )
+
+    def _parse_calibration(self) -> CalibrationConfig:
+        """Parse la section calibration (v6.4 Phase 1, opt-in : section absente = defaults)."""
+        cal = self.cfg.get("calibration", {}) if isinstance(self.cfg.get("calibration"), dict) else {}
+        defaults = CalibrationConfig()
+        persist_path = str(cal.get("persist_path", defaults.persist_path)) or defaults.persist_path
+        try:
+            write_threshold_deg = float(cal.get("write_threshold_deg", defaults.write_threshold_deg))
+            write_interval_sec = float(cal.get("write_interval_sec", defaults.write_interval_sec))
+        except (TypeError, ValueError):
+            self.logger.warning(
+                "calibration config invalide (types non numériques) — utilisation des defaults"
+            )
+            return CalibrationConfig()
+        if write_threshold_deg <= 0 or write_interval_sec <= 0:
+            self.logger.warning(
+                "calibration config invalide (threshold=%s, interval=%s) — utilisation des defaults",
+                write_threshold_deg,
+                write_interval_sec,
+            )
+            return CalibrationConfig()
+        return CalibrationConfig(
+            persist_path=persist_path,
+            write_threshold_deg=write_threshold_deg,
+            write_interval_sec=write_interval_sec,
         )
 
     def _resolve_automation_mode(self, au: dict, default_mode: str) -> str:

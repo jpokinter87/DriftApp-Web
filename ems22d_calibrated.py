@@ -21,9 +21,13 @@ import logging
 import socket
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 import lgpio
+
+from core.hardware.position_persistor import PositionPersistor
 
 try:
     import spidev
@@ -57,7 +61,8 @@ MAX_CONSECUTIVE_SPI_ERRORS = 5
 WRITE_TMP = JSON_OUT.with_suffix(".tmp")
 
 # Configuration logging : fichier horodaté par session + console
-LOG_DIR = Path(__file__).parent / "logs"
+PROJECT_ROOT = Path(__file__).parent
+LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # Nom de fichier avec horodatage de la session
@@ -121,7 +126,24 @@ class EMS22Daemon:
         self.switch_last_state = lgpio.gpio_read(self.hchip, SWITCH_GPIO)
         self.last_calibration_time = 0  # Anti-rebond : timestamp dernière calibration
         self.calibrated = False  # Flag: true après premier passage sur switch
+        self.last_calibration_at: Optional[str] = None  # ISO 8601 UTC, null tant que pas calibré
         logger.info(f"Switch GPIO {SWITCH_GPIO} configuré (pull-up) - état initial : {self.switch_last_state}")
+
+        # Persistor disque (v6.4 Phase 1) — lazy config, le daemon survit aux erreurs config.
+        try:
+            from core.config.config_loader import ConfigLoader
+            cfg = ConfigLoader().load()
+            cal_cfg = cfg.calibration
+            persist_path = PROJECT_ROOT / cal_cfg.persist_path
+            self._persistor: Optional[PositionPersistor] = PositionPersistor(
+                persist_path,
+                cal_cfg.write_threshold_deg,
+                cal_cfg.write_interval_sec,
+            )
+            logger.info(f"PositionPersistor actif : {persist_path}")
+        except Exception as e:
+            logger.warning("position_persistor disabled (config error): %s", e)
+            self._persistor = None
 
     # ------------------------------------------------
     # SPI
@@ -242,6 +264,7 @@ class EMS22Daemon:
 
                 # ✅ Marquer comme calibré
                 self.calibrated = True
+                self.last_calibration_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
                 angle = SWITCH_CALIB_ANGLE
 
@@ -259,12 +282,19 @@ class EMS22Daemon:
             "raw": int(raw),
             "status": status,
             "calibrated": self.calibrated,
+            "last_calibration_at": self.last_calibration_at,
         }
         try:
             WRITE_TMP.write_text(json.dumps(payload))
             WRITE_TMP.replace(JSON_OUT)
         except Exception as e:
             logger.error("Erreur écriture JSON: %s", e)
+
+        if self._persistor is not None:
+            try:
+                self._persistor.maybe_write(angle_deg=float(angle), calibrated=self.calibrated)
+            except Exception as e:
+                logger.warning("position_persistor maybe_write failed: %s", e)
 
     # ------------------------------------------------
     # TCP server
