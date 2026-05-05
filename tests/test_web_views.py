@@ -257,16 +257,73 @@ class TestMotorStatusView:
         assert response.status_code == 200
         assert "status" in response.data
 
+    def test_status_includes_calibration_subdict(self, api_client, mock_ipc):
+        """v6.4 Phase 3 Plan 01 AC-6 : MotorStatusView passthrough du sous-dict calibration."""
+        # Patch direct sur motor_client.get_motor_status du module effectivement
+        # routé par Django (cf. doublon sys.modules `hardware.views` vs
+        # `web.hardware.views` documenté dans Plan 01 SUMMARY).
+        import hardware.views as routed
+        status_payload = {
+            "status": "idle",
+            "position": 45.0,
+            "target": None,
+            "simulation": False,
+            "tracking_object": None,
+            "last_update": "2026-05-05T12:00:00",
+            "calibration": {
+                "status": "ok",
+                "method": "hint_trip",
+                "last_calibration_at": "2026-05-05T12:00:00+00:00",
+                "duration_sec": 12.3,
+                "error_msg": None,
+            },
+        }
+        with patch.object(routed.motor_client, "get_motor_status", return_value=status_payload):
+            response = api_client.get("/api/hardware/status/")
+        assert response.status_code == 200
+        assert "calibration" in response.data
+        assert response.data["calibration"] == status_payload["calibration"]
+
+
+class TestCalibrateView:
+    """v6.4 Phase 3 Plan 01 — POST /api/hardware/calibrate/ remplace stub 501."""
+
+    def test_calibrate_post_writes_command_and_returns_202(self, api_client, mock_ipc):
+        """POST sans body → 202 + commande IPC écrite."""
+        # Patch direct sur motor_client.send_command du module routé pour
+        # observer l'argument sans dépendre du chemin physique du command_file
+        # (cf. doublon sys.modules `hardware.views` vs `web.hardware.views`).
+        import hardware.views as routed
+        with patch.object(routed.motor_client, "send_command", return_value=True) as mock_send:
+            response = api_client.post("/api/hardware/calibrate/")
+        assert response.status_code == 202
+        mock_send.assert_called_once_with('calibrate')
+
+    def test_calibrate_post_returns_503_when_motor_client_fails(self, api_client, mock_ipc):
+        """Si motor_client.send_command échoue, retourne 503."""
+        import sys as _sys
+        # Patch sur le module effectivement routé par Django (hardware.views) — voir
+        # SUMMARY Plan 01 : doublon sys.modules `hardware.views` vs `web.hardware.views`.
+        routed = _sys.modules["hardware.views"]
+        with patch.object(routed.motor_client, "send_command", return_value=False):
+            response = api_client.post("/api/hardware/calibrate/")
+        assert response.status_code == 503
+        assert "error" in response.data
+
+    def test_calibrate_post_message_format(self, api_client, mock_ipc):
+        """La réponse 202 contient une clé 'message' non vide."""
+        response = api_client.post("/api/hardware/calibrate/")
+        assert response.status_code == 202
+        assert "message" in response.data
+        assert isinstance(response.data["message"], str)
+        assert len(response.data["message"]) > 0
+
 
 class TestStubRoutes:
-    """Routes park, calibrate, end-session retournent 501 Not Implemented."""
+    """Routes park, end-session retournent 501 Not Implemented (calibrate livré v6.4)."""
 
     def test_park_returns_501(self, api_client, mock_ipc):
         response = api_client.post("/api/hardware/park/")
-        assert response.status_code == 501
-
-    def test_calibrate_returns_501(self, api_client, mock_ipc):
-        response = api_client.post("/api/hardware/calibrate/")
         assert response.status_code == 501
 
     def test_end_session_returns_501(self, api_client, mock_ipc):

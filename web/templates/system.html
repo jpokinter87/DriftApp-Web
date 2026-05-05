@@ -314,6 +314,50 @@
     </div>
 </section>
 
+<!-- ═══ Section Calibration coupole (v6.4 Phase 3 Plan 02) ═══ -->
+<section class="panel panel-astro mb-4" x-data>
+    <h2 class="section-title section-title-fire mb-3 flex items-center gap-2">
+        <span x-text="$store.system.calibration.badgeIcon"
+              :class="$store.system.calibration.badgeClass"></span>
+        Calibration coupole
+    </h2>
+    <div class="grid grid-cols-2 gap-2 text-xs font-mono mb-3">
+        <div class="flex justify-between p-2 bg-obs-input rounded-button">
+            <label class="text-obs-text-muted">&Eacute;tat&nbsp;:</label>
+            <span class="font-bold"
+                  x-text="$store.system.calibration.label"
+                  :class="$store.system.calibration.badgeClass">--</span>
+        </div>
+        <div class="flex justify-between p-2 bg-obs-input rounded-button">
+            <label class="text-obs-text-muted">M&eacute;thode&nbsp;:</label>
+            <span class="font-bold" x-text="$store.system.calibration.methodLabel">--</span>
+        </div>
+        <div class="flex justify-between p-2 bg-obs-input rounded-button col-span-2">
+            <label class="text-obs-text-muted">Derni&egrave;re calibration&nbsp;:</label>
+            <span class="font-bold" x-text="$store.system.calibration.lastFormatted">--</span>
+        </div>
+        <div class="flex justify-between p-2 bg-obs-input rounded-button col-span-2">
+            <label class="text-obs-text-muted">Dur&eacute;e&nbsp;:</label>
+            <span class="font-bold" x-text="$store.system.calibration.durationFormatted">--</span>
+        </div>
+    </div>
+    <div x-show="$store.system.calibration.error_msg" x-cloak
+         class="text-xs font-mono text-accent-red mb-3"
+         x-text="'Erreur : ' + $store.system.calibration.error_msg"></div>
+    <button class="btn btn-primary w-full"
+            :disabled="$store.system.calibration.status === 'running'
+                       || $store.system.calibrationRequestInFlight"
+            @click="window.requestSystemCalibration && window.requestSystemCalibration()">
+        <span x-show="$store.system.calibration.status !== 'running'">
+            Calibrer maintenant
+        </span>
+        <span x-show="$store.system.calibration.status === 'running'"
+              class="animate-pulse" x-cloak>
+            Calibration en cours&hellip;
+        </span>
+    </button>
+</section>
+
 <!-- ═══ Section Configuration (placeholder — Plan 03-02) ═══ -->
 <section class="panel panel-astro mb-4">
     <h2 class="section-title section-title-fire mb-3">Configuration Active</h2>

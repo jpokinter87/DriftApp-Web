@@ -45,6 +45,15 @@ document.addEventListener('alpine:init', () => {
         parkingStepCimier: 'pending',    // 'pending' | 'cycle' | 'closed' | 'failed'
         parkingStartedAt: null,          // epoch ms
         cimierTimeline: [],                        // FIFO buffer max 50 entrées
+        // Calibration coupole (v6.4 Phase 3 Plan 02) — surface IPC motor_status.calibration
+        calibration: {
+            status: 'unknown',          // 'unknown' | 'running' | 'ok' | 'degraded' | 'simulated' | 'exception'
+            method: null,               // 'hint_trip' | 'fallback_sweep' | 'simulation' | null
+            last_calibration_at: null,  // ISO 8601 UTC ou null
+            error_msg: null,
+            duration_sec: null,
+        },
+        calibrationRequestInFlight: false,         // anti-double-clic POST /calibrate/
         // Logs (reactive array)
         logs: [],
 
@@ -76,6 +85,37 @@ document.addEventListener('alpine:init', () => {
                 return c.pico_state;
             }
             return c.state;
+        },
+
+        // Helpers calibration (v6.4 Phase 3 Plan 02) — Alpine réagit à la lecture
+        calibrationBlocked() {
+            const s = this.calibration?.status;
+            return !['ok', 'simulated'].includes(s);
+        },
+        calibrationLabel() {
+            const labels = {
+                unknown: 'Calibration requise',
+                running: 'Calibration en cours…',
+                ok: 'Calibration validée',
+                degraded: 'Calibration dégradée',
+                exception: 'Calibration en erreur',
+                simulated: 'Mode simulation',
+            };
+            return labels[this.calibration?.status] || 'État inconnu';
+        },
+        calibrationBadgeIcon() {
+            const s = this.calibration?.status;
+            if (s === 'ok') return '✓';
+            if (s === 'running') return '⚠';
+            if (s === 'simulated') return '◯';
+            return '✕';  // unknown / degraded / exception
+        },
+        calibrationBadgeClass() {
+            const s = this.calibration?.status;
+            if (s === 'ok') return 'text-accent-green';
+            if (s === 'running') return 'text-accent-amber-light animate-pulse';
+            if (s === 'simulated') return 'text-obs-text-muted';
+            return 'text-accent-red';
         }
     });
 });
@@ -369,6 +409,40 @@ async function fetchStatus() {
 
     return { motor: motorStatus, encoder: encoderStatus };
 }
+
+// v6.4 Phase 3 Plan 02 — POST /api/hardware/calibrate/ (202 Accepted attendu).
+// Mise à jour optimiste du store : passage en running localement, le polling
+// /status/ confirmera dans la seconde.
+async function requestCalibration() {
+    const store = Alpine.store('dashboard');
+    if (store.calibrationRequestInFlight) return;
+    if (store.calibration?.status === 'running') return;
+    store.calibrationRequestInFlight = true;
+    store.calibration = { ...store.calibration, status: 'running', error_msg: null };
+    log('Calibration manuelle demandée…', 'info');
+    try {
+        const response = await fetch('/api/hardware/calibrate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        if (!response.ok) {
+            const txt = await response.text();
+            log(`Erreur calibration : ${response.status} ${txt}`, 'error');
+            store.calibration = { ...store.calibration, status: 'unknown',
+                                   error_msg: `HTTP ${response.status}` };
+        } else {
+            log('Calibration acceptée (202) — en cours…', 'success');
+        }
+    } catch (err) {
+        log(`Erreur réseau calibration : ${err.message}`, 'error');
+        store.calibration = { ...store.calibration, status: 'unknown',
+                               error_msg: err.message };
+    } finally {
+        store.calibrationRequestInFlight = false;
+    }
+}
+window.requestCalibration = requestCalibration;
 
 // =========================================================================
 // Actions
@@ -1287,6 +1361,19 @@ async function updateStatus() {
     state.trackingObject = motor.tracking_object;
     state.lastUpdate = new Date();
     state.gotoInfo = motor.goto_info || null;
+
+    // v6.4 Phase 3 Plan 02 — propagation sous-dict calibration vers Alpine.store.
+    // Si la clé manque (motor_service Phase 1 sans Phase 2), on conserve 'unknown'.
+    const calib = motor && motor.calibration;
+    if (calib && typeof calib === 'object') {
+        Alpine.store('dashboard').calibration = {
+            status: calib.status ?? 'unknown',
+            method: calib.method ?? null,
+            last_calibration_at: calib.last_calibration_at ?? null,
+            error_msg: calib.error_msg ?? null,
+            duration_sec: calib.duration_sec ?? null,
+        };
+    }
 
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);

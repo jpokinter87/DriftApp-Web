@@ -262,3 +262,77 @@ class TestBootCalibrationIntegration:
         assert cal["last_calibration_at"] == "2026-05-04T12:00:00+00:00"
         assert cal["duration_sec"] == 1.5
         assert motor_service.current_status["status"] == "idle"
+
+
+class TestManualCalibrationCommand:
+    """v6.4 Phase 3 Plan 01 : déclenchement manuel via process_command(cmd_type='calibrate')."""
+
+    def test_process_command_calibrate_dispatches_routine(self, motor_service):
+        """process_command('calibrate') invoque _execute_calibration_routine(manual)."""
+        from unittest.mock import MagicMock
+        with patch.object(motor_service, '_execute_calibration_routine', new=MagicMock()) as mock_exec, \
+             patch.object(motor_service.ipc, 'clear_command') as mock_clear:
+            motor_service.process_command({'command': 'calibrate', 'id': 'test-1'})
+            mock_exec.assert_called_once_with(trigger_label='manual_calibration')
+            mock_clear.assert_called_once()
+
+    def test_calibrate_publishes_calibrating_then_idle(self, motor_service):
+        """Cycle de statuts : calibrating + running pendant, idle + ok après."""
+        import copy
+        from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+        snapshots = []
+
+        def snapshot_status(_=None):
+            snapshots.append(copy.deepcopy(motor_service.current_status))
+
+        ok_result = CalibrationResult(
+            status="ok",
+            method="hint_trip",
+            last_calibration_at="2026-05-05T12:00:00+00:00",
+            duration_sec=12.3,
+        )
+        with patch.object(CalibrationRoutine, "run", return_value=ok_result), \
+             patch.object(motor_service, '_write_status', side_effect=snapshot_status):
+            motor_service.process_command({'command': 'calibrate'})
+
+        running_seen = any(
+            s.get('status') == 'calibrating' and s['calibration'].get('status') == 'running'
+            for s in snapshots
+        )
+        assert running_seen, "Aucun snapshot avec status=calibrating + calibration.status=running"
+        final = snapshots[-1]
+        assert final['status'] == 'idle'
+        assert final['calibration']['status'] == 'ok'
+        assert final['calibration']['method'] == 'hint_trip'
+
+    def test_calibrate_propagates_calibration_subdict(self, motor_service):
+        """Les 5 clés du CalibrationResult sont copiées dans current_status['calibration']."""
+        from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+        result = CalibrationResult(
+            status="ok",
+            method="hint_trip",
+            last_calibration_at="2026-05-05T12:00:00+00:00",
+            duration_sec=42.0,
+            error_msg=None,
+        )
+        with patch.object(CalibrationRoutine, "run", return_value=result):
+            motor_service.process_command({'command': 'calibrate'})
+        cal = motor_service.current_status['calibration']
+        assert cal == {
+            'status': 'ok',
+            'method': 'hint_trip',
+            'last_calibration_at': '2026-05-05T12:00:00+00:00',
+            'duration_sec': 42.0,
+            'error_msg': None,
+        }
+
+    def test_calibrate_handles_routine_exception_gracefully(self, motor_service):
+        """Exception non gérée dans la routine → degraded + idle, pas de propagation."""
+        from core.hardware.calibration_routine import CalibrationRoutine
+        with patch.object(CalibrationRoutine, "run", side_effect=RuntimeError("encoder dead")):
+            motor_service.process_command({'command': 'calibrate'})  # ne doit pas raise
+        cal = motor_service.current_status['calibration']
+        assert cal['status'] == 'degraded'
+        assert cal['method'] == 'exception'
+        assert 'encoder dead' in (cal['error_msg'] or '')
+        assert motor_service.current_status['status'] == 'idle'

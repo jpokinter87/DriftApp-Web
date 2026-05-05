@@ -256,12 +256,26 @@ class ParkView(APIView):
 
 
 class CalibrateView(APIView):
-    """POST /api/hardware/calibrate/ — À implémenter."""
+    """POST /api/hardware/calibrate/
+
+    Déclenche manuellement la routine de calibration du motor_service
+    (équivalent du hook boot v6.4 Phase 2). Synchrone côté motor_service,
+    durée typique 5-180 s. Pendant l'exécution, current_status["status"]
+    passe à "calibrating" et calibration.status à "running" ; le client
+    poll /api/hardware/status/ pour suivre l'avancement.
+    """
 
     def post(self, request):
+        success = motor_client.send_command('calibrate')
+
+        if success:
+            return Response(
+                {'message': 'Calibration manuelle déclenchée'},
+                status=status.HTTP_202_ACCEPTED
+            )
         return Response(
-            {'error': 'Fonction calibrate non implémentée'},
-            status=status.HTTP_501_NOT_IMPLEMENTED
+            {'error': 'Impossible de communiquer avec Motor Service'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
 

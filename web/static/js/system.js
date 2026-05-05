@@ -47,6 +47,22 @@ document.addEventListener('alpine:init', () => {
             lastEventLabel: '--',          // 'HH:MM:SS' local ou '--'
             lastEventMessage: '--',        // message court ou '--'
         },
+        // Calibration coupole (v6.4 Phase 3 Plan 02) — hydraté par fetchCalibration.
+        calibration: {
+            status: 'unknown',
+            method: null,
+            last_calibration_at: null,
+            error_msg: null,
+            duration_sec: null,
+            // Champs dérivés pré-calculés (pattern cohérent avec cimierAutomation).
+            label: 'État inconnu',
+            badgeIcon: '?',
+            badgeClass: 'text-obs-text-muted',
+            methodLabel: '—',
+            lastFormatted: 'Jamais',
+            durationFormatted: '—',
+        },
+        calibrationRequestInFlight: false,
     });
 });
 
@@ -168,6 +184,8 @@ async function fetchDiagnostic() {
     }
     // Fetch parallèle de l'état automation cimier (vue 04-01).
     fetchCimierAutomation();
+    // Fetch parallèle de l'état calibration coupole (v6.4 Phase 3 Plan 02).
+    fetchCalibration();
 }
 
 /**
@@ -229,6 +247,94 @@ async function fetchCimierAutomation() {
         store.cimierAutomation.modeLabel = 'Erreur connexion';
     }
 }
+
+/**
+ * Récupère motor_status.calibration depuis /api/hardware/status/ et hydrate
+ * Alpine.store('system').calibration. (v6.4 Phase 3 Plan 02)
+ */
+async function fetchCalibration() {
+    const store = Alpine.store('system');
+    try {
+        const response = await fetch('/api/hardware/status/');
+        if (!response.ok) return;
+        const data = await response.json();
+        const calib = data && data.calibration;
+        if (calib && typeof calib === 'object') {
+            const status = calib.status || 'unknown';
+            store.calibration.status = status;
+            store.calibration.method = calib.method ?? null;
+            store.calibration.last_calibration_at = calib.last_calibration_at ?? null;
+            store.calibration.error_msg = calib.error_msg ?? null;
+            store.calibration.duration_sec = calib.duration_sec ?? null;
+            // Pré-calcul des libellés affichés (pattern cohérent cimierAutomation).
+            const labels = {
+                unknown: 'Calibration requise',
+                running: 'Calibration en cours…',
+                ok: 'Calibration validée',
+                degraded: 'Calibration dégradée',
+                exception: 'Calibration en erreur',
+                simulated: 'Mode simulation',
+            };
+            store.calibration.label = labels[status] || 'État inconnu';
+            store.calibration.badgeIcon = ({ ok: '✓', running: '⚠', simulated: '◯' })[status] || '✕';
+            store.calibration.badgeClass = ({
+                ok: 'text-accent-green',
+                running: 'text-accent-amber-light animate-pulse',
+                simulated: 'text-obs-text-muted',
+            })[status] || 'text-accent-red';
+            store.calibration.methodLabel = ({
+                hint_trip: 'Indice + switch',
+                fallback_sweep: 'Balayage ±15°',
+                simulation: 'Simulation',
+            })[calib.method] || '—';
+            if (calib.last_calibration_at) {
+                const ms = Date.parse(calib.last_calibration_at);
+                store.calibration.lastFormatted = Number.isFinite(ms)
+                    ? new Date(ms).toLocaleString('fr-FR', {
+                        year: 'numeric', month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit', second: '2-digit'
+                      })
+                    : 'Jamais';
+            } else {
+                store.calibration.lastFormatted = 'Jamais';
+            }
+            store.calibration.durationFormatted = (typeof calib.duration_sec === 'number')
+                ? `${calib.duration_sec.toFixed(1)} s`
+                : '—';
+        }
+    } catch (error) {
+        console.error('Erreur fetch calibration:', error);
+    }
+}
+
+/**
+ * POST /api/hardware/calibrate/ depuis la carte page Système. (v6.4 Phase 3 Plan 02)
+ */
+async function requestSystemCalibration() {
+    const store = Alpine.store('system');
+    if (store.calibrationRequestInFlight) return;
+    if (store.calibration?.status === 'running') return;
+    store.calibrationRequestInFlight = true;
+    store.calibration.status = 'running';
+    store.calibration.label = 'Calibration en cours…';
+    store.calibration.badgeIcon = '⚠';
+    store.calibration.badgeClass = 'text-accent-amber-light animate-pulse';
+    try {
+        const response = await fetch('/api/hardware/calibrate/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        if (!response.ok) {
+            console.error(`Erreur calibration : HTTP ${response.status}`);
+        }
+    } catch (err) {
+        console.error('Erreur réseau calibration:', err);
+    } finally {
+        store.calibrationRequestInFlight = false;
+    }
+}
+window.requestSystemCalibration = requestSystemCalibration;
 
 /**
  * Recalcule les libellés absolute (HH:MM) + relative (Xh Ymin) pour next_open

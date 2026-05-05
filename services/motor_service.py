@@ -403,8 +403,14 @@ class MotorService:
             },
         }
 
-    def _run_boot_calibration(self):
-        """Exécute la routine de calibration au boot avant d'accepter des commandes."""
+    def _execute_calibration_routine(self, trigger_label: str = "boot_calibration") -> None:
+        """Exécute la routine de calibration (boot ou manuel).
+
+        Phase 3 Plan 01 : helper partagé extrait de `_run_boot_calibration`,
+        réutilisé par la branche manuelle `process_command(cmd_type="calibrate")`.
+        Le payload IPC `current_status["calibration"]` (5 clés) reste strictement
+        identique entre les deux déclencheurs ; seul le label de log est paramétré.
+        """
         with self.status_lock:
             self.current_status["status"] = "calibrating"
             self.current_status["calibration"]["status"] = "running"
@@ -429,7 +435,7 @@ class MotorService:
         try:
             result: CalibrationResult = routine.run()
         except Exception as e:
-            logger.exception("boot_calibration: exception non gérée")
+            logger.exception(f"{trigger_label}: exception non gérée")
             result = CalibrationResult(
                 status="degraded",
                 method="exception",
@@ -450,11 +456,15 @@ class MotorService:
         self._write_status()
 
         logger.info(
-            f"boot_calibration | status={result.status} method={result.method} "
+            f"{trigger_label} | status={result.status} method={result.method} "
             f"last_calibration_at={result.last_calibration_at} "
             f"duration={result.duration_sec:.1f}s "
             f"error_msg={result.error_msg}"
         )
+
+    def _run_boot_calibration(self):
+        """Exécute la routine de calibration au boot avant d'accepter des commandes."""
+        self._execute_calibration_routine(trigger_label="boot_calibration")
 
     def _write_status(self, status: Optional[Dict[str, Any]] = None):
         """Écrit l'état via IPC."""
@@ -563,6 +573,10 @@ class MotorService:
         elif cmd_type == "tracking_stop":
             logger.info("ipc_command | type=tracking_stop")
             self.tracking_handler.stop(self.current_status)
+
+        elif cmd_type == "calibrate":
+            logger.info("ipc_command | type=calibrate")
+            self._execute_calibration_routine(trigger_label="manual_calibration")
 
         elif cmd_type == "status":
             pass  # Juste mettre à jour
