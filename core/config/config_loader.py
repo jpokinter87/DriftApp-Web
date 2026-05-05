@@ -240,6 +240,25 @@ class CalibrationConfig:
     write_interval_sec: float = 30.0
 
 
+@dataclass(frozen=True)
+class BootCalibrationConfig:
+    """Configuration de la routine de calibration au boot motor_service (v6.4 Phase 2).
+
+    Au démarrage du `motor_service` (production uniquement), une routine ramène
+    la coupole sur le microswitch à 45° avant d'accepter des commandes. Elle
+    consomme le hint persisté en Phase 1 pour calculer un trajet court ; en
+    cas d'échec, fallback sweep ±`fallback_sweep_deg` autour de la position
+    courante. `overshoot_deg` ajoute une marge dans le sens du trajet pour
+    garantir le franchissement du switch. `timeout_sec` borne la durée totale
+    (mode dégradé après expiration). `poll_interval_sec` cadence le watcher
+    qui poll `last_calibration_at` dans le payload IPC encodeur.
+    """
+    overshoot_deg: float = 5.0
+    fallback_sweep_deg: float = 15.0
+    timeout_sec: float = 180.0
+    poll_interval_sec: float = 0.1
+
+
 @dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
@@ -302,6 +321,7 @@ class DriftAppConfig:
     )
     cimier: CimierConfig = field(default_factory=CimierConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
+    boot_calibration: BootCalibrationConfig = field(default_factory=BootCalibrationConfig)
 
     def __str__(self) -> str:
         return (
@@ -368,6 +388,7 @@ class ConfigLoader:
             meridian_anticipation=self._parse_meridian_anticipation(),
             cimier=self._parse_cimier(),
             calibration=self._parse_calibration(),
+            boot_calibration=self._parse_boot_calibration(),
         )
 
     # =========================================================================
@@ -528,6 +549,48 @@ class ConfigLoader:
             persist_path=persist_path,
             write_threshold_deg=write_threshold_deg,
             write_interval_sec=write_interval_sec,
+        )
+
+    def _parse_boot_calibration(self) -> BootCalibrationConfig:
+        """Parse la section boot_calibration (v6.4 Phase 2, opt-in : section absente = defaults)."""
+        section = self.cfg.get("boot_calibration", {})
+        if not isinstance(section, dict):
+            section = {}
+        defaults = BootCalibrationConfig()
+        try:
+            overshoot_deg = float(section.get("overshoot_deg", defaults.overshoot_deg))
+            fallback_sweep_deg = float(
+                section.get("fallback_sweep_deg", defaults.fallback_sweep_deg)
+            )
+            timeout_sec = float(section.get("timeout_sec", defaults.timeout_sec))
+            poll_interval_sec = float(
+                section.get("poll_interval_sec", defaults.poll_interval_sec)
+            )
+        except (TypeError, ValueError):
+            self.logger.warning(
+                "boot_calibration config invalide (types non numériques) — utilisation des defaults"
+            )
+            return BootCalibrationConfig()
+        if (
+            overshoot_deg <= 0
+            or fallback_sweep_deg <= 0
+            or timeout_sec <= 0
+            or poll_interval_sec <= 0
+        ):
+            self.logger.warning(
+                "boot_calibration config invalide (overshoot=%s, sweep=%s, timeout=%s, poll=%s) — "
+                "utilisation des defaults",
+                overshoot_deg,
+                fallback_sweep_deg,
+                timeout_sec,
+                poll_interval_sec,
+            )
+            return BootCalibrationConfig()
+        return BootCalibrationConfig(
+            overshoot_deg=overshoot_deg,
+            fallback_sweep_deg=fallback_sweep_deg,
+            timeout_sec=timeout_sec,
+            poll_interval_sec=poll_interval_sec,
         )
 
     def _resolve_automation_mode(self, au: dict, default_mode: str) -> str:

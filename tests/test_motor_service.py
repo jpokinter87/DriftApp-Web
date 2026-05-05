@@ -203,3 +203,62 @@ class TestHandleStop:
         motor_service.current_status['tracking_object'] = 'M42'
         motor_service.handle_stop()
         assert motor_service.current_status['tracking_object'] is None
+
+
+# =============================================================================
+# TESTS BOOT CALIBRATION INTEGRATION (v6.4 Phase 2)
+# =============================================================================
+
+class TestBootCalibrationIntegration:
+    """v6.4 Phase 2 : intégration routine boot dans MotorService."""
+
+    def test_initial_calibration_state_unknown(self, motor_service):
+        """Avant la routine, calibration[status]=='unknown'."""
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "unknown"
+        assert cal["last_calibration_at"] is None
+        assert cal["method"] is None
+        assert cal["error_msg"] is None
+
+    def test_run_invokes_boot_calibration_in_simulation(self, motor_service):
+        """En simulation, la routine retourne 'simulated' immédiatement."""
+        motor_service._run_boot_calibration()
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "simulated"
+        assert cal["method"] == "skipped_simulation"
+        assert motor_service.current_status["status"] == "idle"
+
+    def test_run_boot_calibration_handles_routine_exception(self, motor_service):
+        """Une exception non gérée → status=degraded + error_msg renseigné."""
+        from core.hardware.calibration_routine import CalibrationRoutine
+        with patch.object(CalibrationRoutine, "run", side_effect=RuntimeError("boom")):
+            motor_service._run_boot_calibration()
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "degraded"
+        assert cal["method"] == "exception"
+        assert "unexpected_exception" in (cal["error_msg"] or "")
+        assert "boom" in (cal["error_msg"] or "")
+        assert motor_service.current_status["status"] == "idle"
+
+    def test_run_boot_calibration_idle_after_completion(self, motor_service):
+        """Après la routine, current_status['status'] == 'idle'."""
+        motor_service._run_boot_calibration()
+        assert motor_service.current_status["status"] == "idle"
+
+    def test_run_boot_calibration_propagates_ok_result(self, motor_service):
+        """Routine retournant 'ok' → champs calibration propagés correctement."""
+        from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+        ok_result = CalibrationResult(
+            status="ok",
+            method="hint_trip",
+            last_calibration_at="2026-05-04T12:00:00+00:00",
+            duration_sec=1.5,
+        )
+        with patch.object(CalibrationRoutine, "run", return_value=ok_result):
+            motor_service._run_boot_calibration()
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "ok"
+        assert cal["method"] == "hint_trip"
+        assert cal["last_calibration_at"] == "2026-05-04T12:00:00+00:00"
+        assert cal["duration_sec"] == 1.5
+        assert motor_service.current_status["status"] == "idle"

@@ -46,10 +46,13 @@ from core.hardware.moteur_rp2040 import MoteurRP2040
 from core.hardware.serial_simulator import SerialSimulator
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
+from core.hardware.calibration_routine import CalibrationRoutine, CalibrationResult
 
 from services.ipc_manager import IpcManager
 from services.simulation import SimulatedDaemonReader
 from services.command_handlers import GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
+
+PROJECT_ROOT = Path(__file__).parent.parent
 
 # Configuration logging - fichier horodaté par session (cycle démarrage du service)
 LOGS_DIR = Path(__file__).parent.parent / "logs"
@@ -392,7 +395,66 @@ class MotorService:
             "simulation": self.simulation_mode,
             "last_update": datetime.now().isoformat(),
             "tracking_logs": [],
+            "calibration": {
+                "status": "unknown",
+                "last_calibration_at": None,
+                "method": None,
+                "error_msg": None,
+            },
         }
+
+    def _run_boot_calibration(self):
+        """Exécute la routine de calibration au boot avant d'accepter des commandes."""
+        with self.status_lock:
+            self.current_status["status"] = "calibrating"
+            self.current_status["calibration"]["status"] = "running"
+        self._write_status()
+
+        def status_cb(state: str, payload: dict):
+            """Callback transmis à CalibrationRoutine pour propager les jalons."""
+            with self.status_lock:
+                self.current_status["calibration"].update(payload)
+            self._write_status()
+
+        persist_path = PROJECT_ROOT / self.config.calibration.persist_path
+        routine = CalibrationRoutine(
+            moteur=self.moteur,
+            daemon_reader=self.daemon_reader,
+            persist_path=persist_path,
+            config=self.config.boot_calibration,
+            simulation_mode=self.simulation_mode,
+            status_callback=status_cb,
+        )
+
+        try:
+            result: CalibrationResult = routine.run()
+        except Exception as e:
+            logger.exception("boot_calibration: exception non gérée")
+            result = CalibrationResult(
+                status="degraded",
+                method="exception",
+                last_calibration_at=None,
+                duration_sec=0.0,
+                error_msg=f"unexpected_exception: {e}",
+            )
+
+        with self.status_lock:
+            self.current_status["calibration"] = {
+                "status": result.status,
+                "last_calibration_at": result.last_calibration_at,
+                "method": result.method,
+                "error_msg": result.error_msg,
+                "duration_sec": result.duration_sec,
+            }
+            self.current_status["status"] = "idle"
+        self._write_status()
+
+        logger.info(
+            f"boot_calibration | status={result.status} method={result.method} "
+            f"last_calibration_at={result.last_calibration_at} "
+            f"duration={result.duration_sec:.1f}s "
+            f"error_msg={result.error_msg}"
+        )
 
     def _write_status(self, status: Optional[Dict[str, Any]] = None):
         """Écrit l'état via IPC."""
@@ -532,7 +594,12 @@ class MotorService:
         self._notify_systemd("STATUS=Motor Service prêt")
 
         # Démarrer le thread watchdog dédié (survit aux rotations bloquantes)
+        # AVANT la routine de calibration : la routine peut durer 60-180s et
+        # bloquerait le heartbeat sinon (kill systemd).
         self._start_watchdog_thread()
+
+        # === Routine de calibration au boot (v6.4 Phase 2) ===
+        self._run_boot_calibration()
 
         last_tracking_update = time.time()
         tracking_interval = 1.0

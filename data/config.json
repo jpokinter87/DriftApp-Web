@@ -124,5 +124,12 @@
     "persist_path": "data/last_known_position.json",
     "write_threshold_deg": 1.0,
     "write_interval_sec": 30.0
+  },
+  "boot_calibration": {
+    "_comment": "v6.4 Phase 2 — Routine calibration au boot du motor_service. overshoot_deg = degrés ajoutés au trajet principal pour garantir le franchissement du switch 45°. fallback_sweep_deg = amplitude (en deg) du sweep ±X autour de la position courante si le trajet principal n'a pas calibré.",
+    "overshoot_deg": 5.0,
+    "fallback_sweep_deg": 15.0,
+    "timeout_sec": 180.0,
+    "poll_interval_sec": 0.1
   }
 }

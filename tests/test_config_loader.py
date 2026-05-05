@@ -16,6 +16,7 @@ import pytest
 
 from core.config.config_loader import (
     VALID_AUTOMATION_MODES,
+    BootCalibrationConfig,
     CalibrationConfig,
     CimierAutomationConfig,
     CimierConfig,
@@ -613,6 +614,83 @@ class TestCalibrationConfig:
             tmp_path, sample_config_dict, {"persist_path": ""}
         )
         assert config.calibration.persist_path == "data/last_known_position.json"
+
+
+# =============================================================================
+# BootCalibrationConfig (v6.4 Phase 2 — AC-6)
+# =============================================================================
+
+class TestBootCalibrationConfig:
+    """v6.4 Phase 2 : section `boot_calibration` rétro-compatible (AC-6)."""
+
+    def _load_with_boot_calibration(self, tmp_path, sample_config_dict, boot_dict):
+        cfg = dict(sample_config_dict)
+        if boot_dict is not None:
+            cfg["boot_calibration"] = boot_dict
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        return ConfigLoader(config_file).load()
+
+    def test_boot_calibration_defaults_when_section_missing(self, tmp_path, sample_config_dict):
+        """Section absente → defaults (rétro-compat stricte)."""
+        config = self._load_with_boot_calibration(tmp_path, sample_config_dict, None)
+        assert isinstance(config.boot_calibration, BootCalibrationConfig)
+        assert config.boot_calibration.overshoot_deg == 5.0
+        assert config.boot_calibration.fallback_sweep_deg == 15.0
+        assert config.boot_calibration.timeout_sec == 180.0
+        assert config.boot_calibration.poll_interval_sec == 0.1
+
+    def test_boot_calibration_partial_override(self, tmp_path, sample_config_dict):
+        """Override partiel : seule la clé fournie est modifiée, les autres restent en défaut."""
+        config = self._load_with_boot_calibration(
+            tmp_path, sample_config_dict, {"overshoot_deg": 10.0}
+        )
+        assert config.boot_calibration.overshoot_deg == 10.0
+        assert config.boot_calibration.fallback_sweep_deg == 15.0
+        assert config.boot_calibration.timeout_sec == 180.0
+        assert config.boot_calibration.poll_interval_sec == 0.1
+
+    def test_boot_calibration_invalid_overshoot_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """overshoot_deg <= 0 → log WARNING + defaults."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_boot_calibration(
+            tmp_path, sample_config_dict, {"overshoot_deg": -1.0}
+        )
+        assert config.boot_calibration.overshoot_deg == 5.0
+        assert any(
+            "boot_calibration config invalide" in r.message for r in caplog.records
+        )
+
+    def test_boot_calibration_invalid_timeout_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """timeout_sec <= 0 → log WARNING + defaults."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_boot_calibration(
+            tmp_path, sample_config_dict, {"timeout_sec": 0}
+        )
+        assert config.boot_calibration.timeout_sec == 180.0
+        assert any(
+            "boot_calibration config invalide" in r.message for r in caplog.records
+        )
+
+    def test_boot_calibration_invalid_poll_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """poll_interval_sec <= 0 → log WARNING + defaults."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_boot_calibration(
+            tmp_path, sample_config_dict, {"poll_interval_sec": -0.5}
+        )
+        assert config.boot_calibration.poll_interval_sec == 0.1
+        assert any(
+            "boot_calibration config invalide" in r.message for r in caplog.records
+        )
 
 
 # =============================================================================
