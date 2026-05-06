@@ -345,6 +345,161 @@ Voir [RP2040_UPGRADE.md](RP2040_UPGRADE.md) pour le guide complet de migration.
 
 ---
 
+## Déploiement v6.4 sur le Pi terrain (Calibration robuste)
+
+**Contexte** : la prod tourne sur **5.10.0** (déployé 2026-04-24). Le saut vers **6.4.0** traverse 8 milestones intermédiaires (v5.11 → v5.12 → v6.0 → v6.1 → v6.2 → v6.3 → v6.3.x → v6.4). **Une simple MAJ via le bouton « Mettre à jour » de l'UI ne suffit pas** — interventions admin SSH requises selon les milestones franchis.
+
+### Script automatisé : `scripts/migrate_to_v6.4.sh`
+
+Le script `scripts/migrate_to_v6.4.sh` automatise les étapes 1 à 7 ci-dessous (idempotent, peut être relancé sans dommage). Usage :
+
+```bash
+ssh slenk@<pi-host>
+cd ~/DriftApp
+git fetch origin
+git checkout origin/main
+./scripts/migrate_to_v6.4.sh
+# Modes optionnels :
+#   DRY_RUN=1 ./scripts/migrate_to_v6.4.sh        # simule sans modifier
+#   SKIP_HARDWARE=1 ./scripts/migrate_to_v6.4.sh  # ignore checks Pico W/Shelly
+#   TARGET_REF=v6.4.0 ./scripts/migrate_to_v6.4.sh  # pin sur un tag/commit
+```
+
+Le script demande sudo une seule fois (1ère MAJ), puis les MAJ suivantes passent par OTA UI (sudoers v5.12 déployé). Backup automatique de `data/config.json` + sessions dans `data/backups/pre_v6.4_<timestamp>/`. Logs détaillés dans `logs/migrate_to_v6.4_<timestamp>.log`.
+
+**Limites du script** :
+- NON TESTÉ par CI (machine dev à 800 km du Pi). À valider terrain par Serge sur une session test avant utilisation pour une vraie MAJ.
+- NE FLASHE PAS le firmware Pico W (manuel — cf. `firmware/cimier/README.md`).
+- NE CONFIGURE PAS le Shelly (manuel — cf. mémoire S. 30/04 cascade 220V/12V).
+- Si Pico W ne répond pas, le script propose de continuer en mode dégradé (cimier désactivé) — utile si court-circuit install non levé.
+
+### Détail des 7 étapes (manuelles si on choisit de ne pas utiliser le script)
+
+### Étape 1 — Pré-requis sudoers (pour OTA fonctionnel ≥ v5.12)
+
+Sans ce déploiement, `update_driftapp.sh` ne peut pas `systemctl restart` sans password → MAJ via UI échouera.
+
+```bash
+# Sur le Pi, en SSH :
+ssh slenk@<pi-host>
+cd ~/DriftApp
+git fetch origin
+git checkout <hash-v5.12>     # ou directement HEAD si on veut tout
+
+sudo cp setup/driftapp-updater.sudoers /etc/sudoers.d/driftapp-updater
+sudo chmod 0440 /etc/sudoers.d/driftapp-updater
+sudo visudo -cf /etc/sudoers.d/driftapp-updater   # vérifie syntaxe
+```
+
+Une fois fait, les MAJ ultérieures via UI auto-redéploieront ce fichier (pattern v5.12).
+
+### Étape 2 — Installation `cimier_service` (nouveau v6.0)
+
+Le service systemd n'existe pas en 5.10. À installer **une seule fois** :
+
+```bash
+sudo cp cimier_service.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable cimier_service
+# Ne PAS encore start — il faut d'abord configurer cimier.host dans data/config.json
+```
+
+### Étape 3 — Hardware Pico W cimier (v6.0)
+
+Pré-requis pour v6.0+ qui consomme `cimier_service`. Procédure dans `firmware/cimier/README.md` :
+1. Flash MicroPython sur Pico W (`mpremote` + `firmware/cimier/main.py + cimier_controller.py + step_generator.py`).
+2. Configuration WiFi + IP statique DHCP (mémoire `feedback_no_hardcoded_ips.md` : Pico W = `192.168.1.84`, Shelly = `192.168.1.83`).
+3. Cascade alimentation 220V/12V via 2 Shellys (S. 30/04).
+
+**État actuel terrain (2026-05-02)** : court-circuit install définitive Pico W bloque déploiement v6.0+. Mémoire `project_v60_picow_install_short_circuit_20260502.md`. Tant que ça n'est pas levé, **rester en 5.10.0** pour les sessions opérationnelles.
+
+### Étape 4 — Configuration `data/config.json` (rétro-compat partielle)
+
+Sections à ajouter ou compléter (les sections `calibration` et `boot_calibration` ont des defaults rétro-compatibles, les autres sont **requises** pour activer leurs fonctionnalités) :
+
+```json
+{
+  "cimier": {
+    "enabled": true,
+    "host": "192.168.1.84",
+    "port": 80,
+    "automation": { "mode": "manual" },
+    "power_switch": { "type": "shelly", "host": "192.168.1.83" }
+  },
+  "calibration": {
+    "persist_path": "data/last_known_position.json",
+    "delta_threshold_deg": 1.0,
+    "interval_sec": 30
+  },
+  "boot_calibration": {
+    "overshoot_deg": 5.0,
+    "sweep_deg": 15.0,
+    "timeout_sec": 180.0,
+    "poll_interval_sec": 0.1
+  }
+}
+```
+
+**Permissions** : `data/last_known_position.json` est créé par `ems22d.service` (User=slenk). S'assurer que `data/` est writable par slenk :
+
+```bash
+sudo chown -R slenk:slenk /home/slenk/DriftApp/data
+sudo chmod -R u+rw /home/slenk/DriftApp/data
+```
+
+### Étape 5 — Pull + restart cascade
+
+Une fois étapes 1–4 faites, la MAJ peut s'enclencher via l'UI **OU** manuellement :
+
+```bash
+ssh slenk@<pi-host>
+cd ~/DriftApp
+git pull origin main
+uv sync                                # met à jour dépendances Python
+
+sudo systemctl restart ems22d.service          # encoder daemon (Phase 1)
+sudo systemctl restart motor_service.service   # routine boot + dispatch calibrate (Phase 2+3)
+sudo systemctl restart cimier_service.service  # cimier autonome (v6.0+)
+sudo systemctl restart driftapp_web.service    # Django (Phase 3 frontend)
+```
+
+Vérification post-restart :
+
+```bash
+sudo systemctl status ems22d motor_service cimier_service driftapp_web
+cat /dev/shm/motor_status.json | python3 -m json.tool | head -30
+# → doit contenir 'calibration': {'status': 'ok'|'running'|'degraded'|...}
+```
+
+### Étape 6 — Comportement attendu au premier boot post-MAJ v6.4
+
+1. `ems22d.service` démarre → publie IPC encoder + `last_calibration_at` (Phase 1).
+2. `motor_service.service` démarre → watchdog thread, puis exécute `_run_boot_calibration` (Phase 2). Durée 5–180 s pendant laquelle :
+   - `current_status["status"] == "calibrating"`
+   - `calibration.status == "running"`
+   - **Watchdog systemd 30 s NE tuera PAS le service** car le thread daemon maintient le heartbeat indépendamment (vérifié pytest, à confirmer terrain).
+3. Routine cherche le microswitch 45° via `PositionPersistor.load_last_position` (hint) puis fallback sweep ±15° si nécessaire.
+4. À la fin :
+   - **Cas nominal (95 %)** : `calibration.status == "ok"`, `method == "hint_trip"` ou `"fallback_sweep"`. UI affiche badge ✓ vert, bannière masquée, boutons mouvement actifs.
+   - **Cas dégradé** : `calibration.status == "degraded"` ou `"exception"`, `error_msg` renseigné. UI affiche bannière rouge, badge ✕, **7 boutons mouvement grisés** (GOTO + 4 JOG + 2 Continu), STOPs et cimier toujours actifs (sécurité). L'utilisateur clique « Calibrer maintenant » pour relancer un cycle.
+
+### Étape 7 — Validation terrain (post-MAJ)
+
+À observer sur une session d'astrophotographie :
+- Boot motor_service : routine se termine en `ok`, durée et méthode loggés.
+- Mouvement nominal : badge ✓, bannière masquée, GOTO/JOG/tracking fonctionnels.
+- Test arrêt brutal (kill -9 motor_service + redémarrage) : la position chargée depuis `data/last_known_position.json` doit conduire la routine au switch en quelques secondes (pas un sweep complet).
+- Test dégradé simulé (déplacer la coupole off-power avant restart) : bannière rouge, bouton manuel fonctionnel.
+
+### Si quelque chose tourne mal
+
+- **`calibration.status` reste `running` >180 s** : timeout dépassé sans transition → coupole bloquée mécaniquement, ou switch HS, ou daemon ems22d ne publie pas `last_calibration_at`. Vérifier `journalctl -u motor_service -f` et `cat /dev/shm/ems22_position.json`.
+- **`motor_service` redémarre en boucle** : le watchdog tue avant la fin → le thread daemon heartbeat n'est pas effectif. Augmenter temporairement `WatchdogSec` dans `motor_service.service` (à reverter ensuite).
+- **`data/last_known_position.json` jamais créé** : permissions `data/` insuffisantes pour slenk. Cf. étape 4.
+- **Bannière reste affichée même après calibration ok** : cache navigateur (recharger Ctrl+F5), ou `motor_status.json` non rafraîchi (vérifier polling Django).
+
+---
+
 ## Skills Claude Disponibles
 
 ### Diagnostic et Debug
