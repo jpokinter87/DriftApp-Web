@@ -117,6 +117,17 @@
       "deparking_nudge_deg": 1.0,
       "scheduler_interval_seconds": 60,
       "retrigger_cooldown_hours": 12
+    },
+    "motor_shelly": {
+      "_comment": "Pivot v6.x — pilotage moteur cimier via 2 Shellys 1 Gen 3 distincts (1 relais chacun, contact sec) automatisant le circuit manuel de Serge. Conventions terrain Serge pré-positionnées : motor_on_relay_state=false (oscillateur NC : circuit ouvert = moteur tourne) et open_dir_state=false (relais DIR ouvert = UP = ouverture cimier). host_motor + host_dir restent vides jusqu'au déploiement terrain (IPs Shellys non encore commandés). default_state des Shellys à configurer côté UI Shelly : Shelly MOTOR=ON (moteur arrêté au boot), Shelly DIR=OFF (sens UP par défaut).",
+      "host_motor": "",
+      "host_dir": "",
+      "relay_motor": 0,
+      "relay_dir": 0,
+      "open_dir_state": false,
+      "motor_on_relay_state": false,
+      "api": "rpc",
+      "timer_safety_sec": 90.0
     }
   },
   "calibration": {

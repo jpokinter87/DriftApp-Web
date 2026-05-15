@@ -136,6 +136,53 @@ class PowerSwitchConfig:
 
 
 @dataclass
+class MotorShellyConfig:
+    """Configuration du Shelly pilotant le moteur cimier (pivot v6.x).
+
+    Remplace la génération STEP/DIR via Pico W par 2 Shellys 1 Gen 3
+    distincts (1 relais chacun, contact sec) qui automatisent le circuit
+    de commande manuel de Serge (interrupteur ON/OFF moteur + DPDT
+    direction). Cf. `core/hardware/motor_shelly.py`.
+
+    Champs :
+      - ``host_motor``            : IP du Shelly MOTOR (ON/OFF moteur) ;
+                                    vide → section inactive. IP réelle
+                                    uniquement dans ``data/config.json``.
+      - ``host_dir``              : IP du Shelly DIR (pilote le DPDT
+                                    externe du sens moteur).
+      - ``relay_motor``           : index relais du Shelly MOTOR (défaut 0,
+                                    seul relais d'un Shelly 1).
+      - ``relay_dir``             : index relais du Shelly DIR (défaut 0).
+                                    Les 2 indices peuvent valoir 0 puisque
+                                    les Shellys sont distincts.
+      - ``open_dir_state``        : convention sens. True → relais DIR ON =
+                                    ouverture cimier. False = inversé (cas
+                                    Serge : ouvert = UP = ouverture).
+      - ``motor_on_relay_state``  : convention moteur. True (défaut, NO) →
+                                    turn_on met le relais à ON. False (NC,
+                                    cas Serge : oscillateur déclenche quand
+                                    circuit ouvert) → turn_on met le relais
+                                    à OFF.
+      - ``api``                   : "rpc" (Shelly Gen 2/3/Plus/Pro, défaut)
+                                    ou "legacy" (Gen 1).
+      - ``timer_safety_sec``      : filet hardware (Shelly toggle_after).
+                                    Auto-OFF moteur après N secondes en cas
+                                    de WiFi-drop. 0 = pas de timer.
+
+    IPs réelles uniquement dans ``data/config.json`` (terrain) — code Python
+    neutre.
+    """
+    host_motor: str = ""
+    host_dir: str = ""
+    relay_motor: int = 0
+    relay_dir: int = 0
+    open_dir_state: bool = True
+    motor_on_relay_state: bool = True
+    api: str = "rpc"
+    timer_safety_sec: float = 90.0
+
+
+@dataclass
 class WeatherProviderConfig:
     """Configuration du provider météo cimier (v6.0 Phase 2).
 
@@ -222,6 +269,7 @@ class CimierConfig:
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
+    motor_shelly: MotorShellyConfig = field(default_factory=MotorShellyConfig)
 
 
 @dataclass(frozen=True)
@@ -492,9 +540,13 @@ class ConfigLoader:
         ps_defaults = PowerSwitchConfig()
         wp_defaults = WeatherProviderConfig()
         au_defaults = CimierAutomationConfig()
+        ms_defaults = MotorShellyConfig()
         ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
         wp = c.get("weather_provider", {}) if isinstance(c, dict) else {}
         au = c.get("automation", {}) if isinstance(c, dict) else {}
+        ms = c.get("motor_shelly", {}) if isinstance(c, dict) else {}
+        if not isinstance(ms, dict):
+            ms = {}
         return CimierConfig(
             enabled=bool(c.get("enabled", defaults.enabled)),
             host=str(c.get("host", defaults.host)),
@@ -523,6 +575,60 @@ class ConfigLoader:
                 scheduler_interval_seconds=int(au.get("scheduler_interval_seconds", au_defaults.scheduler_interval_seconds)),
                 retrigger_cooldown_hours=int(au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)),
             ),
+            motor_shelly=self._build_motor_shelly_config(ms, ms_defaults),
+        )
+
+    def _build_motor_shelly_config(
+        self, ms: dict, defaults: MotorShellyConfig
+    ) -> MotorShellyConfig:
+        """Construit MotorShellyConfig avec validation default-safe.
+
+        Erreurs typées (api invalide, timer négatif, types non parsables) →
+        warning + fallback sur defaults pour ne pas casser le boot du
+        service à cause d'une config terrain mal saisie.
+
+        Pas de validation `relay_motor != relay_dir` : les 2 Shellys ayant
+        des hôtes distincts, les relais peuvent légitimement avoir le même
+        index (cas Shelly 1 où l'unique relais est d'index 0).
+        """
+        try:
+            host_motor = str(ms.get("host_motor", defaults.host_motor))
+            host_dir = str(ms.get("host_dir", defaults.host_dir))
+            relay_motor = int(ms.get("relay_motor", defaults.relay_motor))
+            relay_dir = int(ms.get("relay_dir", defaults.relay_dir))
+            open_dir_state = bool(ms.get("open_dir_state", defaults.open_dir_state))
+            motor_on_relay_state = bool(
+                ms.get("motor_on_relay_state", defaults.motor_on_relay_state)
+            )
+            api = str(ms.get("api", defaults.api))
+            timer_safety_sec = float(
+                ms.get("timer_safety_sec", defaults.timer_safety_sec)
+            )
+        except (TypeError, ValueError):
+            self.logger.warning(
+                "motor_shelly config invalide (types non parsables) — utilisation des defaults"
+            )
+            return MotorShellyConfig()
+        if api not in ("rpc", "legacy"):
+            self.logger.warning(
+                "motor_shelly.api invalide (%s) — fallback sur 'rpc'", api
+            )
+            api = defaults.api
+        if timer_safety_sec < 0:
+            self.logger.warning(
+                "motor_shelly.timer_safety_sec négatif (%s) — fallback sur default",
+                timer_safety_sec,
+            )
+            timer_safety_sec = defaults.timer_safety_sec
+        return MotorShellyConfig(
+            host_motor=host_motor,
+            host_dir=host_dir,
+            relay_motor=relay_motor,
+            relay_dir=relay_dir,
+            open_dir_state=open_dir_state,
+            motor_on_relay_state=motor_on_relay_state,
+            api=api,
+            timer_safety_sec=timer_safety_sec,
         )
 
     def _parse_calibration(self) -> CalibrationConfig:

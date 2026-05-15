@@ -29,6 +29,7 @@ from core.config.config_loader import (
     MeridianAnticipationConfig,
     MotorConfig,
     MotorDriverConfig,
+    MotorShellyConfig,
     PowerSwitchConfig,
     SerialConfig,
     SiteConfig,
@@ -474,6 +475,192 @@ class TestCimierConfig:
         assert config.cimier.power_switch.type == "shelly_gen2"
         assert config.cimier.power_switch.host == "10.0.0.43"
         assert config.cimier.power_switch.switch_id == 2
+
+
+# =============================================================================
+# MotorShellyConfig (pivot v6.x — pilotage moteur via 2 relais Shelly)
+# =============================================================================
+
+
+class TestMotorShellyConfig:
+    """Tests pour la section cimier.motor_shelly (pivot architectural v6.x).
+
+    Section opt-in : absente du JSON → defaults appliqués, jamais d'exception.
+    Validation default-safe sur erreurs typées (api invalide, timer négatif,
+    types non parsables) → warning + fallback, pas de plantage du boot.
+    Pas de validation `relay_motor != relay_dir` : les 2 Shellys ont des
+    IPs distinctes, indice 0 partagé est légitime.
+    """
+
+    def _load_with_cimier(self, tmp_path, sample_config_dict, cimier_section):
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = cimier_section
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        return ConfigLoader(config_file).load()
+
+    def test_motor_shelly_default_when_section_missing(
+        self, tmp_path, sample_config_dict
+    ):
+        """Section cimier.motor_shelly absente → MotorShellyConfig() par défaut."""
+        config = self._load_with_cimier(
+            tmp_path, sample_config_dict, {"enabled": True, "host": "10.0.0.42"}
+        )
+        ms = config.cimier.motor_shelly
+        assert isinstance(ms, MotorShellyConfig)
+        assert ms.host_motor == ""
+        assert ms.host_dir == ""
+        assert ms.relay_motor == 0
+        assert ms.relay_dir == 0
+        assert ms.open_dir_state is True
+        assert ms.motor_on_relay_state is True
+        assert ms.api == "rpc"
+        assert ms.timer_safety_sec == 90.0
+
+    def test_motor_shelly_full_section(self, tmp_path, sample_config_dict):
+        """Section complète → toutes les valeurs reflétées dans la dataclass."""
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {
+                    "host_motor": "10.0.0.85",
+                    "host_dir": "10.0.0.86",
+                    "relay_motor": 2,
+                    "relay_dir": 3,
+                    "open_dir_state": False,
+                    "motor_on_relay_state": False,
+                    "api": "legacy",
+                    "timer_safety_sec": 60.0,
+                },
+            },
+        )
+        ms = config.cimier.motor_shelly
+        assert ms.host_motor == "10.0.0.85"
+        assert ms.host_dir == "10.0.0.86"
+        assert ms.relay_motor == 2
+        assert ms.relay_dir == 3
+        assert ms.open_dir_state is False
+        assert ms.motor_on_relay_state is False
+        assert ms.api == "legacy"
+        assert ms.timer_safety_sec == 60.0
+
+    def test_motor_shelly_two_shellys_share_relay_index_zero(
+        self, tmp_path, sample_config_dict
+    ):
+        """Shelly 1 Gen 3 × 2 : chaque Shelly a son unique relais d'index 0,
+        et c'est légitime. Pas de validation d'unicité côté config."""
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {
+                    "host_motor": "10.0.0.85",
+                    "host_dir": "10.0.0.86",
+                    "relay_motor": 0,
+                    "relay_dir": 0,
+                },
+            },
+        )
+        ms = config.cimier.motor_shelly
+        assert ms.relay_motor == 0
+        assert ms.relay_dir == 0
+        assert ms.host_motor == "10.0.0.85"
+        assert ms.host_dir == "10.0.0.86"
+
+    def test_motor_shelly_serge_terrain_convention(
+        self, tmp_path, sample_config_dict
+    ):
+        """Cas terrain Serge : oscillateur NC + DIR ouvert=UP → conventions inversées
+        sur les 2 champs paramétriques, sans recompiler la classe."""
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {
+                    "open_dir_state": False,
+                    "motor_on_relay_state": False,
+                },
+            },
+        )
+        assert config.cimier.motor_shelly.open_dir_state is False
+        assert config.cimier.motor_shelly.motor_on_relay_state is False
+        # Le reste reste par défaut
+        assert config.cimier.motor_shelly.api == "rpc"
+        assert config.cimier.motor_shelly.relay_motor == 0
+
+    def test_motor_shelly_partial_section(self, tmp_path, sample_config_dict):
+        """Section partielle → defaults pour clés absentes, override pour les autres."""
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {"enabled": True, "motor_shelly": {"host_motor": "10.0.0.85"}},
+        )
+        ms = config.cimier.motor_shelly
+        assert ms.host_motor == "10.0.0.85"
+        # Defaults pour le reste
+        assert ms.host_dir == ""
+        assert ms.relay_motor == 0
+        assert ms.relay_dir == 0
+        assert ms.api == "rpc"
+        assert ms.timer_safety_sec == 90.0
+
+    def test_motor_shelly_invalid_api_falls_back_to_rpc(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """api='yolo' → warning + fallback sur 'rpc' (les autres champs préservés)."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {"host_motor": "10.0.0.85", "api": "yolo"},
+            },
+        )
+        assert config.cimier.motor_shelly.api == "rpc"
+        assert config.cimier.motor_shelly.host_motor == "10.0.0.85"
+        assert any("motor_shelly.api" in r.message for r in caplog.records)
+
+    def test_motor_shelly_negative_timer_falls_back(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """timer_safety_sec négatif → warning + fallback default (90.0)."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {"host_motor": "10.0.0.85", "timer_safety_sec": -5.0},
+            },
+        )
+        assert config.cimier.motor_shelly.timer_safety_sec == 90.0
+        assert config.cimier.motor_shelly.host_motor == "10.0.0.85"
+        assert any("timer_safety_sec" in r.message for r in caplog.records)
+
+    def test_motor_shelly_invalid_types_fall_back_to_defaults(
+        self, tmp_path, sample_config_dict, caplog
+    ):
+        """Type non parsable (relay_motor="abc") → warning + fallback MotorShellyConfig()."""
+        import logging
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_cimier(
+            tmp_path,
+            sample_config_dict,
+            {
+                "enabled": True,
+                "motor_shelly": {"host_motor": "10.0.0.85", "relay_motor": "abc"},
+            },
+        )
+        # Fallback total : host_motor repasse à default aussi
+        assert config.cimier.motor_shelly.host_motor == ""
+        assert config.cimier.motor_shelly.relay_motor == 0
 
 
 # =============================================================================
