@@ -95,6 +95,8 @@
     "cycle_timeout_s": 90.0,
     "boot_poll_timeout_s": 30.0,
     "post_off_quiet_s": 10.0,
+    "shelly_settle_s": 2.0,
+    "verbose_logging": false,
     "power_switch": {
       "_comment": "type ∈ {shelly_gen2, shelly_gen1, noop}. noop = pas de hardware (dev/tests).",
       "type": "noop",

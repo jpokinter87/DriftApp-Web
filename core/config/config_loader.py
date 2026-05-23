@@ -266,6 +266,8 @@ class CimierConfig:
     cycle_timeout_s: float = 90.0
     boot_poll_timeout_s: float = 30.0
     post_off_quiet_s: float = 10.0
+    shelly_settle_s: float = 2.0          # attente appairage WiFi Shelly MOT/UPDN (synoptique "à mesurer")
+    verbose_logging: bool = False         # true → logs DEBUG par itération (debug à distance)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
@@ -555,6 +557,8 @@ class ConfigLoader:
             cycle_timeout_s=float(c.get("cycle_timeout_s", defaults.cycle_timeout_s)),
             boot_poll_timeout_s=float(c.get("boot_poll_timeout_s", defaults.boot_poll_timeout_s)),
             post_off_quiet_s=float(c.get("post_off_quiet_s", defaults.post_off_quiet_s)),
+            shelly_settle_s=float(c.get("shelly_settle_s", defaults.shelly_settle_s)),
+            verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
             power_switch=PowerSwitchConfig(
                 type=str(ps.get("type", ps_defaults.type)),
                 host=str(ps.get("host", ps_defaults.host)),

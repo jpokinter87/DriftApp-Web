@@ -476,6 +476,30 @@ class TestCimierConfig:
         assert config.cimier.power_switch.host == "10.0.0.43"
         assert config.cimier.power_switch.switch_id == 2
 
+    def test_cimier_shelly_settle_and_verbose_defaults(
+        self, tmp_path, sample_config_dict
+    ):
+        """shelly_settle_s et verbose_logging : defaults rétro-compatibles (section absente)."""
+        cfg = dict(sample_config_dict)
+        cfg.pop("cimier", None)
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.shelly_settle_s == 2.0
+        assert config.cimier.verbose_logging is False
+
+    def test_cimier_parse_shelly_settle_and_verbose(
+        self, tmp_path, sample_config_dict
+    ):
+        """Les deux clés sont lues depuis data/config.json."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"shelly_settle_s": 3.5, "verbose_logging": True}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.shelly_settle_s == 3.5
+        assert config.cimier.verbose_logging is True
+
 
 # =============================================================================
 # MotorShellyConfig (pivot v6.x — pilotage moteur via 2 relais Shelly)
