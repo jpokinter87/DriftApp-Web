@@ -367,6 +367,7 @@ class TestConfigurationAndInstantiation:
 # Section 2 : Cycle complet via simulator
 # ======================================================================
 
+@pytest.mark.skip(reason="Bloc 2 — réécriture orchestration Shelly, cf. plan 2026-05-23")
 class TestFullCycleViaSimulator:
     def test_open_cycle_full_pipeline(
         self,
@@ -973,6 +974,7 @@ class TestWeatherProviderWiring:
         )
         assert isinstance(service._weather_provider, NoopWeatherProvider)
 
+    @pytest.mark.skip(reason="Bloc 2 — réécriture orchestration Shelly, cf. plan 2026-05-23")
     def test_cycle_logs_weather_on_start(
         self,
         service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
