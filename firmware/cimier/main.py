@@ -1,23 +1,24 @@
 """
-Firmware principal Pico W cimier — pilotage WiFi REST.
+Firmware principal Pico W cimier — serveur capteurs WiFi REST.
 
 Tourne sur Raspberry Pi Pico W (RP2040 + WiFi).
 
+Depuis le pivot Shelly (v6.x), le Pico W est un pur serveur de capteurs :
+il expose l'etat des 2 fins de course via HTTP. Le moteur cimier est
+desormais pilote par des relais Shelly (commandes 220V) depuis le Pi
+principal — le Pico W ne genere plus aucune impulsion STEP/DIR.
+
 Architecture :
   - Mini serveur HTTP socket pur (aucune dependance externe a installer)
-  - Boucle principale : tick controller (~50 Hz) + accept HTTP non-bloquant + WDT
+  - Boucle principale : accept HTTP non-bloquant + WDT + heartbeat
   - Mode safe-boot : delai 3 sec au demarrage avec banner. Permet Ctrl-C dans
     mpremote pour reprendre la main si le firmware bloque.
   - 2 fins de course NC sur GPIO 14/15 avec pull-up interne
-  - Watchdog hardware RP2040 200 ms = filet ultime si firmware fige
+  - Watchdog hardware RP2040 8000 ms = filet ultime si firmware fige
 
 Endpoints REST (port 80, JSON) :
-  GET  /status   -> {state, open_switch, closed_switch, ...}
-  POST /open     -> demarre cycle ouverture
-  POST /close    -> demarre cycle fermeture
-  POST /stop     -> stop immediat
-  GET  /info     -> {firmware_version, wifi_rssi, free_memory, ...}
-  POST /config   -> {invert_direction: bool}
+  GET  /status   -> {state, open_switch, closed_switch, error_message}
+  GET  /info     -> {firmware_version, protocol_version, role, wifi_rssi, ...}
 
 Pre-requis Pico W :
   - MicroPython 1.20+
@@ -35,40 +36,26 @@ import network
 from machine import Pin, WDT
 
 from cimier_controller import CimierController
-from step_generator import SoftwareStepGenerator
 
 
 # ------------------------------------------------------------------
 # Configuration GPIO (cf. README.md branchements)
 # ------------------------------------------------------------------
 
-PIN_STEP = 2          # GP2 -> PUL+ DM560T
-PIN_DIR = 3           # GP3 -> DIR+ DM560T
 PIN_OPEN_SWITCH = 14  # GP14 -> fin de course NC OUVERT
 PIN_CLOSED_SWITCH = 15  # GP15 -> fin de course NC FERME
 
-# Cadence tick : 3200 steps / 60 s = ~53 Hz -> ~19 ms entre pas
-STEP_PERIOD_MS = 19
-
-# Watchdog hardware ; on feed a chaque iteration de boucle
-WDT_TIMEOUT_MS = 200
+# Watchdog hardware ; on feed a chaque iteration de boucle.
+# 8000 ms = max supporte par RP2040 (cf. docs.micropython.org/en/latest/library/machine.WDT.html).
+# 200 ms initial etait toxique : collision avec le PM CYW43 (timer 200 ms) qui
+# bloquait recv() pendant le reveil radio -> reset hardware -> RST cote client.
+# Cf. MicroPython issue #17228 (RP2040 lockup if WDT timeout during lightsleep).
+WDT_TIMEOUT_MS = 8000
 
 HTTP_PORT = 80
 
 # Fenetre safe-boot : permet a l'operateur d'interrompre via Ctrl-C
 SAFE_BOOT_DELAY_S = 3
-
-
-# ------------------------------------------------------------------
-# Time provider compatible MicroPython
-# ------------------------------------------------------------------
-
-def now_seconds():
-    """Secondes depuis le boot (float). Wrappe ticks_ms (overflow ~49 jours).
-
-    Suffit pour timeouts cycle (60 s) et marker last_action_ts.
-    """
-    return time.ticks_ms() / 1000.0
 
 
 # ------------------------------------------------------------------
@@ -78,8 +65,7 @@ def now_seconds():
 class PicoHardwareAdapter:
     """Bridge entre CimierController et le hardware Pico W reel."""
 
-    def __init__(self, step_gen, open_switch_pin, closed_switch_pin):
-        self._sg = step_gen
+    def __init__(self, open_switch_pin, closed_switch_pin):
         self._sw_open = Pin(open_switch_pin, Pin.IN, Pin.PULL_UP)
         self._sw_closed = Pin(closed_switch_pin, Pin.IN, Pin.PULL_UP)
 
@@ -90,12 +76,6 @@ class PicoHardwareAdapter:
     def read_closed_switch(self):
         return self._sw_closed.value() == 1
 
-    def set_direction(self, direction):
-        self._sg.set_direction(direction)
-
-    def pulse_step(self):
-        self._sg.pulse_step()
-
 
 # ------------------------------------------------------------------
 # WiFi
@@ -104,6 +84,11 @@ class PicoHardwareAdapter:
 def connect_wifi(ssid, password, timeout_s=30):
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    # Desactive le power management CYW43 (defaut 0xA11142 = sleep apres idle,
+    # reveil ~200 ms qui bloque recv() et cause des RST cote client). 0xA11140
+    # = PM_NONE, radio toujours active. Cf. issue pico-sdk #2153 + issue
+    # MicroPython #9455 (Pico W network inaccessible after idle).
+    wlan.config(pm=0xa11140)
     if wlan.isconnected():
         return wlan
     wlan.connect(ssid, password)
@@ -159,34 +144,28 @@ def route_request(controller, wlan, method, path, body):
     """Routage des endpoints. Retourne (status_code, response_dict)."""
     if method == "GET" and path == "/status":
         return 200, controller.to_status_dict()
-    if method == "POST" and path == "/open":
-        controller.start_open()
-        return 200, controller.to_status_dict()
-    if method == "POST" and path == "/close":
-        controller.start_close()
-        return 200, controller.to_status_dict()
-    if method == "POST" and path == "/stop":
-        controller.stop()
-        return 200, controller.to_status_dict()
     if method == "GET" and path == "/info":
         info = controller.to_info_dict()
         info["wifi_rssi"] = wlan.status("rssi") if wlan else None
         info["wifi_ip"] = wlan.ifconfig()[0] if wlan else None
         info["free_memory"] = gc.mem_free()
         return 200, info
-    if method == "POST" and path == "/config":
-        if isinstance(body, dict) and "invert_direction" in body:
-            controller.set_invert_direction(body["invert_direction"])
-        return 200, controller.to_info_dict()
     return 404, {"error": "not_found", "method": method, "path": path}
 
 
 def serve_one_request(server_sock, controller, wlan):
-    """Tente d'accepter une connexion. Non-bloquant : ne fait rien si pas de client."""
+    """Sert une requete HTTP avec accept court bloquant.
+
+    server_sock doit avoir un settimeout(0.05) ou similaire.
+    OSError sur accept = timeout normal (pas de client), pas un bug.
+
+    Returns:
+        bool: True si une connexion a ete acceptee, False sinon.
+    """
     try:
         client, _addr = server_sock.accept()
     except OSError:
-        return  # pas de client en attente, continue la boucle
+        return False  # timeout ou EAGAIN = pas de client en attente, normal
     try:
         client.settimeout(2)
         data = client.recv(2048)
@@ -197,6 +176,7 @@ def serve_one_request(server_sock, controller, wlan):
             else:
                 status, payload = 400, {"error": "bad_request"}
             client.send(build_response(status, payload))
+            print("[req] ->", status, method, path)
     except OSError as exc:
         print("HTTP error:", exc)
     finally:
@@ -204,6 +184,7 @@ def serve_one_request(server_sock, controller, wlan):
             client.close()
         except OSError:
             pass
+    return True
 
 
 def run_server(controller, wlan, wdt, port):
@@ -211,24 +192,28 @@ def run_server(controller, wlan, wdt, port):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", port))
     sock.listen(5)
-    sock.settimeout(0)  # accept non-bloquant
+    # Timeout court : accept() bloque jusqu'a 50 ms puis OSError ETIMEDOUT.
+    # Sur lwIP MicroPython Pico W, c'est l'approche fiable (select.poll() ne
+    # notifie pas POLLIN sur sockets serveur). 50 ms < 200 ms WDT donc safe.
+    sock.settimeout(0.05)
     print("HTTP server listening on port", port)
 
-    last_step = time.ticks_ms()
+    last_heartbeat = time.ticks_ms()
+    request_count = 0
     while True:
-        # 1. Tick controller a la cadence STEP_PERIOD_MS
-        if time.ticks_diff(time.ticks_ms(), last_step) >= STEP_PERIOD_MS:
-            controller.tick()
-            last_step = time.ticks_ms()
-
-        # 2. Watchdog : tant que la boucle tourne, on est vivant
+        # 1. Watchdog : tant que la boucle tourne, on est vivant
         wdt.feed()
 
-        # 3. Servir 1 requete HTTP si dispo
-        serve_one_request(sock, controller, wlan)
+        # 2. Servir 1 requete HTTP (accept court bloquant 50 ms max)
+        if serve_one_request(sock, controller, wlan):
+            request_count += 1
 
-        # 4. Yield un poil pour eviter de griller le CPU
-        time.sleep_ms(2)
+        # 3. Heartbeat toutes les 10 s : prouve que la boucle tourne
+        if time.ticks_diff(time.ticks_ms(), last_heartbeat) >= 10000:
+            print("[hb] state=" + controller.state +
+                  " req_total=" + str(request_count) +
+                  " mem=" + str(gc.mem_free()))
+            last_heartbeat = time.ticks_ms()
 
 
 # ------------------------------------------------------------------
@@ -280,9 +265,8 @@ def main():
 
     # 2. Hardware (le WDT est arme plus tard, apres WiFi : la connexion peut
     #    prendre plusieurs secondes et un WDT 200 ms reset le Pico avant la fin)
-    step_gen = SoftwareStepGenerator(PIN_STEP, PIN_DIR)
-    hw = PicoHardwareAdapter(step_gen, PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
-    controller = CimierController(hw, now_seconds)
+    hw = PicoHardwareAdapter(PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
+    controller = CimierController(hw)
     print("Hardware initialise. Etat:", controller.state)
 
     # 3. WiFi (avant WDT : connexion peut prendre 2-15 s)
