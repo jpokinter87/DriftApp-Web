@@ -24,9 +24,9 @@ Le cimier est un **mécanisme binaire ouvert/fermé** : 2 fins de course, vitess
 | Élément synoptique Serge | IP (provisoire) | Logique | Modèle code | Convention config actuelle |
 |---|---|---|---|---|
 | SHELLY-1-24 — alim module cimier | 192.168.1.83 | turn=on → module sous tension | `cimier.power_switch` (Shelly Gen 1) | `type:"noop"` (dev) / `shelly_gen1` (prod), host .83 |
-| SHELLY-1-MOT — moteur On/Off | 192.168.1.85 | **inversée** : turn=off → moteur ON | `cimier.motor_shelly.host_motor` | `motor_on_relay_state:false` ✓ |
-| SHELLY-1-UPDN — sens Up/Down (+ DPDT externe) | 192.168.1.86 | UP : turn=on / DN : turn=off | `cimier.motor_shelly.host_dir` | `open_dir_state:false` ⚠️ (voir §9) |
-| SHELLY-1-12 — 12 V + Konyks 3 — 220 V | 192.168.1.82 / — | alim logique / secteur | **hors scope logiciel** | gérés hardware (toujours-on) |
+| SHELLY-1-MOT — moteur On/Off | 192.168.1.85 | **inversée** : turn=off → moteur ON | `cimier.motor_shelly.host_motor` | `motor_on_relay_state:false` ✓ (confirmé Serge 23/05) |
+| SHELLY-1-UPDN — sens Up/Down (+ DPDT externe) | 192.168.1.86 | UP : turn=on / DN : turn=off | `cimier.motor_shelly.host_dir` | `open_dir_state` = calibration ✅ (voir §10.1) |
+| SHELLY-1-12 — 12 V (alim Pico W en //) + Konyks 3 — 220 V | 192.168.1.82 / — | 12 V → Pico W toujours sous tension (// du 24 V) ; secteur | **hors scope logiciel** | gérés hardware (toujours-on) |
 | Fins de course haut / bas | — | NC + pull-up | Pico W `/status` → `open_switch` / `closed_switch` | — |
 
 **IPs** : les adresses du synoptique sont **provisoires**. Les IPs définitives des 2 Shelly moteur seront attribuées en DHCP statique quand Serge les aura commandés ; `host_motor` / `host_dir` restent vides dans `data/config.json` jusque-là (cf. règle `feedback_no_hardcoded_ips` : aucune IP terrain en dur dans le code).
@@ -39,7 +39,7 @@ Le cimier est un **mécanisme binaire ouvert/fermé** : 2 fins de course, vitess
 
 ### 3.0 Pré-vol — garde-fou (voir §4)
 
-En **tout début de cycle**, avant toute action électrique, lecture des fins de course via le `/status` du Pico W (supposé **toujours alimenté**) :
+En **tout début de cycle**, avant toute action électrique, lecture des fins de course via le `/status` du Pico W (**toujours alimenté** via le 12 V parallèle, cf. §10.3) :
 
 - `open` demandé **et** `open_switch=True` → **no-op immédiat** : aucune alim, aucun moteur ; publication `state=open`, `phase=idle`. Fin de cycle.
 - `close` demandé **et** `closed_switch=True` → no-op immédiat symétrique ; `state=closed`.
@@ -48,13 +48,14 @@ En **tout début de cycle**, avant toute action électrique, lecture des fins de
 
 ### 3.1 Ouverture (cas nominal, cible pas encore atteinte)
 
-1. `power_switch.turn_on()` → SHELLY-1-24/ON (alim module).
-2. **Attente `shelly_settle_s`** (~2 s, « à mesurer » synoptique) → appairage WiFi des Shelly.
-3. `motor_shelly.set_direction(open_direction=True)` → SHELLY-1-UPDN/UP.
-4. `motor_shelly.turn_on(timer_s=timer_safety_sec)` → SHELLY-1-MOT/OFF (démarrage moteur + filet hardware Shelly `toggle_after`, indépendant du Pi en cas de WiFi-drop).
-5. **Surveillance** `/status` jusqu'à `open_switch=True` (ou `cycle_timeout_s`, ou commande `stop`).
-6. `motor_shelly.turn_off()` → SHELLY-1-MOT/ON (arrêt moteur).
-7. `power_switch.turn_off()` → SHELLY-1-24/OFF.
+1. `power_switch.turn_on()` → SHELLY-1-24/ON (alim module). Les Shelly MOT + UPDN, alimentés en aval, démarrent et s'appairent au WiFi.
+2. **Attente `shelly_settle_s`** (~2 s, « à mesurer » synoptique) → appairage WiFi des 2 Shelly moteur. Pendant cette fenêtre ils sont **injoignables** → la sécurité repose sur leur `default_state` (voir §3.5).
+3. `motor_shelly.turn_off()` → **force l'état moteur-arrêté connu** dès que le Shelly MOT est joignable (défensif, ne dépend pas du `default_state`).
+4. `motor_shelly.set_direction(open_direction=True)` → SHELLY-1-UPDN/UP.
+5. `motor_shelly.turn_on(timer_s=timer_safety_sec)` → SHELLY-1-MOT/OFF (démarrage moteur + filet hardware Shelly `toggle_after`, indépendant du Pi en cas de WiFi-drop).
+6. **Surveillance** `/status` jusqu'à `open_switch=True` (ou `cycle_timeout_s`, ou commande `stop`).
+7. `motor_shelly.turn_off()` → SHELLY-1-MOT/ON (arrêt moteur).
+8. `power_switch.turn_off()` → SHELLY-1-24/OFF.
 
 ### 3.2 Fermeture
 
@@ -62,11 +63,19 @@ Symétrique : `set_direction(open_direction=False)` (SHELLY-1-UPDN/DN), surveill
 
 ### 3.3 Stop
 
-`motor_shelly.turn_off()` + `power_switch.turn_off()`. Reçu pendant la surveillance (étape 5) ou hors cycle (no-op métier, comme aujourd'hui `_handle_stop`).
+`motor_shelly.turn_off()` + `power_switch.turn_off()`. Reçu pendant la surveillance (étape 6) ou hors cycle (no-op métier, comme aujourd'hui `_handle_stop`).
 
 ### 3.4 Invariant de sécurité 220 V
 
 `power_switch.turn_off()` reste appelé **dans le `finally`** quelle que soit l'issue (timeout, erreur, stop) — invariant déjà en place dans `_run_cycle`, conservé. En cas d'échec en cours de cycle, on tente aussi `motor_shelly.turn_off()` avant de couper l'alim, pour ne jamais laisser le relais moteur dans l'état « tourne ».
+
+### 3.5 Prérequis de sécurité — état des Shelly au boot (confirmé Serge 23/05)
+
+Les Shelly MOT + UPDN sont **alimentés en aval du 24 V** → ils **rebootent à chaque cycle** et passent ~2 s injoignables (appairage WiFi). Pendant cette fenêtre, le code ne peut pas les piloter : la sécurité repose entièrement sur leur **`default_state`** configuré côté UI Shelly.
+
+- **SHELLY-1-MOT** : `default_state` = **ON** (relais fermé). Logique inversée confirmée par Serge (« lorsque les fils de contrôle du moteur sont en contact, il coupe le moteur ») → relais fermé = **moteur arrêté** au réveil. **Prérequis de déploiement bloquant** : un mauvais `default_state` ferait tourner le moteur sans contrôle pendant les ~2 s de boot, **à chaque cycle**.
+- **SHELLY-1-UPDN** : `default_state` connu (sens par défaut). Moins critique : le moteur est garanti arrêté pendant le boot, et `set_direction` est toujours réémis (étape 4) avant tout démarrage.
+- **Défense logicielle complémentaire** (étape 3) : `motor_shelly.turn_off()` appelé dès la fin du settle, **avant** `set_direction`, pour forcer l'état moteur-arrêté sans dépendre du `default_state`. Ne couvre **pas** la fenêtre de boot elle-même (Shelly injoignable) → le prérequis ci-dessus reste obligatoire.
 
 ---
 
@@ -88,7 +97,7 @@ Couvre les **deux sens** (décision validée) : `open`+`open_switch` et `close`+
 
 ### Approches écartées
 
-- **B — se reposer sur la surveillance (étape 5)** : ❌ le moteur est énergisé une fraction de seconde contre la butée le temps que le polling détecte la cible.
+- **B — se reposer sur la surveillance (étape 6)** : ❌ le moteur est énergisé une fraction de seconde contre la butée le temps que le polling détecte la cible.
 - **C — garde-fou firmware** : ❌ inopérant en archi Shelly (le firmware ne commande plus le relais).
 
 ### Défense en profondeur
@@ -209,10 +218,11 @@ Périmètre pytest restreint aux modules touchés (cf. `feedback_tests_scope`) :
 
 ## 10. Points à confirmer avec Serge (avant implémentation/câblage)
 
-1. **⚠️ Inversion sens `open_dir_state`** : le synoptique dit `UP (ouverture) = turn=on` (relais DIR **ON**), mais `config.json` a `open_dir_state:false` → `set_direction(open=True)` met le relais **OFF**. Contradiction apparente (sauf si le DPDT externe inverse). À lever **avant câblage** — type d'inversion qui force le moteur dans le mauvais sens contre une butée.
-2. **Alim du Pico W** : permanente (hypothèse retenue → pré-vol en tête de cycle) ou via le 24 V du module (→ repli pré-vol après power_on) ? Détermine le placement exact du garde-fou.
-3. **Latence stop HTTP** : mesurable seulement Shellys en main. Si elle dépasse la marge mécanique, ajouter un seuil d'anticipation côté `cimier_service` (le `timer_safety_sec=90` Shelly reste le filet).
-4. **IPs définitives** des 2 Shelly moteur (DHCP statique) → remplir `host_motor`/`host_dir`.
+1. **✅ RÉSOLU — Inversion sens `open_dir_state`** (Serge 23/05) : pas un bug de design. La traduction « état relais Shelly DIR → sens physique » vit dans le **DPDT de Serge** (qui remplace le micro-DPDT soudé d'origine), dont il a **vérifié les états attendus au multimètre**. Les libellés `turn=on/off` du synoptique décrivaient son circuit manuel, pas l'état relais à programmer. → `open_dir_state` est un **paramètre de calibration** : sa valeur (true/false) sera **confirmée au 1er test sous tension** en observant que `set_direction(open=True)` ouvre bien (et non ferme). Aucun changement de code.
+2. **🔴 Prérequis bloquant — `default_state` du Shelly MOT** (Serge 23/05, voir §3.5) : configurer côté UI Shelly MOT `default_state=ON` (moteur arrêté au réveil) **avant toute mise sous tension du cimier**. Sinon le moteur tourne sans contrôle pendant les ~2 s de boot à chaque cycle. À cocher sur la checklist de déploiement.
+3. **✅ Alim du Pico W** : permanente — confirmé JP + Serge (23/05). Le Pico W est alimenté en **12 V parallèle** (boîtier d'alim), indépendamment du 24 V coupé en fin de session → reste sous tension. ⇒ pré-vol garde-fou en tête de cycle, avant power_on. *« Fortes chances » selon Serge → vérifier au 1er test : le Pico répond-il `/status` quand le 24 V est coupé ? Sinon repli §4 (pré-vol après power_on).*
+4. **Latence stop HTTP** : mesurable seulement Shellys en main. Si elle dépasse la marge mécanique, ajouter un seuil d'anticipation côté `cimier_service` (le `timer_safety_sec=90` Shelly reste le filet).
+5. **IPs définitives** des 2 Shelly moteur (DHCP statique) → remplir `host_motor`/`host_dir`.
 
 ---
 
