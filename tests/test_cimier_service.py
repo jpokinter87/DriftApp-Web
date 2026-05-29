@@ -1558,3 +1558,185 @@ class TestOrchestrationLogging:
             and "duration_ms=" in m
             for m in events
         ), "cycle_end result=ok missing"
+
+
+# ======================================================================
+# Section T6 Bloc 2 : Logging verbeux dev (spec §7)
+# ======================================================================
+
+
+class TestVerboseLogging:
+    """Mode verbeux dev (spec §7) : DEBUG par itération de polling.
+
+    Câble les deux switches livrés Bloc 1 sans consommateur (commit 50f52d8) :
+    - cimier.verbose_logging=True (config persistante)
+    - env-var CIMIER_DEV_MODE=1 (toggle dev, exporté par start_dev.sh)
+    """
+
+    def test_verbose_logging_true_emits_poll_status_per_iteration(
+        self,
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import logging as _logging
+
+        # Garantir que CIMIER_DEV_MODE n'interfère pas — on veut tester le flag config
+        monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        caplog.set_level(_logging.DEBUG, logger="services.cimier_service")
+
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.3)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        fake.set_status_response(
+            {
+                "state": "closed",
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        fake.bind_mechanism(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            verbose_logging=True,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "verb1", "action": "open"})
+
+        debug_polls = [r.message for r in caplog.records if "cimier_event=poll_status" in r.message]
+        assert len(debug_polls) >= 2, "verbose : au moins 2 polls DEBUG attendus, got " + str(
+            len(debug_polls)
+        )
+
+    def test_non_verbose_does_not_emit_poll_status(
+        self,
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        import logging as _logging
+
+        # Forcer CIMIER_DEV_MODE absent pendant ce test
+        monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        caplog.set_level(_logging.DEBUG, logger="services.cimier_service")
+
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.3)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        fake.set_status_response(
+            {
+                "state": "closed",
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        fake.bind_mechanism(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            verbose_logging=False,  # default
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "verb2", "action": "open"})
+
+        debug_polls = [r.message for r in caplog.records if "cimier_event=poll_status" in r.message]
+        assert len(debug_polls) == 0, "non-verbose : aucun poll_status attendu, got " + str(
+            len(debug_polls)
+        )
+
+    def test_cimier_dev_mode_env_var_emits_poll_status_per_iteration(
+        self,
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """CIMIER_DEV_MODE=1 sans verbose_logging dans config → DEBUG actif."""
+        import logging as _logging
+
+        monkeypatch.setenv("CIMIER_DEV_MODE", "1")
+        caplog.set_level(_logging.DEBUG, logger="services.cimier_service")
+
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.3)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        fake.set_status_response(
+            {
+                "state": "closed",
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        fake.bind_mechanism(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            verbose_logging=False,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "verb3", "action": "open"})
+
+        debug_polls = [r.message for r in caplog.records if "cimier_event=poll_status" in r.message]
+        assert len(debug_polls) >= 2, (
+            "CIMIER_DEV_MODE : au moins 2 polls DEBUG attendus, got " + str(len(debug_polls))
+        )
