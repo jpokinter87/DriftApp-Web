@@ -94,9 +94,7 @@ class ShellyPowerSwitch:
         urlopen=None,
     ) -> None:
         if api not in ("rpc", "legacy"):
-            raise ValueError(
-                "api must be 'rpc' (Gen 2) or 'legacy' (Gen 1), got " + repr(api)
-            )
+            raise ValueError("api must be 'rpc' (Gen 2) or 'legacy' (Gen 1), got " + repr(api))
         self._host = host
         self._switch_id = switch_id
         self._api = api

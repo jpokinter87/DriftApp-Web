@@ -114,9 +114,7 @@ class CalibrationRoutine:
             except (TypeError, ValueError):
                 hint_angle = None
             if hint_angle is not None:
-                self._safe_callback(
-                    "calibrating", {"step": "hint_trip", "hint_deg": hint_angle}
-                )
+                self._safe_callback("calibrating", {"step": "hint_trip", "hint_deg": hint_angle})
                 if self._attempt_hint_trip(hint_angle):
                     return self._build_ok_result(method="hint_trip")
                 if self._timeout_hit:
@@ -135,8 +133,10 @@ class CalibrationRoutine:
                 error_msg=f"timeout après {self.config.timeout_sec}s",
             )
 
-        reason = "hint absent et sweep ±15° infructueux" if hint is None else (
-            "hint divergent et sweep ±15° infructueux"
+        reason = (
+            "hint absent et sweep ±15° infructueux"
+            if hint is None
+            else ("hint divergent et sweep ±15° infructueux")
         )
         return self._build_degraded_result(method="fallback_sweep", error_msg=reason)
 
@@ -171,8 +171,7 @@ class CalibrationRoutine:
 
         if abs(trip_total) < MIN_TRIP_DEG:
             logger.info(
-                "boot_calibration | step=hint_trip skip=below_min_trip "
-                "trip_total=%.3f min=%.2f",
+                "boot_calibration | step=hint_trip skip=below_min_trip trip_total=%.3f min=%.2f",
                 trip_total,
                 MIN_TRIP_DEG,
             )
@@ -232,18 +231,14 @@ class CalibrationRoutine:
                 use_ramp=True,
             )
         except Exception as e:
-            logger.warning(
-                "boot_calibration | step=rotation error=%s delta=%.2f", e, delta_deg
-            )
+            logger.warning("boot_calibration | step=rotation error=%s delta=%.2f", e, delta_deg)
         finally:
             stop_event.set()
             watcher.join(timeout=1.0)
 
         # Re-lire le timestamp final pour confirmer la transition
         final = self._read_calibration_timestamp()
-        calibrated = (
-            final is not None and final != baseline
-        ) or self._calibrated_during_rotation
+        calibrated = (final is not None and final != baseline) or self._calibrated_during_rotation
 
         logger.info(
             "boot_calibration | step=rotation_done delta=%.2f baseline=%s final=%s "
@@ -263,9 +258,7 @@ class CalibrationRoutine:
             now = time.monotonic()
             if now >= self._timeout_deadline:
                 self._timeout_hit = True
-                logger.warning(
-                    "boot_calibration | step=watcher action=timeout deadline_reached"
-                )
+                logger.warning("boot_calibration | step=watcher action=timeout deadline_reached")
                 self._request_stop_safe()
                 stop_event.set()
                 return
@@ -274,8 +267,7 @@ class CalibrationRoutine:
             if current is not None and current != baseline:
                 self._calibrated_during_rotation = True
                 logger.info(
-                    "boot_calibration | step=watcher action=stop "
-                    "transition baseline=%s current=%s",
+                    "boot_calibration | step=watcher action=stop transition baseline=%s current=%s",
                     baseline,
                     current,
                 )

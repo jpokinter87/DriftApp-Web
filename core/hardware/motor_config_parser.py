@@ -9,7 +9,7 @@ Version: 1.0
 """
 
 from dataclasses import dataclass
-from typing import Union, Any
+from typing import Any
 
 
 @dataclass
@@ -19,6 +19,7 @@ class MotorParams:
 
     Unifie l'accès aux paramètres que la source soit un dict ou une dataclass.
     """
+
     steps_per_revolution: int
     microsteps: int
     gear_ratio: float
@@ -30,10 +31,10 @@ class MotorParams:
     def steps_per_dome_revolution(self) -> int:
         """Calcule le nombre total de pas pour un tour de coupole."""
         return int(
-            self.steps_per_revolution *
-            self.microsteps *
-            self.gear_ratio *
-            self.steps_correction_factor
+            self.steps_per_revolution
+            * self.microsteps
+            * self.gear_ratio
+            * self.steps_correction_factor
         )
 
 
@@ -59,7 +60,7 @@ def parse_motor_config(config: Any) -> MotorParams:
         # Depuis dict legacy
         params = parse_motor_config({'steps_per_revolution': 200, ...})
     """
-    if hasattr(config, 'gpio_pins'):
+    if hasattr(config, "gpio_pins"):
         # MotorConfig dataclass (core/config/config_loader.py)
         return MotorParams(
             steps_per_revolution=config.steps_per_revolution,
@@ -67,18 +68,18 @@ def parse_motor_config(config: Any) -> MotorParams:
             gear_ratio=config.gear_ratio,
             steps_correction_factor=config.steps_correction_factor,
             dir_pin=config.gpio_pins.dir,
-            step_pin=config.gpio_pins.step
+            step_pin=config.gpio_pins.step,
         )
     elif isinstance(config, dict):
         # Ancien format dict (compatibilité)
-        gpio_pins = config.get('gpio_pins', {})
+        gpio_pins = config.get("gpio_pins", {})
         return MotorParams(
-            steps_per_revolution=config['steps_per_revolution'],
-            microsteps=config['microsteps'],
-            gear_ratio=config['gear_ratio'],
-            steps_correction_factor=config['steps_correction_factor'],
-            dir_pin=gpio_pins.get('dir', 17),
-            step_pin=gpio_pins.get('step', 18)
+            steps_per_revolution=config["steps_per_revolution"],
+            microsteps=config["microsteps"],
+            gear_ratio=config["gear_ratio"],
+            steps_correction_factor=config["steps_correction_factor"],
+            dir_pin=gpio_pins.get("dir", 17),
+            step_pin=gpio_pins.get("step", 18),
         )
     else:
         raise ValueError(
@@ -104,14 +105,11 @@ def validate_motor_params(params: MotorParams) -> None:
 
     if params.microsteps not in [1, 2, 4, 8, 16, 32]:
         raise ValueError(
-            f"microsteps invalide: {params.microsteps}. "
-            "Valeurs possibles: 1, 2, 4, 8, 16, 32"
+            f"microsteps invalide: {params.microsteps}. Valeurs possibles: 1, 2, 4, 8, 16, 32"
         )
 
     if params.gear_ratio <= 0:
-        raise ValueError(
-            f"gear_ratio doit être > 0 (reçu: {params.gear_ratio})"
-        )
+        raise ValueError(f"gear_ratio doit être > 0 (reçu: {params.gear_ratio})")
 
     if params.steps_correction_factor <= 0:
         raise ValueError(

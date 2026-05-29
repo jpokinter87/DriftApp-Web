@@ -26,6 +26,7 @@ class StaleDataError(RuntimeError):
     depuis trop longtemps, suggérant un problème de communication SPI
     ou un blocage du démon.
     """
+
     pass
 
 
@@ -61,7 +62,7 @@ class DaemonEncoderReader:
             dict: Données complètes du démon ou None si erreur
         """
         try:
-            with open(self.daemon_path, 'r') as f:
+            with open(self.daemon_path, "r") as f:
                 fcntl.flock(f, fcntl.LOCK_SH)
                 text = f.read()
                 fcntl.flock(f, fcntl.LOCK_UN)
@@ -101,9 +102,7 @@ class DaemonEncoderReader:
                 data = self.read_raw()
                 if data is None:
                     if elapsed_ms > timeout_ms:
-                        raise RuntimeError(
-                            f"Démon encodeur non trouvé ({self.daemon_path})"
-                        )
+                        raise RuntimeError(f"Démon encodeur non trouvé ({self.daemon_path})")
                     time.sleep(0.01)
                     continue
 
@@ -191,8 +190,9 @@ class DaemonEncoderReader:
         cos_sum = sum(math.cos(math.radians(p)) for p in positions)
         return math.degrees(math.atan2(sin_sum, cos_sum)) % 360
 
-    def read_stable(self, num_samples: int = 3, delay_ms: int = 10,
-                    stabilization_ms: int = 50) -> float:
+    def read_stable(
+        self, num_samples: int = 3, delay_ms: int = 10, stabilization_ms: int = 50
+    ) -> float:
         """
         Lecture avec moyenne pour stabilité mécanique.
 

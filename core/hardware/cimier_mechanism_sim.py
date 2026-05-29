@@ -25,9 +25,7 @@ class CimierMechanismSim:
         force_both_switches: bool = False,
     ) -> None:
         if initial_state not in _INITIAL_POSITIONS:
-            raise ValueError(
-                "initial_state must be one of {}".format(sorted(_INITIAL_POSITIONS))
-            )
+            raise ValueError("initial_state must be one of {}".format(sorted(_INITIAL_POSITIONS)))
         if full_travel_s <= 0:
             raise ValueError("full_travel_s must be > 0")
         self._position = _INITIAL_POSITIONS[initial_state]

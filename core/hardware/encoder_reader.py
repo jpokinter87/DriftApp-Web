@@ -37,7 +37,7 @@ def read_encoder_daemon(max_age_seconds: float = 2.0) -> Tuple[Optional[float], 
         if age > max_age_seconds:
             return data.get("angle"), False, timestamp
 
-        is_ok = (data.get("status") == "OK")
+        is_ok = data.get("status") == "OK"
         return data.get("angle"), is_ok, timestamp
 
     except (BlockingIOError, FileNotFoundError, json.JSONDecodeError, OSError):

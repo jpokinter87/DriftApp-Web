@@ -127,6 +127,10 @@ class PositionPersistor:
             logger.warning("position_persistor: load skip (reason=invalid_schema path=%s)", path)
             return None
         if not (0.0 <= float(azimut) < 360.0):
-            logger.warning("position_persistor: load skip (reason=invalid_schema path=%s azimut=%s)", path, azimut)
+            logger.warning(
+                "position_persistor: load skip (reason=invalid_schema path=%s azimut=%s)",
+                path,
+                azimut,
+            )
             return None
         return data

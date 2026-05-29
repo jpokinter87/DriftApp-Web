@@ -43,9 +43,9 @@ class FeedbackController:
 
     def __init__(
         self,
-        moteur: 'MoteurRP2040',
-        daemon_reader: 'DaemonEncoderReader',
-        protection_threshold: Optional[float] = None
+        moteur: "MoteurRP2040",
+        daemon_reader: "DaemonEncoderReader",
+        protection_threshold: Optional[float] = None,
     ):
         """
         Initialise le contrôleur de feedback.
@@ -61,7 +61,8 @@ class FeedbackController:
         self.logger = logging.getLogger(__name__)
         self.stop_requested = False
         self.protection_threshold = (
-            protection_threshold if protection_threshold is not None
+            protection_threshold
+            if protection_threshold is not None
             else self.DEFAULT_PROTECTION_THRESHOLD
         )
 
@@ -106,8 +107,7 @@ class FeedbackController:
         """
         return self.daemon_reader.read_fast(num_samples=2, delay_ms=10)
 
-    def _calculer_correction(self, erreur: float,
-                             max_correction: float) -> tuple:
+    def _calculer_correction(self, erreur: float, max_correction: float) -> tuple:
         """
         Calcule les paramètres de correction.
 
@@ -124,32 +124,39 @@ class FeedbackController:
     # RÉSULTATS
     # =========================================================================
 
-    def _creer_resultat(self, success: bool, position_initiale: float,
-                        position_finale: float, angle_cible: float,
-                        erreur_finale: float, iterations: int,
-                        corrections: list, temps_total: float,
-                        timeout: bool = False) -> Dict[str, Any]:
+    def _creer_resultat(
+        self,
+        success: bool,
+        position_initiale: float,
+        position_finale: float,
+        angle_cible: float,
+        erreur_finale: float,
+        iterations: int,
+        corrections: list,
+        temps_total: float,
+        timeout: bool = False,
+    ) -> Dict[str, Any]:
         """Crée le résultat final de la rotation."""
         return {
-            'success': success,
-            'position_initiale': position_initiale,
-            'position_finale': position_finale,
-            'position_cible': angle_cible,
-            'erreur_finale': erreur_finale,
-            'iterations': iterations,
-            'corrections': corrections,
-            'temps_total': temps_total,
-            'mode': 'feedback_daemon',
-            'timeout': timeout
+            "success": success,
+            "position_initiale": position_initiale,
+            "position_finale": position_finale,
+            "position_cible": angle_cible,
+            "erreur_finale": erreur_finale,
+            "iterations": iterations,
+            "corrections": corrections,
+            "temps_total": temps_total,
+            "mode": "feedback_daemon",
+            "timeout": timeout,
         }
 
     # =========================================================================
     # EXÉCUTION DES PAS
     # =========================================================================
 
-    def _executer_pas_avec_verification(self, steps: int, vitesse: float,
-                                         angle_cible: float,
-                                         tolerance: float) -> None:
+    def _executer_pas_avec_verification(
+        self, steps: int, vitesse: float, angle_cible: float, tolerance: float
+    ) -> None:
         """
         Exécute les pas moteur via une seule commande rotation().
         """
@@ -157,14 +164,15 @@ class FeedbackController:
         angle = steps * deg_per_step * (1 if self.moteur.direction_actuelle >= 0 else -1)
         self.moteur.rotation(angle, vitesse=vitesse)
 
-    def _verifier_arret_anticipe(self, angle_cible: float, tolerance: float,
-                                  step_index: int, total_steps: int) -> bool:
+    def _verifier_arret_anticipe(
+        self, angle_cible: float, tolerance: float, step_index: int, total_steps: int
+    ) -> bool:
         """Vérifie si on peut arrêter les pas plus tôt."""
         try:
             pos_courante = self.daemon_reader.read_angle(timeout_ms=50)
             delta_actuel = self._calculer_delta_angulaire(pos_courante, angle_cible)
             if abs(delta_actuel) < tolerance:
-                self.logger.debug(f"Arrêt anticipé à {step_index+1}/{total_steps} pas")
+                self.logger.debug(f"Arrêt anticipé à {step_index + 1}/{total_steps} pas")
                 return True
         except RuntimeError:
             pass
@@ -174,11 +182,17 @@ class FeedbackController:
     # ENREGISTREMENT
     # =========================================================================
 
-    def _enregistrer_correction(self, iteration: int, position_avant: float,
-                                 erreur_avant: float, angle_correction: float,
-                                 direction: int, steps: int,
-                                 correction_start: float,
-                                 angle_cible: float) -> dict:
+    def _enregistrer_correction(
+        self,
+        iteration: int,
+        position_avant: float,
+        erreur_avant: float,
+        angle_correction: float,
+        direction: int,
+        steps: int,
+        correction_start: float,
+        angle_cible: float,
+    ) -> dict:
         """Enregistre les statistiques d'une correction."""
         correction_duration = time.time() - correction_start
 
@@ -190,19 +204,25 @@ class FeedbackController:
             erreur_apres = erreur_avant - (angle_correction * direction)
 
         return {
-            'iteration': iteration + 1,
-            'position_avant': position_avant,
-            'erreur_avant': erreur_avant,
-            'correction_demandee': angle_correction * direction,
-            'steps': steps,
-            'duration': correction_duration,
-            'erreur_apres': erreur_apres
+            "iteration": iteration + 1,
+            "position_avant": position_avant,
+            "erreur_avant": erreur_avant,
+            "correction_demandee": angle_correction * direction,
+            "steps": steps,
+            "duration": correction_duration,
+            "erreur_apres": erreur_apres,
         }
 
-    def _log_resultat_final(self, success: bool, position_initiale: float,
-                            position_finale: float, erreur_finale: float,
-                            iteration: int, max_iterations: int,
-                            temps_total: float) -> None:
+    def _log_resultat_final(
+        self,
+        success: bool,
+        position_initiale: float,
+        position_finale: float,
+        erreur_finale: float,
+        iteration: int,
+        max_iterations: int,
+        temps_total: float,
+    ) -> None:
         """Log le résultat final de la rotation."""
         if success:
             self.logger.info(
@@ -221,10 +241,16 @@ class FeedbackController:
     # BOUCLE DE CORRECTION
     # =========================================================================
 
-    def _executer_iteration(self, angle_cible: float, vitesse: float,
-                            tolerance: float, max_correction: float,
-                            iteration: int, position_initiale: float = None,
-                            allow_large_movement: bool = False) -> Optional[dict]:
+    def _executer_iteration(
+        self,
+        angle_cible: float,
+        vitesse: float,
+        tolerance: float,
+        max_correction: float,
+        iteration: int,
+        position_initiale: float = None,
+        allow_large_movement: bool = False,
+    ) -> Optional[dict]:
         """
         Exécute une itération de la boucle de correction.
 
@@ -255,7 +281,7 @@ class FeedbackController:
 
         erreur = self._calculer_delta_angulaire(position_actuelle, angle_cible)
         self.logger.debug(
-            f"  Iter {iteration+1}: Pos={position_actuelle:.1f}° Erreur={erreur:+.2f}°"
+            f"  Iter {iteration + 1}: Pos={position_actuelle:.1f}° Erreur={erreur:+.2f}°"
         )
 
         # Objectif atteint ?
@@ -272,17 +298,13 @@ class FeedbackController:
             return None
 
         # Calcul de la correction
-        angle_correction, direction, steps = self._calculer_correction(
-            erreur, max_correction
-        )
+        angle_correction, direction, steps = self._calculer_correction(erreur, max_correction)
 
         if steps == 0:
             self.logger.debug("  Erreur trop petite pour un pas")
             return None
 
-        self.logger.debug(
-            f"  Correction: {angle_correction * direction:+.2f}° ({steps} pas)"
-        )
+        self.logger.debug(f"  Correction: {angle_correction * direction:+.2f}° ({steps} pas)")
 
         # Exécution de la correction
         self.moteur.definir_direction(direction)
@@ -291,8 +313,14 @@ class FeedbackController:
 
         # Enregistrer la correction
         return self._enregistrer_correction(
-            iteration, position_actuelle, erreur, angle_correction,
-            direction, steps, correction_start, angle_cible
+            iteration,
+            position_actuelle,
+            erreur,
+            angle_correction,
+            direction,
+            steps,
+            correction_start,
+            angle_cible,
         )
 
     # =========================================================================
@@ -307,7 +335,7 @@ class FeedbackController:
         max_iterations: int = 10,
         max_correction_par_iteration: float = 180.0,
         allow_large_movement: bool = False,
-        max_duration: float = 60.0
+        max_duration: float = 60.0,
     ) -> Dict[str, Any]:
         """
         Rotation avec feedback via démon encodeur.
@@ -334,14 +362,12 @@ class FeedbackController:
         # Lecture position initiale — si le démon est inaccessible, propager l'erreur
         position_initiale = self._lire_position_stable()
 
-        self.logger.info(
-            f"Rotation avec feedback: {position_initiale:.1f}° -> {angle_cible:.1f}°"
-        )
+        self.logger.info(f"Rotation avec feedback: {position_initiale:.1f}° -> {angle_cible:.1f}°")
 
         # Calcul timeout dynamique basé sur la distance à parcourir
         # Pour les grands déplacements (flip méridien > 30°), le timeout fixe de 60s est insuffisant
         distance = abs(self._calculer_delta_angulaire(position_initiale, angle_cible))
-        if distance > 30.0 and hasattr(self.moteur, 'steps_per_dome_revolution'):
+        if distance > 30.0 and hasattr(self.moteur, "steps_per_dome_revolution"):
             steps_per_degree = self.moteur.steps_per_dome_revolution / 360.0
             temps_estime = distance * steps_per_degree * vitesse
             # Facteur de marge x2 pour les itérations de correction
@@ -377,10 +403,13 @@ class FeedbackController:
 
             try:
                 correction = self._executer_iteration(
-                    angle_cible, vitesse, tolerance,
-                    max_correction_par_iteration, iteration,
+                    angle_cible,
+                    vitesse,
+                    tolerance,
+                    max_correction_par_iteration,
+                    iteration,
                     position_initiale=position_initiale,  # Pour détecter recalibration switch
-                    allow_large_movement=allow_large_movement  # Pour GOTO initial
+                    allow_large_movement=allow_large_movement,  # Pour GOTO initial
                 )
             except StaleDataError as e:
                 self.logger.error(f"⚠️ Problème encodeur détecté: {e}")
@@ -396,8 +425,8 @@ class FeedbackController:
             # IMPORTANT: Vérifier le mouvement TOTAL depuis le début, pas seulement entre échantillons
             # Cela évite les faux positifs lors de grands déplacements (ex: passage méridien)
             if len(corrections) >= 2:
-                last_pos = corrections[-1]['position_avant']
-                prev_pos = corrections[-2]['position_avant']
+                last_pos = corrections[-1]["position_avant"]
+                prev_pos = corrections[-2]["position_avant"]
                 inter_sample_movement = abs(last_pos - prev_pos)
                 # Gérer le wraparound 0-360
                 inter_sample_movement = min(inter_sample_movement, 360 - inter_sample_movement)
@@ -453,24 +482,31 @@ class FeedbackController:
         success = abs(erreur_finale) < tolerance and not timeout_reached and not encoder_frozen
 
         self._log_resultat_final(
-            success, position_initiale, position_finale,
-            erreur_finale, iteration, max_iterations, temps_total
+            success,
+            position_initiale,
+            position_finale,
+            erreur_finale,
+            iteration,
+            max_iterations,
+            temps_total,
         )
 
         result = self._creer_resultat(
-            success, position_initiale, position_finale, angle_cible,
-            erreur_finale, iteration, corrections, temps_total,
-            timeout=timeout_reached
+            success,
+            position_initiale,
+            position_finale,
+            angle_cible,
+            erreur_finale,
+            iteration,
+            corrections,
+            temps_total,
+            timeout=timeout_reached,
         )
         # Ajouter info encodeur figé
-        result['encoder_frozen'] = encoder_frozen
+        result["encoder_frozen"] = encoder_frozen
         return result
 
-    def rotation_relative_avec_feedback(
-        self,
-        delta_deg: float,
-        **kwargs
-    ) -> Dict[str, Any]:
+    def rotation_relative_avec_feedback(self, delta_deg: float, **kwargs) -> Dict[str, Any]:
         """
         Rotation relative avec feedback via démon.
 
@@ -487,8 +523,7 @@ class FeedbackController:
         angle_cible = (position_actuelle + delta_deg) % 360
 
         self.logger.info(
-            f"Rotation relative: {delta_deg:+.1f}° "
-            f"({position_actuelle:.1f}° -> {angle_cible:.1f}°)"
+            f"Rotation relative: {delta_deg:+.1f}° ({position_actuelle:.1f}° -> {angle_cible:.1f}°)"
         )
 
         return self.rotation_avec_feedback(angle_cible=angle_cible, **kwargs)

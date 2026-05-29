@@ -76,12 +76,13 @@ class MoteurSimule:
         self._instance_id = id(self)
 
         if config_moteur:
-            if hasattr(config_moteur, 'steps_per_dome_revolution'):
+            if hasattr(config_moteur, "steps_per_dome_revolution"):
                 # Déjà un MotorParams ou objet avec propriété calculée
                 self.steps_per_dome_revolution = config_moteur.steps_per_dome_revolution
             else:
                 # Utiliser le parser centralisé (dict ou dataclass)
                 from core.hardware.motor_config_parser import parse_motor_config
+
                 params = parse_motor_config(config_moteur)
                 self.steps_per_dome_revolution = params.steps_per_dome_revolution
         else:
@@ -115,8 +116,9 @@ class MoteurSimule:
         """Définit la direction de rotation."""
         self.direction = direction
 
-    def _calculer_delai_rampe(self, step_index: int, total_steps: int,
-                               vitesse_nominale: float) -> float:
+    def _calculer_delai_rampe(
+        self, step_index: int, total_steps: int, vitesse_nominale: float
+    ) -> float:
         """Calcule le délai pour un pas (retourne toujours la vitesse nominale en simulation)."""
         return vitesse_nominale
 
@@ -182,8 +184,13 @@ class MoteurSimule:
         _global_position = new_pos
         self.position_actuelle = new_pos
 
-    def rotation_absolue(self, position_cible_deg: float, position_actuelle_deg: float,
-                        vitesse: float = 0.0015, use_ramp: bool = True):
+    def rotation_absolue(
+        self,
+        position_cible_deg: float,
+        position_actuelle_deg: float,
+        vitesse: float = 0.0015,
+        use_ramp: bool = True,
+    ):
         """
         Rotation vers une position absolue.
 
@@ -217,10 +224,10 @@ class MoteurSimule:
     def get_daemon_status() -> Optional[dict]:
         """Retourne un statut simulé."""
         return {
-            'angle': _global_position,
-            'calibrated': True,
-            'status': 'OK (simulation)',
-            'timestamp': 0
+            "angle": _global_position,
+            "calibrated": True,
+            "status": "OK (simulation)",
+            "timestamp": 0,
         }
 
     # =========================================================================
@@ -248,7 +255,7 @@ class MoteurSimule:
         tolerance: float = 0.5,
         max_iterations: int = 10,
         max_correction_par_iteration: float = 45.0,
-        allow_large_movement: bool = False
+        allow_large_movement: bool = False,
     ) -> Dict[str, Any]:
         """
         Simule une rotation avec feedback et timing réaliste.
@@ -274,22 +281,18 @@ class MoteurSimule:
         temps_total = time.time() - start_time
 
         return {
-            'success': True,
-            'position_initiale': position_initiale,
-            'position_finale': angle_cible,
-            'position_cible': angle_cible,
-            'erreur_finale': 0.0,
-            'iterations': 1,
-            'corrections': [],
-            'temps_total': temps_total,
-            'mode': 'simulation'
+            "success": True,
+            "position_initiale": position_initiale,
+            "position_finale": angle_cible,
+            "position_cible": angle_cible,
+            "erreur_finale": 0.0,
+            "iterations": 1,
+            "corrections": [],
+            "temps_total": temps_total,
+            "mode": "simulation",
         }
 
-    def rotation_relative_avec_feedback(
-        self,
-        delta_deg: float,
-        **kwargs
-    ) -> Dict[str, Any]:
+    def rotation_relative_avec_feedback(self, delta_deg: float, **kwargs) -> Dict[str, Any]:
         """
         Simule une rotation relative avec feedback.
         """

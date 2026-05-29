@@ -83,5 +83,3 @@ def make_weather_provider(cfg: "WeatherProviderConfig") -> WeatherProvider:
     if t == "noop":
         return NoopWeatherProvider()
     raise ValueError("WeatherProviderConfig.type inconnu: " + repr(cfg.type))
-
-

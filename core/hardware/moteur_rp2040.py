@@ -70,18 +70,14 @@ class MoteurRP2040:
         self.gear_ratio = params.gear_ratio
         self.steps_correction_factor = params.steps_correction_factor
         self.steps_per_dome_revolution = int(
-            self.STEPS_PER_REV
-            * self.MICROSTEPS
-            * self.gear_ratio
-            * self.steps_correction_factor
+            self.STEPS_PER_REV * self.MICROSTEPS * self.gear_ratio * self.steps_correction_factor
         )
 
         # Attendre le READY du firmware
         self._wait_ready()
 
         self.logger.info(
-            f"MoteurRP2040 initialise - "
-            f"Steps/tour coupole: {self.steps_per_dome_revolution}"
+            f"MoteurRP2040 initialise - Steps/tour coupole: {self.steps_per_dome_revolution}"
         )
 
     # =========================================================================
@@ -185,9 +181,7 @@ class MoteurRP2040:
         except Exception:
             pass
 
-        raise TimeoutError(
-            f"Firmware RP2040 n'a pas repondu dans {READY_TIMEOUT}s"
-        )
+        raise TimeoutError(f"Firmware RP2040 n'a pas repondu dans {READY_TIMEOUT}s")
 
     def _parse_response(self, response: str, context: str = "") -> Optional[int]:
         """
@@ -214,9 +208,7 @@ class MoteurRP2040:
         elif status == "STOPPED":
             steps_done = int(parts[1]) if len(parts) > 1 else 0
             self._needs_drain = True
-            self.logger.info(
-                f"Mouvement arrete par firmware apres {steps_done} pas ({context})"
-            )
+            self.logger.info(f"Mouvement arrete par firmware apres {steps_done} pas ({context})")
             return steps_done
 
         elif status == "ERROR":
@@ -225,9 +217,7 @@ class MoteurRP2040:
             return None
 
         elif status == "BUSY":
-            self.logger.warning(
-                f"Firmware occupe, commande ignoree ({context})"
-            )
+            self.logger.warning(f"Firmware occupe, commande ignoree ({context})")
             return None
 
         elif status == "IDLE":
@@ -272,9 +262,7 @@ class MoteurRP2040:
                 La grandeur du mouvement reste abs(angle_deg).
         """
         if force_direction not in (-1, 0, 1):
-            raise ValueError(
-                f"force_direction doit être -1, 0 ou +1, reçu {force_direction}"
-            )
+            raise ValueError(f"force_direction doit être -1, 0 ou +1, reçu {force_direction}")
 
         self.clear_stop_request()
 
@@ -321,8 +309,10 @@ class MoteurRP2040:
         # En simulation, synchroniser la position globale
         # (SerialSimulator ne met pas a jour get_simulated_position)
         from core.hardware.serial_simulator import SerialSimulator
+
         if isinstance(self.serial_port, SerialSimulator):
             from core.hardware.moteur_simule import get_simulated_position, set_simulated_position
+
             set_simulated_position((get_simulated_position() + angle_deg) % 360)
 
     def rotation_absolue(
@@ -443,9 +433,7 @@ class MoteurRP2040:
             allow_large_movement=allow_large_movement,
         )
 
-    def rotation_relative_avec_feedback(
-        self, delta_deg: float, **kwargs
-    ) -> Dict[str, Any]:
+    def rotation_relative_avec_feedback(self, delta_deg: float, **kwargs) -> Dict[str, Any]:
         """
         Rotation relative avec feedback via demon.
         """

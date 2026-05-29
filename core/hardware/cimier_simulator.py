@@ -10,6 +10,7 @@ Reproduit la latence boot (port non lié → ConnectionRefused côté client).
 CLI : uv run python -m core.hardware.cimier_simulator [--port 8001]
       [--boot-delay 0.0] [--initial closed|open|mid]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -129,9 +130,7 @@ class CimierSimulator:
             self._mechanism = CimierMechanismSim(
                 initial_state=self._initial_state, full_travel_s=self._full_travel_s
             )
-            self._controller = _cc.CimierController(
-                _MechanismSwitchAdapter(self._mechanism)
-            )
+            self._controller = _cc.CimierController(_MechanismSwitchAdapter(self._mechanism))
             self._boot_thread = threading.Thread(
                 target=self._boot_then_serve, name="cimier-sim-boot", daemon=True
             )
@@ -227,7 +226,9 @@ def _parse_args(argv):
 def main(argv=None):
     args = _parse_args(argv)
     sim = CimierSimulator(
-        port=args.port, boot_delay_s=args.boot_delay, host=args.host,
+        port=args.port,
+        boot_delay_s=args.boot_delay,
+        host=args.host,
         initial_state=args.initial,
     )
     print(

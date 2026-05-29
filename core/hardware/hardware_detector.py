@@ -68,6 +68,7 @@ class HardwareDetector:
         # Essayer RPi.GPIO (Pi 1-4)
         try:
             import RPi.GPIO as GPIO
+
             try:
                 GPIO.setmode(GPIO.BCM)
                 GPIO.setwarnings(False)
@@ -80,6 +81,7 @@ class HardwareDetector:
         # Essayer lgpio (Raspberry Pi 5)
         try:
             import lgpio
+
             try:
                 h = lgpio.gpiochip_open(0)
                 lgpio.gpiochip_close(h)
@@ -92,8 +94,9 @@ class HardwareDetector:
         # Essayer gpiod (alternative)
         try:
             import gpiod
+
             try:
-                chip = gpiod.Chip('gpiochip0')
+                chip = gpiod.Chip("gpiochip0")
                 chip.close()
                 return True, None
             except Exception as e:
@@ -118,11 +121,11 @@ class HardwareDetector:
             Tuple (is_available, error_message, test_position)
         """
         daemon_json = Path("/dev/shm/ems22_position.json")
-        
+
         # Vérifier si le fichier existe
         if not daemon_json.exists():
             return False, "Démon encodeur non actif (fichier JSON absent)", None
-        
+
         try:
             # Lire le fichier JSON avec verrou fcntl
             with open(daemon_json, "r") as f:
@@ -136,12 +139,12 @@ class HardwareDetector:
             status = data.get("status", "UNKNOWN")
             angle = data.get("angle", None)
             timestamp = data.get("ts", 0)
-            
+
             # Vérifier que le fichier est récent (< 5 secondes)
             age = time.time() - timestamp
             if age > 5:
                 return False, f"Démon encodeur inactif (dernière mise à jour: {age:.1f}s)", None
-            
+
             if status == "OK":
                 if angle is not None and 0 <= angle <= 360:
                     return True, None, float(angle)
@@ -149,7 +152,7 @@ class HardwareDetector:
                     return False, f"Position invalide: {angle}°", None
             else:
                 return False, f"Démon encodeur en erreur: {status}", angle if angle else None
-                
+
         except BlockingIOError:
             return False, "Fichier démon verrouillé, réessayer", None
         except json.JSONDecodeError as e:
@@ -165,10 +168,7 @@ class HardwareDetector:
         Returns:
             Dict avec les informations SPI
         """
-        spi_info = {
-            "spi_available": False,
-            "spi_devices": []
-        }
+        spi_info = {"spi_available": False, "spi_devices": []}
 
         # Vérifier les devices SPI
         spi_paths = ["/dev/spidev0.0", "/dev/spidev0.1", "/dev/spidev1.0", "/dev/spidev1.1"]
@@ -184,7 +184,7 @@ class HardwareDetector:
                 spi_info["spi_module"] = "loaded"
             else:
                 spi_info["spi_module"] = "not loaded"
-        except:
+        except Exception:
             spi_info["spi_module"] = "unknown"
 
         return spi_info
@@ -198,14 +198,9 @@ class HardwareDetector:
             True si le démon tourne
         """
         try:
-            result = subprocess.run(
-                ["ps", "aux"], 
-                capture_output=True, 
-                text=True, 
-                timeout=2
-            )
+            result = subprocess.run(["ps", "aux"], capture_output=True, text=True, timeout=2)
             return "ems22d_calibrated" in result.stdout
-        except:
+        except Exception:
             return False
 
     @staticmethod
@@ -230,9 +225,13 @@ class HardwareDetector:
         is_rpi = HardwareDetector.is_raspberry_pi()
         rpi_model = HardwareDetector.get_raspberry_pi_model() if is_rpi else None
 
-        gpio_ok, gpio_error = (False, "Non testé") if not is_rpi else HardwareDetector.check_gpio_available()
+        gpio_ok, gpio_error = (
+            (False, "Non testé") if not is_rpi else HardwareDetector.check_gpio_available()
+        )
         encoder_ok, encoder_error, encoder_pos = HardwareDetector.check_encoder_daemon()
-        motor_ok, motor_error = (False, "Non testé") if not is_rpi else HardwareDetector.test_motor_pins()
+        motor_ok, motor_error = (
+            (False, "Non testé") if not is_rpi else HardwareDetector.test_motor_pins()
+        )
 
         spi_info = HardwareDetector.check_spi_devices() if is_rpi else {}
         daemon_running = HardwareDetector.check_daemon_process()
@@ -269,7 +268,7 @@ class HardwareDetector:
         if model_path.exists():
             try:
                 with open(model_path, "r") as f:
-                    return f.read().strip().replace('\x00', '')
+                    return f.read().strip().replace("\x00", "")
             except Exception:
                 pass
         return None
@@ -299,74 +298,74 @@ class HardwareDetector:
 
         # Raspberry Pi
         summary.append("RASPBERRY PI:")
-        if hardware_info['raspberry_pi']:
-            summary.append(f"  Détecté:      ✓ OUI")
-            if hardware_info['rpi_model']:
+        if hardware_info["raspberry_pi"]:
+            summary.append("  Détecté:      ✓ OUI")
+            if hardware_info["rpi_model"]:
                 summary.append(f"  Modèle:       {hardware_info['rpi_model']}")
         else:
-            summary.append(f"  Détecté:      ✗ NON")
+            summary.append("  Détecté:      ✗ NON")
         summary.append("")
 
         # GPIO
         summary.append("GPIO:")
-        if hardware_info['gpio']:
-            summary.append(f"  Disponible:   ✓ OUI")
+        if hardware_info["gpio"]:
+            summary.append("  Disponible:   ✓ OUI")
         else:
-            summary.append(f"  Disponible:   ✗ NON")
-            if hardware_info['gpio_error']:
+            summary.append("  Disponible:   ✗ NON")
+            if hardware_info["gpio_error"]:
                 summary.append(f"  Info:         {hardware_info['gpio_error']}")
         summary.append("")
 
         # SPI
-        if hardware_info.get('spi_available'):
+        if hardware_info.get("spi_available"):
             summary.append("BUS SPI:")
-            summary.append(f"  Disponible:   ✓ OUI")
-            if hardware_info.get('spi_devices'):
+            summary.append("  Disponible:   ✓ OUI")
+            if hardware_info.get("spi_devices"):
                 summary.append(f"  Devices:      {', '.join(hardware_info['spi_devices'])}")
             summary.append("")
 
         # Démon Encodeur
         summary.append("DÉMON ENCODEUR EMS22A:")
-        if hardware_info['encoder_daemon']:
-            summary.append(f"  Actif:        ✓ OUI")
-            if hardware_info['encoder_position'] is not None:
+        if hardware_info["encoder_daemon"]:
+            summary.append("  Actif:        ✓ OUI")
+            if hardware_info["encoder_position"] is not None:
                 summary.append(f"  Position:     {hardware_info['encoder_position']:.2f}°")
         else:
-            summary.append(f"  Actif:        ✗ NON")
-            if hardware_info['encoder_error']:
+            summary.append("  Actif:        ✗ NON")
+            if hardware_info["encoder_error"]:
                 summary.append(f"  Info:         {hardware_info['encoder_error']}")
-            
-        if hardware_info.get('daemon_process'):
-            summary.append(f"  Processus:    ✓ Trouvé (ems22d_calibrated)")
+
+        if hardware_info.get("daemon_process"):
+            summary.append("  Processus:    ✓ Trouvé (ems22d_calibrated)")
         else:
-            summary.append(f"  Processus:    ✗ Non trouvé")
-            summary.append(f"  → Lancer:     sudo python3 ems22d_calibrated.py &")
+            summary.append("  Processus:    ✗ Non trouvé")
+            summary.append("  → Lancer:     sudo python3 ems22d_calibrated.py &")
         summary.append("")
 
         # Moteur
         summary.append("MOTEUR COUPOLE:")
-        if hardware_info['motor']:
-            summary.append(f"  Disponible:   ✓ OUI")
+        if hardware_info["motor"]:
+            summary.append("  Disponible:   ✓ OUI")
         else:
-            summary.append(f"  Disponible:   ✗ NON")
-            if hardware_info['motor_error']:
+            summary.append("  Disponible:   ✗ NON")
+            if hardware_info["motor_error"]:
                 summary.append(f"  Info:         {hardware_info['motor_error']}")
         summary.append("")
 
         # Conclusion
         summary.append("─" * 80)
-        if hardware_info['raspberry_pi'] and hardware_info['gpio']:
+        if hardware_info["raspberry_pi"] and hardware_info["gpio"]:
             summary.append("→ MODE PRODUCTION ACTIVÉ")
             summary.append("  Le système peut piloter la coupole physiquement.")
-            if not hardware_info['encoder_daemon']:
+            if not hardware_info["encoder_daemon"]:
                 summary.append("  ⚠️  Démon encodeur inactif : mode position logicielle")
                 summary.append("     Lancer: sudo python3 ems22d_calibrated.py &")
         else:
             summary.append("→ MODE SIMULATION ACTIVÉ")
             summary.append("  Raisons:")
-            if not hardware_info['raspberry_pi']:
+            if not hardware_info["raspberry_pi"]:
                 summary.append("    - Raspberry Pi non détecté")
-            if not hardware_info['gpio']:
+            if not hardware_info["gpio"]:
                 summary.append("    - GPIO non disponible")
             summary.append("  Le système fonctionnera en mode développement.")
         summary.append("─" * 80)
@@ -378,16 +377,18 @@ class HardwareDetector:
         """Sauvegarde un rapport de détection dans un fichier."""
         try:
             import time
+
             Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
             with open(filepath, "w", encoding="utf-8") as f:
-                f.write(f"Rapport de détection matérielle\n")
+                f.write("Rapport de détection matérielle\n")
                 f.write(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Architecture: DAEMON\n\n")
+                f.write("Architecture: DAEMON\n\n")
                 f.write(HardwareDetector.get_hardware_summary(hardware_info))
                 f.write("\n\nDétails JSON:\n")
-                
+
                 import json
+
                 f.write(json.dumps(hardware_info, indent=2, ensure_ascii=False))
 
             return True
@@ -398,9 +399,9 @@ class HardwareDetector:
 
 # Test si exécuté directement
 if __name__ == "__main__":
-    print("\n" + "="*80)
+    print("\n" + "=" * 80)
     print("TEST DE DÉTECTION MATÉRIELLE - ARCHITECTURE DAEMON")
-    print("="*80 + "\n")
+    print("=" * 80 + "\n")
 
     is_prod, hw_info = HardwareDetector.detect_hardware()
 
