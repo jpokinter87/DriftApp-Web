@@ -7,12 +7,14 @@ Couvre :
   - Erreurs et timeouts (cycle_timeout, both_switches, power_on_failure)
   - Commande "stop" (pendant cycle, idle)
   - IPC manager : dédup, écriture atomique, création fichier
+  - T7 : cycles bout-en-bout via CimierSimulator HTTP réel (spec §8)
 """
 
 from __future__ import annotations
 
 import json
 import re
+import socket
 import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +23,7 @@ import pytest
 
 from core.config.config_loader import CimierConfig, MotorShellyConfig, PowerSwitchConfig
 from core.hardware.cimier_mechanism_sim import CimierMechanismSim
+from core.hardware.cimier_simulator import CimierSimulator
 from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
 from core.hardware.sim_motor_shelly import SimMotorShelly
 from core.hardware.power_switch import (
@@ -39,9 +42,48 @@ from services.cimier_service import (
     STATE_ERROR,
     STATE_IDLE,
     CimierService,
+    HttpClient,
     make_motor_shelly,
     make_power_switch,
 )
+
+
+# ======================================================================
+# Helpers T7 — cycle bout-en-bout via simulator HTTP réel
+# ======================================================================
+
+
+def _find_free_port() -> int:
+    """Réserve éphémère d'un port TCP libre sur localhost."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+class MechanismDrivingSleep:
+    """Sleep qui fait avancer un CimierMechanismSim + une MockClock de la durée.
+
+    Permet de tester un cycle bout-en-bout via le simulator HTTP réel sans
+    démarrer de thread d'avancement : chaque ``_sleep(dt)`` côté service
+    avance le mécanisme déterministe de dt secondes ET la clock injectée
+    (sinon le deadline ``self._clock() + cycle_timeout_s`` ne serait jamais
+    dépassé puisque le MockClock ne progresse pas en wall-clock).
+
+    Le temps wall-clock réel consommé reste négligeable (no-op sleep).
+    """
+
+    def __init__(self, mechanism: CimierMechanismSim, clock: "MockClock") -> None:
+        self._m = mechanism
+        self._clock = clock
+        self.total_slept_s: float = 0.0
+
+    def __call__(self, seconds: float) -> None:
+        # Pas de wall-clock : on avance le mécanisme + la clock virtuelle.
+        seconds = float(seconds)
+        if seconds > 0:
+            self._m.advance(seconds)
+            self._clock.advance(seconds)
+            self.total_slept_s += seconds
 
 
 # ======================================================================
@@ -1740,3 +1782,315 @@ class TestVerboseLogging:
         assert len(debug_polls) >= 2, (
             "CIMIER_DEV_MODE : au moins 2 polls DEBUG attendus, got " + str(len(debug_polls))
         )
+
+
+# ======================================================================
+# Section T7 Bloc 2 : Cycles bout-en-bout via simulator HTTP réel (spec §8)
+#
+# Refonte from-scratch des 8 tests "cycle complet" supprimés en T4 (Bloc 1)
+# avec leurs fixtures obsolètes (steps_per_cycle, tick_period_ms, push_config).
+#
+# Architecture testée :
+#   SimMotorShelly → CimierMechanismSim → _MechanismSwitchAdapter →
+#   CimierController → GET /status (HTTP réel via HttpClient)
+#
+# Le simulator écoute sur un vrai port, le service envoie un vrai GET /status.
+# Le mécanisme virtuel partagé entre SimMotorShelly (pilote) et le simulator
+# (capteur via adapter interne) ferme la boucle physique sans hardware.
+#
+# Le temps d'avancement du mécanisme est piloté par MechanismDrivingSleep :
+# chaque _sleep côté service avance le mécanisme du delta demandé.
+# ======================================================================
+
+
+def _build_e2e_service(
+    *,
+    initial_state: str,
+    ipc_manager: RecordingIpcManager,
+    cycle_timeout_s: float = 5.0,
+    post_off_quiet_s: float = 0.0,
+    full_travel_s: float = 0.5,
+    force_both_switches: bool = False,
+    weather_provider: Optional[Any] = None,
+    cycle_poll_interval_s: float = 0.05,
+) -> Tuple[
+    CimierService,
+    CountingPowerSwitch,
+    CimierSimulator,
+    SimMotorShelly,
+]:
+    """Assemble le stack T7 : simulator HTTP réel + SimMotorShelly partageant
+    son mécanisme. Retourne (service, ps, simulator, sim_motor).
+
+    Le simulator construit son propre CimierMechanismSim en interne ; on le
+    récupère via ``simulator.mechanism`` et on l'injecte au SimMotorShelly :
+    ainsi pilote (Shelly virtuel) et capteur (Pico virtuel) partagent un
+    seul et même mécanisme.
+
+    Si ``force_both_switches=True``, on remplace le mécanisme du simulator
+    par un nouveau mécanisme avec ce flag (utilisé pour le test "both switches
+    bloque preflight").
+    """
+    port = _find_free_port()
+    sim = CimierSimulator(
+        port=port,
+        boot_delay_s=0.0,
+        initial_state=initial_state,
+        full_travel_s=full_travel_s,
+    )
+    sim.start()
+    assert sim.wait_ready(timeout=3.0), "simulator did not boot"
+
+    # Cas spécial : force_both_switches → recâble le contrôleur sur un
+    # nouveau mécanisme avec ce flag. Le simulator a déjà construit le sien
+    # dans start(), mais on peut substituer en interne (les attributs sont
+    # accessibles pour les tests).
+    if force_both_switches:
+        from core.hardware.cimier_simulator import _MechanismSwitchAdapter
+
+        new_mech = CimierMechanismSim(
+            initial_state=initial_state,
+            full_travel_s=full_travel_s,
+            force_both_switches=True,
+        )
+        sim._mechanism = new_mech
+        sim._controller._hw = _MechanismSwitchAdapter(new_mech)
+
+    mech = sim.mechanism
+    sim_motor = SimMotorShelly(mech)
+    clock = MockClock()
+    advancing_sleep = MechanismDrivingSleep(mech, clock)
+
+    cfg = CimierConfig(
+        enabled=True,
+        host="127.0.0.1",
+        port=port,
+        cycle_timeout_s=cycle_timeout_s,
+        post_off_quiet_s=post_off_quiet_s,
+        shelly_settle_s=0.0,
+        power_switch=PowerSwitchConfig(type="noop"),
+        motor_shelly=MotorShellyConfig(
+            host_motor="203.0.113.85",
+            host_dir="203.0.113.86",
+            timer_safety_sec=90.0,
+        ),
+    )
+    ps = CountingPowerSwitch()
+    service = CimierService(
+        cimier_config=cfg,
+        power_switch=ps,
+        motor_shelly=sim_motor,
+        http_client=HttpClient(timeout_s=2.0),
+        ipc_manager=ipc_manager,
+        clock=clock,
+        sleep=advancing_sleep,
+        weather_provider=weather_provider,
+        cycle_poll_interval_s=cycle_poll_interval_s,
+    )
+    return service, ps, sim, sim_motor
+
+
+class TestFullCycleViaSimulator:
+    """Cycles bout-en-bout via CimierSimulator HTTP réel (spec §8).
+
+    Le simulator écoute sur un vrai port, le service envoie un vrai GET /status
+    via HttpClient. Le mécanisme virtuel partagé entre SimMotorShelly (pilote)
+    et le simulator (capteur via adapter interne) ferme la boucle physique.
+    """
+
+    def test_open_cycle_completes_state_open(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+        )
+        try:
+            service.execute_command({"id": "s1", "action": "open"})
+
+            # Mécanisme en butée ouverte.
+            assert sim.mechanism.open_switch is True, "mécanisme doit être en butée open"
+            # power_on + power_off appelés une fois chacun.
+            assert ps.on_count == 1
+            assert ps.off_count == 1
+            # Ordre Shelly : turn_off (défensif) / set_direction(True) / turn_on / ... / turn_off
+            kinds = [c[0] for c in sim_motor.calls]
+            assert kinds[0] == "turn_off"
+            assert kinds[1] == "set_direction" and sim_motor.calls[1][1] is True
+            assert kinds[2] == "turn_on"
+            assert kinds[-1] == "turn_off"
+        finally:
+            sim.stop()
+
+    def test_close_cycle_completes_state_closed(self, ipc_manager: RecordingIpcManager) -> None:
+        """Init open → cycle close → switch closed devient True."""
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="open",
+            ipc_manager=ipc_manager,
+        )
+        try:
+            service.execute_command({"id": "s2", "action": "close"})
+
+            assert sim.mechanism.closed_switch is True
+            assert ps.on_count == 1 and ps.off_count == 1
+            kinds = [c[0] for c in sim_motor.calls]
+            assert kinds[1] == "set_direction" and sim_motor.calls[1][1] is False
+        finally:
+            sim.stop()
+
+    def test_open_when_already_open_no_op_via_simulator(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Garde-fou : init open → cycle open → preflight noop, 0 power_on."""
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="open",
+            ipc_manager=ipc_manager,
+        )
+        try:
+            service.execute_command({"id": "s3", "action": "open"})
+
+            # Garde-fou pré-vol : aucune action électrique.
+            assert ps.on_count == 0
+            assert ps.off_count == 0
+            assert sim_motor.calls == []
+        finally:
+            sim.stop()
+
+    def test_close_when_already_closed_no_op_via_simulator(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Symétrique : init closed → cycle close → noop preflight."""
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+        )
+        try:
+            service.execute_command({"id": "s4", "action": "close"})
+
+            assert ps.on_count == 0
+            assert sim_motor.calls == []
+        finally:
+            sim.stop()
+
+    def test_cycle_timeout_publishes_error_via_simulator(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Mécanisme ultra-lent (course 999s) + cycle_timeout_s=0.5 → cycle_timeout."""
+        service, ps, sim, _sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+            cycle_timeout_s=0.5,
+            full_travel_s=999.0,
+        )
+        try:
+            service.execute_command({"id": "s5", "action": "open"})
+
+            # Invariant 220V : power_off appelé même sur timeout.
+            assert ps.off_count == 1
+            last = ipc_manager.history[-1]
+            assert last["error_message"] == "cycle_timeout"
+            assert last["state"] == STATE_ERROR
+        finally:
+            sim.stop()
+
+    def test_stop_command_during_polling_aborts_cycle(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Stop injecté pendant le polling → motor_off + power_off appelés."""
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+            cycle_timeout_s=10.0,
+            full_travel_s=5.0,  # Mouvement lent pour laisser le temps d'injecter le stop.
+        )
+        try:
+            # Patcher _check_for_stop_command pour renvoyer un stop après N appels.
+            call_count = {"n": 0}
+
+            def stop_after_some_polls():
+                call_count["n"] += 1
+                if call_count["n"] >= 3:
+                    return {"id": "stop-during", "action": "stop"}
+                return None
+
+            service._check_for_stop_command = stop_after_some_polls
+
+            service.execute_command({"id": "s6", "action": "open"})
+
+            # power_off invariant.
+            assert ps.off_count == 1
+            # motor.turn_off appelé en cleanup (au moins 2 fois : défensif + cleanup).
+            turn_off_calls = [c for c in sim_motor.calls if c[0] == "turn_off"]
+            assert len(turn_off_calls) >= 2
+        finally:
+            sim.stop()
+
+    def test_both_switches_via_simulator_blocks_preflight(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """CimierMechanismSim(force_both_switches=True) → preflight error."""
+        service, ps, sim, sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+            force_both_switches=True,
+        )
+        try:
+            service.execute_command({"id": "s7", "action": "open"})
+
+            # Garde-fou : 0 action électrique.
+            assert ps.on_count == 0
+            assert sim_motor.calls == []
+            last = ipc_manager.history[-1]
+            assert last["error_message"] == "both_switches_triggered"
+            assert last["state"] == STATE_ERROR
+        finally:
+            sim.stop()
+
+
+# ======================================================================
+# Section T7 Bloc 2 : WeatherProvider via simulator HTTP réel
+# ======================================================================
+
+
+class TestWeatherProviderViaSimulator:
+    """Verrouille le log weather=... émis au démarrage d'un cycle (via simulator)."""
+
+    def test_cycle_logs_weather_on_start_via_simulator(
+        self,
+        ipc_manager: RecordingIpcManager,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Le payload du WeatherProvider injecté doit apparaître dans le log
+        cimier_event=cycle_start au format JSON, même via simulator HTTP réel."""
+        import logging as _logging
+
+        caplog.set_level(_logging.INFO, logger="services.cimier_service")
+
+        class CustomWeatherProvider:
+            def is_safe_to_open(self) -> bool:
+                return True
+
+            def is_safe_to_keep_open(self) -> bool:
+                return True
+
+            def describe(self) -> Dict[str, Any]:
+                return {"source": "test", "wind_kph": 12, "rain": False}
+
+        service, _ps, sim, _sim_motor = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+            weather_provider=CustomWeatherProvider(),
+        )
+        try:
+            service.execute_command({"id": "w1", "action": "open"})
+
+            cycle_starts = [
+                r.message for r in caplog.records if "cimier_event=cycle_start" in r.message
+            ]
+            assert len(cycle_starts) == 1
+            msg = cycle_starts[0]
+            # JSON sort_keys=True → "rain" < "source" < "wind_kph" alphabétique
+            assert '"source":"test"' in msg, (
+                "weather payload should be serialized into cycle_start log: " + msg
+            )
+            assert '"wind_kph":12' in msg
+        finally:
+            sim.stop()
