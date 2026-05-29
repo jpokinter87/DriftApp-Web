@@ -2023,6 +2023,53 @@ class TestFullCycleViaSimulator:
         finally:
             sim.stop()
 
+    def test_cycle_end_logs_result_stopped_when_stop_during_polling(
+        self, ipc_manager: RecordingIpcManager, caplog
+    ) -> None:
+        """Stop pendant polling → log cycle_end avec result=stopped (Bloc 3 dette T4).
+
+        Distingue le cycle interrompu utilisateur (result=stopped) du cycle
+        nominal réussi (result=ok), pour rendre les journaux dépiautables
+        à 800 km du site.
+        """
+        import logging
+
+        service, ps, sim, _ = _build_e2e_service(
+            initial_state="closed",
+            ipc_manager=ipc_manager,
+            cycle_timeout_s=10.0,
+            full_travel_s=5.0,
+        )
+        try:
+            call_count = {"n": 0}
+
+            def stop_after_some_polls():
+                call_count["n"] += 1
+                if call_count["n"] >= 3:
+                    return {"id": "stop-during", "action": "stop"}
+                return None
+
+            service._check_for_stop_command = stop_after_some_polls
+
+            caplog.set_level(logging.INFO, logger="services.cimier_service")
+            with caplog.at_level(logging.INFO, logger="services.cimier_service"):
+                service.execute_command({"id": "s8", "action": "open"})
+
+            # Cycle terminé par stop → log final result=stopped.
+            cycle_end_records = [
+                r for r in caplog.records if "cimier_event=cycle_end" in r.getMessage()
+            ]
+            assert len(cycle_end_records) == 1, (
+                f"attendu 1 cycle_end, vu {len(cycle_end_records)} : "
+                f"{[r.getMessage() for r in cycle_end_records]}"
+            )
+            assert "result=stopped" in cycle_end_records[0].getMessage(), (
+                f"cycle_end devrait contenir result=stopped, vu : "
+                f"{cycle_end_records[0].getMessage()}"
+            )
+        finally:
+            sim.stop()
+
     def test_both_switches_via_simulator_blocks_preflight(
         self, ipc_manager: RecordingIpcManager
     ) -> None:

@@ -560,6 +560,7 @@ class CimierService:
         """
         cycle_start = self._clock()
         error_message = ""
+        poll_outcome = ""  # "ok"/"stopped"/"timeout"/"error" — propagé au mapping result= du finally
 
         # Snapshot meteo au demarrage (Phase 2 : log seulement, pas de blocage).
         # Phase 3 consultera is_safe_to_open() pour refuser une ouverture auto.
@@ -705,6 +706,7 @@ class CimierService:
             # Phase F : poll target switch jusqu'à fin de course / timeout / stop.
             self._publish_phase(PHASE_POLL_SWITCH, action, cmd_id, error_message="")
             outcome = self._poll_target_switch(action, cmd_id)
+            poll_outcome = outcome
             logger.info(
                 "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
                 PHASE_POLL_SWITCH,
@@ -747,8 +749,11 @@ class CimierService:
             duration_ms = int((self._clock() - cycle_start) * 1000)
             if error_message == "cycle_timeout":
                 result = "timeout"
+            elif poll_outcome == "stopped":
+                # Interruption utilisateur pendant le polling — cleanup garanti
+                # mais distinct d'un cycle nominal (Bloc 3 dette T4).
+                result = "stopped"
             elif error_message == "":
-                # Soit cycle nominal OK, soit interruption stop → traités comme ok.
                 result = "ok"
             else:
                 result = "error"
