@@ -62,3 +62,6 @@ web/data/objets_cache.json
 
 # Fichiers de gestion de projet (non nécessaires en production)
 .paul/
+
+# Credentials WiFi locaux Pico W cimier (créé manuellement par Serge sur la machine de flash)
+firmware/cimier/secrets.py
