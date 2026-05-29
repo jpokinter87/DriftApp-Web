@@ -101,7 +101,6 @@ ACTION_STOP = "stop"
 _VALID_CYCLE_ACTIONS = (ACTION_OPEN, ACTION_CLOSE)
 
 # Polling intervals par défaut (overridables par constructeur pour tests rapides)
-DEFAULT_BOOT_POLL_INTERVAL_S = 0.5
 DEFAULT_CYCLE_POLL_INTERVAL_S = 0.5
 DEFAULT_RUN_LOOP_INTERVAL_S = 0.5
 DEFAULT_HTTP_TIMEOUT_S = 3.0
@@ -208,7 +207,6 @@ class CimierService:
         motor_ipc: Optional[MotorIpcWriter] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
-        boot_poll_interval_s: float = DEFAULT_BOOT_POLL_INTERVAL_S,
         cycle_poll_interval_s: float = DEFAULT_CYCLE_POLL_INTERVAL_S,
         run_loop_interval_s: float = DEFAULT_RUN_LOOP_INTERVAL_S,
     ):
@@ -224,7 +222,6 @@ class CimierService:
         self._weather_provider = weather_provider or NoopWeatherProvider()
         self._clock = clock
         self._sleep = sleep
-        self._boot_poll_interval_s = float(boot_poll_interval_s)
         self._cycle_poll_interval_s = float(cycle_poll_interval_s)
         self._run_loop_interval_s = float(run_loop_interval_s)
 
@@ -296,10 +293,11 @@ class CimierService:
 
         self._install_signal_handlers()
         logger.info(
-            "cimier_event=started host=%s port=%d invert=%s",
+            "cimier_event=started host=%s port=%d motor_host=%s dir_host=%s",
             self._config.host,
             self._config.port,
-            self._config.invert_direction,
+            self._config.motor_shelly.host_motor or "(noop)",
+            self._config.motor_shelly.host_dir or "(noop)",
         )
 
         while not self._stop_requested:
@@ -533,9 +531,9 @@ class CimierService:
         try:
             fn()
             latency_ms = int((self._clock() - t0) * 1000)
-            extras = " ".join("%s=%s" % (k, v) for k, v in ctx.items())
+            extras = (" " + " ".join("%s=%s" % (k, v) for k, v in ctx.items())) if ctx else ""
             logger.info(
-                "cimier_event=shelly_call call=%s host=%s latency_ms=%d %s",
+                "cimier_event=shelly_call call=%s host=%s latency_ms=%d%s",
                 call_name,
                 host,
                 latency_ms,

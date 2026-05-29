@@ -244,7 +244,6 @@ def service_with_fake_http(
         ipc_manager=ipc_manager,
         clock=clock,
         sleep=clock.sleep,
-        boot_poll_interval_s=0.05,
         cycle_poll_interval_s=0.05,
         run_loop_interval_s=0.05,
     )
@@ -601,13 +600,8 @@ class TestStop:
         # Patch read_command pour renvoyer une commande stop dès qu'elle est
         # interrogée (le 1er appel viendra de _check_for_stop_command pendant
         # poll_target_switch).
-        call_count = {"n": 0}
-
         def patched_read():
-            call_count["n"] += 1
-            if call_count["n"] >= 1:
-                return {"id": "stop-during", "action": "stop"}
-            return None
+            return {"id": "stop-during", "action": "stop"}
 
         service._ipc.read_command = patched_read  # type: ignore[assignment]
         service.execute_command({"id": "open-1", "action": "open"})
@@ -757,7 +751,6 @@ class TestWeatherProviderWiring:
             weather_provider=FakeWeatherProvider(),
             clock=clock,
             sleep=clock.sleep,
-            boot_poll_interval_s=0.05,
             cycle_poll_interval_s=0.05,
         )
         with caplog.at_level("INFO", logger="services.cimier_service"):

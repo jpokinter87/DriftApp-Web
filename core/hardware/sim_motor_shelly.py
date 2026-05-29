@@ -15,6 +15,10 @@ from core.hardware.cimier_mechanism_sim import CimierMechanismSim
 class SimMotorShelly:
     """Pilote un CimierMechanismSim, imite l'interface de MotorShelly."""
 
+    host_motor = (
+        "sim"  # diagnostic : permet à _call_motor_logged d'afficher host=sim au lieu de host=noop
+    )
+
     def __init__(self, mechanism: CimierMechanismSim) -> None:
         self._m = mechanism
         self.last_timer_s: float = 0.0
