@@ -501,6 +501,18 @@ class TestCimierConfig:
         assert config.cimier.verbose_logging is True
 
 
+@pytest.mark.parametrize("invalid", [-1.0, 0.0, 0])
+def test_cimier_config_rejects_cycle_timeout_zero_or_negative(invalid):
+    """cycle_timeout_s ≤ 0 → ValueError explicite au démarrage du service.
+
+    Sans ce guard, le polling sortait immédiatement avec result=timeout
+    trompeur (le moteur n'a pas tourné). On veut un refus net à la lecture
+    de config, pas une dégénérescence silencieuse runtime (Bloc 3 dette T4).
+    """
+    with pytest.raises(ValueError, match="cycle_timeout_s"):
+        CimierConfig(cycle_timeout_s=invalid)
+
+
 # =============================================================================
 # MotorShellyConfig (pivot v6.x — pilotage moteur via 2 relais Shelly)
 # =============================================================================

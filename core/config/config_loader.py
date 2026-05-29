@@ -273,6 +273,13 @@ class CimierConfig:
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
     motor_shelly: MotorShellyConfig = field(default_factory=MotorShellyConfig)
 
+    def __post_init__(self) -> None:
+        if self.cycle_timeout_s <= 0:
+            raise ValueError(
+                f"cimier.cycle_timeout_s doit être > 0, "
+                f"reçu {self.cycle_timeout_s}"
+            )
+
 
 @dataclass(frozen=True)
 class CalibrationConfig:
