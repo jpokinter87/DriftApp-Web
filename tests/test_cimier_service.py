@@ -36,6 +36,8 @@ from services.cimier_service import (
     ACTION_CLOSE,
     ACTION_OPEN,
     ACTION_STOP,
+    CIMIER_STATE_CLOSED,
+    CIMIER_STATE_OPEN,
     HttpClient,
     PHASE_BOOT_POLL,
     PHASE_COMMAND_PICO,
@@ -144,6 +146,14 @@ class AutoFakeHttpClient:
                 self.invert = bool(body["invert_direction"])
             return 200, {}
         return 404, {}
+
+    def set_status_response(self, payload: Dict[str, Any]) -> None:
+        """Force le prochain GET /status à retourner HTTP 200 + payload (one-shot)."""
+        self.responses_by_url.setdefault("/status", []).insert(0, (200, payload))
+
+    def set_status_response_error(self, exc: BaseException) -> None:
+        """Force le prochain GET /status à lever exc (one-shot)."""
+        self.responses_by_url.setdefault("/status", []).insert(0, exc)
 
     def count_calls(self, url_suffix: str, method: Optional[str] = None) -> int:
         return sum(
@@ -619,9 +629,11 @@ class TestErrorsAndTimeouts:
         cimier_config_default: CimierConfig,
         ipc_manager: RecordingIpcManager,
     ) -> None:
-        # FakeHttp qui lève toujours une URLError sur /status → timeout boot.
+        # FakeHttp : preflight OK (1 hit /status → proceed), puis boot_poll échoue
+        # indéfiniment → boot_timeout.
         fake = AutoFakeHttpClient()
-        # Saturer la queue avec 100 exceptions sur /status pour couvrir tout le timeout.
+        # Le preflight consomme 1 hit /status (succeed → proceed, sans switches).
+        # Les 100 exceptions suivantes sont consommées pendant boot_poll.
         for _ in range(100):
             fake.queue_exception("/status", urllib.error.URLError("connection refused"))
 
@@ -646,6 +658,9 @@ class TestErrorsAndTimeouts:
             boot_poll_interval_s=0.05,
             cycle_poll_interval_s=0.05,
         )
+        # Injecter 1 réponse /status valide (sans switches) pour que le preflight
+        # décide "proceed", puis les exceptions de la queue couvrent le boot_poll.
+        fake.set_status_response({"state": "closed"})
         service.execute_command({"id": "boot-fail", "action": "open"})
         # turn_off DOIT être appelé même en boot timeout (sécurité)
         assert ps.off_count == 1
@@ -700,7 +715,10 @@ class TestErrorsAndTimeouts:
         ipc_manager: RecordingIpcManager,
     ) -> None:
         fake = AutoFakeHttpClient()
-        # Pico passe en "error" pendant le cycle_poll.
+        # Preflight : 1 hit /status → proceed (sans switches).
+        # boot_poll : /status → "opening" (ready).
+        # cycle_poll : /status → "error" (pico_error).
+        fake.set_status_response({"state": "closed"})
         fake.queue("/status", 200, {"state": "opening"})
         fake.queue("/status", 200, {"state": "error"})
 
@@ -848,7 +866,9 @@ class TestStop:
         ipc_manager: RecordingIpcManager,
     ) -> None:
         fake = AutoFakeHttpClient()
-        # /status échoue → boot pas terminé, on reste en boot_poll
+        # Le preflight consomme 1 hit /status (succeed → proceed, sans switches).
+        # Les 100 exceptions suivantes couvrent boot_poll → stop intercepté → turn_off.
+        fake.set_status_response({"state": "closed"})
         for _ in range(100):
             fake.queue_exception("/status", urllib.error.URLError("nope"))
 
@@ -1432,6 +1452,102 @@ class TestDevModeOverrides:
         assert cfg.cycle_timeout_s == 120.0
         assert cfg.boot_poll_timeout_s == 45.0
         assert cfg.automation.mode == original_automation_mode
+
+
+# ======================================================================
+# Section T2 Bloc 2 : Garde-fou pré-vol (spec §3.0 + §4)
+# ======================================================================
+
+
+class TestPreflightGuard:
+    """Garde-fou « déjà en butée » : 0 action électrique si fin de course cible atteinte."""
+
+    def _make_service(
+        self,
+        ipc_manager: RecordingIpcManager,
+        switches_payload: Dict[str, Any],
+        unreachable: bool = False,
+    ):
+        from core.hardware.cimier_mechanism_sim import CimierMechanismSim
+        from core.hardware.sim_motor_shelly import SimMotorShelly
+
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        if unreachable:
+            fake.set_status_response_error(urllib.error.URLError("nope"))
+        else:
+            fake.set_status_response(switches_payload)
+
+        mech = CimierMechanismSim()
+        sim_motor = SimMotorShelly(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=2.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+        )
+        return service, ps, sim_motor, ipc_manager
+
+    def test_open_when_already_open_is_noop(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor, _ = self._make_service(
+            ipc_manager,
+            switches_payload={"state": "open", "open_switch": True, "closed_switch": False},
+        )
+        service.execute_command({"id": "1", "action": "open"})
+        assert ps.on_count == 0
+        assert ps.off_count == 0
+        assert sim_motor.calls == []
+        last = ipc_manager.history[-1]
+        assert last["state"] == CIMIER_STATE_OPEN
+        assert last.get("error_message", "") in ("", None)
+
+    def test_close_when_already_closed_is_noop(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor, _ = self._make_service(
+            ipc_manager,
+            switches_payload={"state": "closed", "open_switch": False, "closed_switch": True},
+        )
+        service.execute_command({"id": "2", "action": "close"})
+        assert ps.on_count == 0
+        assert sim_motor.calls == []
+        last = ipc_manager.history[-1]
+        assert last["state"] == CIMIER_STATE_CLOSED
+
+    def test_both_switches_true_blocks_with_error(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor, _ = self._make_service(
+            ipc_manager,
+            switches_payload={"state": "error", "open_switch": True, "closed_switch": True},
+        )
+        service.execute_command({"id": "3", "action": "open"})
+        assert ps.on_count == 0
+        assert sim_motor.calls == []
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "both_switches_triggered"
+
+    def test_status_unreachable_blocks_with_error(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor, _ = self._make_service(
+            ipc_manager,
+            switches_payload={},
+            unreachable=True,
+        )
+        service.execute_command({"id": "4", "action": "open"})
+        assert ps.on_count == 0
+        assert sim_motor.calls == []
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "precheck_unreachable"
 
 
 # ======================================================================

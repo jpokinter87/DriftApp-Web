@@ -427,6 +427,84 @@ class CimierService:
     # Pipeline cycle
     # ------------------------------------------------------------------
 
+    def _preflight_switches(self, action: str, cmd_id: str) -> Tuple[str, str, Dict[str, Any]]:
+        """Lit /status du Pico W avant toute action électrique.
+
+        Retourne (decision, reason, payload) :
+          - decision: "noop"|"proceed"|"error"|"unreachable"
+          - reason: chaîne lisible (vide si proceed)
+          - payload: dict /status si lu, {} sinon
+        """
+        url = self._base_url() + "/status"
+        t0 = self._clock()
+        try:
+            status, payload = self._http.request("GET", url)
+        except (urllib.error.URLError, OSError, ConnectionError) as exc:
+            latency_ms = int((self._clock() - t0) * 1000)
+            logger.info(
+                "cimier_event=preflight action=%s id=%s decision=unreachable latency_ms=%d exc=%s",
+                action,
+                cmd_id,
+                latency_ms,
+                exc,
+            )
+            return ("unreachable", "precheck_unreachable", {})
+
+        latency_ms = int((self._clock() - t0) * 1000)
+        if status != 200 or not isinstance(payload, dict):
+            logger.info(
+                "cimier_event=preflight action=%s id=%s decision=unreachable "
+                "latency_ms=%d http_status=%s",
+                action,
+                cmd_id,
+                latency_ms,
+                status,
+            )
+            return ("unreachable", "precheck_unreachable", {})
+
+        open_sw = bool(payload.get("open_switch", False))
+        closed_sw = bool(payload.get("closed_switch", False))
+
+        if open_sw and closed_sw:
+            logger.info(
+                "cimier_event=preflight action=%s id=%s decision=error "
+                "reason=both_switches_triggered open_switch=true closed_switch=true "
+                "latency_ms=%d",
+                action,
+                cmd_id,
+                latency_ms,
+            )
+            return ("error", "both_switches_triggered", payload)
+
+        if action == ACTION_OPEN and open_sw:
+            logger.info(
+                "cimier_event=preflight action=open id=%s decision=noop "
+                "reason=already_open latency_ms=%d",
+                cmd_id,
+                latency_ms,
+            )
+            return ("noop", "already_open", payload)
+
+        if action == ACTION_CLOSE and closed_sw:
+            logger.info(
+                "cimier_event=preflight action=close id=%s decision=noop "
+                "reason=already_closed latency_ms=%d",
+                cmd_id,
+                latency_ms,
+            )
+            return ("noop", "already_closed", payload)
+
+        logger.info(
+            "cimier_event=preflight action=%s id=%s decision=proceed "
+            "open_switch=%s closed_switch=%s latency_ms=%d",
+            action,
+            cmd_id,
+            str(open_sw).lower(),
+            str(closed_sw).lower(),
+            latency_ms,
+        )
+        return ("proceed", "", payload)
+
     def _run_cycle(self, action: str, cmd_id: str) -> None:
         """Pipeline phases : power_on → boot_poll → push_config → command_pico
         → cycle_poll → power_off → cooldown.
@@ -446,6 +524,47 @@ class CimierService:
             json.dumps(weather_desc, separators=(",", ":"), sort_keys=True),
         )
 
+        # ----- Pré-vol garde-fou (avant toute alim) -----
+        self._publish_phase(PHASE_PREFLIGHT, action, cmd_id, error_message="")
+        decision, reason, _ = self._preflight_switches(action, cmd_id)
+        if decision == "noop":
+            target_state = CIMIER_STATE_OPEN if action == ACTION_OPEN else CIMIER_STATE_CLOSED
+            self._publish_status(
+                state=target_state,
+                phase=PHASE_IDLE,
+                last_action=action,
+                command_id=cmd_id,
+                error_message="",
+            )
+            duration_ms = int((self._clock() - cycle_start) * 1000)
+            logger.info(
+                "cimier_event=cycle_end action=%s id=%s duration_ms=%d result=noop reason=%s",
+                action,
+                cmd_id,
+                duration_ms,
+                reason,
+            )
+            return
+        if decision in ("error", "unreachable"):
+            self._publish_status(
+                state=STATE_ERROR,
+                phase=PHASE_IDLE,
+                last_action=action,
+                command_id=cmd_id,
+                error_message=reason,
+            )
+            duration_ms = int((self._clock() - cycle_start) * 1000)
+            logger.info(
+                "cimier_event=cycle_end action=%s id=%s duration_ms=%d result=%s error=%s",
+                action,
+                cmd_id,
+                duration_ms,
+                decision,
+                reason,
+            )
+            return
+
+        # decision == "proceed" → continuer vers la cinématique legacy (refactor T4)
         try:
             # Phase 1 : power_on
             self._publish_phase(PHASE_POWER_ON, action, cmd_id, error_message="")
