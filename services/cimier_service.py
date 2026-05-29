@@ -1,23 +1,33 @@
 """
-Cimier Service — orchestre un cycle complet du cimier (v6.0 Phase 1).
+Cimier Service — orchestre un cycle complet du cimier (Bloc 2 archi Shelly).
 
-Flow d'un cycle (commande "open" ou "close") :
-  1. power_on    : `power_switch.turn_on()` (Shelly 220V)
-  2. boot_poll   : poll GET <pico>/status jusqu'à 200 OK ou boot_poll_timeout_s
-  3. push_config : POST <pico>/config {invert_direction:true} si non-défaut
-                   (l'invert est perdu à chaque coupure Shelly → re-push obligatoire)
-  4. command_pico: POST <pico>/<action>
-  5. cycle_poll  : poll GET <pico>/status jusqu'à pico_state cible (open|closed|error)
-                   ou cycle_timeout_s. Surveille aussi une commande "stop" entrante.
-  6. power_off   : `power_switch.turn_off()` — TOUJOURS appelé (sécurité 220V).
-  7. cooldown    : attente post_off_quiet_s avant d'accepter une nouvelle commande
-                   (anti-bounce hardware ; le 12V coupe ~10 s plus tard via heartbeat).
+Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) :
+  0. preflight     : lit ``GET /status`` du Pico capteur AVANT toute alim
+                     (déjà en butée → noop, both_switches → error,
+                     unreachable → error).
+  1. power_on      : ``power_switch.turn_on()`` (Shelly 220V cascade).
+  2. settle        : ``sleep(shelly_settle_s)`` — attente appairage WiFi
+                     Shelly MOTOR + DIR après montée 24V.
+  3. motor_off     : ``motor_shelly.turn_off()`` défensif (état connu avant
+                     énergisation).
+  4. set_direction : ``motor_shelly.set_direction(open_direction=...)``
+                     (relais DIR).
+  5. motor_on      : ``motor_shelly.turn_on(timer_s=timer_safety_sec)``
+                     (relais MOTOR + filet hardware Shelly toggle_after).
+  6. poll_switch   : boucle ``GET /status`` jusqu'à ``open_switch`` ou
+                     ``closed_switch == True`` (ou ``cycle_timeout_s``,
+                     ou commande stop, ou both_switches → error).
+  7. motor_off     : ``motor_shelly.turn_off()`` (cleanup, dans finally).
+  8. power_off     : ``power_switch.turn_off()`` — TOUJOURS appelé (sécurité
+                     220V, invariant).
+  9. cooldown      : attente ``post_off_quiet_s`` avant d'accepter une
+                     nouvelle commande (anti-bounce hardware).
 
 Bus : commande-driven via /dev/shm/cimier_command.json (pas de scheduler
-éphémérides — c'est Phase 3).
+éphémérides — c'est Phase 3 v6.2).
 
-Le service est testable sans hardware : NoopPowerSwitch + CimierSimulator
-suffisent pour reproduire le contrat REST du firmware Pico W.
+Le service est testable sans hardware : NoopPowerSwitch + SimMotorShelly
+(piloté par CimierMechanismSim) + AutoFakeHttpClient pour ``/status`` Pico.
 """
 
 from __future__ import annotations
@@ -56,7 +66,6 @@ from services.cimier_ipc_manager import CimierIpcManager
 from services.cimier_scheduler import (
     CIMIER_STATE_CLOSED,
     CIMIER_STATE_COOLDOWN,
-    CIMIER_STATE_CYCLE,
     CIMIER_STATE_ERROR,
     CIMIER_STATE_OPEN,
     CimierScheduler,
@@ -66,22 +75,17 @@ from services.motor_ipc_writer import MotorIpcWriter
 logger = logging.getLogger(__name__)
 
 
-# Phases publiées dans cimier_status.json["phase"]
+# Phases publiées dans cimier_status.json["phase"] — archi Shelly (Bloc 2)
 PHASE_IDLE = "idle"
-PHASE_POWER_ON = "power_on"
-PHASE_BOOT_POLL = "boot_poll"  # caduc archi Shelly — conservé T1, supprimé en T4
-PHASE_PUSH_CONFIG = "push_config"  # caduc archi Shelly — conservé T1, supprimé en T4
-PHASE_COMMAND_PICO = "command_pico"  # caduc archi Shelly — conservé T1, supprimé en T4
-PHASE_CYCLE_POLL = "cycle_poll"  # caduc archi Shelly — conservé T1, supprimé en T4
-PHASE_POWER_OFF = "power_off"
-PHASE_COOLDOWN = "cooldown"
-# Nouvelles phases archi Shelly (Bloc 2)
 PHASE_PREFLIGHT = "preflight"
+PHASE_POWER_ON = "power_on"
 PHASE_SETTLE = "settle"
+PHASE_MOTOR_OFF = "motor_off"
 PHASE_SET_DIR = "set_dir"
 PHASE_MOTOR_ON = "motor_on"
 PHASE_POLL_SWITCH = "poll_switch"
-PHASE_MOTOR_OFF = "motor_off"
+PHASE_POWER_OFF = "power_off"
+PHASE_COOLDOWN = "cooldown"
 
 # États de haut niveau publiés dans cimier_status.json["state"]
 STATE_IDLE = "idle"
@@ -227,7 +231,10 @@ class CimierService:
         self._stop_requested = False
         self._cooldown_end_ts: Optional[float] = None
         self._pending_command: Optional[Dict[str, Any]] = None
-        self._last_pico_state: str = "unknown"
+        # Switches Pico capteur observés en dernier (alimente le mapping vers
+        # CIMIER_STATE_* pour le scheduler — pas de pico_state legacy).
+        self._last_open_switch: bool = False
+        self._last_closed_switch: bool = False
 
         # Phase 3 : scheduler astropy. Court-circuit complet si automation off.
         self._scheduler: Optional[CimierScheduler] = scheduler
@@ -509,11 +516,49 @@ class CimierService:
         )
         return ("proceed", "", payload)
 
-    def _run_cycle(self, action: str, cmd_id: str) -> None:
-        """Pipeline phases : power_on → boot_poll → push_config → command_pico
-        → cycle_poll → power_off → cooldown.
+    def _call_motor_logged(self, call_name: str, fn: Callable[[], None], **ctx: Any) -> None:
+        """Appelle une méthode de motor_shelly en chronométrant et journalisant.
 
-        turn_off() est TOUJOURS appelé en cleanup (sécurité 220V).
+        Args:
+            call_name: nom de la méthode appelée (turn_off / set_direction / turn_on).
+            fn: callable sans argument (lambda fermée sur les args réels).
+            **ctx: clés/valeurs additionnelles à inclure dans le log
+                   (ex: open=True, timer_s=90.0).
+
+        Log INFO sur succès (cimier_event=shelly_call), ERROR sur exception.
+        Ré-émet l'exception pour propagation.
+        """
+        host = getattr(self._motor_shelly, "host_motor", "noop")
+        t0 = self._clock()
+        try:
+            fn()
+            latency_ms = int((self._clock() - t0) * 1000)
+            extras = " ".join("%s=%s" % (k, v) for k, v in ctx.items())
+            logger.info(
+                "cimier_event=shelly_call call=%s host=%s latency_ms=%d %s",
+                call_name,
+                host,
+                latency_ms,
+                extras,
+            )
+        except Exception as exc:
+            latency_ms = int((self._clock() - t0) * 1000)
+            logger.error(
+                "cimier_event=shelly_call_failed call=%s host=%s latency_ms=%d exc=%s",
+                call_name,
+                host,
+                latency_ms,
+                exc,
+            )
+            raise
+
+    def _run_cycle(self, action: str, cmd_id: str) -> None:
+        """Pipeline phases — cinématique Shelly (spec §3) :
+        preflight → power_on → settle → motor_off → set_direction → motor_on
+        → poll_switch → motor_off (cleanup) → power_off → cooldown.
+
+        ``power_switch.turn_off()`` et ``motor_shelly.turn_off()`` sont TOUJOURS
+        appelés dans ``finally`` (sécurité 220V + état moteur connu).
         """
         cycle_start = self._clock()
         error_message = ""
@@ -573,88 +618,110 @@ class CimierService:
             )
             return
 
-        # decision == "proceed" → continuer vers la cinématique legacy (refactor T4)
+        # ----- Cinématique Shelly (spec §3.1 → §3.4) -----
         try:
-            # Phase 1 : power_on
+            # Phase A : power_on (Shelly 220V cascade).
             self._publish_phase(PHASE_POWER_ON, action, cmd_id, error_message="")
             try:
                 self._power_switch.turn_on()
             except PowerSwitchError as exc:
-                logger.error("cimier_event=power_on_failed exc=%s", exc)
+                logger.error("cimier_event=power_on_failed id=%s exc=%s", cmd_id, exc)
                 error_message = "power_on_failed"
                 return
-
-            # Phase 2 : boot_poll
-            self._publish_phase(PHASE_BOOT_POLL, action, cmd_id, error_message="")
-            ready = self._poll_pico_ready(action, cmd_id)
-            if ready == "stopped":
-                error_message = ""
-                return
-            if not ready:
-                logger.error("cimier_event=boot_timeout id=%s", cmd_id)
-                error_message = "boot_timeout"
-                return
-
-            # Phase 3 : push_config (uniquement si invert non-défaut)
-            if self._config.invert_direction:
-                self._publish_phase(PHASE_PUSH_CONFIG, action, cmd_id, error_message="")
-                pushed = self._push_invert_config()
-                if not pushed:
-                    logger.error("cimier_event=push_config_failed id=%s", cmd_id)
-                    error_message = "push_config_failed"
-                    return
-
-            # Phase 4 : command_pico
-            self._publish_phase(PHASE_COMMAND_PICO, action, cmd_id, error_message="")
-            commanded = self._post_action(action)
-            if not commanded:
-                logger.error("cimier_event=command_failed action=%s id=%s", action, cmd_id)
-                error_message = "command_failed"
-                # Tenter un /stop pour ne pas laisser le moteur tourner
-                self._try_post_stop_silent()
-                return
-
-            # Phase 5 : cycle_poll
-            self._publish_phase(PHASE_CYCLE_POLL, action, cmd_id, error_message="")
-            outcome = self._poll_cycle_complete(action, cmd_id)
-            if outcome == "timeout":
-                logger.error("cimier_event=cycle_timeout id=%s", cmd_id)
-                error_message = "cycle_timeout"
-                self._try_post_stop_silent()
-                return
-            if outcome == "pico_error":
-                logger.error(
-                    "cimier_event=pico_error id=%s state=%s", cmd_id, self._last_pico_state
-                )
-                error_message = "pico_error"
-                return
-            if outcome == "stopped":
-                error_message = ""
-                return
-
-        finally:
-            # Phase 6 : power_off — TOUJOURS appelé (sécurité 220V)
-            self._publish_phase(
-                PHASE_POWER_OFF,
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_POWER_ON,
                 action,
                 cmd_id,
-                error_message=error_message,
+                int((self._clock() - cycle_start) * 1000),
             )
+
+            # Phase B : settle (appairage WiFi Shelly aval — 24V montant).
+            self._publish_phase(PHASE_SETTLE, action, cmd_id, error_message="")
+            settle = float(self._config.shelly_settle_s)
+            if settle > 0:
+                self._sleep(settle)
+
+            # Phase C : turn_off moteur défensif (état connu avant énergisation).
+            self._publish_phase(PHASE_MOTOR_OFF, action, cmd_id, error_message="")
+            try:
+                self._call_motor_logged("turn_off", lambda: self._motor_shelly.turn_off())
+            except Exception:
+                error_message = "motor_off_defensive_failed"
+                return
+
+            # Phase D : set_direction selon action.
+            self._publish_phase(PHASE_SET_DIR, action, cmd_id, error_message="")
+            open_direction = action == ACTION_OPEN
+            try:
+                self._call_motor_logged(
+                    "set_direction",
+                    lambda: self._motor_shelly.set_direction(open_direction=open_direction),
+                    open=open_direction,
+                )
+            except Exception:
+                error_message = "set_direction_failed"
+                return
+
+            # Phase E : turn_on moteur (filet hardware Shelly toggle_after).
+            self._publish_phase(PHASE_MOTOR_ON, action, cmd_id, error_message="")
+            timer_safety = float(self._config.motor_shelly.timer_safety_sec)
+            try:
+                self._call_motor_logged(
+                    "turn_on",
+                    lambda: self._motor_shelly.turn_on(timer_s=timer_safety),
+                    timer_s=timer_safety,
+                )
+            except Exception:
+                error_message = "motor_on_failed"
+                return
+
+            # Phase F : poll target switch jusqu'à fin de course / timeout / stop.
+            self._publish_phase(PHASE_POLL_SWITCH, action, cmd_id, error_message="")
+            outcome = self._poll_target_switch(action, cmd_id)
+            if outcome == "timeout":
+                logger.error("cimier_event=poll_timeout id=%s", cmd_id)
+                error_message = "cycle_timeout"
+                return
+            if outcome == "error":
+                error_message = "both_switches_triggered"
+                return
+            if outcome == "stopped":
+                error_message = ""  # stop = OK (cleanup garanti)
+                return
+            # outcome == "ok" → fall through, cleanup ci-dessous.
+
+        finally:
+            # Cleanup garanti : motor_off + power_off (invariant 220V).
+            try:
+                self._motor_shelly.turn_off()
+            except Exception as exc:
+                logger.error("cimier_event=motor_off_cleanup_failed id=%s exc=%s", cmd_id, exc)
+
+            self._publish_phase(PHASE_POWER_OFF, action, cmd_id, error_message=error_message)
             try:
                 self._power_switch.turn_off()
             except PowerSwitchError as exc:
                 logger.error("cimier_event=power_off_failed exc=%s", exc)
 
             duration_ms = int((self._clock() - cycle_start) * 1000)
+            if error_message == "cycle_timeout":
+                result = "timeout"
+            elif error_message == "":
+                # Soit cycle nominal OK, soit interruption stop → traités comme ok.
+                result = "ok"
+            else:
+                result = "error"
             logger.info(
-                "cimier_event=cycle_end action=%s id=%s duration_ms=%d error=%s",
+                "cimier_event=cycle_end action=%s id=%s duration_ms=%d result=%s error=%s",
                 action,
                 cmd_id,
                 duration_ms,
+                result,
                 error_message or "none",
             )
 
-            # Phase 7 : cooldown — démarrer la fenêtre anti-bounce
+            # Cooldown : démarrer la fenêtre anti-bounce.
             self._cooldown_end_ts = self._clock() + self._config.post_off_quiet_s
             state = STATE_ERROR if error_message else STATE_COOLDOWN
             self._publish_status(
@@ -670,94 +737,60 @@ class CimierService:
     # Phases helpers (HTTP)
     # ------------------------------------------------------------------
 
-    def _poll_pico_ready(self, action: str, cmd_id: str):
-        """Boucle GET /status jusqu'à 200 OK. Retourne True / False / 'stopped'."""
-        deadline = self._clock() + self._config.boot_poll_timeout_s
-        url = self._base_url() + "/status"
-        while self._clock() < deadline:
-            if self._stop_requested:
-                return False
-            # Surveille une commande "stop" pendant le boot.
-            stop_seen = self._check_for_stop_command()
-            if stop_seen is not None:
-                self._try_post_stop_silent()
-                return "stopped"
-            try:
-                status, payload = self._http.request("GET", url)
-                if status == 200:
-                    if isinstance(payload, dict):
-                        self._last_pico_state = str(payload.get("state", "unknown"))
-                    return True
-            except (urllib.error.URLError, OSError, ConnectionError):
-                pass  # boot pas terminé
-            self._sleep(self._boot_poll_interval_s)
-        return False
+    def _poll_target_switch(self, action: str, cmd_id: str) -> str:
+        """Boucle GET /status jusqu'à fin de course cible atteinte.
 
-    def _push_invert_config(self) -> bool:
-        """POST /config {invert_direction: true}. Retourne True si 200."""
-        url = self._base_url() + "/config"
-        try:
-            status, _ = self._http.request("POST", url, body={"invert_direction": True})
-            return status == 200
-        except (urllib.error.URLError, OSError, ConnectionError) as exc:
-            logger.warning("cimier_event=push_config_exception exc=%s", exc)
-            return False
-
-    def _post_action(self, action: str) -> bool:
-        """POST /open ou /close. Retourne True si 200."""
-        url = self._base_url() + "/" + action
-        try:
-            status, payload = self._http.request("POST", url)
-            if isinstance(payload, dict):
-                self._last_pico_state = str(payload.get("state", "unknown"))
-            return status == 200
-        except (urllib.error.URLError, OSError, ConnectionError) as exc:
-            logger.warning("cimier_event=post_action_exception action=%s exc=%s", action, exc)
-            return False
-
-    def _poll_cycle_complete(self, action: str, cmd_id: str) -> str:
-        """Boucle GET /status jusqu'à pico_state cible.
-
-        Retourne :
-          - "ok"        : pico_state cible atteint (open ou closed)
-          - "timeout"   : cycle_timeout_s dépassé
-          - "stopped"   : commande "stop" reçue et propagée au Pico
-          - "pico_error": Pico a remonté state="error"
+        Returns:
+            "ok"       : switch cible passé à True.
+            "timeout"  : cycle_timeout_s dépassé.
+            "stopped"  : commande stop reçue.
+            "error"    : both_switches_triggered au cours du polling.
         """
-        target = "open" if action == ACTION_OPEN else "closed"
+        target_key = "open_switch" if action == ACTION_OPEN else "closed_switch"
+        other_key = "closed_switch" if action == ACTION_OPEN else "open_switch"
         deadline = self._clock() + self._config.cycle_timeout_s
         url = self._base_url() + "/status"
 
         while self._clock() < deadline:
             if self._stop_requested:
-                self._try_post_stop_silent()
                 return "stopped"
             stop_seen = self._check_for_stop_command()
             if stop_seen is not None:
-                self._try_post_stop_silent()
                 return "stopped"
             try:
+                t0 = self._clock()
                 status, payload = self._http.request("GET", url)
+                latency_ms = int((self._clock() - t0) * 1000)
                 if status == 200 and isinstance(payload, dict):
-                    pico_state = str(payload.get("state", "unknown"))
-                    self._last_pico_state = pico_state
-                    if pico_state == target:
+                    target_now = bool(payload.get(target_key, False))
+                    other_now = bool(payload.get(other_key, False))
+                    # Mise à jour des derniers switches observés (mapping
+                    # CIMIER_STATE_* pour scheduler).
+                    self._last_open_switch = bool(payload.get("open_switch", False))
+                    self._last_closed_switch = bool(payload.get("closed_switch", False))
+                    if target_now and other_now:
+                        logger.error("cimier_event=poll_both_switches id=%s", cmd_id)
+                        return "error"
+                    if target_now:
+                        logger.info(
+                            "cimier_event=switch_transition switch=%s from=false to=true "
+                            "elapsed_ms=%d id=%s",
+                            target_key,
+                            latency_ms,
+                            cmd_id,
+                        )
                         return "ok"
-                    if pico_state == "error":
-                        return "pico_error"
+                    if self._config.verbose_logging or os.environ.get("CIMIER_DEV_MODE"):
+                        logger.debug(
+                            "cimier_event=poll_status id=%s open_switch=%s closed_switch=%s",
+                            cmd_id,
+                            str(payload.get("open_switch", False)).lower(),
+                            str(payload.get("closed_switch", False)).lower(),
+                        )
             except (urllib.error.URLError, OSError, ConnectionError) as exc:
-                logger.debug("cimier_event=poll_status_exception exc=%s", exc)
+                logger.debug("cimier_event=poll_exception id=%s exc=%s", cmd_id, exc)
             self._sleep(self._cycle_poll_interval_s)
-
         return "timeout"
-
-    def _try_post_stop_silent(self) -> None:
-        """Tente un POST /stop, ignore les erreurs (déjà en cleanup)."""
-        url = self._base_url() + "/stop"
-        try:
-            self._http.request("POST", url)
-        except (urllib.error.URLError, OSError, ConnectionError):
-            pass
 
     def _check_for_stop_command(self) -> Optional[Dict[str, Any]]:
         """Lit l'IPC sans bloquer pour détecter une commande "stop" entrante.
@@ -833,7 +866,9 @@ class CimierService:
             "last_action_ts": self._clock(),
             "command_id": command_id,
             "error_message": error_message,
-            "pico_state": self._last_pico_state,
+            # Switches Pico capteur (alimente UI + scheduler mapping).
+            "open_switch": self._last_open_switch,
+            "closed_switch": self._last_closed_switch,
             # v6.0 Phase 4 : mode automation + prochains horaires de trigger
             # (consommés par GET /api/cimier/automation/ + countdown UI dashboard).
             "mode": self._config.automation.mode,
@@ -859,25 +894,26 @@ class CimierService:
     def _derive_current_cimier_state(self) -> str:
         """Mappe l'état interne du service vers les labels CIMIER_STATE_* du scheduler.
 
+        Archi Shelly (Bloc 2) : le Pico est capteur-only — pas de ``pico_state``
+        legacy. On dérive l'état du cimier des derniers ``open_switch`` /
+        ``closed_switch`` observés.
+
         - Cooldown actif → CIMIER_STATE_COOLDOWN
-        - Pico state ∈ {open, opening} → CIMIER_STATE_OPEN (opening = en train de s'ouvrir)
-        - Pico state == closed → CIMIER_STATE_CLOSED
-        - Pico state == closing → CIMIER_STATE_CYCLE (cycle de fermeture en cours)
-        - Pico state == error → CIMIER_STATE_ERROR
-        - Pico state == unknown (boot) → "unknown" (ne matche aucun CIMIER_STATE_* →
-          le scheduler retourne skip:state, comportement default-safe au boot)
+        - both switches True → CIMIER_STATE_ERROR (anomalie capteur)
+        - open_switch True  → CIMIER_STATE_OPEN
+        - closed_switch True → CIMIER_STATE_CLOSED
+        - aucun switch (mouvement ou état inconnu au boot) → "unknown"
+          (ne matche aucun CIMIER_STATE_* → le scheduler retourne skip:state,
+          comportement default-safe au boot).
         """
         if self._cooldown_end_ts is not None:
             return CIMIER_STATE_COOLDOWN
-        state = self._last_pico_state
-        if state in ("open", "opening"):
-            return CIMIER_STATE_OPEN
-        if state == "closing":
-            return CIMIER_STATE_CYCLE
-        if state == "closed":
-            return CIMIER_STATE_CLOSED
-        if state == "error":
+        if self._last_open_switch and self._last_closed_switch:
             return CIMIER_STATE_ERROR
+        if self._last_open_switch:
+            return CIMIER_STATE_OPEN
+        if self._last_closed_switch:
+            return CIMIER_STATE_CLOSED
         return "unknown"
 
     # ------------------------------------------------------------------

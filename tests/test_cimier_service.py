@@ -2,21 +2,17 @@
 
 Couvre :
   - Configuration & instantiation (factory power_switch, enabled flag)
-  - Cycle complet bout-en-bout via CimierSimulator + NoopPowerSwitch
+  - Cinématique Shelly Bloc 2 (preflight + ordre d'appels + invariant 220V)
   - Anti-bounce post_off_quiet_s (FakeHttpClient + MockClock)
-  - Erreurs et timeouts (boot, cycle, http, pico_error)
-  - Commande "stop" (pendant cycle, idle, pendant boot)
+  - Erreurs et timeouts (cycle_timeout, both_switches, power_on_failure)
+  - Commande "stop" (pendant cycle, idle)
   - IPC manager : dédup, écriture atomique, création fichier
-
-v6.0 Phase 1 sub-plan 02.
 """
 
 from __future__ import annotations
 
 import json
 import re
-import socket
-import time
 import urllib.error
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -25,7 +21,6 @@ import pytest
 
 from core.config.config_loader import CimierConfig, MotorShellyConfig, PowerSwitchConfig
 from core.hardware.cimier_mechanism_sim import CimierMechanismSim
-from core.hardware.cimier_simulator import CimierSimulator
 from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
 from core.hardware.sim_motor_shelly import SimMotorShelly
 from core.hardware.power_switch import (
@@ -36,17 +31,9 @@ from core.hardware.power_switch import (
 from services.cimier_ipc_manager import CimierIpcManager
 from services.cimier_service import (
     ACTION_CLOSE,
-    ACTION_OPEN,
     ACTION_STOP,
     CIMIER_STATE_CLOSED,
     CIMIER_STATE_OPEN,
-    HttpClient,
-    PHASE_BOOT_POLL,
-    PHASE_COMMAND_PICO,
-    PHASE_COOLDOWN,
-    PHASE_CYCLE_POLL,
-    PHASE_POWER_OFF,
-    PHASE_POWER_ON,
     STATE_COOLDOWN,
     STATE_DISABLED,
     STATE_ERROR,
@@ -60,14 +47,6 @@ from services.cimier_service import (
 # ======================================================================
 # Helpers / fakes
 # ======================================================================
-
-
-def _find_free_port() -> int:
-    s = socket.socket()
-    s.bind(("127.0.0.1", 0))
-    port = s.getsockname()[1]
-    s.close()
-    return port
 
 
 class CountingPowerSwitch:
@@ -250,51 +229,6 @@ def cimier_config_default() -> CimierConfig:
 
 
 @pytest.fixture
-def simulator():
-    """CimierSimulator sur port libre, boot rapide (50ms), cycle court."""
-    port = _find_free_port()
-    sim = CimierSimulator(
-        port=port,
-        boot_delay_s=0.05,
-        steps_per_cycle=20,
-        tick_period_ms=5,
-        cycle_timeout_s=2.0,
-    )
-    sim.start()
-    assert sim.wait_ready(timeout=3.0), "simulator did not boot"
-    yield sim
-    sim.stop()
-
-
-@pytest.fixture
-def service_with_simulator(
-    simulator: CimierSimulator,
-    ipc_manager: RecordingIpcManager,
-) -> Tuple[CimierService, CountingPowerSwitch, CimierSimulator]:
-    """Service connecté au simulator HTTP réel."""
-    cfg = CimierConfig(
-        enabled=True,
-        host="127.0.0.1",
-        port=simulator.port,
-        invert_direction=False,
-        cycle_timeout_s=2.0,
-        boot_poll_timeout_s=2.0,
-        post_off_quiet_s=0.1,
-        power_switch=PowerSwitchConfig(type="noop"),
-    )
-    ps = CountingPowerSwitch()
-    service = CimierService(
-        cimier_config=cfg,
-        power_switch=ps,
-        http_client=HttpClient(timeout_s=2.0),
-        ipc_manager=ipc_manager,
-        boot_poll_interval_s=0.05,
-        cycle_poll_interval_s=0.02,
-    )
-    return service, ps, simulator
-
-
-@pytest.fixture
 def service_with_fake_http(
     cimier_config_default: CimierConfig,
     ipc_manager: RecordingIpcManager,
@@ -400,171 +334,14 @@ class TestConfigurationAndInstantiation:
 
 
 # ======================================================================
-# Section 2 : Cycle complet via simulator
+# Section 2 : Cycle complet via simulator — SUPPRIMÉ (Bloc 2 T4)
+#
+# La classe TestFullCycleViaSimulator legacy testait la pipeline HTTP Pico
+# (POST /open, polling pico_state, push /config) qui n'existe plus dans
+# l'archi Shelly. Les invariants équivalents pour la nouvelle cinématique
+# sont couverts par TestShellyCinematique (ordre d'appels + invariant
+# power_off) et TestPreflightGuard.
 # ======================================================================
-
-
-@pytest.mark.skip(reason="Bloc 2 — réécriture orchestration Shelly, cf. plan 2026-05-23")
-class TestFullCycleViaSimulator:
-    def test_open_cycle_full_pipeline(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        service, ps, simulator = service_with_simulator
-        ipc_manager.write_command({"id": "cmd-open-1", "action": "open"})
-        service.tick()
-        assert ps.on_count == 1
-        assert ps.off_count == 1
-        assert simulator.controller.state == "open"
-        # Status final = cooldown (cycle vient de finir)
-        last = ipc_manager.history[-1]
-        assert last["state"] in (STATE_COOLDOWN, STATE_IDLE)
-        assert last["last_action"] == ACTION_OPEN
-        assert last["command_id"] == "cmd-open-1"
-        assert last["error_message"] == ""
-
-    def test_close_cycle_full_pipeline(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        service, ps, simulator = service_with_simulator
-        # Forcer position open au boot.
-        simulator.stop()
-        simulator._initial_position = simulator._steps_per_cycle
-        simulator.start()
-        assert simulator.wait_ready(timeout=2.0)
-
-        ipc_manager.write_command({"id": "cmd-close-1", "action": "close"})
-        service.tick()
-        assert ps.on_count == 1
-        assert ps.off_count == 1
-        assert simulator.controller.state == "closed"
-
-    def test_invert_not_pushed_when_default(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        service, _, simulator = service_with_simulator
-        # invert_direction défaut = False → pas de POST /config attendu.
-        ipc_manager.write_command({"id": "cmd-1", "action": "open"})
-        service.tick()
-        assert simulator.controller.invert_direction is False
-
-    def test_invert_pushed_when_true(
-        self,
-        simulator: CimierSimulator,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        cfg = CimierConfig(
-            enabled=True,
-            host="127.0.0.1",
-            port=simulator.port,
-            invert_direction=True,
-            cycle_timeout_s=2.0,
-            boot_poll_timeout_s=2.0,
-            post_off_quiet_s=0.05,
-            power_switch=PowerSwitchConfig(type="noop"),
-        )
-        ps = CountingPowerSwitch()
-        service = CimierService(
-            cimier_config=cfg,
-            power_switch=ps,
-            http_client=HttpClient(timeout_s=2.0),
-            ipc_manager=ipc_manager,
-            boot_poll_interval_s=0.05,
-            cycle_poll_interval_s=0.02,
-        )
-        ipc_manager.write_command({"id": "cmd-1", "action": "open"})
-        service.tick()
-        # Le simulateur a reçu POST /config → invert mémorisée.
-        assert simulator.controller.invert_direction is True
-
-    def test_invert_re_pushed_after_reset_boot(
-        self,
-        simulator: CimierSimulator,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        cfg = CimierConfig(
-            enabled=True,
-            host="127.0.0.1",
-            port=simulator.port,
-            invert_direction=True,
-            cycle_timeout_s=2.0,
-            boot_poll_timeout_s=2.0,
-            post_off_quiet_s=0.05,
-            power_switch=PowerSwitchConfig(type="noop"),
-        )
-        ps = CountingPowerSwitch()
-        service = CimierService(
-            cimier_config=cfg,
-            power_switch=ps,
-            http_client=HttpClient(timeout_s=2.0),
-            ipc_manager=ipc_manager,
-            boot_poll_interval_s=0.05,
-            cycle_poll_interval_s=0.02,
-        )
-        # Cycle 1
-        ipc_manager.write_command({"id": "cycle-1", "action": "open"})
-        service.tick()
-        assert simulator.controller.invert_direction is True
-
-        # reset_boot simule la coupure Shelly → Pico oublie l'invert.
-        simulator.reset_boot()
-        assert simulator.wait_ready(timeout=2.0)
-        assert simulator.controller.invert_direction is False  # perdu au reboot
-
-        # Cycle 2 — le service doit re-pousser l'invert.
-        # Avancer après cooldown : on attend 0.1s qui couvre les 0.05s post_off_quiet_s.
-        time.sleep(0.15)
-        ipc_manager.write_command({"id": "cycle-2", "action": "close"})
-        service.tick()  # consomme cooldown s'il reste
-        # Si encore en cooldown, faire un autre tick après attente
-        if not simulator.controller.invert_direction:
-            time.sleep(0.1)
-            service.tick()
-        assert simulator.controller.invert_direction is True
-
-    def test_command_id_dedup(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        service, ps, _ = service_with_simulator
-        # Même id soumis 2x → 1 seul cycle exécuté.
-        ipc_manager.write_command({"id": "cmd-x", "action": "open"})
-        service.tick()
-        assert ps.on_count == 1
-        # Re-soumettre la même commande (même id)
-        ipc_manager.write_command({"id": "cmd-x", "action": "open"})
-        # Après cooldown
-        time.sleep(0.15)
-        service.tick()
-        assert ps.on_count == 1  # pas de 2e cycle
-
-    def test_status_published_each_phase_transition(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        service, _, _ = service_with_simulator
-        ipc_manager.history.clear()
-        ipc_manager.write_command({"id": "phase-test", "action": "open"})
-        service.tick()
-        phases_seen = [h["phase"] for h in ipc_manager.history]
-        # Au moins ces phases doivent apparaître pendant le cycle (invert=False
-        # → push_config absent).
-        for required in (
-            PHASE_POWER_ON,
-            PHASE_BOOT_POLL,
-            PHASE_COMMAND_PICO,
-            PHASE_CYCLE_POLL,
-            PHASE_POWER_OFF,
-            PHASE_COOLDOWN,
-        ):
-            assert required in phases_seen, (required, phases_seen)
 
 
 # ======================================================================
@@ -651,26 +428,73 @@ class TestAntiBounceCooldown:
 
 
 class TestErrorsAndTimeouts:
-    def test_boot_timeout_sets_error_state(
+    """Erreurs et timeouts — archi Shelly (T4)."""
+
+    def test_cycle_timeout_sets_error_state(
         self,
-        cimier_config_default: CimierConfig,
         ipc_manager: RecordingIpcManager,
     ) -> None:
-        # FakeHttp : preflight OK (1 hit /status → proceed), puis boot_poll échoue
-        # indéfiniment → boot_timeout.
+        """poll_target_switch ne voit jamais open_switch=True → cycle_timeout."""
         fake = AutoFakeHttpClient()
-        # Le preflight consomme 1 hit /status (succeed → proceed, sans switches).
-        # Les 100 exceptions suivantes sont consommées pendant boot_poll.
+        # Preflight : switches au repos → proceed.
+        fake.set_status_response({"state": "closed", "open_switch": False, "closed_switch": False})
+        # poll_target_switch : /status renvoie indéfiniment switches False → timeout.
         for _ in range(100):
-            fake.queue_exception("/status", urllib.error.URLError("connection refused"))
+            fake.queue(
+                "/status",
+                200,
+                {"state": "moving", "open_switch": False, "closed_switch": False},
+            )
+
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=0.2,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "cycle-fail", "action": "open"})
+        # Invariant 220V : power_off appelé en cleanup.
+        assert ps.off_count == 1
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "cycle_timeout"
+
+    def test_both_switches_during_poll_sets_error(
+        self,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        """Si /status renvoie open_switch+closed_switch=True pendant le poll → error."""
+        fake = AutoFakeHttpClient()
+        # Preflight : repos → proceed.
+        fake.set_status_response({"state": "closed", "open_switch": False, "closed_switch": False})
+        # poll_target_switch : 1er status anormal → both_switches_triggered.
+        fake.queue(
+            "/status",
+            200,
+            {"state": "error", "open_switch": True, "closed_switch": True},
+        )
 
         cfg = CimierConfig(
             enabled=True,
             host="127.0.0.1",
             port=80,
             cycle_timeout_s=2.0,
-            boot_poll_timeout_s=0.2,  # court
             post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
             power_switch=PowerSwitchConfig(type="noop"),
         )
         ps = CountingPowerSwitch()
@@ -682,129 +506,29 @@ class TestErrorsAndTimeouts:
             ipc_manager=ipc_manager,
             clock=clock,
             sleep=clock.sleep,
-            boot_poll_interval_s=0.05,
             cycle_poll_interval_s=0.05,
         )
-        # Injecter 1 réponse /status valide (sans switches) pour que le preflight
-        # décide "proceed", puis les exceptions de la queue couvrent le boot_poll.
-        fake.set_status_response({"state": "closed"})
-        service.execute_command({"id": "boot-fail", "action": "open"})
-        # turn_off DOIT être appelé même en boot timeout (sécurité)
+        service.execute_command({"id": "both", "action": "open"})
         assert ps.off_count == 1
         last = ipc_manager.history[-1]
         assert last["state"] == STATE_ERROR
-        assert last["error_message"] == "boot_timeout"
-
-    def test_cycle_timeout_sets_error_state(
-        self,
-        cimier_config_default: CimierConfig,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        # FakeHttp : /status retourne toujours "opening" (jamais "open") → cycle_timeout.
-        fake = AutoFakeHttpClient(initial_state="opening")
-        # /status renvoie immédiatement 200 mais avec state="opening" indéfiniment
-        cfg = CimierConfig(
-            enabled=True,
-            host="127.0.0.1",
-            port=80,
-            cycle_timeout_s=0.2,
-            boot_poll_timeout_s=2.0,
-            post_off_quiet_s=0.0,
-            power_switch=PowerSwitchConfig(type="noop"),
-        )
-        ps = CountingPowerSwitch()
-        clock = MockClock()
-        service = CimierService(
-            cimier_config=cfg,
-            power_switch=ps,
-            http_client=fake,
-            ipc_manager=ipc_manager,
-            clock=clock,
-            sleep=clock.sleep,
-            boot_poll_interval_s=0.05,
-            cycle_poll_interval_s=0.05,
-        )
-        # Pour ce test, /open passe le pico en "opening" mais on force /status à
-        # garder cet état (le AutoFake passe en "open" sur POST /open par défaut).
-        # Solution : on neutralise le passage automatique en queueant 100 status="opening".
-        for _ in range(100):
-            fake.queue("/status", 200, {"state": "opening"})
-
-        service.execute_command({"id": "cycle-fail", "action": "open"})
-        assert ps.off_count == 1
-        last = ipc_manager.history[-1]
-        assert last["state"] == STATE_ERROR
-        assert last["error_message"] == "cycle_timeout"
-
-    def test_pico_returns_error_state_propagated(
-        self,
-        cimier_config_default: CimierConfig,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        fake = AutoFakeHttpClient()
-        # Preflight : 1 hit /status → proceed (sans switches).
-        # boot_poll : /status → "opening" (ready).
-        # cycle_poll : /status → "error" (pico_error).
-        fake.set_status_response({"state": "closed"})
-        fake.queue("/status", 200, {"state": "opening"})
-        fake.queue("/status", 200, {"state": "error"})
-
-        ps = CountingPowerSwitch()
-        clock = MockClock()
-        service = CimierService(
-            cimier_config=cimier_config_default,
-            power_switch=ps,
-            http_client=fake,
-            ipc_manager=ipc_manager,
-            clock=clock,
-            sleep=clock.sleep,
-            boot_poll_interval_s=0.05,
-            cycle_poll_interval_s=0.05,
-        )
-        service.execute_command({"id": "err", "action": "open"})
-        assert ps.off_count == 1
-        last = ipc_manager.history[-1]
-        assert last["state"] == STATE_ERROR
-        assert last["error_message"] == "pico_error"
-
-    def test_http_exception_during_post_action_recovered(
-        self,
-        cimier_config_default: CimierConfig,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        fake = AutoFakeHttpClient()
-        # Boot OK, mais POST /open lève une URLError.
-        fake.queue_exception("/open", urllib.error.URLError("bad"))
-
-        ps = CountingPowerSwitch()
-        clock = MockClock()
-        service = CimierService(
-            cimier_config=cimier_config_default,
-            power_switch=ps,
-            http_client=fake,
-            ipc_manager=ipc_manager,
-            clock=clock,
-            sleep=clock.sleep,
-            boot_poll_interval_s=0.05,
-            cycle_poll_interval_s=0.05,
-        )
-        service.execute_command({"id": "http-fail", "action": "open"})
-        assert ps.off_count == 1
-        last = ipc_manager.history[-1]
-        assert last["state"] == STATE_ERROR
-        assert last["error_message"] == "command_failed"
+        assert last["error_message"] == "both_switches_triggered"
 
     def test_turn_off_called_even_on_power_on_failure(
         self,
         cimier_config_default: CimierConfig,
         ipc_manager: RecordingIpcManager,
     ) -> None:
+        """Invariant 220V : turn_off appelé en cleanup même si turn_on raise."""
         ps = FailingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        # Preflight : OK → proceed (sans switches).
+        fake.set_status_response({"state": "closed", "open_switch": False, "closed_switch": False})
         clock = MockClock()
         service = CimierService(
             cimier_config=cimier_config_default,
             power_switch=ps,
-            http_client=AutoFakeHttpClient(),
+            http_client=fake,
             ipc_manager=ipc_manager,
             clock=clock,
             sleep=clock.sleep,
@@ -837,92 +561,62 @@ class TestStop:
         assert last["last_action"] == ACTION_STOP
         assert last["state"] == STATE_IDLE
 
-    def test_stop_during_cycle_poll_interrupts(
+    def test_stop_during_poll_switch_releases_power_and_motor(
         self,
         cimier_config_default: CimierConfig,
         ipc_manager: RecordingIpcManager,
     ) -> None:
-        """Pendant cycle_poll, une commande "stop" doit être détectée et propagée."""
-        fake = AutoFakeHttpClient()
-        # /open → state=opening (pas "open" → cycle_poll attend)
-        fake.queue("/open", 200, {"state": "opening"})
-        # /status renvoie "opening" indéfiniment (jamais "open") jusqu'à stop.
-        for _ in range(100):
-            fake.queue("/status", 200, {"state": "opening"})
+        """Pendant poll_switch, une commande "stop" doit interrompre + cleanup.
 
+        Archi Shelly (T4) : pas de POST /stop vers le Pico (capteur-only).
+        L'interruption coupe le moteur (motor_shelly.turn_off cleanup) puis
+        le power_switch (invariant 220V).
+        """
+        fake = AutoFakeHttpClient()
+        # Preflight : repos → proceed.
+        fake.set_status_response({"state": "closed", "open_switch": False, "closed_switch": False})
+        # poll_target_switch : 100 réponses « moving » (jamais open_switch=True).
+        for _ in range(100):
+            fake.queue(
+                "/status",
+                200,
+                {"state": "moving", "open_switch": False, "closed_switch": False},
+            )
+
+        mech = CimierMechanismSim()
+        sim_motor = SimMotorShelly(mech)
         ps = CountingPowerSwitch()
         clock = MockClock()
         service = CimierService(
             cimier_config=cimier_config_default,
             power_switch=ps,
+            motor_shelly=sim_motor,
             http_client=fake,
             ipc_manager=ipc_manager,
             clock=clock,
             sleep=clock.sleep,
-            boot_poll_interval_s=0.01,
             cycle_poll_interval_s=0.01,
         )
 
-        # Pré-écrire la commande stop AVANT execute_command pour qu'elle soit
-        # détectée pendant cycle_poll. Mais l'IPC manager dédup par id : on doit
-        # écrire open puis remplacer par stop avec un id différent.
-        # Simulation : appeler manuellement pour reproduire la séquence.
-        # On exécute open dans un setup où la 1ère lecture IPC interne ramène stop.
-        # Plus simple : patch read_command pour renvoyer stop au 2e appel.
-
-        original_read = service._ipc.read_command
+        # Patch read_command pour renvoyer une commande stop dès qu'elle est
+        # interrogée (le 1er appel viendra de _check_for_stop_command pendant
+        # poll_target_switch).
         call_count = {"n": 0}
 
         def patched_read():
             call_count["n"] += 1
-            # 1er appel (par check_for_stop_command pendant boot/cycle) → stop
             if call_count["n"] >= 1:
                 return {"id": "stop-during", "action": "stop"}
-            return original_read()
-
-        service._ipc.read_command = patched_read  # type: ignore[assignment]
-        service.execute_command({"id": "open-1", "action": "open"})
-        # Le service a tenté un POST /stop suite à la détection.
-        assert fake.count_calls("/stop", method="POST") >= 1
-        # Et turn_off a bien été appelé en cleanup.
-        assert ps.off_count == 1
-
-    def test_stop_during_boot_poll_releases_power(
-        self,
-        cimier_config_default: CimierConfig,
-        ipc_manager: RecordingIpcManager,
-    ) -> None:
-        fake = AutoFakeHttpClient()
-        # Le preflight consomme 1 hit /status (succeed → proceed, sans switches).
-        # Les 100 exceptions suivantes couvrent boot_poll → stop intercepté → turn_off.
-        fake.set_status_response({"state": "closed"})
-        for _ in range(100):
-            fake.queue_exception("/status", urllib.error.URLError("nope"))
-
-        ps = CountingPowerSwitch()
-        clock = MockClock()
-        service = CimierService(
-            cimier_config=cimier_config_default,
-            power_switch=ps,
-            http_client=fake,
-            ipc_manager=ipc_manager,
-            clock=clock,
-            sleep=clock.sleep,
-            boot_poll_interval_s=0.01,
-        )
-
-        call_count = {"n": 0}
-
-        def patched_read():
-            call_count["n"] += 1
-            if call_count["n"] >= 1:
-                return {"id": "stop-boot", "action": "stop"}
             return None
 
         service._ipc.read_command = patched_read  # type: ignore[assignment]
-        service.execute_command({"id": "open-boot", "action": "open"})
-        # Cleanup → turn_off appelé
+        service.execute_command({"id": "open-1", "action": "open"})
+
+        # Invariant 220V + moteur OFF : cleanup garanti.
         assert ps.off_count == 1
+        # SimMotorShelly enregistre turn_off au moins 2 fois (défensif + cleanup).
+        turn_off_calls = [c for c in sim_motor.calls if c[0] == "turn_off"]
+        assert len(turn_off_calls) >= 2
 
 
 # ======================================================================
@@ -1033,27 +727,6 @@ class TestWeatherProviderWiring:
             ipc_manager=ipc_manager,
         )
         assert isinstance(service._weather_provider, NoopWeatherProvider)
-
-    @pytest.mark.skip(reason="Bloc 2 — réécriture orchestration Shelly, cf. plan 2026-05-23")
-    def test_cycle_logs_weather_on_start(
-        self,
-        service_with_simulator: Tuple[CimierService, CountingPowerSwitch, CimierSimulator],
-        ipc_manager: RecordingIpcManager,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        """`_run_cycle` doit emettre `cimier_event=cycle_start ... weather=<json>`."""
-        service, _, _ = service_with_simulator
-        with caplog.at_level("INFO", logger="services.cimier_service"):
-            ipc_manager.write_command({"id": "weather-test-1", "action": "open"})
-            service.tick()
-
-        starts = [rec for rec in caplog.records if "cimier_event=cycle_start" in rec.getMessage()]
-        assert len(starts) == 1
-        msg = starts[0].getMessage()
-        assert "weather=" in msg
-        assert '{"provider":"noop"}' in msg
-        assert "action=open" in msg
-        assert "id=weather-test-1" in msg
 
     def test_cycle_logs_describe_from_custom_provider(
         self,
@@ -1272,11 +945,10 @@ class TestSchedulerWiring:
         assert any("scheduler_exception" in r.getMessage() for r in caplog.records)
 
     def test_derive_current_cimier_state_mappings(self, ipc_manager: RecordingIpcManager) -> None:
-        """Vérifie le mapping pico_state → CIMIER_STATE_*."""
+        """Vérifie le mapping switches Pico capteur → CIMIER_STATE_* (archi Shelly Bloc 2)."""
         from services.cimier_scheduler import (
             CIMIER_STATE_CLOSED,
             CIMIER_STATE_COOLDOWN,
-            CIMIER_STATE_CYCLE,
             CIMIER_STATE_ERROR,
             CIMIER_STATE_OPEN,
         )
@@ -1288,32 +960,29 @@ class TestSchedulerWiring:
             ipc_manager=ipc_manager,
         )
 
-        # unknown (boot) → "unknown" (default-safe : pas de trigger)
-        service._last_pico_state = "unknown"
+        # Aucun switch (mouvement / boot) → "unknown" (default-safe : pas de trigger)
+        service._last_open_switch = False
+        service._last_closed_switch = False
         assert service._derive_current_cimier_state() == "unknown"
 
-        # closed → CIMIER_STATE_CLOSED
-        service._last_pico_state = "closed"
+        # closed_switch True → CIMIER_STATE_CLOSED
+        service._last_open_switch = False
+        service._last_closed_switch = True
         assert service._derive_current_cimier_state() == CIMIER_STATE_CLOSED
 
-        # open → CIMIER_STATE_OPEN
-        service._last_pico_state = "open"
+        # open_switch True → CIMIER_STATE_OPEN
+        service._last_open_switch = True
+        service._last_closed_switch = False
         assert service._derive_current_cimier_state() == CIMIER_STATE_OPEN
 
-        # opening → CIMIER_STATE_OPEN (en train de s'ouvrir)
-        service._last_pico_state = "opening"
-        assert service._derive_current_cimier_state() == CIMIER_STATE_OPEN
-
-        # closing → CIMIER_STATE_CYCLE (cycle de fermeture)
-        service._last_pico_state = "closing"
-        assert service._derive_current_cimier_state() == CIMIER_STATE_CYCLE
-
-        # error → CIMIER_STATE_ERROR
-        service._last_pico_state = "error"
+        # both switches True → CIMIER_STATE_ERROR (anomalie capteur)
+        service._last_open_switch = True
+        service._last_closed_switch = True
         assert service._derive_current_cimier_state() == CIMIER_STATE_ERROR
 
-        # cooldown actif → CIMIER_STATE_COOLDOWN (priorité sur pico_state)
-        service._last_pico_state = "open"
+        # cooldown actif → CIMIER_STATE_COOLDOWN (priorité absolue)
+        service._last_open_switch = True
+        service._last_closed_switch = False
         service._cooldown_end_ts = 999999.0
         assert service._derive_current_cimier_state() == CIMIER_STATE_COOLDOWN
 
