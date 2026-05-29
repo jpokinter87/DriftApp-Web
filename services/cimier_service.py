@@ -468,18 +468,21 @@ class CimierService:
         if open_sw and closed_sw:
             logger.info(
                 "cimier_event=preflight action=%s id=%s decision=error "
-                "reason=both_switches_triggered open_switch=true closed_switch=true "
+                "reason=both_switches_triggered open_switch=%s closed_switch=%s "
                 "latency_ms=%d",
                 action,
                 cmd_id,
+                str(open_sw).lower(),
+                str(closed_sw).lower(),
                 latency_ms,
             )
             return ("error", "both_switches_triggered", payload)
 
         if action == ACTION_OPEN and open_sw:
             logger.info(
-                "cimier_event=preflight action=open id=%s decision=noop "
+                "cimier_event=preflight action=%s id=%s decision=noop "
                 "reason=already_open latency_ms=%d",
+                action,
                 cmd_id,
                 latency_ms,
             )
@@ -487,8 +490,9 @@ class CimierService:
 
         if action == ACTION_CLOSE and closed_sw:
             logger.info(
-                "cimier_event=preflight action=close id=%s decision=noop "
+                "cimier_event=preflight action=%s id=%s decision=noop "
                 "reason=already_closed latency_ms=%d",
+                action,
                 cmd_id,
                 latency_ms,
             )
@@ -528,7 +532,12 @@ class CimierService:
         self._publish_phase(PHASE_PREFLIGHT, action, cmd_id, error_message="")
         decision, reason, _ = self._preflight_switches(action, cmd_id)
         if decision == "noop":
-            target_state = CIMIER_STATE_OPEN if action == ACTION_OPEN else CIMIER_STATE_CLOSED
+            if action == ACTION_OPEN:
+                target_state = CIMIER_STATE_OPEN
+            elif action == ACTION_CLOSE:
+                target_state = CIMIER_STATE_CLOSED
+            else:
+                raise AssertionError("preflight noop unreachable for action=" + repr(action))
             self._publish_status(
                 state=target_state,
                 phase=PHASE_IDLE,

@@ -24,8 +24,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import pytest
 
 from core.config.config_loader import CimierConfig, MotorShellyConfig, PowerSwitchConfig
+from core.hardware.cimier_mechanism_sim import CimierMechanismSim
 from core.hardware.cimier_simulator import CimierSimulator
 from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
+from core.hardware.sim_motor_shelly import SimMotorShelly
 from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
@@ -1468,9 +1470,6 @@ class TestPreflightGuard:
         switches_payload: Dict[str, Any],
         unreachable: bool = False,
     ):
-        from core.hardware.cimier_mechanism_sim import CimierMechanismSim
-        from core.hardware.sim_motor_shelly import SimMotorShelly
-
         ps = CountingPowerSwitch()
         fake = AutoFakeHttpClient()
         if unreachable:
@@ -1498,10 +1497,10 @@ class TestPreflightGuard:
             clock=clock,
             sleep=clock.sleep,
         )
-        return service, ps, sim_motor, ipc_manager
+        return service, ps, sim_motor
 
     def test_open_when_already_open_is_noop(self, ipc_manager: RecordingIpcManager) -> None:
-        service, ps, sim_motor, _ = self._make_service(
+        service, ps, sim_motor = self._make_service(
             ipc_manager,
             switches_payload={"state": "open", "open_switch": True, "closed_switch": False},
         )
@@ -1514,18 +1513,19 @@ class TestPreflightGuard:
         assert last.get("error_message", "") in ("", None)
 
     def test_close_when_already_closed_is_noop(self, ipc_manager: RecordingIpcManager) -> None:
-        service, ps, sim_motor, _ = self._make_service(
+        service, ps, sim_motor = self._make_service(
             ipc_manager,
             switches_payload={"state": "closed", "open_switch": False, "closed_switch": True},
         )
         service.execute_command({"id": "2", "action": "close"})
         assert ps.on_count == 0
+        assert ps.off_count == 0
         assert sim_motor.calls == []
         last = ipc_manager.history[-1]
         assert last["state"] == CIMIER_STATE_CLOSED
 
     def test_both_switches_true_blocks_with_error(self, ipc_manager: RecordingIpcManager) -> None:
-        service, ps, sim_motor, _ = self._make_service(
+        service, ps, sim_motor = self._make_service(
             ipc_manager,
             switches_payload={"state": "error", "open_switch": True, "closed_switch": True},
         )
@@ -1537,7 +1537,7 @@ class TestPreflightGuard:
         assert last["error_message"] == "both_switches_triggered"
 
     def test_status_unreachable_blocks_with_error(self, ipc_manager: RecordingIpcManager) -> None:
-        service, ps, sim_motor, _ = self._make_service(
+        service, ps, sim_motor = self._make_service(
             ipc_manager,
             switches_payload={},
             unreachable=True,
@@ -1591,9 +1591,6 @@ class TestMotorShellyInjection:
         cimier_config_default: CimierConfig,
         ipc_manager: RecordingIpcManager,
     ) -> None:
-        from core.hardware.cimier_mechanism_sim import CimierMechanismSim
-        from core.hardware.sim_motor_shelly import SimMotorShelly
-
         mech = CimierMechanismSim()
         sim_motor = SimMotorShelly(mech)
         ps = CountingPowerSwitch()
