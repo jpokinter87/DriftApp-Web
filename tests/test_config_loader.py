@@ -43,6 +43,7 @@ from core.config.config_loader import (
 # Fixtures locales
 # =============================================================================
 
+
 @pytest.fixture
 def sample_config_dict():
     """Dict JSON complet pour un config.json de test."""
@@ -109,11 +110,11 @@ def config_json_path():
 # Dataclasses — Tests de construction et propriétés
 # =============================================================================
 
+
 class TestSiteConfig:
     def test_construction(self):
         site = SiteConfig(
-            latitude=44.15, longitude=5.23, altitude=800,
-            nom="Test", fuseau="Europe/Paris"
+            latitude=44.15, longitude=5.23, altitude=800, nom="Test", fuseau="Europe/Paris"
         )
         assert site.latitude == 44.15
         assert site.nom == "Test"
@@ -121,8 +122,7 @@ class TestSiteConfig:
 
     def test_str(self):
         site = SiteConfig(
-            latitude=44.15, longitude=5.23, altitude=800,
-            nom="Ubik", fuseau="Europe/Paris"
+            latitude=44.15, longitude=5.23, altitude=800, nom="Ubik", fuseau="Europe/Paris"
         )
         s = str(site)
         assert "Ubik" in s
@@ -156,10 +156,14 @@ class TestMotorConfig:
     def test_str(self):
         motor = MotorConfig(
             gpio_pins=GPIOPins(dir=17, step=18),
-            steps_per_revolution=200, microsteps=4,
-            gear_ratio=2230.0, steps_correction_factor=1.0,
-            motor_delay_base=0.002, motor_delay_min=0.00001,
-            motor_delay_max=0.01, max_speed_steps_per_sec=1000,
+            steps_per_revolution=200,
+            microsteps=4,
+            gear_ratio=2230.0,
+            steps_correction_factor=1.0,
+            motor_delay_base=0.002,
+            motor_delay_min=0.00001,
+            motor_delay_max=0.01,
+            max_speed_steps_per_sec=1000,
             acceleration_steps_per_sec2=500,
         )
         s = str(motor)
@@ -172,7 +176,7 @@ class TestTrackingConfig:
         tc = TrackingConfig(
             seuil_correction_deg=0.5,
             intervalle_verification_sec=60,
-            abaque_file="data/Loi_coupole.xlsx"
+            abaque_file="data/Loi_coupole.xlsx",
         )
         assert tc.abaque_path == Path("data/Loi_coupole.xlsx")
 
@@ -182,14 +186,15 @@ class TestDriftAppConfig:
         config = DriftAppConfig(
             site=SiteConfig(44.15, 5.23, 800, "Test", "UTC"),
             motor=MotorConfig(
-                GPIOPins(17, 18), 200, 4, 2230.0, 1.0,
-                0.002, 0.00001, 0.01, 1000, 500
+                GPIOPins(17, 18), 200, 4, 2230.0, 1.0, 0.002, 0.00001, 0.01, 1000, 500
             ),
             motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, "data/Loi.xlsx"),
             encoder=EncoderConfig(
-                True, EncoderSPIConfig(0, 0, 1000000, 0),
-                EncoderMecaniqueConfig(50.0, 2303.0, 1024), 0.01
+                True,
+                EncoderSPIConfig(0, 0, 1000000, 0),
+                EncoderMecaniqueConfig(50.0, 2303.0, 1024),
+                0.01,
             ),
             thresholds=ThresholdsConfig(3.0, 30.0, 20.0, 0.5),
             simulation=False,
@@ -203,8 +208,7 @@ class TestDriftAppConfig:
             motor_driver=MotorDriverConfig("gpio", SerialConfig("/dev/ttyACM0", 115200, 2.0)),
             tracking=TrackingConfig(0.5, 60, ""),
             encoder=EncoderConfig(
-                False, EncoderSPIConfig(0, 0, 0, 0),
-                EncoderMecaniqueConfig(0, 0, 0), 0
+                False, EncoderSPIConfig(0, 0, 0, 0), EncoderMecaniqueConfig(0, 0, 0), 0
             ),
             thresholds=ThresholdsConfig(3.0, 30.0, 20.0, 0.5),
             simulation=True,
@@ -215,6 +219,7 @@ class TestDriftAppConfig:
 # =============================================================================
 # ConfigLoader — Tests de chargement
 # =============================================================================
+
 
 class TestConfigLoader:
     def test_load_valid_config(self, tmp_config_file):
@@ -293,7 +298,7 @@ class TestConfigLoader:
         config_file.write_text(json.dumps(legacy))
         config = ConfigLoader(config_file).load()
         assert isinstance(config, DriftAppConfig)
-        assert not hasattr(config, 'adaptive')
+        assert not hasattr(config, "adaptive")
 
     def test_parse_simulation_flag(self, tmp_config_file):
         loader = ConfigLoader(tmp_config_file)
@@ -331,6 +336,7 @@ class TestConfigLoader:
 # MeridianAnticipationConfig (v5.9) — flag opt-in
 # =============================================================================
 
+
 class TestMeridianAnticipationConfig:
     """Tests pour le flag meridian_anticipation (v5.9 Phase 2 Plan 01)."""
 
@@ -355,9 +361,7 @@ class TestMeridianAnticipationConfig:
         config = ConfigLoader(config_file).load()
         assert config.meridian_anticipation.enabled is True
 
-    def test_meridian_anticipation_enabled_false_explicit(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_meridian_anticipation_enabled_false_explicit(self, tmp_path, sample_config_dict):
         """Section avec enabled=false explicitement → flag à False."""
         cfg = dict(sample_config_dict)
         cfg["meridian_anticipation"] = {"enabled": False}
@@ -377,6 +381,7 @@ class TestMeridianAnticipationConfig:
 # =============================================================================
 # CimierConfig (v6.0 Phase 1) — opt-in + rétro-compat stricte
 # =============================================================================
+
 
 class TestCimierConfig:
     """Tests pour la section cimier (v6.0 Phase 1, sub-plan 02)."""
@@ -476,9 +481,7 @@ class TestCimierConfig:
         assert config.cimier.power_switch.host == "10.0.0.43"
         assert config.cimier.power_switch.switch_id == 2
 
-    def test_cimier_shelly_settle_and_verbose_defaults(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_cimier_shelly_settle_and_verbose_defaults(self, tmp_path, sample_config_dict):
         """shelly_settle_s et verbose_logging : defaults rétro-compatibles (section absente)."""
         cfg = dict(sample_config_dict)
         cfg.pop("cimier", None)
@@ -488,9 +491,7 @@ class TestCimierConfig:
         assert config.cimier.shelly_settle_s == 2.0
         assert config.cimier.verbose_logging is False
 
-    def test_cimier_parse_shelly_settle_and_verbose(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_cimier_parse_shelly_settle_and_verbose(self, tmp_path, sample_config_dict):
         """Les deux clés sont lues depuis data/config.json."""
         cfg = dict(sample_config_dict)
         cfg["cimier"] = {"shelly_settle_s": 3.5, "verbose_logging": True}
@@ -535,9 +536,7 @@ class TestMotorShellyConfig:
         config_file.write_text(json.dumps(cfg))
         return ConfigLoader(config_file).load()
 
-    def test_motor_shelly_default_when_section_missing(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_motor_shelly_default_when_section_missing(self, tmp_path, sample_config_dict):
         """Section cimier.motor_shelly absente → MotorShellyConfig() par défaut."""
         config = self._load_with_cimier(
             tmp_path, sample_config_dict, {"enabled": True, "host": "10.0.0.42"}
@@ -582,9 +581,7 @@ class TestMotorShellyConfig:
         assert ms.api == "legacy"
         assert ms.timer_safety_sec == 60.0
 
-    def test_motor_shelly_two_shellys_share_relay_index_zero(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_motor_shelly_two_shellys_share_relay_index_zero(self, tmp_path, sample_config_dict):
         """Shelly 1 Gen 3 × 2 : chaque Shelly a son unique relais d'index 0,
         et c'est légitime. Pas de validation d'unicité côté config."""
         config = self._load_with_cimier(
@@ -606,9 +603,7 @@ class TestMotorShellyConfig:
         assert ms.host_motor == "10.0.0.85"
         assert ms.host_dir == "10.0.0.86"
 
-    def test_motor_shelly_serge_terrain_convention(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_motor_shelly_serge_terrain_convention(self, tmp_path, sample_config_dict):
         """Cas terrain Serge : oscillateur NC + DIR ouvert=UP → conventions inversées
         sur les 2 champs paramétriques, sans recompiler la classe."""
         config = self._load_with_cimier(
@@ -644,11 +639,10 @@ class TestMotorShellyConfig:
         assert ms.api == "rpc"
         assert ms.timer_safety_sec == 90.0
 
-    def test_motor_shelly_invalid_api_falls_back_to_rpc(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_motor_shelly_invalid_api_falls_back_to_rpc(self, tmp_path, sample_config_dict, caplog):
         """api='yolo' → warning + fallback sur 'rpc' (les autres champs préservés)."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_cimier(
             tmp_path,
@@ -662,11 +656,10 @@ class TestMotorShellyConfig:
         assert config.cimier.motor_shelly.host_motor == "10.0.0.85"
         assert any("motor_shelly.api" in r.message for r in caplog.records)
 
-    def test_motor_shelly_negative_timer_falls_back(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_motor_shelly_negative_timer_falls_back(self, tmp_path, sample_config_dict, caplog):
         """timer_safety_sec négatif → warning + fallback default (90.0)."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_cimier(
             tmp_path,
@@ -685,6 +678,7 @@ class TestMotorShellyConfig:
     ):
         """Type non parsable (relay_motor="abc") → warning + fallback MotorShellyConfig()."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_cimier(
             tmp_path,
@@ -730,23 +724,17 @@ class TestCimierAutomationMode:
 
     def test_legacy_enabled_true_maps_to_full(self, tmp_path, sample_config_dict):
         """Rétro-compat v6.2 : enabled=true (sans mode) → mode='full'."""
-        config = self._load_with_automation(
-            tmp_path, sample_config_dict, {"enabled": True}
-        )
+        config = self._load_with_automation(tmp_path, sample_config_dict, {"enabled": True})
         assert config.cimier.automation.mode == "full"
 
     def test_legacy_enabled_false_maps_to_manual(self, tmp_path, sample_config_dict):
         """Rétro-compat v6.2 : enabled=false (sans mode) → mode='manual'."""
-        config = self._load_with_automation(
-            tmp_path, sample_config_dict, {"enabled": False}
-        )
+        config = self._load_with_automation(tmp_path, sample_config_dict, {"enabled": False})
         assert config.cimier.automation.mode == "manual"
 
     def test_explicit_mode_semi_loaded_directly(self, tmp_path, sample_config_dict):
         """Lecture directe : mode='semi' → mode='semi' (pas de fallback enabled)."""
-        config = self._load_with_automation(
-            tmp_path, sample_config_dict, {"mode": "semi"}
-        )
+        config = self._load_with_automation(tmp_path, sample_config_dict, {"mode": "semi"})
         assert config.cimier.automation.mode == "semi"
 
     def test_mode_takes_priority_over_legacy_enabled(self, tmp_path, sample_config_dict):
@@ -756,15 +744,12 @@ class TestCimierAutomationMode:
         )
         assert config.cimier.automation.mode == "semi"
 
-    def test_invalid_mode_falls_back_to_default_manual(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_invalid_mode_falls_back_to_default_manual(self, tmp_path, sample_config_dict, caplog):
         """mode invalide ('yolo') → fallback default-safe sur 'manual', warning loggé."""
         import logging
+
         caplog.set_level(logging.WARNING)
-        config = self._load_with_automation(
-            tmp_path, sample_config_dict, {"mode": "yolo"}
-        )
+        config = self._load_with_automation(tmp_path, sample_config_dict, {"mode": "yolo"})
         assert config.cimier.automation.mode == "manual"
         assert any("yolo" in record.message for record in caplog.records)
 
@@ -776,6 +761,7 @@ class TestCimierAutomationMode:
 # =============================================================================
 # CalibrationConfig — v6.4 Phase 1 (persistance position absolue)
 # =============================================================================
+
 
 class TestCalibrationConfig:
     """v6.4 Phase 1 : section `calibration` rétro-compatible (AC-5)."""
@@ -805,11 +791,10 @@ class TestCalibrationConfig:
         assert config.calibration.write_interval_sec == 30.0
         assert config.calibration.persist_path == "data/last_known_position.json"
 
-    def test_calibration_invalid_threshold_falls_back(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_calibration_invalid_threshold_falls_back(self, tmp_path, sample_config_dict, caplog):
         """write_threshold_deg <= 0 → log WARNING + defaults."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_calibration(
             tmp_path, sample_config_dict, {"write_threshold_deg": -1.0}
@@ -817,11 +802,10 @@ class TestCalibrationConfig:
         assert config.calibration.write_threshold_deg == 1.0
         assert any("calibration config invalide" in r.message for r in caplog.records)
 
-    def test_calibration_invalid_interval_falls_back(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_calibration_invalid_interval_falls_back(self, tmp_path, sample_config_dict, caplog):
         """write_interval_sec <= 0 → log WARNING + defaults."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_calibration(
             tmp_path, sample_config_dict, {"write_interval_sec": 0}
@@ -829,19 +813,16 @@ class TestCalibrationConfig:
         assert config.calibration.write_interval_sec == 30.0
         assert any("calibration config invalide" in r.message for r in caplog.records)
 
-    def test_calibration_persist_path_empty_falls_back(
-        self, tmp_path, sample_config_dict
-    ):
+    def test_calibration_persist_path_empty_falls_back(self, tmp_path, sample_config_dict):
         """persist_path chaîne vide → fallback sur default."""
-        config = self._load_with_calibration(
-            tmp_path, sample_config_dict, {"persist_path": ""}
-        )
+        config = self._load_with_calibration(tmp_path, sample_config_dict, {"persist_path": ""})
         assert config.calibration.persist_path == "data/last_known_position.json"
 
 
 # =============================================================================
 # BootCalibrationConfig (v6.4 Phase 2 — AC-6)
 # =============================================================================
+
 
 class TestBootCalibrationConfig:
     """v6.4 Phase 2 : section `boot_calibration` rétro-compatible (AC-6)."""
@@ -878,47 +859,41 @@ class TestBootCalibrationConfig:
     ):
         """overshoot_deg <= 0 → log WARNING + defaults."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_boot_calibration(
             tmp_path, sample_config_dict, {"overshoot_deg": -1.0}
         )
         assert config.boot_calibration.overshoot_deg == 5.0
-        assert any(
-            "boot_calibration config invalide" in r.message for r in caplog.records
-        )
+        assert any("boot_calibration config invalide" in r.message for r in caplog.records)
 
     def test_boot_calibration_invalid_timeout_falls_back(
         self, tmp_path, sample_config_dict, caplog
     ):
         """timeout_sec <= 0 → log WARNING + defaults."""
         import logging
-        caplog.set_level(logging.WARNING)
-        config = self._load_with_boot_calibration(
-            tmp_path, sample_config_dict, {"timeout_sec": 0}
-        )
-        assert config.boot_calibration.timeout_sec == 180.0
-        assert any(
-            "boot_calibration config invalide" in r.message for r in caplog.records
-        )
 
-    def test_boot_calibration_invalid_poll_falls_back(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+        caplog.set_level(logging.WARNING)
+        config = self._load_with_boot_calibration(tmp_path, sample_config_dict, {"timeout_sec": 0})
+        assert config.boot_calibration.timeout_sec == 180.0
+        assert any("boot_calibration config invalide" in r.message for r in caplog.records)
+
+    def test_boot_calibration_invalid_poll_falls_back(self, tmp_path, sample_config_dict, caplog):
         """poll_interval_sec <= 0 → log WARNING + defaults."""
         import logging
+
         caplog.set_level(logging.WARNING)
         config = self._load_with_boot_calibration(
             tmp_path, sample_config_dict, {"poll_interval_sec": -0.5}
         )
         assert config.boot_calibration.poll_interval_sec == 0.1
-        assert any(
-            "boot_calibration config invalide" in r.message for r in caplog.records
-        )
+        assert any("boot_calibration config invalide" in r.message for r in caplog.records)
 
 
 # =============================================================================
 # load_config() — fonction publique
 # =============================================================================
+
 
 class TestLoadConfig:
     def test_load_real_config(self, config_json_path):

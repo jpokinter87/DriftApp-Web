@@ -26,9 +26,11 @@ from zoneinfo import ZoneInfo
 # DATACLASSES POUR LA CONFIGURATION
 # ============================================================================
 
+
 @dataclass
 class SiteConfig:
     """Configuration du site d'observation."""
+
     latitude: float
     longitude: float
     altitude: float
@@ -43,13 +45,16 @@ class SiteConfig:
         return int(round(off.total_seconds() / 3600.0))
 
     def __str__(self) -> str:
-        return (f"{self.nom} (lat={self.latitude}°, lon={self.longitude}°, "
-                f"alt={self.altitude}m, TZ={self.fuseau})")
+        return (
+            f"{self.nom} (lat={self.latitude}°, lon={self.longitude}°, "
+            f"alt={self.altitude}m, TZ={self.fuseau})"
+        )
 
 
 @dataclass
 class GPIOPins:
     """Configuration des pins GPIO."""
+
     dir: int
     step: int
 
@@ -57,6 +62,7 @@ class GPIOPins:
 @dataclass
 class MotorConfig:
     """Configuration du moteur pas-à-pas."""
+
     gpio_pins: GPIOPins
     steps_per_revolution: int
     microsteps: int
@@ -67,27 +73,30 @@ class MotorConfig:
     motor_delay_max: float
     max_speed_steps_per_sec: int
     acceleration_steps_per_sec2: int
-    
+
     @property
     def steps_per_dome_revolution(self) -> int:
         """Calcule le nombre total de pas pour un tour complet de coupole."""
         return int(
-            self.steps_per_revolution *
-            self.microsteps *
-            self.gear_ratio *
-            self.steps_correction_factor
+            self.steps_per_revolution
+            * self.microsteps
+            * self.gear_ratio
+            * self.steps_correction_factor
         )
-    
+
     def __str__(self) -> str:
-        return (f"Motor(steps/rev={self.steps_per_revolution}, "
-                f"MS={self.microsteps}, GR={self.gear_ratio}, "
-                f"correction={self.steps_correction_factor:.4f}, "
-                f"total={self.steps_per_dome_revolution} steps/360°)")
+        return (
+            f"Motor(steps/rev={self.steps_per_revolution}, "
+            f"MS={self.microsteps}, GR={self.gear_ratio}, "
+            f"correction={self.steps_correction_factor:.4f}, "
+            f"total={self.steps_per_dome_revolution} steps/360°)"
+        )
 
 
 @dataclass
 class TrackingConfig:
     """Configuration du suivi de base (méthode abaque uniquement)."""
+
     seuil_correction_deg: float
     intervalle_verification_sec: int
     abaque_file: str
@@ -101,10 +110,11 @@ class TrackingConfig:
 @dataclass
 class ThresholdsConfig:
     """Seuils de mouvement centralisés (remplace les constantes magiques)."""
-    feedback_min_deg: float      # Delta min pour feedback (en-dessous = rotation directe)
-    large_movement_deg: float    # Au-delà = mode CONTINUOUS/FAST_TRACK
+
+    feedback_min_deg: float  # Delta min pour feedback (en-dessous = rotation directe)
+    large_movement_deg: float  # Au-delà = mode CONTINUOUS/FAST_TRACK
     feedback_protection_deg: float  # Protection contre mouvements anormaux
-    default_tolerance_deg: float    # Tolérance par défaut pour feedback
+    default_tolerance_deg: float  # Tolérance par défaut pour feedback
 
 
 @dataclass
@@ -116,6 +126,7 @@ class MeridianAnticipationConfig:
     théoriques −47% lag max au transit. Mettre `enabled=false` dans
     `data/config.json` pour repasser au comportement v5.10 strict.
     """
+
     enabled: bool = True
 
 
@@ -130,6 +141,7 @@ class PowerSwitchConfig:
 
     IP réelle uniquement dans `data/config.json` (terrain) — code Python neutre.
     """
+
     type: str = "noop"
     host: str = ""
     switch_id: int = 0
@@ -172,6 +184,7 @@ class MotorShellyConfig:
     IPs réelles uniquement dans ``data/config.json`` (terrain) — code Python
     neutre.
     """
+
     host_motor: str = ""
     host_dir: str = ""
     relay_motor: int = 0
@@ -191,6 +204,7 @@ class WeatherProviderConfig:
     capteurs ultérieur (v6.4+). Aucun seuil dans la config tant qu'aucun
     capteur réel n'existe — le contrat figure dans `core.hardware.weather_provider`.
     """
+
     type: str = "noop"
 
 
@@ -231,6 +245,7 @@ class CimierAutomationConfig:
     parser si `mode` est absent (`enabled=true` → `mode="full"`,
     `enabled=false` ou absent → `mode="manual"`). Cf. `_parse_cimier()`.
     """
+
     mode: str = "manual"
     opening_sun_altitude_deg: float = -12.0
     closing_target_sun_altitude_deg: float = -6.0
@@ -259,6 +274,7 @@ class CimierConfig:
     Phase 3 ajoute `automation` : scheduler astropy opt-in qui déclenche
     automatiquement open/close selon les éphémérides solaires.
     """
+
     enabled: bool = False
     host: str = ""
     port: int = 80
@@ -266,8 +282,8 @@ class CimierConfig:
     cycle_timeout_s: float = 90.0
     boot_poll_timeout_s: float = 30.0
     post_off_quiet_s: float = 10.0
-    shelly_settle_s: float = 2.0          # attente appairage WiFi Shelly MOT/UPDN (synoptique "à mesurer")
-    verbose_logging: bool = False         # true → logs DEBUG par itération (debug à distance)
+    shelly_settle_s: float = 2.0  # attente appairage WiFi Shelly MOT/UPDN (synoptique "à mesurer")
+    verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
@@ -275,10 +291,7 @@ class CimierConfig:
 
     def __post_init__(self) -> None:
         if self.cycle_timeout_s <= 0:
-            raise ValueError(
-                f"cimier.cycle_timeout_s doit être > 0, "
-                f"reçu {self.cycle_timeout_s}"
-            )
+            raise ValueError(f"cimier.cycle_timeout_s doit être > 0, reçu {self.cycle_timeout_s}")
 
 
 @dataclass(frozen=True)
@@ -292,6 +305,7 @@ class CalibrationConfig:
     `write_threshold_deg` OU si `write_interval_sec` s'est écoulé avec un
     mouvement actif (delta > 0.05°).
     """
+
     persist_path: str = "data/last_known_position.json"
     write_threshold_deg: float = 1.0
     write_interval_sec: float = 30.0
@@ -310,6 +324,7 @@ class BootCalibrationConfig:
     (mode dégradé après expiration). `poll_interval_sec` cadence le watcher
     qui poll `last_calibration_at` dans le payload IPC encodeur.
     """
+
     overshoot_deg: float = 5.0
     fallback_sweep_deg: float = 15.0
     timeout_sec: float = 180.0
@@ -319,6 +334,7 @@ class BootCalibrationConfig:
 @dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
+
     port: str
     baudrate: int
     timeout: float
@@ -327,6 +343,7 @@ class SerialConfig:
 @dataclass
 class MotorDriverConfig:
     """Configuration du pilote moteur (GPIO direct ou RP2040 serie)."""
+
     type: str  # "rp2040"
     serial: SerialConfig
 
@@ -334,6 +351,7 @@ class MotorDriverConfig:
 @dataclass
 class EncoderSPIConfig:
     """Configuration SPI de l'encodeur."""
+
     bus: int
     device: int
     speed_hz: int
@@ -343,6 +361,7 @@ class EncoderSPIConfig:
 @dataclass
 class EncoderMecaniqueConfig:
     """Configuration mécanique de l'encodeur."""
+
     wheel_diameter_mm: float
     ring_diameter_mm: float
     counts_per_rev: int
@@ -351,6 +370,7 @@ class EncoderMecaniqueConfig:
 @dataclass
 class EncoderConfig:
     """Configuration de l'encodeur magnétique."""
+
     enabled: bool
     spi: EncoderSPIConfig
     mecanique: EncoderMecaniqueConfig
@@ -366,6 +386,7 @@ class DriftAppConfig:
         config = load_config()
         moteur = MoteurRP2040(config.motor, serial_port)
     """
+
     site: SiteConfig
     motor: MotorConfig
     motor_driver: MotorDriverConfig
@@ -390,15 +411,16 @@ class DriftAppConfig:
             f"  Simulation: {self.simulation}\n"
             f")"
         )
-    
+
     @property
     def is_production(self) -> bool:
         """True si mode production (pas simulation)."""
         return not self.simulation
-    
+
     def to_dict(self) -> dict:
         """Convertit la config en dictionnaire (pour sauvegarde JSON)."""
         from dataclasses import asdict
+
         return asdict(self)
 
 
@@ -406,10 +428,14 @@ class DriftAppConfig:
 # CHARGEMENT DE LA CONFIGURATION
 # ============================================================================
 
+
 class ConfigLoader:
     """Chargeur de configuration modulaire."""
 
-    def __init__(self, config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json"):
+    def __init__(
+        self,
+        config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json",
+    ):
         self.logger = logging.getLogger(__name__)
         self.config_path = config_path
         self.cfg: dict = {}
@@ -469,8 +495,7 @@ class ConfigLoader:
         gpio_cfg = c.get("gpio_pins", {})
         return MotorConfig(
             gpio_pins=GPIOPins(
-                dir=int(gpio_cfg.get("dir", 17)),
-                step=int(gpio_cfg.get("step", 18))
+                dir=int(gpio_cfg.get("dir", 17)), step=int(gpio_cfg.get("step", 18))
             ),
             steps_per_revolution=int(c.get("steps_per_revolution", 200)),
             microsteps=int(c.get("microsteps", 4)),
@@ -480,7 +505,7 @@ class ConfigLoader:
             motor_delay_min=float(c.get("motor_delay_min", 0.00001)),
             motor_delay_max=float(c.get("motor_delay_max", 0.01)),
             max_speed_steps_per_sec=int(c.get("max_speed_steps_per_sec", 10000)),
-            acceleration_steps_per_sec2=int(c.get("acceleration_steps_per_sec2", 5000))
+            acceleration_steps_per_sec2=int(c.get("acceleration_steps_per_sec2", 5000)),
         )
 
     def _parse_motor_driver(self) -> MotorDriverConfig:
@@ -502,7 +527,7 @@ class ConfigLoader:
         return TrackingConfig(
             seuil_correction_deg=float(c.get("seuil_correction_deg", 0.5)),
             intervalle_verification_sec=int(c.get("intervalle_verification_sec", 60)),
-            abaque_file=str(c.get("abaque_file", "data/Loi_coupole.xlsx"))
+            abaque_file=str(c.get("abaque_file", "data/Loi_coupole.xlsx")),
         )
 
     def _parse_encoder(self) -> EncoderConfig:
@@ -517,14 +542,14 @@ class ConfigLoader:
                 bus=int(spi.get("bus", 0)),
                 device=int(spi.get("device", 0)),
                 speed_hz=int(spi.get("speed_hz", 1000000)),
-                mode=int(spi.get("mode", 0))
+                mode=int(spi.get("mode", 0)),
             ),
             mecanique=EncoderMecaniqueConfig(
                 wheel_diameter_mm=float(meca.get("wheel_diameter_mm", 50.0)),
                 ring_diameter_mm=float(meca.get("ring_diameter_mm", 2303.0)),
-                counts_per_rev=int(meca.get("counts_per_rev", 1024))
+                counts_per_rev=int(meca.get("counts_per_rev", 1024)),
             ),
-            calibration_factor=float(c.get("calibration_factor", 0.031354))
+            calibration_factor=float(c.get("calibration_factor", 0.031354)),
         )
 
     def _parse_thresholds(self) -> ThresholdsConfig:
@@ -534,7 +559,7 @@ class ConfigLoader:
             feedback_min_deg=float(c.get("feedback_min_deg", 3.0)),
             large_movement_deg=float(c.get("large_movement_deg", 30.0)),
             feedback_protection_deg=float(c.get("feedback_protection_deg", 20.0)),
-            default_tolerance_deg=float(c.get("default_tolerance_deg", 0.5))
+            default_tolerance_deg=float(c.get("default_tolerance_deg", 0.5)),
         )
 
     def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:
@@ -576,15 +601,36 @@ class ConfigLoader:
             ),
             automation=CimierAutomationConfig(
                 mode=self._resolve_automation_mode(au, au_defaults.mode),
-                opening_sun_altitude_deg=float(au.get("opening_sun_altitude_deg", au_defaults.opening_sun_altitude_deg)),
-                closing_target_sun_altitude_deg=float(au.get("closing_target_sun_altitude_deg", au_defaults.closing_target_sun_altitude_deg)),
-                closing_advance_minutes=int(au.get("closing_advance_minutes", au_defaults.closing_advance_minutes)),
-                clock_safety_margin_minutes=int(au.get("clock_safety_margin_minutes", au_defaults.clock_safety_margin_minutes)),
-                parking_target_azimuth_deg=float(au.get("parking_target_azimuth_deg", au_defaults.parking_target_azimuth_deg)),
-                parking_timeout_minutes=int(au.get("parking_timeout_minutes", au_defaults.parking_timeout_minutes)),
-                deparking_nudge_deg=float(au.get("deparking_nudge_deg", au_defaults.deparking_nudge_deg)),
-                scheduler_interval_seconds=int(au.get("scheduler_interval_seconds", au_defaults.scheduler_interval_seconds)),
-                retrigger_cooldown_hours=int(au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)),
+                opening_sun_altitude_deg=float(
+                    au.get("opening_sun_altitude_deg", au_defaults.opening_sun_altitude_deg)
+                ),
+                closing_target_sun_altitude_deg=float(
+                    au.get(
+                        "closing_target_sun_altitude_deg",
+                        au_defaults.closing_target_sun_altitude_deg,
+                    )
+                ),
+                closing_advance_minutes=int(
+                    au.get("closing_advance_minutes", au_defaults.closing_advance_minutes)
+                ),
+                clock_safety_margin_minutes=int(
+                    au.get("clock_safety_margin_minutes", au_defaults.clock_safety_margin_minutes)
+                ),
+                parking_target_azimuth_deg=float(
+                    au.get("parking_target_azimuth_deg", au_defaults.parking_target_azimuth_deg)
+                ),
+                parking_timeout_minutes=int(
+                    au.get("parking_timeout_minutes", au_defaults.parking_timeout_minutes)
+                ),
+                deparking_nudge_deg=float(
+                    au.get("deparking_nudge_deg", au_defaults.deparking_nudge_deg)
+                ),
+                scheduler_interval_seconds=int(
+                    au.get("scheduler_interval_seconds", au_defaults.scheduler_interval_seconds)
+                ),
+                retrigger_cooldown_hours=int(
+                    au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)
+                ),
             ),
             motor_shelly=self._build_motor_shelly_config(ms, ms_defaults),
         )
@@ -612,18 +658,14 @@ class ConfigLoader:
                 ms.get("motor_on_relay_state", defaults.motor_on_relay_state)
             )
             api = str(ms.get("api", defaults.api))
-            timer_safety_sec = float(
-                ms.get("timer_safety_sec", defaults.timer_safety_sec)
-            )
+            timer_safety_sec = float(ms.get("timer_safety_sec", defaults.timer_safety_sec))
         except (TypeError, ValueError):
             self.logger.warning(
                 "motor_shelly config invalide (types non parsables) — utilisation des defaults"
             )
             return MotorShellyConfig()
         if api not in ("rpc", "legacy"):
-            self.logger.warning(
-                "motor_shelly.api invalide (%s) — fallback sur 'rpc'", api
-            )
+            self.logger.warning("motor_shelly.api invalide (%s) — fallback sur 'rpc'", api)
             api = defaults.api
         if timer_safety_sec < 0:
             self.logger.warning(
@@ -644,11 +686,15 @@ class ConfigLoader:
 
     def _parse_calibration(self) -> CalibrationConfig:
         """Parse la section calibration (v6.4 Phase 1, opt-in : section absente = defaults)."""
-        cal = self.cfg.get("calibration", {}) if isinstance(self.cfg.get("calibration"), dict) else {}
+        cal = (
+            self.cfg.get("calibration", {}) if isinstance(self.cfg.get("calibration"), dict) else {}
+        )
         defaults = CalibrationConfig()
         persist_path = str(cal.get("persist_path", defaults.persist_path)) or defaults.persist_path
         try:
-            write_threshold_deg = float(cal.get("write_threshold_deg", defaults.write_threshold_deg))
+            write_threshold_deg = float(
+                cal.get("write_threshold_deg", defaults.write_threshold_deg)
+            )
             write_interval_sec = float(cal.get("write_interval_sec", defaults.write_interval_sec))
         except (TypeError, ValueError):
             self.logger.warning(
@@ -680,9 +726,7 @@ class ConfigLoader:
                 section.get("fallback_sweep_deg", defaults.fallback_sweep_deg)
             )
             timeout_sec = float(section.get("timeout_sec", defaults.timeout_sec))
-            poll_interval_sec = float(
-                section.get("poll_interval_sec", defaults.poll_interval_sec)
-            )
+            poll_interval_sec = float(section.get("poll_interval_sec", defaults.poll_interval_sec))
         except (TypeError, ValueError):
             self.logger.warning(
                 "boot_calibration config invalide (types non numériques) — utilisation des defaults"
@@ -761,7 +805,9 @@ class ConfigLoader:
         self.logger.info(f"  Mode: {'SIMULATION' if config.simulation else 'PRODUCTION'}")
 
 
-def load_config(config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json") -> DriftAppConfig:
+def load_config(
+    config_path: Path = Path(__file__).resolve().parent.parent.parent / "data" / "config.json",
+) -> DriftAppConfig:
     """
     Charge la configuration complète depuis config.json.
 
@@ -780,5 +826,3 @@ def load_config(config_path: Path = Path(__file__).resolve().parent.parent.paren
         print(f"Site: {config.site.nom}")
     """
     return ConfigLoader(config_path).load()
-
-

@@ -560,7 +560,9 @@ class CimierService:
         """
         cycle_start = self._clock()
         error_message = ""
-        poll_outcome = ""  # "ok"/"stopped"/"timeout"/"error" — propagé au mapping result= du finally
+        poll_outcome = (
+            ""  # "ok"/"stopped"/"timeout"/"error" — propagé au mapping result= du finally
+        )
 
         # Snapshot meteo au demarrage (Phase 2 : log seulement, pas de blocage).
         # Phase 3 consultera is_safe_to_open() pour refuser une ouverture auto.
