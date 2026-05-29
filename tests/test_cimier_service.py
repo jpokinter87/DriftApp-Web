@@ -2032,7 +2032,7 @@ class TestFullCycleViaSimulator:
         nominal réussi (result=ok), pour rendre les journaux dépiautables
         à 800 km du site.
         """
-        import logging
+        import logging as _logging
 
         service, ps, sim, _ = _build_e2e_service(
             initial_state="closed",
@@ -2051,8 +2051,7 @@ class TestFullCycleViaSimulator:
 
             service._check_for_stop_command = stop_after_some_polls
 
-            caplog.set_level(logging.INFO, logger="services.cimier_service")
-            with caplog.at_level(logging.INFO, logger="services.cimier_service"):
+            with caplog.at_level(_logging.INFO, logger="services.cimier_service"):
                 service.execute_command({"id": "s8", "action": "open"})
 
             # Cycle terminé par stop → log final result=stopped.
