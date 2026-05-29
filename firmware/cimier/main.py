@@ -194,7 +194,7 @@ def run_server(controller, wlan, wdt, port):
     sock.listen(5)
     # Timeout court : accept() bloque jusqu'a 50 ms puis OSError ETIMEDOUT.
     # Sur lwIP MicroPython Pico W, c'est l'approche fiable (select.poll() ne
-    # notifie pas POLLIN sur sockets serveur). 50 ms < 200 ms WDT donc safe.
+    # notifie pas POLLIN sur sockets serveur). 50 ms << 8000 ms WDT donc safe.
     sock.settimeout(0.05)
     print("HTTP server listening on port", port)
 
@@ -264,7 +264,8 @@ def main():
         return
 
     # 2. Hardware (le WDT est arme plus tard, apres WiFi : la connexion peut
-    #    prendre plusieurs secondes et un WDT 200 ms reset le Pico avant la fin)
+    #    prendre plusieurs secondes et un WDT court reset le Pico avant la fin
+    #    -- WDT_TIMEOUT_MS = 8000 ms arme etape 4 ci-dessous)
     hw = PicoHardwareAdapter(PIN_OPEN_SWITCH, PIN_CLOSED_SWITCH)
     controller = CimierController(hw)
     print("Hardware initialise. Etat:", controller.state)
