@@ -639,6 +639,13 @@ class CimierService:
             settle = float(self._config.shelly_settle_s)
             if settle > 0:
                 self._sleep(settle)
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_SETTLE,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
 
             # Phase C : turn_off moteur défensif (état connu avant énergisation).
             self._publish_phase(PHASE_MOTOR_OFF, action, cmd_id, error_message="")
@@ -647,6 +654,13 @@ class CimierService:
             except Exception:
                 error_message = "motor_off_defensive_failed"
                 return
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_MOTOR_OFF,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
 
             # Phase D : set_direction selon action.
             self._publish_phase(PHASE_SET_DIR, action, cmd_id, error_message="")
@@ -660,6 +674,13 @@ class CimierService:
             except Exception:
                 error_message = "set_direction_failed"
                 return
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_SET_DIR,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
 
             # Phase E : turn_on moteur (filet hardware Shelly toggle_after).
             self._publish_phase(PHASE_MOTOR_ON, action, cmd_id, error_message="")
@@ -673,10 +694,24 @@ class CimierService:
             except Exception:
                 error_message = "motor_on_failed"
                 return
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_MOTOR_ON,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
 
             # Phase F : poll target switch jusqu'à fin de course / timeout / stop.
             self._publish_phase(PHASE_POLL_SWITCH, action, cmd_id, error_message="")
             outcome = self._poll_target_switch(action, cmd_id)
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_POLL_SWITCH,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
             if outcome == "timeout":
                 logger.error("cimier_event=poll_timeout id=%s", cmd_id)
                 error_message = "cycle_timeout"
@@ -701,6 +736,13 @@ class CimierService:
                 self._power_switch.turn_off()
             except PowerSwitchError as exc:
                 logger.error("cimier_event=power_off_failed exc=%s", exc)
+            logger.info(
+                "cimier_event=phase phase=%s action=%s id=%s elapsed_ms=%d",
+                PHASE_POWER_OFF,
+                action,
+                cmd_id,
+                int((self._clock() - cycle_start) * 1000),
+            )
 
             duration_ms = int((self._clock() - cycle_start) * 1000)
             if error_message == "cycle_timeout":

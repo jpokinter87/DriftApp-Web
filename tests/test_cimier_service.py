@@ -1433,3 +1433,128 @@ class TestShellyCinematique:
         assert ps.off_count == 1
         # Et turn_off moteur tenté en cleanup
         assert crashing.turn_off_count >= 1
+
+
+# ======================================================================
+# Section T5 Bloc 2 : verrouillage format events orchestration (spec §7)
+# ======================================================================
+
+
+class TestOrchestrationLogging:
+    """Verrouille le format des events d'orchestration (spec §7).
+
+    Critique pour debug à distance : la timeline d'un cycle doit être
+    entièrement reconstructible depuis logs/cimier_service.log. Cassure
+    de format = bug de production silencieux.
+    """
+
+    def test_full_open_cycle_publishes_expected_events(
+        self, ipc_manager: RecordingIpcManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging as _logging
+
+        caplog.set_level(_logging.INFO, logger="services.cimier_service")
+
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.5)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        # Preflight : pas en butée
+        fake.set_status_response(
+            {
+                "state": "closed",
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        # Les /status suivants reflètent l'état réel du mécanisme
+        fake.bind_mechanism(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "ev1", "action": "open"})
+
+        events = [r.message for r in caplog.records if "cimier_event=" in r.message]
+
+        # 1. cycle_start
+        assert any("cimier_event=cycle_start" in m and "action=open" in m for m in events), (
+            "cycle_start missing"
+        )
+
+        # 2. preflight decision=proceed
+        assert any(
+            "cimier_event=preflight" in m
+            and "decision=proceed" in m
+            and "open_switch=false" in m
+            and "closed_switch=false" in m
+            for m in events
+        ), "preflight proceed missing"
+
+        # 3. shelly_call x3 : turn_off, set_direction, turn_on
+        shelly_calls = [m for m in events if "cimier_event=shelly_call" in m]
+        assert len(shelly_calls) >= 3, "expected >=3 shelly_call events"
+        assert any("call=turn_off" in m for m in shelly_calls), "missing call=turn_off"
+        assert any("call=set_direction" in m and "open=True" in m for m in shelly_calls), (
+            "missing call=set_direction open=True"
+        )
+        assert any("call=turn_on" in m and "timer_s=90.0" in m for m in shelly_calls), (
+            "missing call=turn_on timer_s=90.0"
+        )
+
+        # 4. latency_ms présent sur chaque shelly_call
+        for m in shelly_calls:
+            assert "latency_ms=" in m, "latency_ms missing on shelly_call: " + m
+
+        # 5. switch_transition
+        assert any(
+            "cimier_event=switch_transition" in m
+            and "switch=open_switch" in m
+            and "from=false" in m
+            and "to=true" in m
+            for m in events
+        ), "switch_transition missing"
+
+        # 6. phase events pour chaque phase majeure (avec elapsed_ms)
+        for phase in (
+            "power_on",
+            "settle",
+            "motor_off",
+            "set_dir",
+            "motor_on",
+            "poll_switch",
+            "power_off",
+        ):
+            assert any(
+                "cimier_event=phase" in m and ("phase=" + phase) in m and "elapsed_ms=" in m
+                for m in events
+            ), "phase event missing: phase=" + phase
+
+        # 7. cycle_end result=ok
+        assert any(
+            "cimier_event=cycle_end" in m
+            and "action=open" in m
+            and "result=ok" in m
+            and "duration_ms=" in m
+            for m in events
+        ), "cycle_end result=ok missing"
