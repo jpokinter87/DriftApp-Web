@@ -118,6 +118,15 @@ class AutoFakeHttpClient:
     def queue_exception(self, url_suffix: str, exc: BaseException) -> None:
         self.responses_by_url.setdefault(url_suffix, []).append(exc)
 
+    def bind_mechanism(self, mechanism) -> None:
+        """Branche un CimierMechanismSim : /status reflète son état temps réel.
+
+        Quand activé, chaque GET /status fait avancer le mécanisme de 50ms (cohérent
+        avec cycle_poll_interval_s) et retourne un payload dérivé des fins de course.
+        Idéal pour tester le cycle complet de bout en bout sans hardware.
+        """
+        self._mechanism = mechanism
+
     def request(
         self,
         method: str,
@@ -126,6 +135,7 @@ class AutoFakeHttpClient:
     ) -> Tuple[int, Dict[str, Any]]:
         self.calls.append((method, url, body))
 
+        # Priorité 1 : réponses one-shot pré-configurées (queue par suffix).
         for suffix, queue in self.responses_by_url.items():
             if url.endswith(suffix) and queue:
                 resp = queue.pop(0)
@@ -133,6 +143,21 @@ class AutoFakeHttpClient:
                     raise resp
                 return resp
 
+        # Priorité 2 : si un mécanisme est branché, dériver /status de son état.
+        if (
+            method == "GET"
+            and url.endswith("/status")
+            and getattr(self, "_mechanism", None) is not None
+        ):
+            m = self._mechanism
+            m.advance(0.05)
+            return 200, {
+                "state": "open" if m.open_switch else ("closed" if m.closed_switch else "moving"),
+                "open_switch": bool(m.open_switch),
+                "closed_switch": bool(m.closed_switch),
+            }
+
+        # Priorité 3 : comportement par défaut.
         if url.endswith("/status"):
             return 200, {"state": self.state}
         if url.endswith("/open"):
@@ -1610,3 +1635,139 @@ class TestMotorShellyInjection:
         ps = CountingPowerSwitch()
         service = CimierService(cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager)
         assert isinstance(service._motor_shelly, NoopMotorShelly)
+
+
+# ======================================================================
+# Section T3 Bloc 2 : Cinématique Shelly nominale (spec §3.1 / §3.2)
+# ======================================================================
+
+
+class TestShellyCinematique:
+    """Cinématique cible (spec §3.1 / §3.2) : ordre d'appels Shelly."""
+
+    def _build_service_for_action(self, ipc_manager: RecordingIpcManager, action_target: str):
+        initial = "closed" if action_target == "open" else "open"
+        mech = CimierMechanismSim(initial_state=initial, full_travel_s=0.5)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        # Preflight : pas en butée (one-shot prioritaire)
+        fake.set_status_response(
+            {
+                "state": initial,
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        # Les /status suivants reflètent l'état réel du mécanisme
+        fake.bind_mechanism(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.5,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        return service, ps, sim_motor
+
+    def test_open_cycle_calls_in_order(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor = self._build_service_for_action(ipc_manager, action_target="open")
+        service.execute_command({"id": "10", "action": "open"})
+
+        assert ps.on_count == 1, "power_switch.turn_on appelé exactement 1 fois"
+        assert ps.off_count == 1, "power_switch.turn_off appelé exactement 1 fois"
+        kinds = [c[0] for c in sim_motor.calls]
+        assert kinds[0] == "turn_off", "1er appel moteur = turn_off défensif"
+        assert kinds[1] == "set_direction", "puis set_direction"
+        assert sim_motor.calls[1][1] is True, "set_direction(open=True)"
+        assert kinds[2] == "turn_on", "puis turn_on"
+        assert sim_motor.calls[2][1] == 90.0, "turn_on(timer_s=90.0)"
+        assert kinds[-1] == "turn_off", "dernier appel moteur = turn_off final"
+
+    def test_close_cycle_calls_in_order(self, ipc_manager: RecordingIpcManager) -> None:
+        service, ps, sim_motor = self._build_service_for_action(ipc_manager, action_target="close")
+        service.execute_command({"id": "11", "action": "close"})
+
+        kinds = [c[0] for c in sim_motor.calls]
+        assert kinds[0] == "turn_off"
+        assert kinds[1] == "set_direction"
+        assert sim_motor.calls[1][1] is False, "set_direction(open=False) pour fermeture"
+        assert kinds[2] == "turn_on"
+        assert kinds[-1] == "turn_off"
+
+    def test_power_off_always_called_even_on_motor_exception(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        from core.hardware.motor_shelly import MotorShellyError
+
+        class CrashingMotor:
+            def __init__(self):
+                self.turn_off_count = 0
+
+            def set_direction(self, open_direction):
+                raise MotorShellyError("nope")
+
+            def turn_on(self, timer_s: float = 0.0):
+                pass
+
+            def turn_off(self):
+                self.turn_off_count += 1
+
+        crashing = CrashingMotor()
+        ps = CountingPowerSwitch()
+        fake = AutoFakeHttpClient()
+        fake.set_status_response(
+            {
+                "state": "closed",
+                "open_switch": False,
+                "closed_switch": False,
+            }
+        )
+        cfg = CimierConfig(
+            enabled=True,
+            host="127.0.0.1",
+            port=80,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=crashing,
+            http_client=fake,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+
+        service.execute_command({"id": "12", "action": "open"})
+
+        # Invariant : power_off appelé même si moteur crash
+        assert ps.off_count == 1
+        # Et turn_off moteur tenté en cleanup
+        assert crashing.turn_off_count >= 1
