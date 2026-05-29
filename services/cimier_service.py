@@ -41,7 +41,7 @@ from core.config.config_loader import (
     SiteConfig,
     load_config,
 )
-from core.hardware.motor_shelly import MotorShelly
+from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
 from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
@@ -69,10 +69,10 @@ logger = logging.getLogger(__name__)
 # Phases publiées dans cimier_status.json["phase"]
 PHASE_IDLE = "idle"
 PHASE_POWER_ON = "power_on"
-PHASE_BOOT_POLL = "boot_poll"      # caduc archi Shelly — conservé T1, supprimé en T4
+PHASE_BOOT_POLL = "boot_poll"  # caduc archi Shelly — conservé T1, supprimé en T4
 PHASE_PUSH_CONFIG = "push_config"  # caduc archi Shelly — conservé T1, supprimé en T4
 PHASE_COMMAND_PICO = "command_pico"  # caduc archi Shelly — conservé T1, supprimé en T4
-PHASE_CYCLE_POLL = "cycle_poll"    # caduc archi Shelly — conservé T1, supprimé en T4
+PHASE_CYCLE_POLL = "cycle_poll"  # caduc archi Shelly — conservé T1, supprimé en T4
 PHASE_POWER_OFF = "power_off"
 PHASE_COOLDOWN = "cooldown"
 # Nouvelles phases archi Shelly (Bloc 2)
@@ -85,7 +85,7 @@ PHASE_MOTOR_OFF = "motor_off"
 
 # États de haut niveau publiés dans cimier_status.json["state"]
 STATE_IDLE = "idle"
-STATE_CYCLE = "cycle"          # un cycle est en cours (phase = sous-état)
+STATE_CYCLE = "cycle"  # un cycle est en cours (phase = sous-état)
 STATE_COOLDOWN = "cooldown"
 STATE_ERROR = "error"
 STATE_DISABLED = "disabled"
@@ -145,6 +145,7 @@ class HttpClient:
 
 
 PowerSwitchProtocol = Any  # duck-typed : turn_on() / turn_off()
+MotorShellyProtocol = Any  # duck-typed : set_direction() / turn_on() / turn_off()
 
 
 def make_power_switch(cfg: PowerSwitchConfig) -> PowerSwitchProtocol:
@@ -166,26 +167,7 @@ def make_power_switch(cfg: PowerSwitchConfig) -> PowerSwitchProtocol:
     raise ValueError("PowerSwitchConfig.type inconnu: " + repr(cfg.type))
 
 
-class NoopMotorShelly:
-    """Double inerte de MotorShelly : aucune requête réseau.
-
-    Utilisé quand la config motor_shelly est incomplète (host_motor ou
-    host_dir vide) — typiquement install terrain pas encore câblée, ou en
-    tests qui veulent juste un placeholder. Toutes les méthodes sont des
-    no-ops loggées pour la traçabilité.
-    """
-
-    def set_direction(self, open_direction: bool) -> None:
-        logger.info("cimier_event=noop_motor call=set_direction open=%s", open_direction)
-
-    def turn_on(self, timer_s: float = 0.0) -> None:
-        logger.info("cimier_event=noop_motor call=turn_on timer_s=%.1f", timer_s)
-
-    def turn_off(self) -> None:
-        logger.info("cimier_event=noop_motor call=turn_off")
-
-
-def make_motor_shelly(cfg: MotorShellyConfig):
+def make_motor_shelly(cfg: MotorShellyConfig) -> MotorShellyProtocol:
     """Factory MotorShelly. Retourne NoopMotorShelly si hosts incomplets.
 
     Note : ``cfg.timer_safety_sec`` (filet hardware Shelly toggle_after) est
@@ -213,7 +195,7 @@ class CimierService:
         self,
         cimier_config: CimierConfig,
         power_switch: PowerSwitchProtocol,
-        motor_shelly=None,
+        motor_shelly: Optional[MotorShellyProtocol] = None,
         http_client: Optional[HttpClient] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
@@ -228,7 +210,7 @@ class CimierService:
     ):
         self._config = cimier_config
         self._power_switch = power_switch
-        self.motor_shelly = (
+        self._motor_shelly = (
             motor_shelly
             if motor_shelly is not None
             else make_motor_shelly(cimier_config.motor_shelly)
@@ -256,9 +238,7 @@ class CimierService:
         self._last_next_close_at: Optional[Any] = None  # datetime UTC ou None
         if self._scheduler is None and cimier_config.automation.mode != "manual":
             if site_config is None:
-                logger.warning(
-                    "cimier_event=automation_disabled reason=site_config_missing"
-                )
+                logger.warning("cimier_event=automation_disabled reason=site_config_missing")
             else:
                 motor_ipc = motor_ipc or MotorIpcWriter()
                 self._scheduler = CimierScheduler(
@@ -348,9 +328,7 @@ class CimierService:
                         config_path = Path(__file__).resolve().parents[1] / "data" / "config.json"
                         self._scheduler.refresh_mode_from_config(config_path)
                 except Exception as exc:  # noqa: BLE001
-                    logger.warning(
-                        "cimier_event=mode_refresh_exception exc=%s", exc
-                    )
+                    logger.warning("cimier_event=mode_refresh_exception exc=%s", exc)
                 current_state = self._derive_current_cimier_state()
                 try:
                     decision = self._scheduler.maybe_trigger(current_state)
@@ -373,9 +351,7 @@ class CimierService:
                         self._last_next_open_at = next_open
                         self._last_next_close_at = next_close
                 except Exception as exc:  # noqa: BLE001
-                    logger.error(
-                        "cimier_event=compute_next_triggers_exception exc=%s", exc
-                    )
+                    logger.error("cimier_event=compute_next_triggers_exception exc=%s", exc)
                     self._last_next_open_at = None
                     self._last_next_close_at = None
                 self._last_scheduler_check_ts = now_mono
@@ -472,9 +448,7 @@ class CimierService:
 
         try:
             # Phase 1 : power_on
-            self._publish_phase(
-                PHASE_POWER_ON, action, cmd_id, error_message=""
-            )
+            self._publish_phase(PHASE_POWER_ON, action, cmd_id, error_message="")
             try:
                 self._power_switch.turn_on()
             except PowerSwitchError as exc:
@@ -483,9 +457,7 @@ class CimierService:
                 return
 
             # Phase 2 : boot_poll
-            self._publish_phase(
-                PHASE_BOOT_POLL, action, cmd_id, error_message=""
-            )
+            self._publish_phase(PHASE_BOOT_POLL, action, cmd_id, error_message="")
             ready = self._poll_pico_ready(action, cmd_id)
             if ready == "stopped":
                 error_message = ""
@@ -497,9 +469,7 @@ class CimierService:
 
             # Phase 3 : push_config (uniquement si invert non-défaut)
             if self._config.invert_direction:
-                self._publish_phase(
-                    PHASE_PUSH_CONFIG, action, cmd_id, error_message=""
-                )
+                self._publish_phase(PHASE_PUSH_CONFIG, action, cmd_id, error_message="")
                 pushed = self._push_invert_config()
                 if not pushed:
                     logger.error("cimier_event=push_config_failed id=%s", cmd_id)
@@ -507,9 +477,7 @@ class CimierService:
                     return
 
             # Phase 4 : command_pico
-            self._publish_phase(
-                PHASE_COMMAND_PICO, action, cmd_id, error_message=""
-            )
+            self._publish_phase(PHASE_COMMAND_PICO, action, cmd_id, error_message="")
             commanded = self._post_action(action)
             if not commanded:
                 logger.error("cimier_event=command_failed action=%s id=%s", action, cmd_id)
@@ -519,9 +487,7 @@ class CimierService:
                 return
 
             # Phase 5 : cycle_poll
-            self._publish_phase(
-                PHASE_CYCLE_POLL, action, cmd_id, error_message=""
-            )
+            self._publish_phase(PHASE_CYCLE_POLL, action, cmd_id, error_message="")
             outcome = self._poll_cycle_complete(action, cmd_id)
             if outcome == "timeout":
                 logger.error("cimier_event=cycle_timeout id=%s", cmd_id)
@@ -529,7 +495,9 @@ class CimierService:
                 self._try_post_stop_silent()
                 return
             if outcome == "pico_error":
-                logger.error("cimier_event=pico_error id=%s state=%s", cmd_id, self._last_pico_state)
+                logger.error(
+                    "cimier_event=pico_error id=%s state=%s", cmd_id, self._last_pico_state
+                )
                 error_message = "pico_error"
                 return
             if outcome == "stopped":
@@ -601,9 +569,7 @@ class CimierService:
         """POST /config {invert_direction: true}. Retourne True si 200."""
         url = self._base_url() + "/config"
         try:
-            status, _ = self._http.request(
-                "POST", url, body={"invert_direction": True}
-            )
+            status, _ = self._http.request("POST", url, body={"invert_direction": True})
             return status == 200
         except (urllib.error.URLError, OSError, ConnectionError) as exc:
             logger.warning("cimier_event=push_config_exception exc=%s", exc)
@@ -744,9 +710,7 @@ class CimierService:
             # (consommés par GET /api/cimier/automation/ + countdown UI dashboard).
             "mode": self._config.automation.mode,
             "next_open_at": (
-                self._last_next_open_at.isoformat()
-                if self._last_next_open_at is not None
-                else None
+                self._last_next_open_at.isoformat() if self._last_next_open_at is not None else None
             ),
             "next_close_at": (
                 self._last_next_close_at.isoformat()

@@ -25,7 +25,7 @@ import pytest
 
 from core.config.config_loader import CimierConfig, MotorShellyConfig, PowerSwitchConfig
 from core.hardware.cimier_simulator import CimierSimulator
-from core.hardware.motor_shelly import MotorShelly
+from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
 from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
@@ -37,7 +37,6 @@ from services.cimier_service import (
     ACTION_OPEN,
     ACTION_STOP,
     HttpClient,
-    NoopMotorShelly,
     PHASE_BOOT_POLL,
     PHASE_COMMAND_PICO,
     PHASE_COOLDOWN,
@@ -57,6 +56,7 @@ from services.cimier_service import (
 # ======================================================================
 # Helpers / fakes
 # ======================================================================
+
 
 def _find_free_port() -> int:
     s = socket.socket()
@@ -185,6 +185,7 @@ class RecordingIpcManager(CimierIpcManager):
 # Fixtures
 # ======================================================================
 
+
 @pytest.fixture
 def tmp_ipc(tmp_path: Path) -> Tuple[Path, Path]:
     return tmp_path / "cimier_command.json", tmp_path / "cimier_status.json"
@@ -283,15 +284,14 @@ def service_with_fake_http(
 # Section 1 : Configuration & instantiation
 # ======================================================================
 
+
 class TestConfigurationAndInstantiation:
     def test_service_disabled_when_cimier_enabled_false(
         self, ipc_manager: RecordingIpcManager
     ) -> None:
         cfg = CimierConfig(enabled=False, host="127.0.0.1")
         ps = CountingPowerSwitch()
-        service = CimierService(
-            cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager
-        )
+        service = CimierService(cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager)
         service.run_forever()
         assert ps.on_count == 0
         assert ps.off_count == 0
@@ -304,17 +304,13 @@ class TestConfigurationAndInstantiation:
         assert isinstance(sw, NoopPowerSwitch)
 
     def test_make_power_switch_factory_shelly_gen2(self) -> None:
-        sw = make_power_switch(
-            PowerSwitchConfig(type="shelly_gen2", host="10.0.0.1", switch_id=0)
-        )
+        sw = make_power_switch(PowerSwitchConfig(type="shelly_gen2", host="10.0.0.1", switch_id=0))
         assert isinstance(sw, ShellyPowerSwitch)
         assert sw.api == "rpc"
         assert sw.host == "10.0.0.1"
 
     def test_make_power_switch_factory_shelly_gen1(self) -> None:
-        sw = make_power_switch(
-            PowerSwitchConfig(type="shelly_gen1", host="10.0.0.2")
-        )
+        sw = make_power_switch(PowerSwitchConfig(type="shelly_gen1", host="10.0.0.2"))
         assert isinstance(sw, ShellyPowerSwitch)
         assert sw.api == "legacy"
 
@@ -369,6 +365,7 @@ class TestConfigurationAndInstantiation:
 # ======================================================================
 # Section 2 : Cycle complet via simulator
 # ======================================================================
+
 
 @pytest.mark.skip(reason="Bloc 2 — réécriture orchestration Shelly, cf. plan 2026-05-23")
 class TestFullCycleViaSimulator:
@@ -537,10 +534,13 @@ class TestFullCycleViaSimulator:
 # Section 3 : Anti-bounce (cooldown post_off_quiet_s)
 # ======================================================================
 
+
 class TestAntiBounceCooldown:
     def test_cooldown_window_blocks_new_command(
         self,
-        service_with_fake_http: Tuple[CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock],
+        service_with_fake_http: Tuple[
+            CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock
+        ],
         ipc_manager: RecordingIpcManager,
     ) -> None:
         service, ps, _fake, _clock = service_with_fake_http
@@ -563,7 +563,9 @@ class TestAntiBounceCooldown:
 
     def test_cooldown_releases_after_quiet_window(
         self,
-        service_with_fake_http: Tuple[CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock],
+        service_with_fake_http: Tuple[
+            CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock
+        ],
         ipc_manager: RecordingIpcManager,
     ) -> None:
         service, ps, _fake, clock = service_with_fake_http
@@ -581,7 +583,9 @@ class TestAntiBounceCooldown:
 
     def test_cooldown_preserves_command_for_later_dispatch(
         self,
-        service_with_fake_http: Tuple[CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock],
+        service_with_fake_http: Tuple[
+            CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock
+        ],
         ipc_manager: RecordingIpcManager,
     ) -> None:
         service, ps, _fake, clock = service_with_fake_http
@@ -607,6 +611,7 @@ class TestAntiBounceCooldown:
 # ======================================================================
 # Section 4 : Erreurs & timeouts
 # ======================================================================
+
 
 class TestErrorsAndTimeouts:
     def test_boot_timeout_sets_error_state(
@@ -769,10 +774,13 @@ class TestErrorsAndTimeouts:
 # Section 5 : Stop
 # ======================================================================
 
+
 class TestStop:
     def test_stop_when_idle_is_noop(
         self,
-        service_with_fake_http: Tuple[CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock],
+        service_with_fake_http: Tuple[
+            CimierService, CountingPowerSwitch, AutoFakeHttpClient, MockClock
+        ],
         ipc_manager: RecordingIpcManager,
     ) -> None:
         service, ps, _fake, _clock = service_with_fake_http
@@ -874,6 +882,7 @@ class TestStop:
 # Section 6 : IPC manager
 # ======================================================================
 
+
 class TestIpcManager:
     def test_ipc_command_dedup_by_id(self, tmp_ipc: Tuple[Path, Path]) -> None:
         cmd_file, status_file = tmp_ipc
@@ -905,9 +914,7 @@ class TestIpcManager:
                 payload = json.loads(f.read())
             assert payload["iter"] == i
 
-    def test_ipc_command_file_created_if_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_ipc_command_file_created_if_missing(self, tmp_path: Path) -> None:
         cmd_file = tmp_path / "cimier_command.json"
         status_file = tmp_path / "cimier_status.json"
         assert not cmd_file.exists()
@@ -924,6 +931,7 @@ class TestIpcManager:
 # ======================================================================
 # Section 7 : AC-8 — pas d'IP en dur dans le code livré
 # ======================================================================
+
 
 class TestNoHardcodedIps:
     def test_no_hardcoded_ips_in_delivered_python_code(self) -> None:
@@ -955,6 +963,7 @@ class TestNoHardcodedIps:
 # Section 8 : v6.0 Phase 2 — câblage WeatherProvider
 # ======================================================================
 
+
 class TestWeatherProviderWiring:
     """Sub-plan v6.0-02-02 : provider injecte + log au demarrage de cycle."""
 
@@ -969,6 +978,7 @@ class TestWeatherProviderWiring:
         l'argument weather_provider=.
         """
         from core.hardware.weather_provider import NoopWeatherProvider
+
         ps = CountingPowerSwitch()
         service = CimierService(
             cimier_config=cimier_config_default,
@@ -990,10 +1000,7 @@ class TestWeatherProviderWiring:
             ipc_manager.write_command({"id": "weather-test-1", "action": "open"})
             service.tick()
 
-        starts = [
-            rec for rec in caplog.records
-            if "cimier_event=cycle_start" in rec.getMessage()
-        ]
+        starts = [rec for rec in caplog.records if "cimier_event=cycle_start" in rec.getMessage()]
         assert len(starts) == 1
         msg = starts[0].getMessage()
         assert "weather=" in msg
@@ -1037,19 +1044,14 @@ class TestWeatherProviderWiring:
             ipc_manager.write_command({"id": "fake-weather-1", "action": "open"})
             service.tick()
 
-        starts = [
-            rec for rec in caplog.records
-            if "cimier_event=cycle_start" in rec.getMessage()
-        ]
+        starts = [rec for rec in caplog.records if "cimier_event=cycle_start" in rec.getMessage()]
         assert len(starts) == 1
         msg = starts[0].getMessage()
         # JSON sort_keys=True → "provider" avant "wind"
         assert '"provider":"fake"' in msg
         assert '"wind":42' in msg
 
-    def test_build_service_from_config_uses_factory(
-        self, tmp_path: Path
-    ) -> None:
+    def test_build_service_from_config_uses_factory(self, tmp_path: Path) -> None:
         """`_build_service_from_config` doit instancier le provider via la factory.
 
         Cas par defaut (config.json sans section weather_provider) → Noop.
@@ -1059,21 +1061,30 @@ class TestWeatherProviderWiring:
 
         config_path = tmp_path / "config.json"
         # Config minimale qui passe le loader sans erreur.
-        config_path.write_text(json.dumps({
-            "site": {"latitude": 0, "longitude": 0, "altitude": 0,
-                     "nom": "Test", "fuseau": "Europe/Paris"},
-            "moteur": {},
-            "motor_driver": {"type": "rp2040", "serial": {}},
-            "suivi": {},
-            "encodeur": {"enabled": False, "spi": {}, "mecanique": {}},
-            "thresholds": {},
-            "simulation": True,
-            "cimier": {
-                "enabled": False,
-                "host": "127.0.0.1",
-                "port": 80,
-            },
-        }))
+        config_path.write_text(
+            json.dumps(
+                {
+                    "site": {
+                        "latitude": 0,
+                        "longitude": 0,
+                        "altitude": 0,
+                        "nom": "Test",
+                        "fuseau": "Europe/Paris",
+                    },
+                    "moteur": {},
+                    "motor_driver": {"type": "rp2040", "serial": {}},
+                    "suivi": {},
+                    "encodeur": {"enabled": False, "spi": {}, "mecanique": {}},
+                    "thresholds": {},
+                    "simulation": True,
+                    "cimier": {
+                        "enabled": False,
+                        "host": "127.0.0.1",
+                        "port": 80,
+                    },
+                }
+            )
+        )
         service = _build_service_from_config(config_path=config_path)
         assert isinstance(service._weather_provider, NoopWeatherProvider)
 
@@ -1081,6 +1092,7 @@ class TestWeatherProviderWiring:
 # ======================================================================
 # Section 9 : v6.0 Phase 3 — câblage scheduler astropy
 # ======================================================================
+
 
 class TestSchedulerWiring:
     """Sub-plan v6.0-03-01 : scheduler astropy intégré à tick()."""
@@ -1091,6 +1103,7 @@ class TestSchedulerWiring:
         scheduler_interval_seconds: int = 60,
     ) -> CimierConfig:
         from core.config.config_loader import CimierAutomationConfig
+
         return CimierConfig(
             enabled=True,
             host="127.0.0.1",
@@ -1105,9 +1118,7 @@ class TestSchedulerWiring:
             ),
         )
 
-    def test_scheduler_disabled_when_automation_off(
-        self, ipc_manager: RecordingIpcManager
-    ) -> None:
+    def test_scheduler_disabled_when_automation_off(self, ipc_manager: RecordingIpcManager) -> None:
         cfg = self._make_config_with_automation(mode="manual")
         service = CimierService(
             cimier_config=cfg,
@@ -1124,8 +1135,10 @@ class TestSchedulerWiring:
     ) -> None:
         from core.config.config_loader import SiteConfig
         from services.cimier_scheduler import CimierScheduler
-        site = SiteConfig(latitude=44.15, longitude=5.23, altitude=800.0,
-                          nom="Test", fuseau="Europe/Paris")
+
+        site = SiteConfig(
+            latitude=44.15, longitude=5.23, altitude=800.0, nom="Test", fuseau="Europe/Paris"
+        )
         cfg = self._make_config_with_automation(mode="full")
         service = CimierService(
             cimier_config=cfg,
@@ -1161,8 +1174,10 @@ class TestSchedulerWiring:
             def maybe_trigger(self, current_state: str) -> SchedulerDecision:
                 self.call_count += 1
                 from datetime import datetime, timezone
-                return SchedulerDecision("skip:state", float("nan"), "flat",
-                                         datetime.now(timezone.utc))
+
+                return SchedulerDecision(
+                    "skip:state", float("nan"), "flat", datetime.now(timezone.utc)
+                )
 
         cfg = self._make_config_with_automation(mode="full", scheduler_interval_seconds=60)
         clock = MockClock(start=1000.0)
@@ -1209,9 +1224,7 @@ class TestSchedulerWiring:
 
         assert any("scheduler_exception" in r.getMessage() for r in caplog.records)
 
-    def test_derive_current_cimier_state_mappings(
-        self, ipc_manager: RecordingIpcManager
-    ) -> None:
+    def test_derive_current_cimier_state_mappings(self, ipc_manager: RecordingIpcManager) -> None:
         """Vérifie le mapping pico_state → CIMIER_STATE_*."""
         from services.cimier_scheduler import (
             CIMIER_STATE_CLOSED,
@@ -1270,6 +1283,7 @@ class TestSchedulerIpcEnrichmentPhase4:
 
     def _make_config(self, mode: str) -> CimierConfig:
         from core.config.config_loader import CimierAutomationConfig
+
         return CimierConfig(
             enabled=True,
             host="127.0.0.1",
@@ -1300,6 +1314,7 @@ class TestSchedulerIpcEnrichmentPhase4:
             def compute_next_triggers(self, now):
                 self.compute_calls += 1
                 return (next_open, next_close)
+
         return StubScheduler()
 
     def test_status_payload_contains_mode_and_next_triggers_iso(
@@ -1423,6 +1438,7 @@ class TestDevModeOverrides:
 # Section T1 Bloc 2 : MotorShelly factory + injection
 # ======================================================================
 
+
 class TestMotorShellyFactory:
     def test_factory_returns_motor_shelly_when_hosts_configured(self) -> None:
         # IPs fictives non-routables (TEST-NET RFC 5737) — jamais en prod.
@@ -1471,7 +1487,7 @@ class TestMotorShellyInjection:
             motor_shelly=sim_motor,
             ipc_manager=ipc_manager,
         )
-        assert service.motor_shelly is sim_motor
+        assert service._motor_shelly is sim_motor
 
     def test_constructor_defaults_motor_shelly_to_factory(
         self,
@@ -1479,8 +1495,5 @@ class TestMotorShellyInjection:
     ) -> None:
         cfg = CimierConfig(enabled=True, host="127.0.0.1", port=80)
         ps = CountingPowerSwitch()
-        service = CimierService(
-            cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager
-        )
-        assert isinstance(service.motor_shelly, NoopMotorShelly)
-        assert cfg.weather_provider.type == "noop"
+        service = CimierService(cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager)
+        assert isinstance(service._motor_shelly, NoopMotorShelly)

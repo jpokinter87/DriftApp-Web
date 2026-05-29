@@ -41,8 +41,11 @@ L'argument `urlopen` permet d'injecter un mock pour les tests.
 
 from __future__ import annotations
 
+import logging
 import urllib.error
 import urllib.request
+
+logger = logging.getLogger(__name__)
 
 
 class MotorShellyError(Exception):
@@ -110,9 +113,7 @@ class MotorShelly:
         urlopen=None,
     ) -> None:
         if api not in ("rpc", "legacy"):
-            raise ValueError(
-                "api must be 'rpc' (Gen 2) or 'legacy' (Gen 1), got " + repr(api)
-            )
+            raise ValueError("api must be 'rpc' (Gen 2) or 'legacy' (Gen 1), got " + repr(api))
         self._host_motor = host_motor
         self._host_dir = host_dir
         self._relay_motor = int(relay_motor)
@@ -135,12 +136,8 @@ class MotorShelly:
                 fermeture. La traduction en état physique du relais dépend
                 de ``open_dir_state`` injecté à la construction.
         """
-        relay_state = (
-            bool(open_direction) if self._open_dir_state else (not bool(open_direction))
-        )
-        self._set_relay(
-            self._host_dir, self._relay_dir, relay_state, timer_s=0.0
-        )
+        relay_state = bool(open_direction) if self._open_dir_state else (not bool(open_direction))
+        self._set_relay(self._host_dir, self._relay_dir, relay_state, timer_s=0.0)
 
     def turn_on(self, timer_s: float = 0.0) -> None:
         """Démarre le moteur.
@@ -219,14 +216,7 @@ class MotorShelly:
                 url += "&toggle_after=" + str(timer_int)
             return url
         # legacy (Gen 1)
-        url = (
-            "http://"
-            + host
-            + "/relay/"
-            + str(relay_id)
-            + "?turn="
-            + ("on" if on else "off")
-        )
+        url = "http://" + host + "/relay/" + str(relay_id) + "?turn=" + ("on" if on else "off")
         if timer_int > 0:
             url += "&timer=" + str(timer_int)
         return url
@@ -240,8 +230,29 @@ class MotorShelly:
                     raise MotorShellyError("Shelly HTTP " + str(status))
                 resp.read()
         except urllib.error.URLError as exc:
-            raise MotorShellyError(
-                "Shelly unreachable: " + str(exc.reason)
-            ) from exc
+            raise MotorShellyError("Shelly unreachable: " + str(exc.reason)) from exc
         except OSError as exc:
             raise MotorShellyError("Shelly socket error: " + str(exc)) from exc
+
+
+class NoopMotorShelly:
+    """Double inerte de MotorShelly : aucune requête réseau.
+
+    Utilisé quand la config motor_shelly est incomplète (host_motor ou
+    host_dir vide) — typiquement install terrain pas encore câblée, ou en
+    tests qui veulent juste un placeholder. Toutes les méthodes sont des
+    no-ops loggées pour la traçabilité.
+
+    Les logs sont en WARNING car en production, ce double signifie que
+    l'install n'est pas encore câblée (host_motor/host_dir vides dans la
+    config) — état dégradé qui mérite un signal visible.
+    """
+
+    def set_direction(self, open_direction: bool) -> None:
+        logger.warning("cimier_event=noop_motor call=set_direction open=%s", open_direction)
+
+    def turn_on(self, timer_s: float = 0.0) -> None:
+        logger.warning("cimier_event=noop_motor call=turn_on timer_s=%.1f", timer_s)
+
+    def turn_off(self) -> None:
+        logger.warning("cimier_event=noop_motor call=turn_off")
