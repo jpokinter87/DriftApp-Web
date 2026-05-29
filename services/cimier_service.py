@@ -36,10 +36,12 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from core.config.config_loader import (
     CimierConfig,
     ConfigLoader,
+    MotorShellyConfig,
     PowerSwitchConfig,
     SiteConfig,
     load_config,
 )
+from core.hardware.motor_shelly import MotorShelly
 from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
@@ -67,12 +69,19 @@ logger = logging.getLogger(__name__)
 # Phases publiées dans cimier_status.json["phase"]
 PHASE_IDLE = "idle"
 PHASE_POWER_ON = "power_on"
-PHASE_BOOT_POLL = "boot_poll"
-PHASE_PUSH_CONFIG = "push_config"
-PHASE_COMMAND_PICO = "command_pico"
-PHASE_CYCLE_POLL = "cycle_poll"
+PHASE_BOOT_POLL = "boot_poll"      # caduc archi Shelly — conservé T1, supprimé en T4
+PHASE_PUSH_CONFIG = "push_config"  # caduc archi Shelly — conservé T1, supprimé en T4
+PHASE_COMMAND_PICO = "command_pico"  # caduc archi Shelly — conservé T1, supprimé en T4
+PHASE_CYCLE_POLL = "cycle_poll"    # caduc archi Shelly — conservé T1, supprimé en T4
 PHASE_POWER_OFF = "power_off"
 PHASE_COOLDOWN = "cooldown"
+# Nouvelles phases archi Shelly (Bloc 2)
+PHASE_PREFLIGHT = "preflight"
+PHASE_SETTLE = "settle"
+PHASE_SET_DIR = "set_dir"
+PHASE_MOTOR_ON = "motor_on"
+PHASE_POLL_SWITCH = "poll_switch"
+PHASE_MOTOR_OFF = "motor_off"
 
 # États de haut niveau publiés dans cimier_status.json["state"]
 STATE_IDLE = "idle"
@@ -157,6 +166,46 @@ def make_power_switch(cfg: PowerSwitchConfig) -> PowerSwitchProtocol:
     raise ValueError("PowerSwitchConfig.type inconnu: " + repr(cfg.type))
 
 
+class NoopMotorShelly:
+    """Double inerte de MotorShelly : aucune requête réseau.
+
+    Utilisé quand la config motor_shelly est incomplète (host_motor ou
+    host_dir vide) — typiquement install terrain pas encore câblée, ou en
+    tests qui veulent juste un placeholder. Toutes les méthodes sont des
+    no-ops loggées pour la traçabilité.
+    """
+
+    def set_direction(self, open_direction: bool) -> None:
+        logger.info("cimier_event=noop_motor call=set_direction open=%s", open_direction)
+
+    def turn_on(self, timer_s: float = 0.0) -> None:
+        logger.info("cimier_event=noop_motor call=turn_on timer_s=%.1f", timer_s)
+
+    def turn_off(self) -> None:
+        logger.info("cimier_event=noop_motor call=turn_off")
+
+
+def make_motor_shelly(cfg: MotorShellyConfig):
+    """Factory MotorShelly. Retourne NoopMotorShelly si hosts incomplets.
+
+    Note : ``cfg.timer_safety_sec`` (filet hardware Shelly toggle_after) est
+    distinct du timeout HTTP de MotorShelly — il sera passé à ``turn_on()``
+    lors de l'orchestration dans T4. Le constructeur MotorShelly reçoit le
+    timeout réseau par défaut (3 s).
+    """
+    if not cfg.host_motor or not cfg.host_dir:
+        return NoopMotorShelly()
+    return MotorShelly(
+        host_motor=cfg.host_motor,
+        host_dir=cfg.host_dir,
+        relay_motor=cfg.relay_motor,
+        relay_dir=cfg.relay_dir,
+        open_dir_state=cfg.open_dir_state,
+        motor_on_relay_state=cfg.motor_on_relay_state,
+        api=cfg.api,
+    )
+
+
 class CimierService:
     """Orchestrateur cycle cimier — commande-driven via IPC."""
 
@@ -164,6 +213,7 @@ class CimierService:
         self,
         cimier_config: CimierConfig,
         power_switch: PowerSwitchProtocol,
+        motor_shelly=None,
         http_client: Optional[HttpClient] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
@@ -178,6 +228,11 @@ class CimierService:
     ):
         self._config = cimier_config
         self._power_switch = power_switch
+        self.motor_shelly = (
+            motor_shelly
+            if motor_shelly is not None
+            else make_motor_shelly(cimier_config.motor_shelly)
+        )
         self._http = http_client or HttpClient()
         self._ipc = ipc_manager or CimierIpcManager()
         self._weather_provider = weather_provider or NoopWeatherProvider()

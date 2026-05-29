@@ -23,8 +23,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 
-from core.config.config_loader import CimierConfig, PowerSwitchConfig
+from core.config.config_loader import CimierConfig, MotorShellyConfig, PowerSwitchConfig
 from core.hardware.cimier_simulator import CimierSimulator
+from core.hardware.motor_shelly import MotorShelly
 from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
@@ -36,6 +37,7 @@ from services.cimier_service import (
     ACTION_OPEN,
     ACTION_STOP,
     HttpClient,
+    NoopMotorShelly,
     PHASE_BOOT_POLL,
     PHASE_COMMAND_PICO,
     PHASE_COOLDOWN,
@@ -47,6 +49,7 @@ from services.cimier_service import (
     STATE_ERROR,
     STATE_IDLE,
     CimierService,
+    make_motor_shelly,
     make_power_switch,
 )
 
@@ -1414,4 +1417,70 @@ class TestDevModeOverrides:
         assert cfg.cycle_timeout_s == 120.0
         assert cfg.boot_poll_timeout_s == 45.0
         assert cfg.automation.mode == original_automation_mode
+
+
+# ======================================================================
+# Section T1 Bloc 2 : MotorShelly factory + injection
+# ======================================================================
+
+class TestMotorShellyFactory:
+    def test_factory_returns_motor_shelly_when_hosts_configured(self) -> None:
+        # IPs fictives non-routables (TEST-NET RFC 5737) — jamais en prod.
+        cfg = MotorShellyConfig(
+            host_motor="203.0.113.85",
+            host_dir="203.0.113.86",
+            relay_motor=0,
+            relay_dir=0,
+            open_dir_state=True,
+            motor_on_relay_state=False,
+            api="rpc",
+            timer_safety_sec=90.0,
+        )
+        m = make_motor_shelly(cfg)
+        assert isinstance(m, MotorShelly)
+        assert m.host_motor == "203.0.113.85"
+        assert m.host_dir == "203.0.113.86"
+        assert m.motor_on_relay_state is False
+
+    def test_factory_returns_noop_when_hosts_empty(self) -> None:
+        cfg = MotorShellyConfig(host_motor="", host_dir="")
+        m = make_motor_shelly(cfg)
+        assert isinstance(m, NoopMotorShelly)
+
+    def test_factory_returns_noop_when_only_one_host(self) -> None:
+        cfg = MotorShellyConfig(host_motor="203.0.113.85", host_dir="")
+        m = make_motor_shelly(cfg)
+        assert isinstance(m, NoopMotorShelly)
+
+
+class TestMotorShellyInjection:
+    def test_constructor_accepts_motor_shelly(
+        self,
+        cimier_config_default: CimierConfig,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        from core.hardware.cimier_mechanism_sim import CimierMechanismSim
+        from core.hardware.sim_motor_shelly import SimMotorShelly
+
+        mech = CimierMechanismSim()
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        service = CimierService(
+            cimier_config=cimier_config_default,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            ipc_manager=ipc_manager,
+        )
+        assert service.motor_shelly is sim_motor
+
+    def test_constructor_defaults_motor_shelly_to_factory(
+        self,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        cfg = CimierConfig(enabled=True, host="127.0.0.1", port=80)
+        ps = CountingPowerSwitch()
+        service = CimierService(
+            cimier_config=cfg, power_switch=ps, ipc_manager=ipc_manager
+        )
+        assert isinstance(service.motor_shelly, NoopMotorShelly)
         assert cfg.weather_provider.type == "noop"
