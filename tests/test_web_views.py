@@ -272,7 +272,7 @@ class TestMotorStatusView:
             "last_update": "2026-05-05T12:00:00",
             "calibration": {
                 "status": "ok",
-                "method": "hint_trip",
+                "method": "sweep",
                 "last_calibration_at": "2026-05-05T12:00:00+00:00",
                 "duration_sec": 12.3,
                 "error_msg": None,

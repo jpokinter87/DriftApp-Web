@@ -1,11 +1,11 @@
-"""Routine de calibration au boot du motor_service (v6.4 Phase 2).
+"""Routine de calibration au boot du motor_service (v6.4 Phase 2, simplifiée v6.6.0).
 
 Au démarrage du `motor_service` en mode production, cette routine ramène la
 coupole sur le microswitch de calibration à 45° avant d'accepter des commandes
-utilisateur. Elle s'appuie sur le hint de position persisté en Phase 1
-(`PositionPersistor.load_last_position`) pour calculer un trajet court ; un
-fallback recherche élargie ±15° couvre les cas où la coupole a été déplacée
-hors-tension.
+utilisateur. Depuis v6.6.0 elle se limite à un sweep court autour de la
+position courante (`-fallback_sweep_deg` puis `+2×fallback_sweep_deg`) :
+la coupole est toujours parquée près de 45° en fin de session précédente,
+donc un sweep aveugle de quelques degrés suffit à franchir le switch.
 
 Architecture du monitoring :
 - Le main thread appelle `moteur.rotation(...)` (bloquant).
@@ -15,30 +15,19 @@ Architecture du monitoring :
   il appelle `moteur.request_stop()` pour interrompre la rotation en cours.
 - Un timeout global (`timeout_sec`) borne la durée totale de la routine.
 
-La routine ne fait JAMAIS confiance au hint pour fixer une position absolue :
-elle l'utilise uniquement pour optimiser le trajet vers le switch (le switch
-reste l'autorité de calibration). Le hint peut être absent, corrompu, ou
-divergent — la routine bascule alors sur le fallback sweep.
-
 Pas de dépendance externe (stdlib + utilitaires projet uniquement).
 """
 
 from __future__ import annotations
 
 import logging
-import math
 import threading
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable, Optional
-
-from core.hardware.position_persistor import PositionPersistor
-from core.utils.angle_utils import shortest_angular_distance
 
 
 SWITCH_CALIB_ANGLE: float = 45.0
-MIN_TRIP_DEG: float = 0.5
 
 SINGLE_SPEED_MOTOR_DELAY: float = 0.00026
 
@@ -60,22 +49,20 @@ class CalibrationRoutine:
     """Orchestre la calibration au boot du motor_service.
 
     Le couplage avec le service est minimal : un `status_callback(state, payload)`
-    permet à `motor_service` de propager l'avancement (par ex. step="loading_hint")
-    vers `current_status["calibration"]` sans que ce module n'accède à `IpcManager`.
+    permet à `motor_service` de propager l'avancement vers
+    `current_status["calibration"]` sans que ce module n'accède à `IpcManager`.
     """
 
     def __init__(
         self,
         moteur,
         daemon_reader,
-        persist_path: Path,
         config,
         simulation_mode: bool,
         status_callback: Callable[[str, dict], None],
     ) -> None:
         self.moteur = moteur
         self.daemon_reader = daemon_reader
-        self.persist_path = Path(persist_path)
         self.config = config
         self.simulation_mode = bool(simulation_mode)
         self.status_callback = status_callback
@@ -103,99 +90,42 @@ class CalibrationRoutine:
             )
 
         self._initialize_timeout_deadline()
-        self._safe_callback("calibrating", {"step": "loading_hint"})
+        self._safe_callback("calibrating", {"step": "sweep"})
 
-        hint = self._safe_load_hint()
-
-        # Phase 1 : trajet principal (si hint disponible)
-        if hint is not None:
-            try:
-                hint_angle = float(hint.get("azimut_deg"))
-            except (TypeError, ValueError):
-                hint_angle = None
-            if hint_angle is not None:
-                self._safe_callback("calibrating", {"step": "hint_trip", "hint_deg": hint_angle})
-                if self._attempt_hint_trip(hint_angle):
-                    return self._build_ok_result(method="hint_trip")
-                if self._timeout_hit:
-                    return self._build_degraded_result(
-                        method="hint_trip", error_msg="timeout pendant trajet hint"
-                    )
-
-        # Phase 2 : fallback sweep
-        self._safe_callback("calibrating", {"step": "fallback_sweep"})
-        if self._attempt_fallback_sweep():
-            return self._build_ok_result(method="fallback_sweep")
+        if self._attempt_sweep():
+            return self._build_ok_result(method="sweep")
 
         if self._timeout_hit:
             return self._build_degraded_result(
-                method="fallback_sweep",
+                method="sweep",
                 error_msg=f"timeout après {self.config.timeout_sec}s",
             )
 
-        reason = (
-            "hint absent et sweep ±15° infructueux"
-            if hint is None
-            else ("hint divergent et sweep ±15° infructueux")
-        )
-        return self._build_degraded_result(method="fallback_sweep", error_msg=reason)
-
-    # =========================================================================
-    # PHASES
-    # =========================================================================
-
-    def _attempt_hint_trip(self, hint_angle: float) -> bool:
-        """Trajet principal : calcule un delta court vers 45° + overshoot."""
-        current = self._read_current_position()
-        if current is None:
-            logger.warning("boot_calibration | step=hint_trip skip=no_position")
-            return False
-
-        delta = shortest_angular_distance(current, SWITCH_CALIB_ANGLE)
-        if abs(delta) < 1e-9:
-            sign = 1.0
-        else:
-            sign = math.copysign(1.0, delta)
-        overshoot_signed = sign * float(self.config.overshoot_deg)
-        trip_total = delta + overshoot_signed
-
-        logger.info(
-            "boot_calibration | step=hint_trip current=%.2f hint=%.2f delta=%.2f "
-            "overshoot=%.2f trip_total=%.2f",
-            current,
-            hint_angle,
-            delta,
-            overshoot_signed,
-            trip_total,
+        return self._build_degraded_result(
+            method="sweep",
+            error_msg=f"sweep ±{self.config.fallback_sweep_deg}° infructueux",
         )
 
-        if abs(trip_total) < MIN_TRIP_DEG:
-            logger.info(
-                "boot_calibration | step=hint_trip skip=below_min_trip trip_total=%.3f min=%.2f",
-                trip_total,
-                MIN_TRIP_DEG,
-            )
-            return False
+    # =========================================================================
+    # SWEEP
+    # =========================================================================
 
-        return self._execute_monitored_rotation(trip_total)
+    def _attempt_sweep(self) -> bool:
+        """Sweep court autour de la position courante (séquence -N° puis +2N°).
 
-    def _attempt_fallback_sweep(self) -> bool:
-        """Sweep ±N° autour de la position courante (séquence -N° puis +2N°)."""
+        À vitesse single-speed (40°/min), avec `fallback_sweep_deg=7.0` :
+        première branche ≈ 10 s, deuxième branche ≈ 20 s. Garantit le passage
+        sur le switch tant que la coupole est parquée à ±7° de 45°.
+        """
         sweep = float(self.config.fallback_sweep_deg)
 
-        logger.info(
-            "boot_calibration | step=fallback_sweep first_branch=%.2f",
-            -sweep,
-        )
+        logger.info("boot_calibration | step=sweep first_branch=%.2f", -sweep)
         if self._execute_monitored_rotation(-sweep):
             return True
         if self._timeout_hit:
             return False
 
-        logger.info(
-            "boot_calibration | step=fallback_sweep second_branch=%.2f",
-            2.0 * sweep,
-        )
+        logger.info("boot_calibration | step=sweep second_branch=%.2f", 2.0 * sweep)
         if self._execute_monitored_rotation(2.0 * sweep):
             return True
 
@@ -290,26 +220,6 @@ class CalibrationRoutine:
 
     def _initialize_timeout_deadline(self) -> None:
         self._timeout_deadline = time.monotonic() + float(self.config.timeout_sec)
-
-    def _safe_load_hint(self) -> Optional[dict]:
-        try:
-            return PositionPersistor.load_last_position(self.persist_path)
-        except Exception as e:
-            logger.warning("boot_calibration | step=load_hint error=%s", e)
-            return None
-
-    def _read_current_position(self) -> Optional[float]:
-        try:
-            return float(self.daemon_reader.read_angle(timeout_ms=200))
-        except RuntimeError:
-            try:
-                return float(self.daemon_reader.read_angle(timeout_ms=200))
-            except RuntimeError as e:
-                logger.warning("boot_calibration | step=read_position error=%s", e)
-                return None
-        except Exception as e:
-            logger.warning("boot_calibration | step=read_position error=%s", e)
-            return None
 
     def _read_calibration_timestamp(self) -> Optional[str]:
         try:

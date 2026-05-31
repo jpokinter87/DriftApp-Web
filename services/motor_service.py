@@ -52,8 +52,6 @@ from services.ipc_manager import IpcManager
 from services.simulation import SimulatedDaemonReader
 from services.command_handlers import GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
 
-PROJECT_ROOT = Path(__file__).parent.parent
-
 # Configuration logging - fichier horodaté par session (cycle démarrage du service)
 LOGS_DIR = Path(__file__).parent.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
@@ -422,11 +420,9 @@ class MotorService:
                 self.current_status["calibration"].update(payload)
             self._write_status()
 
-        persist_path = PROJECT_ROOT / self.config.calibration.persist_path
         routine = CalibrationRoutine(
             moteur=self.moteur,
             daemon_reader=self.daemon_reader,
-            persist_path=persist_path,
             config=self.config.boot_calibration,
             simulation_mode=self.simulation_mode,
             status_callback=status_cb,

@@ -132,16 +132,9 @@
       "timer_safety_sec": 90.0
     }
   },
-  "calibration": {
-    "_comment": "v6.4 Phase 1 — persistance disque de la position absolue (alimente la routine boot motor_service du plan 02). Throttling : écriture si delta >= write_threshold_deg OU si write_interval_sec écoulé avec mouvement (>0.05°).",
-    "persist_path": "data/last_known_position.json",
-    "write_threshold_deg": 1.0,
-    "write_interval_sec": 30.0
-  },
   "boot_calibration": {
-    "_comment": "v6.4 Phase 2 — Routine calibration au boot du motor_service. overshoot_deg = degrés ajoutés au trajet principal pour garantir le franchissement du switch 45°. fallback_sweep_deg = amplitude (en deg) du sweep ±X autour de la position courante si le trajet principal n'a pas calibré.",
-    "overshoot_deg": 5.0,
-    "fallback_sweep_deg": 15.0,
+    "_comment": "v6.6.0 — routine calibration au boot du motor_service simplifiée : sweep court autour de la position courante (-fallback_sweep_deg puis +2×fallback_sweep_deg). fallback_sweep_deg=7° → séquence -7°/+14° ≈ 10s/20s à 40°/min single-speed.",
+    "fallback_sweep_deg": 7.0,
     "timeout_sec": 180.0,
     "poll_interval_sec": 0.1
   }

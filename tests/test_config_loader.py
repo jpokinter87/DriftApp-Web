@@ -17,7 +17,6 @@ import pytest
 from core.config.config_loader import (
     VALID_AUTOMATION_MODES,
     BootCalibrationConfig,
-    CalibrationConfig,
     CimierAutomationConfig,
     CimierConfig,
     ConfigLoader,
@@ -759,73 +758,16 @@ class TestCimierAutomationMode:
 
 
 # =============================================================================
-# CalibrationConfig — v6.4 Phase 1 (persistance position absolue)
-# =============================================================================
-
-
-class TestCalibrationConfig:
-    """v6.4 Phase 1 : section `calibration` rétro-compatible (AC-5)."""
-
-    def _load_with_calibration(self, tmp_path, sample_config_dict, calibration_dict):
-        cfg = dict(sample_config_dict)
-        if calibration_dict is not None:
-            cfg["calibration"] = calibration_dict
-        config_file = tmp_path / "config.json"
-        config_file.write_text(json.dumps(cfg))
-        return ConfigLoader(config_file).load()
-
-    def test_calibration_defaults_when_section_missing(self, tmp_path, sample_config_dict):
-        """Section calibration absente → defaults (AC-5 rétro-compat stricte)."""
-        config = self._load_with_calibration(tmp_path, sample_config_dict, None)
-        assert isinstance(config.calibration, CalibrationConfig)
-        assert config.calibration.persist_path == "data/last_known_position.json"
-        assert config.calibration.write_threshold_deg == 1.0
-        assert config.calibration.write_interval_sec == 30.0
-
-    def test_calibration_partial_override(self, tmp_path, sample_config_dict):
-        """Override partiel : seule la clé fournie est modifiée."""
-        config = self._load_with_calibration(
-            tmp_path, sample_config_dict, {"write_threshold_deg": 2.5}
-        )
-        assert config.calibration.write_threshold_deg == 2.5
-        assert config.calibration.write_interval_sec == 30.0
-        assert config.calibration.persist_path == "data/last_known_position.json"
-
-    def test_calibration_invalid_threshold_falls_back(self, tmp_path, sample_config_dict, caplog):
-        """write_threshold_deg <= 0 → log WARNING + defaults."""
-        import logging
-
-        caplog.set_level(logging.WARNING)
-        config = self._load_with_calibration(
-            tmp_path, sample_config_dict, {"write_threshold_deg": -1.0}
-        )
-        assert config.calibration.write_threshold_deg == 1.0
-        assert any("calibration config invalide" in r.message for r in caplog.records)
-
-    def test_calibration_invalid_interval_falls_back(self, tmp_path, sample_config_dict, caplog):
-        """write_interval_sec <= 0 → log WARNING + defaults."""
-        import logging
-
-        caplog.set_level(logging.WARNING)
-        config = self._load_with_calibration(
-            tmp_path, sample_config_dict, {"write_interval_sec": 0}
-        )
-        assert config.calibration.write_interval_sec == 30.0
-        assert any("calibration config invalide" in r.message for r in caplog.records)
-
-    def test_calibration_persist_path_empty_falls_back(self, tmp_path, sample_config_dict):
-        """persist_path chaîne vide → fallback sur default."""
-        config = self._load_with_calibration(tmp_path, sample_config_dict, {"persist_path": ""})
-        assert config.calibration.persist_path == "data/last_known_position.json"
-
-
-# =============================================================================
-# BootCalibrationConfig (v6.4 Phase 2 — AC-6)
+# BootCalibrationConfig (v6.6.0 — routine boot simplifiée)
 # =============================================================================
 
 
 class TestBootCalibrationConfig:
-    """v6.4 Phase 2 : section `boot_calibration` rétro-compatible (AC-6)."""
+    """v6.6.0 : section `boot_calibration` rétro-compatible.
+
+    Clés legacy (`overshoot_deg`, section `calibration`) sont ignorées
+    silencieusement — pas de warning, juste défaut sans effet.
+    """
 
     def _load_with_boot_calibration(self, tmp_path, sample_config_dict, boot_dict):
         cfg = dict(sample_config_dict)
@@ -839,33 +781,40 @@ class TestBootCalibrationConfig:
         """Section absente → defaults (rétro-compat stricte)."""
         config = self._load_with_boot_calibration(tmp_path, sample_config_dict, None)
         assert isinstance(config.boot_calibration, BootCalibrationConfig)
-        assert config.boot_calibration.overshoot_deg == 5.0
-        assert config.boot_calibration.fallback_sweep_deg == 15.0
+        assert config.boot_calibration.fallback_sweep_deg == 7.0
         assert config.boot_calibration.timeout_sec == 180.0
         assert config.boot_calibration.poll_interval_sec == 0.1
 
     def test_boot_calibration_partial_override(self, tmp_path, sample_config_dict):
         """Override partiel : seule la clé fournie est modifiée, les autres restent en défaut."""
         config = self._load_with_boot_calibration(
-            tmp_path, sample_config_dict, {"overshoot_deg": 10.0}
+            tmp_path, sample_config_dict, {"fallback_sweep_deg": 12.0}
         )
-        assert config.boot_calibration.overshoot_deg == 10.0
-        assert config.boot_calibration.fallback_sweep_deg == 15.0
+        assert config.boot_calibration.fallback_sweep_deg == 12.0
         assert config.boot_calibration.timeout_sec == 180.0
         assert config.boot_calibration.poll_interval_sec == 0.1
 
-    def test_boot_calibration_invalid_overshoot_falls_back(
+    def test_boot_calibration_invalid_sweep_falls_back(
         self, tmp_path, sample_config_dict, caplog
     ):
-        """overshoot_deg <= 0 → log WARNING + defaults."""
+        """fallback_sweep_deg <= 0 → log WARNING + defaults."""
         import logging
 
         caplog.set_level(logging.WARNING)
         config = self._load_with_boot_calibration(
-            tmp_path, sample_config_dict, {"overshoot_deg": -1.0}
+            tmp_path, sample_config_dict, {"fallback_sweep_deg": -1.0}
         )
-        assert config.boot_calibration.overshoot_deg == 5.0
+        assert config.boot_calibration.fallback_sweep_deg == 7.0
         assert any("boot_calibration config invalide" in r.message for r in caplog.records)
+
+    def test_boot_calibration_legacy_overshoot_ignored(self, tmp_path, sample_config_dict):
+        """Clé legacy `overshoot_deg` dans la config est ignorée silencieusement."""
+        config = self._load_with_boot_calibration(
+            tmp_path, sample_config_dict, {"overshoot_deg": 5.0, "fallback_sweep_deg": 7.0}
+        )
+        # Pas d'erreur, valeurs explicites + defaults pour les autres clés
+        assert config.boot_calibration.fallback_sweep_deg == 7.0
+        assert not hasattr(config.boot_calibration, "overshoot_deg")
 
     def test_boot_calibration_invalid_timeout_falls_back(
         self, tmp_path, sample_config_dict, caplog

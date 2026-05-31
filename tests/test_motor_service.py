@@ -250,7 +250,7 @@ class TestBootCalibrationIntegration:
         from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
         ok_result = CalibrationResult(
             status="ok",
-            method="hint_trip",
+            method="sweep",
             last_calibration_at="2026-05-04T12:00:00+00:00",
             duration_sec=1.5,
         )
@@ -258,7 +258,7 @@ class TestBootCalibrationIntegration:
             motor_service._run_boot_calibration()
         cal = motor_service.current_status["calibration"]
         assert cal["status"] == "ok"
-        assert cal["method"] == "hint_trip"
+        assert cal["method"] == "sweep"
         assert cal["last_calibration_at"] == "2026-05-04T12:00:00+00:00"
         assert cal["duration_sec"] == 1.5
         assert motor_service.current_status["status"] == "idle"
@@ -287,7 +287,7 @@ class TestManualCalibrationCommand:
 
         ok_result = CalibrationResult(
             status="ok",
-            method="hint_trip",
+            method="sweep",
             last_calibration_at="2026-05-05T12:00:00+00:00",
             duration_sec=12.3,
         )
@@ -303,14 +303,14 @@ class TestManualCalibrationCommand:
         final = snapshots[-1]
         assert final['status'] == 'idle'
         assert final['calibration']['status'] == 'ok'
-        assert final['calibration']['method'] == 'hint_trip'
+        assert final['calibration']['method'] == 'sweep'
 
     def test_calibrate_propagates_calibration_subdict(self, motor_service):
         """Les 5 clés du CalibrationResult sont copiées dans current_status['calibration']."""
         from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
         result = CalibrationResult(
             status="ok",
-            method="hint_trip",
+            method="sweep",
             last_calibration_at="2026-05-05T12:00:00+00:00",
             duration_sec=42.0,
             error_msg=None,
@@ -320,7 +320,7 @@ class TestManualCalibrationCommand:
         cal = motor_service.current_status['calibration']
         assert cal == {
             'status': 'ok',
-            'method': 'hint_trip',
+            'method': 'sweep',
             'last_calibration_at': '2026-05-05T12:00:00+00:00',
             'duration_sec': 42.0,
             'error_msg': None,
