@@ -17,9 +17,11 @@ cd "$PROJECT_DIR"
 # Python du virtual environment
 PYTHON="$PROJECT_DIR/.venv/bin/python"
 
-# Synchroniser les dépendances (crée le venv si nécessaire)
+# Synchroniser les dépendances (crée le venv si nécessaire).
+# --frozen : en prod, on installe strictement depuis uv.lock sans jamais le
+# réécrire — sinon ce démarrage ferait diverger le lock et bloquerait l'OTA.
 if command -v uv &> /dev/null; then
-    uv sync --quiet 2>/dev/null || true
+    uv sync --frozen --quiet 2>/dev/null || true
 fi
 
 # Vérifier que le venv existe

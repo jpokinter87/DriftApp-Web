@@ -10,7 +10,7 @@
 # Étapes (5 au total) :
 #   1. stop_services : stop motor_service, ems22d
 #   2. fetch         : stash + pull (préserve les modifs locales de l'utilisateur)
-#   3. deps          : uv sync --extra dev
+#   3. deps          : uv sync --extra dev --frozen (n'altère jamais uv.lock)
 #   4. services      : install .service + daemon-reload
 #   5. restart       : start ems22d, motor_service, driftapp_web
 #
@@ -187,6 +187,22 @@ if [ "$CONFIG_STRATEGY" = "reset" ]; then
     fi
 fi
 
+# uv.lock : fichier de lock généré, jamais une personnalisation utilisateur.
+# Le Pi ne doit plus le réécrire (cf. `uv sync --frozen`, étape 3), mais s'il a
+# divergé localement (run antérieur sans --frozen, version uv différente), on le
+# ramène à l'état du dépôt AVANT le stash/pull, pour qu'il ne soit ni stashé ni
+# en collision avec la version upstream. C'est la cause historique des blocages
+# OTA (« supprimer uv.lock à la main »).
+if run_as_owner git ls-files --error-unmatch uv.lock >/dev/null 2>&1; then
+    # tracké : annuler les modifs locales — le pull fast-forward la version upstream
+    if run_as_owner git checkout -- uv.lock >> "$LOG_FILE" 2>&1; then
+        log "uv.lock : modifs locales annulées (suivra l'upstream)"
+    fi
+elif [ -f "$PROJECT_DIR/uv.lock" ]; then
+    # untracked (détrack passé) : le retirer pour ne pas bloquer le merge ; le pull le recrée
+    rm -f "$PROJECT_DIR/uv.lock" && log "uv.lock untracked retiré (sera repris de l'upstream)"
+fi
+
 # Liste des fichiers trackés modifiés (staged + unstaged)
 MODIFIED_FILES="$(run_as_owner git status --porcelain 2>/dev/null \
     | awk '/^[ MADRCU?][MADRCU]|^[MADRCU][ MADRCU]/ {print $2}' \
@@ -264,10 +280,12 @@ write_status "deps" 3 "Synchronisation des dépendances Python (uv sync)..."
 log "--- Étape 3/5 : uv sync ---"
 
 if command -v uv &>/dev/null; then
-    if run_as_owner uv sync --extra dev >> "$LOG_FILE" 2>&1; then
-        log "Dépendances synchronisées"
+    # --frozen : installe strictement depuis uv.lock, sans jamais le réécrire ni
+    # re-résoudre. Indispensable pour que uv.lock ne diverge plus localement.
+    if run_as_owner uv sync --extra dev --frozen >> "$LOG_FILE" 2>&1; then
+        log "Dépendances synchronisées (--frozen, uv.lock inchangé)"
     else
-        log "WARN : uv sync a échoué — l'environnement peut être incohérent"
+        log "WARN : uv sync --frozen a échoué — uv.lock probablement incohérent avec pyproject (regénérer le lock côté dev)"
     fi
 else
     log "uv non installé — étape sautée"

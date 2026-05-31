@@ -170,12 +170,14 @@ else
 fi
 
 # Synchroniser les dépendances Python après mise à jour du code
-print_step "Synchronisation des dépendances (uv sync --extra dev)..."
+# --frozen : installe depuis uv.lock sans jamais le réécrire (évite la divergence
+# locale du lock qui collisionne avec l'upstream au pull suivant).
+print_step "Synchronisation des dépendances (uv sync --extra dev --frozen)..."
 if command -v uv &> /dev/null; then
-    if uv sync --extra dev 2>&1; then
-        print_success "Dépendances synchronisées"
+    if uv sync --extra dev --frozen 2>&1; then
+        print_success "Dépendances synchronisées (uv.lock inchangé)"
     else
-        print_warning "Échec de uv sync — les dépendances peuvent être obsolètes"
+        print_warning "Échec de uv sync --frozen — uv.lock incohérent ? (regénérer côté dev)"
     fi
 else
     print_warning "uv non installé — synchronisation des dépendances ignorée"
