@@ -1,0 +1,170 @@
+● Récap des contraintes confirmées (corrigé après retour Serge 31/05) :
+  - ENA libre côté DM556T → on en dispose
+  - DIR pris en aval du Shelly DIR (directement sur la broche DIR- du DM556T, image fidèle du sens en cours)
+  - Pas de +5V « spontané » sur le DM556T (les broches ENA+/DIR+/PUL+ sont des anodes d'optos
+    alimentées en externe par le module PWM, pas une source). Le 74HC00 est donc alimenté par
+    un convertisseur DC-DC 5 V externe (déjà dispo côté Serge), branché sur une 220 V permanente,
+    indépendant du Shelly POWER → le 74HC00 reste actif même module PWM éteint.
+  - Le Shelly POWER (220 V) reste en place et garde son rôle d'alim principale (= ceinture).
+    Le 74HC00 + ENA- = 2e ligne de défense (= bretelles), purement combinatoire, sans soft.
+  - Chauffe résiduelle du module = problème en aval (alim 220 V), pas notre sujet
+
+  Schéma final prêt à câbler ci-dessous.
+
+  Schéma définitif — câblage broche à broche
+
+  Pinout 74HC00N (DIP-14, quad NAND CMOS)
+
+              ┌──────∪──────┐
+     1A  ──┤1│              │14├──  VCC  (+5V anode commune)
+     1B  ──┤2│              │13├──  4B
+     1Y  ──┤3│   74HC00     │12├──  4A
+     2A  ──┤4│              │11├──  4Y
+     2B  ──┤5│              │10├──  3B
+     2Y  ──┤6│              │ 9├──  3A
+     GND ──┤7│              │ 8├──  3Y
+              └─────────────┘
+
+  Affectation des portes
+
+  ┌─────────────────────┬─────────────────────┬───────────────────────────────────────────────────────┬─────────────┐
+  │        Porte        │        Rôle         │                        Entrées                        │   Sortie    │
+  ├─────────────────────┼─────────────────────┼───────────────────────────────────────────────────────┼─────────────┤
+  │ U1A (pins 1,2,3)    │ NOT_DIR (inverseur) │ 1=DIR_signal, 2=DIR_signal (court-circuités)          │ 3=NOT_DIR   │
+  ├─────────────────────┼─────────────────────┼───────────────────────────────────────────────────────┼─────────────┤
+  │ U1B (pins 4,5,6)    │ OPEN_OK             │ 4=NOT_DIR (depuis pin 3), 5=SW_OPEN                   │ 6=OPEN_OK   │
+  ├─────────────────────┼─────────────────────┼───────────────────────────────────────────────────────┼─────────────┤
+  │ U1C (pins 9,10,8)   │ CLOSE_OK            │ 9=DIR_signal, 10=SW_CLOSED                            │ 8=CLOSE_OK  │
+  ├─────────────────────┼─────────────────────┼───────────────────────────────────────────────────────┼─────────────┤
+  │ U1D (pins 12,13,11) │ ENA-_out            │ 12=OPEN_OK (depuis pin 6), 13=CLOSE_OK (depuis pin 8) │ 11=ENA-_out │
+  └─────────────────────┴─────────────────────┴───────────────────────────────────────────────────────┴─────────────┘
+
+  Câblage extérieur
+
+     220 V permanente ── Convertisseur DC-DC 5 V ──┬─────────┬───── pin 14 (VCC)
+       (PAS via Shelly POWER)                      │         │
+                                                   R1 (10k)  R2 (10k)
+                                                   │         │
+     SW_OPEN_signal  ──┬───────────────────────────┘         │     vers pin 5 (U1B-B)
+                       │                                      │
+                       └── Switch_OPEN (NC) ─────────────────── GND
+                       │
+                       └────► reste branché sur Pico W GP14 (lecture passive UI, optionnel)
+
+     SW_CLOSED_signal ─┬──────────────────────────────────────┘     vers pin 10 (U1C-B)
+                       │
+                       └── Switch_CLOSED (NC) ──────────────── GND
+                       │
+                       └────► reste branché sur Pico W GP15 (lecture passive UI, optionnel)
+
+     DIR_signal       ──── broche DIR- du DM556T ──────────── vers pins 1, 2, 9
+                           (et donc aval du Shelly DIR)
+
+     ENA-_out (pin 11) ─── broche ENA- du DM556T (auparavant non câblée)
+
+     GND (DM556T)     ──── pin 7   (masse commune DM556T / module PWM / DC-DC)
+     C1 (100 nF)      ──── entre pin 14 et pin 7, au plus court (< 2 cm)
+
+  Note : PUL- du DM556T continue d'être piloté par le module PWM exactement comme aujourd'hui.
+        Le 74HC00 ne touche PAS à PUL-. Il agit uniquement sur ENA- (signal indépendant
+        qui active ou désactive le courant des bobines, sans interférer avec les pulses STEP).
+
+  Points de soudure / dérivation (résumé Serge)
+
+  1. VCC du 74HC00 : tirer un fil depuis la sortie +5 V du convertisseur DC-DC. Le DC-DC doit
+     être alimenté sur une 220 V PERMANENTE (en amont du Shelly POWER), pour que le 74HC00
+     reste actif quoi qu'il arrive. Conso 74HC00 ≈ 1 mA, le moindre DC-DC suffit largement.
+  2. GND du 74HC00 : relier au 0 V commun (DM556T, module PWM et DC-DC partagent la même masse).
+  3. DIR_signal : se piquer sur la ligne entre Shelly DIR (sortie) et DM556T (entrée DIR-).
+     Cette ligne reflète déjà le sens effectif.
+  4. SW_OPEN / SW_CLOSED : se piquer sur les lignes existantes entre le Pico W et les switches.
+     Ajouter 2 résistances pull-up 10 kΩ vers le +5 V du DC-DC (les pull-ups internes du Pico
+     ne sont pas dans le bon référentiel et ne suffiraient pas pour alimenter une charge CMOS
+     externe propre).
+  5. ENA- : nouveau fil entre pin 11 du 74HC00 et la broche ENA- du DM556T (jusqu'ici non câblée).
+  6. C1 (100 nF céramique) : entre pins 14 et 7 du 74HC00, juste à côté de l'IC.
+
+  → Le Shelly POWER et le Shelly DIR ne sont PAS touchés. Le câblage existant reste tel quel,
+     on ajoute simplement le module 74HC00 en parallèle, alimenté indépendamment par le DC-DC.
+
+  Vérification : 6 scénarios (les 4 logiques + 2 cas limites)
+
+  ┌─────┬────────────────────────────────────────┬──────┬──────┬──────┬─────────┬─────────┬──────────┬──────┬──────────┐
+  │  #  │                Scénario                │ DIR- │ SW_O │ SW_C │ NOT_DIR │ OPEN_OK │ CLOSE_OK │ ENA- │  Moteur  │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 1   │ Repos en course (montée, pas en butée) │ 0    │ 0    │ 0    │ 1       │ 1       │ 1        │ 0    │ tourne ✓ │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 2   │ Repos en course (descente)             │ 1    │ 0    │ 0    │ 0       │ 1       │ 1        │ 0    │ tourne ✓ │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 3   │ Butée OPEN, sens montée                │ 0    │ 1    │ 0    │ 1       │ 0       │ 1        │ 1    │ stop ✓   │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 4   │ Butée OPEN, sens descente (libération) │ 1    │ 1    │ 0    │ 0       │ 1       │ 1        │ 0    │ tourne ✓ │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 5   │ Butée CLOSED, sens descente            │ 1    │ 0    │ 1    │ 0       │ 1       │ 0        │ 1    │ stop ✓   │
+  ├─────┼────────────────────────────────────────┼──────┼──────┼──────┼─────────┼─────────┼──────────┼──────┼──────────┤
+  │ 6   │ Butée CLOSED, sens montée (libération) │ 0    │ 0    │ 1    │ 1       │ 1       │ 1        │ 0    │ tourne ✓ │
+  └─────┴────────────────────────────────────────┴──────┴──────┴──────┴─────────┴─────────┴──────────┴──────┴──────────┘
+
+  Comportement parfait dans tous les cas.
+
+  Cas limite : Shelly POWER off (module PWM éteint)
+
+  Le Shelly POWER coupe l'alim 220 V du module entier (PWM + ses sorties vers DM556T).
+  Conséquences :
+  - +5 V anode commune DM556T (ENA+/DIR+/PUL+) : plus alimenté → aucune opto d'entrée du
+    DM556T ne peut conduire → DM556T sourd à tous les signaux → moteur immobile, garanti
+    par construction, indépendamment de ce que fait le 74HC00.
+  - 74HC00 lui-même : toujours sous tension via son DC-DC indépendant. Lit DIR_signal qui
+    est désormais flottant (côté DM556T plus de pull-up effectif puisque l'anode commune
+    est morte) → peut être interprété 0 ou 1 → ENA- peut osciller. Aucun impact : le
+    DM556T n'écoute plus rien.
+  - SW_OPEN / SW_CLOSED : toujours lus correctement par le 74HC00 (R1/R2 sont sur le
+    +5 V du DC-DC, indépendant).
+
+  C'est cohérent et sans danger : sans alim module = pas de moteur, quoi que dise ENA-.
+  La sécurité hardware n'est utile QUE quand le module PWM est actif (= cycle en cours).
+  Le Shelly POWER reste la coupure d'urgence absolue (= ceinture) ; le 74HC00 ajoute la
+  protection en cours de cycle (= bretelles).
+
+  BOM totale (récap)
+
+  ┌────────┬───────────────────────────────────────────────┬──────────┬──────────┐
+  │  Réf   │                  Composant                    │ Quantité │   Coût   │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ U1     │ 74HC00N (quad NAND CMOS, DIP-14)              │ 1        │ ~0,30 €  │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ R1, R2 │ Résistance 10 kΩ 1/4 W                        │ 2        │ ~0,05 €  │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ C1     │ Condensateur céramique 100 nF                 │ 1        │ ~0,05 €  │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ —      │ Convertisseur DC-DC 5 V                       │ 1        │ déjà     │
+  │        │ (alim 220 V permanente, indépendant du Shelly)│          │ dispo    │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ —      │ Support DIP-14 (conseillé)                    │ 1        │ ~0,30 €  │
+  ├────────┼───────────────────────────────────────────────┼──────────┼──────────┤
+  │ —      │ Plaque pastillée 3×4 cm                       │ 1        │ ~0,50 €  │
+  └────────┴───────────────────────────────────────────────┴──────────┴──────────┘
+
+  ~1,20 € de pièces neuves, soudure 20-30 min sur plaque pastillée.
+
+  Protocole de test (avant montage final)
+
+  1. Bench sans coupole : alimenter le 74HC00 en +5 V depuis le DC-DC (ou un labo bench),
+     simuler DIR_signal / SW_OPEN / SW_CLOSED avec des fils + R1/R2 (10 kΩ vers +5 V),
+     mesurer ENA-_out au voltmètre. Valider les 6 cas du tableau de vérité. (15 min)
+  2. Installation à blanc : monter le module dans le boîtier cimier, Shelly POWER coupé
+     mais DC-DC sous tension (= 74HC00 actif). Actionner manuellement les switches et
+     le Shelly DIR via UI Shelly app, mesurer ENA- au voltmètre. (15 min)
+  3. Premier cycle avec coupole : Shelly POWER on, cycle ouverture complet. Vérifier au
+     multimètre que ENA- bascule à HIGH au moment du contact butée OPEN, et passe LOW
+     dès qu'on commute Shelly DIR vers descente. (15 min)
+  4. Test de robustesse : forcer un « faux trigger » sur GP2 du Pico W (par ex. en
+     débranchant momentanément le câble switch côté Pico) pendant un cycle d'ouverture
+     → vérifier que ça ne déclenche RIEN côté hardware : le 74HC00 lit SW_OPEN via son
+     propre pull-up R1, indépendant du Pico. C'est précisément ce qui élimine la classe
+     du bug parasitage du 30/05. (10 min)
+
+  Si les 4 tests passent, on peut décommissionner la logique « stop on switch » côté
+  cimier_service au milestone suivant. La lecture des switches par le Pico W reste
+  en place mais uniquement pour l'affichage UI dashboard (rôle informatif, plus aucun
+  rôle sécurité). On peut aussi la retirer complètement si on veut simplifier — au choix.
