@@ -11,6 +11,51 @@
 
   Schéma final prêt à câbler ci-dessous.
 
+  Principe : deux niveaux d'autorisation en série (ceinture + bretelles)
+
+  Pour que le moteur tourne, il faut que DEUX éléments disent oui simultanément :
+
+  1. Shelly POWER = autorisation niveau 1 (humain ou software décide « j'allume
+     tout ou pas »). Coupe l'alim 220 V du module entier. Si OFF → rien ne peut
+     bouger, indépendamment de l'état d'ENA-.
+
+  2. 74HC00 sur ENA- = autorisation niveau 2 (logique câblée combinatoire,
+     instantanée, infalsifiable, sans soft ni firmware). Décide « OK on laisse
+     passer le courant moteur ou pas », en fonction des fins de course et du
+     sens demandé. Actif uniquement quand POWER est ON.
+
+  Chaîne de décision :
+
+     Shelly POWER (interrupteur ON/OFF du module)
+            │
+            ├── OFF → module mort → +5 V anode DM556T coupé → DM556T sourd
+            │         → moteur immobile, point. (ENA- ignoré, pas de courant
+            │            à couper de toute façon)
+            │
+            └── ON  → module alimenté → envoie PUL-, DIR-, etc. vers DM556T
+                                                       │
+                                                       ▼
+                                          74HC00 calcule ENA- en parallèle :
+                                            • butée + sens conflictuel → ENA- HIGH
+                                              → DM556T coupe le courant moteur
+                                            • sinon                    → ENA- LOW
+                                              → DM556T laisse passer les pas
+
+  Note vocabulaire : le 74HC00 n'est PAS un processeur ni un microcontrôleur.
+  C'est une simple porte logique combinatoire CMOS (4 NAND dans un boîtier
+  DIP-14) — pas de CPU, pas de programme, pas de firmware, pas de soft. Juste
+  3 entrées (DIR_signal, SW_OPEN, SW_CLOSED) qui donnent 1 sortie (ENA-) selon
+  la table de vérité, en quelques nanosecondes. Aucune mise à jour soft ne
+  peut le « casser », contrairement à cimier_service.
+
+  Cas critique que cette protection verrouille : POWER est ON (cycle en cours),
+  le module envoie joyeusement des STEP, mais la butée OPEN est atteinte et le
+  sens reste « montée » (= ce qui s'est passé le 30/05 quand cimier_service a
+  foiré et n'a pas commandé l'arrêt assez vite). Avec le 74HC00, ENA- passe
+  HIGH en < 1 µs → DM556T coupe les bobines → moteur arrêté SANS intervention
+  soft. Le module PWM peut continuer à envoyer des STEP, ils sont simplement
+  ignorés tant que la butée est enfoncée dans le mauvais sens.
+
   Schéma définitif — câblage broche à broche
 
   Pinout 74HC00N (DIP-14, quad NAND CMOS)
