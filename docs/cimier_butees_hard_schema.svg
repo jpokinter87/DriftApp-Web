@@ -1,0 +1,376 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 950" font-family="monospace">
+
+  <!-- Styles -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#333"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#c41e3a"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1e4a9e"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="950" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="700" y="35" text-anchor="middle" font-size="22" font-weight="bold" fill="#222">
+    Sécurité butées hardware cimier — schéma de câblage (74HC00)
+  </text>
+  <text x="700" y="58" text-anchor="middle" font-size="13" fill="#555">
+    DriftApp v6.5.x — sortie ENA- du DM556T pilotée par logique combinatoire
+  </text>
+
+  <!-- Légende couleurs -->
+  <g transform="translate(40, 80)">
+    <rect width="200" height="110" fill="white" stroke="#999" stroke-width="1"/>
+    <text x="100" y="20" text-anchor="middle" font-size="12" font-weight="bold">Légende</text>
+    <line x1="15" y1="35" x2="40" y2="35" stroke="#c41e3a" stroke-width="2.5"/>
+    <text x="48" y="39" font-size="11">+5V (anode commune)</text>
+    <line x1="15" y1="52" x2="40" y2="52" stroke="#1e4a9e" stroke-width="2.5"/>
+    <text x="48" y="56" font-size="11">GND</text>
+    <line x1="15" y1="69" x2="40" y2="69" stroke="#d68910" stroke-width="2.5"/>
+    <text x="48" y="73" font-size="11">signal DIR</text>
+    <line x1="15" y1="86" x2="40" y2="86" stroke="#1e8449" stroke-width="2.5"/>
+    <text x="48" y="90" font-size="11">signaux switches</text>
+    <line x1="15" y1="103" x2="40" y2="103" stroke="#333" stroke-width="2.5"/>
+    <text x="48" y="107" font-size="11">logique interne / sortie</text>
+  </g>
+
+  <!-- ====================== Source signals (gauche) ====================== -->
+
+  <!-- DIR signal source (Shelly DIR -> DM556T DIR-) -->
+  <g transform="translate(60, 250)">
+    <rect width="220" height="80" fill="#fff3e0" stroke="#d68910" stroke-width="2" rx="5"/>
+    <text x="110" y="22" text-anchor="middle" font-size="12" font-weight="bold">Ligne DIR-</text>
+    <text x="110" y="40" text-anchor="middle" font-size="10">aval du Shelly DIR,</text>
+    <text x="110" y="55" text-anchor="middle" font-size="10">amont de DM556T.DIR-</text>
+    <text x="110" y="72" text-anchor="middle" font-size="10" fill="#666">
+      0 = montée, 1 = descente
+    </text>
+  </g>
+
+  <!-- Switch OPEN -->
+  <g transform="translate(60, 400)">
+    <rect width="220" height="100" fill="#e8f5e9" stroke="#1e8449" stroke-width="2" rx="5"/>
+    <text x="110" y="22" text-anchor="middle" font-size="12" font-weight="bold">SWITCH_OPEN (NC)</text>
+    <text x="110" y="40" text-anchor="middle" font-size="10">existant, vers Pico GP14</text>
+    <line x1="20" y1="60" x2="80" y2="60" stroke="#1e4a9e" stroke-width="2"/>
+    <text x="20" y="75" font-size="10" fill="#1e4a9e">GND</text>
+    <!-- contact NC dessin -->
+    <line x1="80" y1="60" x2="110" y2="60" stroke="#1e8449" stroke-width="2"/>
+    <line x1="110" y1="60" x2="135" y2="55" stroke="#1e8449" stroke-width="2"/>
+    <circle cx="110" cy="60" r="2.5" fill="#1e8449"/>
+    <circle cx="135" cy="55" r="2.5" fill="#1e8449"/>
+    <line x1="135" y1="60" x2="200" y2="60" stroke="#1e8449" stroke-width="2"/>
+    <text x="172" y="55" font-size="9" fill="#666">SW_O</text>
+    <text x="110" y="92" text-anchor="middle" font-size="10" fill="#666">
+      ouvre à butée haute
+    </text>
+  </g>
+
+  <!-- Switch CLOSED -->
+  <g transform="translate(60, 560)">
+    <rect width="220" height="100" fill="#e8f5e9" stroke="#1e8449" stroke-width="2" rx="5"/>
+    <text x="110" y="22" text-anchor="middle" font-size="12" font-weight="bold">SWITCH_CLOSED (NC)</text>
+    <text x="110" y="40" text-anchor="middle" font-size="10">existant, vers Pico GP15</text>
+    <line x1="20" y1="60" x2="80" y2="60" stroke="#1e4a9e" stroke-width="2"/>
+    <text x="20" y="75" font-size="10" fill="#1e4a9e">GND</text>
+    <line x1="80" y1="60" x2="110" y2="60" stroke="#1e8449" stroke-width="2"/>
+    <line x1="110" y1="60" x2="135" y2="55" stroke="#1e8449" stroke-width="2"/>
+    <circle cx="110" cy="60" r="2.5" fill="#1e8449"/>
+    <circle cx="135" cy="55" r="2.5" fill="#1e8449"/>
+    <line x1="135" y1="60" x2="200" y2="60" stroke="#1e8449" stroke-width="2"/>
+    <text x="172" y="55" font-size="9" fill="#666">SW_C</text>
+    <text x="110" y="92" text-anchor="middle" font-size="10" fill="#666">
+      ouvre à butée basse
+    </text>
+  </g>
+
+  <!-- Pull-up R1 -->
+  <g transform="translate(330, 410)">
+    <line x1="0" y1="0" x2="0" y2="-110" stroke="#c41e3a" stroke-width="2"/>
+    <rect x="-12" y="-90" width="24" height="40" fill="white" stroke="#c41e3a" stroke-width="1.5"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="10">R1</text>
+    <text x="0" y="-52" text-anchor="middle" font-size="9">10k</text>
+    <text x="-30" y="-100" font-size="10" fill="#c41e3a">+5V</text>
+    <line x1="0" y1="0" x2="-50" y2="0" stroke="#1e8449" stroke-width="2"/>
+    <text x="-25" y="-5" font-size="9" fill="#666">SW_OPEN</text>
+  </g>
+
+  <!-- Pull-up R2 -->
+  <g transform="translate(330, 570)">
+    <line x1="0" y1="0" x2="0" y2="-110" stroke="#c41e3a" stroke-width="2"/>
+    <rect x="-12" y="-90" width="24" height="40" fill="white" stroke="#c41e3a" stroke-width="1.5"/>
+    <text x="0" y="-65" text-anchor="middle" font-size="10">R2</text>
+    <text x="0" y="-52" text-anchor="middle" font-size="9">10k</text>
+    <text x="-30" y="-100" font-size="10" fill="#c41e3a">+5V</text>
+    <line x1="0" y1="0" x2="-50" y2="0" stroke="#1e8449" stroke-width="2"/>
+    <text x="-25" y="-5" font-size="9" fill="#666">SW_CLOSED</text>
+  </g>
+
+  <!-- Lignes DIR/SW vers 74HC00 -->
+  <!-- DIR signal vers pin 1 et pin 2 (U1A) et pin 9 (U1C) -->
+  <path d="M 280 290 L 360 290 L 360 380 L 600 380" stroke="#d68910" stroke-width="2" fill="none"/>
+  <circle cx="360" cy="380" r="3" fill="#d68910"/>
+  <text x="400" y="375" font-size="10" fill="#d68910" font-weight="bold">DIR_signal</text>
+
+  <!-- DIR branch to pin 1 -->
+  <line x1="600" y1="380" x2="600" y2="370" stroke="#d68910" stroke-width="2"/>
+  <text x="605" y="367" font-size="9" fill="#d68910">→ pin 1 (U1A-A)</text>
+
+  <!-- DIR branch to pin 2 (court-circuit avec pin 1) -->
+  <path d="M 600 380 L 700 380 L 700 392" stroke="#d68910" stroke-width="2" fill="none"/>
+  <circle cx="600" cy="380" r="3" fill="#d68910"/>
+  <text x="705" y="389" font-size="9" fill="#d68910">→ pin 2 (U1A-B, court-circuité)</text>
+
+  <!-- DIR branch to pin 9 (U1C-A) -->
+  <path d="M 360 380 L 360 700 L 900 700 L 900 542" stroke="#d68910" stroke-width="2" fill="none"/>
+  <text x="660" y="715" font-size="9" fill="#d68910">→ pin 9 (U1C-A)</text>
+
+  <!-- SW_OPEN vers pin 5 -->
+  <path d="M 280 460 L 600 460 L 600 460" stroke="#1e8449" stroke-width="2" fill="none"/>
+  <text x="450" y="455" font-size="10" fill="#1e8449" font-weight="bold">SW_OPEN</text>
+  <circle cx="330" cy="460" r="3" fill="#1e8449"/>
+  <line x1="600" y1="460" x2="600" y2="438" stroke="#1e8449" stroke-width="2"/>
+  <text x="605" y="447" font-size="9" fill="#1e8449">→ pin 5 (U1B-B)</text>
+
+  <!-- SW_CLOSED vers pin 10 -->
+  <path d="M 280 620 L 900 620 L 900 588" stroke="#1e8449" stroke-width="2" fill="none"/>
+  <text x="500" y="615" font-size="10" fill="#1e8449" font-weight="bold">SW_CLOSED</text>
+  <circle cx="330" cy="620" r="3" fill="#1e8449"/>
+  <text x="905" y="585" font-size="9" fill="#1e8449">→ pin 10 (U1C-B)</text>
+
+  <!-- ====================== 74HC00 IC (centre) ====================== -->
+
+  <g transform="translate(560, 380)">
+    <!-- Boîtier IC -->
+    <rect x="0" y="0" width="380" height="200" fill="white" stroke="#333" stroke-width="2"/>
+    <text x="190" y="105" text-anchor="middle" font-size="18" font-weight="bold">74HC00</text>
+    <text x="190" y="125" text-anchor="middle" font-size="11" fill="#666">quad NAND CMOS</text>
+
+    <!-- Encoche supérieure -->
+    <path d="M 175 0 L 175 8 L 205 8 L 205 0" fill="white" stroke="#333" stroke-width="2"/>
+
+    <!-- Pins du haut (1-7) -->
+    <g font-size="10">
+      <!-- Pin 1 -->
+      <line x1="40" y1="0" x2="40" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="40" y="-16" text-anchor="middle" font-size="9">1</text>
+      <text x="48" y="18" font-size="9" fill="#666">1A</text>
+      <!-- Pin 2 -->
+      <line x1="80" y1="0" x2="80" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="80" y="-16" text-anchor="middle" font-size="9">2</text>
+      <text x="88" y="18" font-size="9" fill="#666">1B</text>
+      <!-- Pin 3 (sortie U1A = NOT_DIR) -->
+      <line x1="120" y1="0" x2="120" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="120" y="-16" text-anchor="middle" font-size="9">3</text>
+      <text x="128" y="18" font-size="9" fill="#666">1Y</text>
+      <!-- Pin 4 -->
+      <line x1="160" y1="0" x2="160" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="160" y="-16" text-anchor="middle" font-size="9">4</text>
+      <text x="168" y="18" font-size="9" fill="#666">2A</text>
+      <!-- Pin 5 -->
+      <line x1="220" y1="0" x2="220" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="220" y="-16" text-anchor="middle" font-size="9">5</text>
+      <text x="200" y="18" font-size="9" fill="#666">2B</text>
+      <!-- Pin 6 (sortie U1B = OPEN_OK) -->
+      <line x1="260" y1="0" x2="260" y2="-12" stroke="#333" stroke-width="2"/>
+      <text x="260" y="-16" text-anchor="middle" font-size="9">6</text>
+      <text x="240" y="18" font-size="9" fill="#666">2Y</text>
+      <!-- Pin 7 (GND) -->
+      <line x1="340" y1="0" x2="340" y2="-12" stroke="#1e4a9e" stroke-width="2"/>
+      <text x="340" y="-16" text-anchor="middle" font-size="9" fill="#1e4a9e">7</text>
+      <text x="320" y="18" font-size="9" fill="#1e4a9e">GND</text>
+    </g>
+
+    <!-- Pins du bas (8-14) -->
+    <g font-size="10">
+      <!-- Pin 8 (sortie U1C = CLOSE_OK) -->
+      <line x1="340" y1="200" x2="340" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="340" y="225" text-anchor="middle" font-size="9">8</text>
+      <text x="320" y="190" font-size="9" fill="#666">3Y</text>
+      <!-- Pin 9 -->
+      <line x1="300" y1="200" x2="300" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="300" y="225" text-anchor="middle" font-size="9">9</text>
+      <text x="280" y="190" font-size="9" fill="#666">3A</text>
+      <!-- Pin 10 -->
+      <line x1="260" y1="200" x2="260" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="260" y="225" text-anchor="middle" font-size="9">10</text>
+      <text x="240" y="190" font-size="9" fill="#666">3B</text>
+      <!-- Pin 11 (sortie U1D = ENA-_out) -->
+      <line x1="220" y1="200" x2="220" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="220" y="225" text-anchor="middle" font-size="9">11</text>
+      <text x="200" y="190" font-size="9" fill="#666">4Y</text>
+      <!-- Pin 12 -->
+      <line x1="180" y1="200" x2="180" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="180" y="225" text-anchor="middle" font-size="9">12</text>
+      <text x="160" y="190" font-size="9" fill="#666">4A</text>
+      <!-- Pin 13 -->
+      <line x1="140" y1="200" x2="140" y2="212" stroke="#333" stroke-width="2"/>
+      <text x="140" y="225" text-anchor="middle" font-size="9">13</text>
+      <text x="120" y="190" font-size="9" fill="#666">4B</text>
+      <!-- Pin 14 (VCC) -->
+      <line x1="40" y1="200" x2="40" y2="212" stroke="#c41e3a" stroke-width="2"/>
+      <text x="40" y="225" text-anchor="middle" font-size="9" fill="#c41e3a">14</text>
+      <text x="20" y="190" font-size="9" fill="#c41e3a">VCC</text>
+    </g>
+
+    <!-- Identification des 4 portes -->
+    <g font-size="9" fill="#999">
+      <text x="80" y="70" text-anchor="middle">U1A</text>
+      <text x="80" y="82" text-anchor="middle">(inv. DIR)</text>
+      <text x="220" y="70" text-anchor="middle">U1B</text>
+      <text x="220" y="82" text-anchor="middle">(OPEN_OK)</text>
+      <text x="280" y="155" text-anchor="middle">U1C</text>
+      <text x="280" y="167" text-anchor="middle">(CLOSE_OK)</text>
+      <text x="160" y="155" text-anchor="middle">U1D</text>
+      <text x="160" y="167" text-anchor="middle">(ENA-_out)</text>
+    </g>
+  </g>
+
+  <!-- ====================== VCC / GND / Découplage ====================== -->
+
+  <!-- VCC rail (haut) -->
+  <line x1="60" y1="200" x2="1340" y2="200" stroke="#c41e3a" stroke-width="2.5"/>
+  <text x="700" y="195" text-anchor="middle" font-size="11" fill="#c41e3a" font-weight="bold">
+    +5V (anode commune DM556T : broches DIR+ / PUL+ / ENA+)
+  </text>
+
+  <!-- VCC vers pin 14 -->
+  <line x1="600" y1="200" x2="600" y2="592" stroke="#c41e3a" stroke-width="2"/>
+  <circle cx="600" cy="200" r="3" fill="#c41e3a"/>
+
+  <!-- GND rail (bas) -->
+  <line x1="60" y1="800" x2="1340" y2="800" stroke="#1e4a9e" stroke-width="2.5"/>
+  <text x="700" y="820" text-anchor="middle" font-size="11" fill="#1e4a9e" font-weight="bold">
+    GND (commun DM556T / module PWM / Pico W)
+  </text>
+
+  <!-- GND vers pin 7 -->
+  <line x1="900" y1="380" x2="900" y2="800" stroke="#1e4a9e" stroke-width="2"/>
+  <circle cx="900" cy="800" r="3" fill="#1e4a9e"/>
+
+  <!-- C1 découplage entre pin 14 et pin 7 -->
+  <g transform="translate(630, 250)">
+    <text x="0" y="0" font-size="10" font-weight="bold" fill="#7b2cbf">C1 = 100 nF</text>
+    <text x="0" y="13" font-size="9" fill="#7b2cbf">céramique, entre</text>
+    <text x="0" y="25" font-size="9" fill="#7b2cbf">pin 14 et pin 7,</text>
+    <text x="0" y="37" font-size="9" fill="#7b2cbf">au plus court</text>
+    <line x1="-25" y1="-5" x2="-50" y2="-50" stroke="#7b2cbf" stroke-width="1.5" stroke-dasharray="3,3"/>
+  </g>
+
+  <!-- Liaison court-circuit interne pin 1 ↔ pin 2 -->
+  <path d="M 600 368 Q 650 360 700 368" stroke="#d68910" stroke-width="1.5" fill="none" stroke-dasharray="4,2"/>
+  <text x="650" y="350" text-anchor="middle" font-size="9" fill="#d68910" font-style="italic">
+    court-circuit (inverseur)
+  </text>
+
+  <!-- Connexion interne pin 3 → pin 4 (NOT_DIR vers U1B-A) -->
+  <path d="M 680 368 Q 700 350 720 360 L 720 392" stroke="#333" stroke-width="1.5" fill="none"/>
+  <text x="690" y="345" font-size="9" fill="#666">NOT_DIR (3→4)</text>
+
+  <!-- Connexion interne pin 6 (OPEN_OK) → pin 12 (U1D-A) -->
+  <path d="M 820 368 L 820 360 L 1020 360 L 1020 615 L 740 615 L 740 592" stroke="#333" stroke-width="1.5" fill="none"/>
+  <text x="900" y="355" font-size="9" fill="#666">OPEN_OK (6 → 12)</text>
+
+  <!-- Connexion interne pin 8 (CLOSE_OK) → pin 13 (U1D-B) -->
+  <path d="M 900 592 L 900 615 L 700 615 L 700 592" stroke="#333" stroke-width="1.5" fill="none"/>
+  <text x="800" y="635" text-anchor="middle" font-size="9" fill="#666">CLOSE_OK (8 → 13)</text>
+
+  <!-- ====================== Sortie ENA- vers DM556T ====================== -->
+
+  <!-- Sortie pin 11 → DM556T ENA- -->
+  <path d="M 780 592 L 780 720 L 1230 720" stroke="#333" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="1000" y="715" font-size="11" font-weight="bold">ENA-_out (pin 11)</text>
+
+  <!-- Bloc DM556T -->
+  <g transform="translate(1140, 300)">
+    <rect width="220" height="200" fill="#fce4ec" stroke="#c41e3a" stroke-width="2" rx="5"/>
+    <text x="110" y="22" text-anchor="middle" font-size="14" font-weight="bold">DM556T</text>
+    <text x="110" y="40" text-anchor="middle" font-size="10">driver pas-à-pas</text>
+    <text x="110" y="55" text-anchor="middle" font-size="10">(mode anode commune)</text>
+
+    <!-- Bornes -->
+    <line x1="10" y1="85" x2="40" y2="85" stroke="#c41e3a" stroke-width="2"/>
+    <text x="45" y="89" font-size="10" fill="#c41e3a">ENA+, DIR+, PUL+ (anode commune)</text>
+
+    <line x1="10" y1="110" x2="40" y2="110" stroke="#333" stroke-width="2"/>
+    <text x="45" y="114" font-size="10">ENA- ← depuis pin 11 (74HC00)</text>
+
+    <line x1="10" y1="135" x2="40" y2="135" stroke="#d68910" stroke-width="2"/>
+    <text x="45" y="139" font-size="10" fill="#d68910">DIR- ← aval Shelly DIR</text>
+
+    <line x1="10" y1="160" x2="40" y2="160" stroke="#666" stroke-width="2"/>
+    <text x="45" y="164" font-size="10" fill="#666">PUL- ← module PWM (inchangé)</text>
+
+    <line x1="10" y1="185" x2="40" y2="185" stroke="#1e4a9e" stroke-width="2"/>
+    <text x="45" y="189" font-size="10" fill="#1e4a9e">GND</text>
+  </g>
+
+  <!-- Flèche d'entrée ENA- -->
+  <line x1="1230" y1="720" x2="1230" y2="410" stroke="#333" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ====================== Table de vérité (bas) ====================== -->
+
+  <g transform="translate(60, 850)">
+    <text x="0" y="0" font-size="13" font-weight="bold">Table de vérité (sortie ENA- pilote l'enable du DM556T)</text>
+    <g font-size="11" transform="translate(0, 15)">
+      <rect x="0" y="0" width="800" height="20" fill="#e0e0e0"/>
+      <text x="8" y="14">Scénario</text>
+      <text x="270" y="14">DIR-</text>
+      <text x="320" y="14">SW_O</text>
+      <text x="370" y="14">SW_C</text>
+      <text x="430" y="14">NOT_DIR</text>
+      <text x="510" y="14">OPEN_OK</text>
+      <text x="590" y="14">CLOSE_OK</text>
+      <text x="680" y="14">ENA-</text>
+      <text x="730" y="14">Moteur</text>
+
+      <text x="8" y="35">Repos montée</text>
+      <text x="270" y="35">0</text><text x="320" y="35">0</text><text x="370" y="35">0</text>
+      <text x="430" y="35">1</text><text x="510" y="35">1</text><text x="590" y="35">1</text>
+      <text x="680" y="35" font-weight="bold" fill="#1e8449">0</text>
+      <text x="730" y="35">tourne</text>
+
+      <text x="8" y="50">Repos descente</text>
+      <text x="270" y="50">1</text><text x="320" y="50">0</text><text x="370" y="50">0</text>
+      <text x="430" y="50">0</text><text x="510" y="50">1</text><text x="590" y="50">1</text>
+      <text x="680" y="50" font-weight="bold" fill="#1e8449">0</text>
+      <text x="730" y="50">tourne</text>
+
+      <text x="8" y="65">Butée OPEN + montée</text>
+      <text x="270" y="65">0</text><text x="320" y="65">1</text><text x="370" y="65">0</text>
+      <text x="430" y="65">1</text><text x="510" y="65">0</text><text x="590" y="65">1</text>
+      <text x="680" y="65" font-weight="bold" fill="#c41e3a">1</text>
+      <text x="730" y="65">STOP</text>
+
+      <text x="8" y="80">Butée OPEN + descente (libère)</text>
+      <text x="270" y="80">1</text><text x="320" y="80">1</text><text x="370" y="80">0</text>
+      <text x="430" y="80">0</text><text x="510" y="80">1</text><text x="590" y="80">1</text>
+      <text x="680" y="80" font-weight="bold" fill="#1e8449">0</text>
+      <text x="730" y="80">tourne</text>
+
+      <text x="8" y="95">Butée CLOSED + descente</text>
+      <text x="270" y="95">1</text><text x="320" y="95">0</text><text x="370" y="95">1</text>
+      <text x="430" y="95">0</text><text x="510" y="95">1</text><text x="590" y="95">0</text>
+      <text x="680" y="95" font-weight="bold" fill="#c41e3a">1</text>
+      <text x="730" y="95">STOP</text>
+    </g>
+  </g>
+
+  <!-- Note BOM -->
+  <g transform="translate(940, 95)">
+    <rect width="420" height="95" fill="white" stroke="#999" stroke-width="1"/>
+    <text x="210" y="20" text-anchor="middle" font-size="12" font-weight="bold">BOM</text>
+    <text x="15" y="38" font-size="11">• 1× 74HC00N (quad NAND CMOS, DIP-14)</text>
+    <text x="15" y="54" font-size="11">• 2× résistances 10 kΩ 1/4 W (R1, R2 pull-up)</text>
+    <text x="15" y="70" font-size="11">• 1× condensateur céramique 100 nF (C1 découplage)</text>
+    <text x="15" y="86" font-size="11">• support DIP-14, plaque pastillée 3×4 cm</text>
+  </g>
+
+</svg>
