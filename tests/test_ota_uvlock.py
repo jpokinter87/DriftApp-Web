@@ -132,3 +132,54 @@ def test_update_script_normalizes_uvlock_before_modified_scan():
     assert idx_norm < idx_modified, (
         "uv.lock doit être normalisé AVANT le calcul de MODIFIED_FILES/stash"
     )
+
+
+# --------------------------------------------------------------------------
+# Bug terrain 2026-06-01 : `git stash push --include-untracked=false` est une
+# syntaxe git INVALIDE (l'option booléenne n'accepte aucune valeur). Le stash
+# échouait donc à chaque OTA depuis v5.8.0 → fallback « pull sur arbre sale » →
+# avortement dès qu'un fichier tracké modifié localement était aussi changé
+# upstream (sur le terrain : scripts/update_driftapp.sh copié à la main).
+# --------------------------------------------------------------------------
+
+
+def test_invalid_stash_flag_fails_and_blocks_pull(repo_pair: Path):
+    """REPRODUIT LE BUG : le flag invalide fait échouer le stash, et le pull
+    sur arbre sale avorte sur le fichier tracké modifié localement."""
+    work = repo_pair
+    # app.py est modifié upstream (C1) ET localement → collision si non stashé
+    (work / "app.py").write_text("print('LOCAL edit')\n")
+
+    bad = _git(["stash", "push", "--include-untracked=false", "-m", "x"], work)
+    assert bad.returncode != 0, "le flag invalide doit faire échouer le stash"
+    assert "include-untracked" in (bad.stderr + bad.stdout)
+
+    # stash mort → pull --ff-only sur arbre sale → blocage nommant app.py
+    res = _git(["pull", "--ff-only", "origin", "main"], work)
+    assert res.returncode != 0
+    assert "app.py" in (res.stderr + res.stdout)
+
+
+def test_valid_stash_unblocks_pull(repo_pair: Path):
+    """VALIDE LE FIX : `git stash push` seul (untracked exclus par défaut)
+    écarte la modif locale → le pull fast-forward passe."""
+    work = repo_pair
+    (work / "app.py").write_text("print('LOCAL edit')\n")
+
+    good = _git(["stash", "push", "-m", "x"], work)
+    assert good.returncode == 0, good.stderr
+
+    res = _git(["pull", "--ff-only", "origin", "main"], work)
+    assert res.returncode == 0, res.stderr
+    assert (work / "app.py").read_text() == "print('c1')\n"
+
+
+def test_update_script_stash_invocation_is_valid():
+    """GUARD : le script ne doit jamais utiliser `--include-untracked=false`
+    (syntaxe invalide). `git stash push` exclut déjà les untracked par défaut."""
+    content = UPDATE_SCRIPT.read_text()
+    assert "--include-untracked=false" not in content, (
+        "`git stash push --include-untracked=false` est invalide → stash échoue "
+        "silencieusement (bug terrain 2026-06-01) ; utiliser `git stash push` seul"
+    )
+    assert "git stash push" in content, "le script doit toujours stasher les modifs locales"

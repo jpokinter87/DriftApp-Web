@@ -220,8 +220,13 @@ if [ -n "$MODIFIED_FILES" ]; then
         fi
     done <<< "$MODIFIED_FILES"
 
+    # `git stash push` (sans -u/--include-untracked) ne stashe QUE les fichiers
+    # trackés modifiés et laisse les untracked en place — exactement l'intention.
+    # NE PAS suffixer --include-untracked d'une valeur : c'est un booléen, git
+    # refuse la valeur, le stash échoue et le pull se fait sur arbre sale (cause
+    # racine du blocage OTA depuis v5.8.0 — retour terrain 2026-06-01).
     log "Création du stash..."
-    if run_as_owner git stash push --include-untracked=false \
+    if run_as_owner git stash push \
         -m "driftapp-auto-$TIMESTAMP" >> "$LOG_FILE" 2>&1; then
         STASH_APPLIED=true
         log "Stash créé"
