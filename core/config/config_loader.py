@@ -196,6 +196,33 @@ class MotorShellyConfig:
 
 
 @dataclass
+class SwitchReaderConfig:
+    """Configuration de la lecture des fins de course cimier (Shelly Uni+, V3).
+
+    Remplace le Pico W capteur. Les 2 microswitches Haut/Bas sont lus via les
+    2 entrées du Shelly Uni+ (RPC Gen 2 ``Input.GetStatus``).
+
+    type:
+      - "shelly_uni" → lit via ``core.hardware.shelly_switch_reader.ShellySwitchReader``
+      - "noop"       → reader inerte (dev/tests sans hardware)
+
+    ``open_input_id`` / ``closed_input_id`` : index d'entrée Shelly Uni+ pour
+    les microswitches HAUT et BAS. ``invert`` : True → butée atteinte = input
+    False (« fermé », convention synoptique V3, à valider au banc).
+
+    IP réelle uniquement dans ``data/config.json`` (terrain) — code Python neutre.
+    """
+
+    type: str = "noop"
+    host: str = ""
+    api: str = "rpc"
+    open_input_id: int = 1
+    closed_input_id: int = 0
+    invert: bool = True
+    timeout_s: float = 3.0
+
+
+@dataclass
 class WeatherProviderConfig:
     """Configuration du provider météo cimier (v6.0 Phase 2).
 
@@ -276,14 +303,12 @@ class CimierConfig:
     """
 
     enabled: bool = False
-    host: str = ""
-    port: int = 80
-    invert_direction: bool = False
     cycle_timeout_s: float = 90.0
-    boot_poll_timeout_s: float = 30.0
+    boot_poll_timeout_s: float = 30.0  # legacy (boot Pico) — dette, non utilisé en V3
     post_off_quiet_s: float = 10.0
     shelly_settle_s: float = 2.0  # attente appairage WiFi Shelly MOT/UPDN (synoptique "à mesurer")
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
+    switch_reader: SwitchReaderConfig = field(default_factory=SwitchReaderConfig)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
@@ -561,16 +586,26 @@ class ConfigLoader:
         ms = c.get("motor_shelly", {}) if isinstance(c, dict) else {}
         if not isinstance(ms, dict):
             ms = {}
+        sr = c.get("switch_reader", {}) if isinstance(c, dict) else {}
+        if not isinstance(sr, dict):
+            sr = {}
+        sr_defaults = SwitchReaderConfig()
         return CimierConfig(
             enabled=bool(c.get("enabled", defaults.enabled)),
-            host=str(c.get("host", defaults.host)),
-            port=int(c.get("port", defaults.port)),
-            invert_direction=bool(c.get("invert_direction", defaults.invert_direction)),
             cycle_timeout_s=float(c.get("cycle_timeout_s", defaults.cycle_timeout_s)),
             boot_poll_timeout_s=float(c.get("boot_poll_timeout_s", defaults.boot_poll_timeout_s)),
             post_off_quiet_s=float(c.get("post_off_quiet_s", defaults.post_off_quiet_s)),
             shelly_settle_s=float(c.get("shelly_settle_s", defaults.shelly_settle_s)),
             verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
+            switch_reader=SwitchReaderConfig(
+                type=str(sr.get("type", sr_defaults.type)),
+                host=str(sr.get("host", sr_defaults.host)),
+                api=str(sr.get("api", sr_defaults.api)),
+                open_input_id=int(sr.get("open_input_id", sr_defaults.open_input_id)),
+                closed_input_id=int(sr.get("closed_input_id", sr_defaults.closed_input_id)),
+                invert=bool(sr.get("invert", sr_defaults.invert)),
+                timeout_s=float(sr.get("timeout_s", sr_defaults.timeout_s)),
+            ),
             power_switch=PowerSwitchConfig(
                 type=str(ps.get("type", ps_defaults.type)),
                 host=str(ps.get("host", ps_defaults.host)),

@@ -32,6 +32,7 @@ from core.config.config_loader import (
     PowerSwitchConfig,
     SerialConfig,
     SiteConfig,
+    SwitchReaderConfig,
     ThresholdsConfig,
     TrackingConfig,
     load_config,
@@ -394,9 +395,6 @@ class TestCimierConfig:
         config = ConfigLoader(config_file).load()
         assert isinstance(config.cimier, CimierConfig)
         assert config.cimier.enabled is False
-        assert config.cimier.host == ""
-        assert config.cimier.port == 80
-        assert config.cimier.invert_direction is False
         assert config.cimier.cycle_timeout_s == 90.0
         assert config.cimier.boot_poll_timeout_s == 30.0
         assert config.cimier.post_off_quiet_s == 10.0
@@ -410,9 +408,6 @@ class TestCimierConfig:
         cfg = dict(sample_config_dict)
         cfg["cimier"] = {
             "enabled": True,
-            "host": "10.0.0.42",
-            "port": 8080,
-            "invert_direction": True,
             "cycle_timeout_s": 60.0,
             "boot_poll_timeout_s": 20.0,
             "post_off_quiet_s": 5.0,
@@ -426,9 +421,6 @@ class TestCimierConfig:
         config_file.write_text(json.dumps(cfg))
         config = ConfigLoader(config_file).load()
         assert config.cimier.enabled is True
-        assert config.cimier.host == "10.0.0.42"
-        assert config.cimier.port == 8080
-        assert config.cimier.invert_direction is True
         assert config.cimier.cycle_timeout_s == 60.0
         assert config.cimier.boot_poll_timeout_s == 20.0
         assert config.cimier.post_off_quiet_s == 5.0
@@ -439,22 +431,19 @@ class TestCimierConfig:
     def test_cimier_config_partial_section(self, tmp_path, sample_config_dict):
         """Section partielle → defaults pour clés absentes, override pour les autres."""
         cfg = dict(sample_config_dict)
-        cfg["cimier"] = {"enabled": True, "host": "10.0.0.99"}
+        cfg["cimier"] = {"enabled": True}
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(cfg))
         config = ConfigLoader(config_file).load()
         assert config.cimier.enabled is True
-        assert config.cimier.host == "10.0.0.99"
         # Defaults pour les autres champs
-        assert config.cimier.port == 80
-        assert config.cimier.invert_direction is False
         assert config.cimier.cycle_timeout_s == 90.0
         assert config.cimier.power_switch.type == "noop"
 
     def test_cimier_power_switch_nested_default(self, tmp_path, sample_config_dict):
         """Section cimier sans power_switch imbriqué → PowerSwitchConfig() par défaut."""
         cfg = dict(sample_config_dict)
-        cfg["cimier"] = {"enabled": True, "host": "10.0.0.99"}
+        cfg["cimier"] = {"enabled": True}
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(cfg))
         config = ConfigLoader(config_file).load()
@@ -537,9 +526,7 @@ class TestMotorShellyConfig:
 
     def test_motor_shelly_default_when_section_missing(self, tmp_path, sample_config_dict):
         """Section cimier.motor_shelly absente → MotorShellyConfig() par défaut."""
-        config = self._load_with_cimier(
-            tmp_path, sample_config_dict, {"enabled": True, "host": "10.0.0.42"}
-        )
+        config = self._load_with_cimier(tmp_path, sample_config_dict, {"enabled": True})
         ms = config.cimier.motor_shelly
         assert isinstance(ms, MotorShellyConfig)
         assert ms.host_motor == ""
@@ -794,9 +781,7 @@ class TestBootCalibrationConfig:
         assert config.boot_calibration.timeout_sec == 180.0
         assert config.boot_calibration.poll_interval_sec == 0.1
 
-    def test_boot_calibration_invalid_sweep_falls_back(
-        self, tmp_path, sample_config_dict, caplog
-    ):
+    def test_boot_calibration_invalid_sweep_falls_back(self, tmp_path, sample_config_dict, caplog):
         """fallback_sweep_deg <= 0 → log WARNING + defaults."""
         import logging
 
@@ -837,6 +822,81 @@ class TestBootCalibrationConfig:
         )
         assert config.boot_calibration.poll_interval_sec == 0.1
         assert any("boot_calibration config invalide" in r.message for r in caplog.records)
+
+
+# =============================================================================
+# SwitchReaderConfig (V3 tout-Shelly — lecture fins de course via Shelly Uni+)
+# =============================================================================
+
+
+class TestSwitchReaderConfig:
+    def test_defaults(self):
+        c = SwitchReaderConfig()
+        assert c.type == "noop"
+        assert c.host == ""
+        assert c.api == "rpc"
+        assert c.open_input_id == 1
+        assert c.closed_input_id == 0
+        assert c.invert is True
+        assert c.timeout_s == 3.0
+
+    def test_parse_switch_reader_from_json(self, tmp_path):
+        import json
+
+        from core.config.config_loader import load_config
+
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "cimier": {
+                        "enabled": True,
+                        "switch_reader": {
+                            "type": "shelly_uni",
+                            "host": "192.168.1.84",
+                            "api": "rpc",
+                            "open_input_id": 1,
+                            "closed_input_id": 0,
+                            "invert": True,
+                        },
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        cfg = load_config(cfg_path)
+        sr = cfg.cimier.switch_reader
+        assert sr.type == "shelly_uni"
+        assert sr.host == "192.168.1.84"
+        assert sr.open_input_id == 1
+        assert sr.closed_input_id == 0
+        assert sr.invert is True
+
+    def test_switch_reader_defaults_when_absent(self, tmp_path):
+        import json
+
+        from core.config.config_loader import load_config
+
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(json.dumps({"cimier": {"enabled": False}}), encoding="utf-8")
+        cfg = load_config(cfg_path)
+        assert cfg.cimier.switch_reader.type == "noop"
+
+    def test_legacy_pico_keys_ignored(self, tmp_path):
+        # Anciennes clés Pico host/port présentes : ne doivent PAS faire planter
+        # le parse (rétro-compat lecture), mais ne sont plus exposées.
+        import json
+
+        from core.config.config_loader import load_config
+
+        cfg_path = tmp_path / "config.json"
+        cfg_path.write_text(
+            json.dumps({"cimier": {"enabled": False, "host": "192.168.1.84", "port": 80}}),
+            encoding="utf-8",
+        )
+        cfg = load_config(cfg_path)
+        assert not hasattr(cfg.cimier, "host")
+        assert not hasattr(cfg.cimier, "port")
 
 
 # =============================================================================
