@@ -22,7 +22,7 @@ uv sync
 sudo ./start_web.sh
 
 # Démarrage dev complet (recommandé) — 4 processus en parallèle :
-#   - cimier_simulator.py  (Pico W simulé, port localhost:8001)
+#   - cimier_simulator.py  (simulateur Shelly unifié V3 — Uni+ RPC + relais 24V/MOT/UPDN)
 #   - motor_service.py     (mode SIMULATION auto-détecté)
 #   - cimier_service.py    (skip silencieux si cimier.enabled=false dans config.json)
 #   - Django runserver     (port 0.0.0.0:8000 par défaut, configurable)
@@ -145,6 +145,29 @@ firmware/
 ├── ramp.py              # Rampe S-curve portee depuis acceleration_ramp.py
 └── README.md            # Guide flash MicroPython + branchements
 ```
+
+**Note V3** : `firmware/cimier/` supprimé (pivot tout-Shelly v6.7). Le cimier n'utilise plus de Pico W — Contrôleur autonome STEP+DM556T piloté par 4 Shellys (24V/Uni+/MOT/UPDN). Voir section « Architecture cimier V3 » ci-dessous.
+
+---
+
+## Architecture cimier V3 (tout-Shelly, v6.7)
+
+Suppression totale du Pico W. Le cimier est désormais piloté par 4 Shellys Gen 1 :
+
+| Shelly | IP terrain | Rôle |
+|--------|-----------|------|
+| SHELLY-1-24V | 192.168.1.83 | Alimentation module cimier (power_switch) |
+| SHELLY-UNI+  | 192.168.1.84 | Lecture microswitches HAUT/BAS (switch_reader) |
+| SHELLY-1-MOT | 192.168.1.85 | ON/OFF moteur cimier (motor_shelly.host_motor) |
+| SHELLY-1-UPDN| 192.168.1.86 | Sens moteur via DPDT externe (motor_shelly.host_dir) |
+
+**Cinématique** : `cimier_service` → Shelly 24V (alim ON) → Shelly MOT (moteur ON) + Shelly UPDN (sens) → Shelly Uni+ (poll microswitches) → Shelly MOT OFF → Shelly 24V OFF.
+
+**Lecture butées** : `core/hardware/shelly_switch_reader.py` (`ShellySwitchReader`) via API RPC `Input.GetStatus`. Config `switch_reader` dans `data/config.json` (`type="shelly_uni"` en prod, `"noop"` dans le template repo).
+
+**Simulateur dev** : `core/hardware/cimier_simulator.py` — émule les 4 Shellys (Uni+ RPC + 3 relais legacy). Activé via `CIMIER_DEV_MODE=1` (exporté par `start_dev.sh`).
+
+**Conventions à valider au banc** : `motor_on_relay_state`, `open_dir_state`, `switch_reader.invert` dans `data/config.json` section `motor_shelly` / `switch_reader`.
 
 ---
 
@@ -310,12 +333,12 @@ countdown ouverture/fermeture s'affichent (alimentés par fallback Django).
 **Cause** : avant v6.3.2, `cimier_service` skip silencieusement quand
 `cimier.enabled=false` dans `data/config.json` (template repo).
 
-**Fix v6.3.2** : `start_dev.sh` exporte `CIMIER_DEV_MODE=1` automatiquement →
-`cimier_service` patche en mémoire enabled=True + host=127.0.0.1:8001
-(simulateur) + power_switch=noop. `data/config.json` reste intact (template
-repo respecté pour la prod). Si l'UI reste vide après `./start_dev.sh restart`,
-vérifier `cat /dev/shm/cimier_status.json` (présent + state non-null) et
-`logs/cimier_service.log` (ligne `cimier_dev_mode=on host=127.0.0.1:8001`).
+**Fix v6.3.2 / V3** : `start_dev.sh` exporte `CIMIER_DEV_MODE=1` automatiquement →
+`cimier_service` patche en mémoire enabled=True et pointe le simulateur Shelly unifié
+`core.hardware.cimier_simulator` (Uni+ RPC + relais 24V/MOT/UPDN). `data/config.json`
+reste intact (template repo respecté pour la prod). Si l'UI reste vide après
+`./start_dev.sh restart`, vérifier `cat /dev/shm/cimier_status.json` (présent + state
+non-null) et `logs/cimier_service.log`.
 
 ### Encodeur indisponible
 ```bash
@@ -369,9 +392,8 @@ Le script demande sudo une seule fois (1ère MAJ), puis les MAJ suivantes passen
 
 **Limites du script** :
 - NON TESTÉ par CI (machine dev à 800 km du Pi). À valider terrain par Serge sur une session test avant utilisation pour une vraie MAJ.
-- NE FLASHE PAS le firmware Pico W (manuel — cf. `firmware/cimier/README.md`).
-- NE CONFIGURE PAS le Shelly (manuel — cf. mémoire S. 30/04 cascade 220V/12V).
-- Si Pico W ne répond pas, le script propose de continuer en mode dégradé (cimier désactivé) — utile si court-circuit install non levé.
+- NE CONFIGURE PAS les 4 Shellys V3 (manuel — cf. section « Architecture cimier V3 » et synoptique `docs/synoptique electronique cimier V3.pdf`).
+- En V3 il n'y a plus de firmware Pico W à flasher (`firmware/cimier/` supprimé).
 
 ### Détail des 7 étapes (manuelles si on choisit de ne pas utiliser le script)
 
@@ -401,17 +423,16 @@ Le service systemd n'existe pas en 5.10. À installer **une seule fois** :
 sudo cp cimier_service.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable cimier_service
-# Ne PAS encore start — il faut d'abord configurer cimier.host dans data/config.json
+# Ne PAS encore start — il faut d'abord configurer data/config.json (étape 3 ci-dessous)
 ```
 
-### Étape 3 — Hardware Pico W cimier (v6.0)
+### Étape 3 — Hardware cimier V3 tout-Shelly (v6.7)
 
-Pré-requis pour v6.0+ qui consomme `cimier_service`. Procédure dans `firmware/cimier/README.md` :
-1. Flash MicroPython sur Pico W (`mpremote` + `firmware/cimier/main.py + cimier_controller.py + step_generator.py`).
-2. Configuration WiFi + IP statique DHCP (mémoire `feedback_no_hardcoded_ips.md` : Pico W = `192.168.1.84`, Shelly = `192.168.1.83`).
-3. Cascade alimentation 220V/12V via 2 Shellys (S. 30/04).
-
-**État actuel terrain (2026-05-02)** : court-circuit install définitive Pico W bloque déploiement v6.0+. Mémoire `project_v60_picow_install_short_circuit_20260502.md`. Tant que ça n'est pas levé, **rester en 5.10.0** pour les sessions opérationnelles.
+Le Pico W est supprimé. Le cimier est piloté par 4 Shellys Gen 1 (voir section « Architecture cimier V3 »). Vérifier :
+1. Shelly 24V (.83), Uni+ (.84), MOT (.85), UPDN (.86) accessibles sur le réseau local.
+2. IPs DHCP statiques configurées dans l'interface web Shelly de chaque appareil.
+3. Mettre `cimier.enabled=true` + renseigner `switch_reader.host`, `motor_shelly.host_motor`, `motor_shelly.host_dir` dans `data/config.json` terrain (laisser `"noop"` dans le template repo).
+4. Valider les conventions au banc : `motor_on_relay_state`, `open_dir_state`, `switch_reader.invert` (cf. `docs/synoptique electronique cimier V3.pdf`).
 
 ### Étape 4 — Configuration `data/config.json` (rétro-compat partielle)
 
@@ -421,26 +442,24 @@ Sections à ajouter ou compléter (les sections `calibration` et `boot_calibrati
 {
   "cimier": {
     "enabled": true,
-    "host": "192.168.1.84",
-    "port": 80,
-    "automation": { "mode": "manual" },
-    "power_switch": { "type": "shelly", "host": "192.168.1.83" }
-  },
-  "calibration": {
-    "persist_path": "data/last_known_position.json",
-    "delta_threshold_deg": 1.0,
-    "interval_sec": 30
+    "switch_reader": { "type": "shelly_uni", "host": "192.168.1.84" },
+    "power_switch": { "type": "shelly_gen1", "host": "192.168.1.83" },
+    "motor_shelly": {
+      "host_motor": "192.168.1.85",
+      "host_dir": "192.168.1.86",
+      "api": "legacy"
+    },
+    "automation": { "mode": "manual" }
   },
   "boot_calibration": {
-    "overshoot_deg": 5.0,
-    "sweep_deg": 15.0,
+    "fallback_sweep_deg": 7.0,
     "timeout_sec": 180.0,
     "poll_interval_sec": 0.1
   }
 }
 ```
 
-**Permissions** : `data/last_known_position.json` est créé par `ems22d.service` (User=slenk). S'assurer que `data/` est writable par slenk :
+**Permissions** : s'assurer que `data/` est writable par slenk :
 
 ```bash
 sudo chown -R slenk:slenk /home/slenk/DriftApp/data
@@ -478,9 +497,9 @@ cat /dev/shm/motor_status.json | python3 -m json.tool | head -30
    - `current_status["status"] == "calibrating"`
    - `calibration.status == "running"`
    - **Watchdog systemd 30 s NE tuera PAS le service** car le thread daemon maintient le heartbeat indépendamment (vérifié pytest, à confirmer terrain).
-3. Routine cherche le microswitch 45° via `PositionPersistor.load_last_position` (hint) puis fallback sweep ±15° si nécessaire.
+3. Routine cherche le microswitch 45° via sweep court (−7° puis +14°, ~30 s total à 40°/min).
 4. À la fin :
-   - **Cas nominal (95 %)** : `calibration.status == "ok"`, `method == "hint_trip"` ou `"fallback_sweep"`. UI affiche badge ✓ vert, bannière masquée, boutons mouvement actifs.
+   - **Cas nominal (95 %)** : `calibration.status == "ok"`, `method == "sweep"`. UI affiche badge ✓ vert, bannière masquée, boutons mouvement actifs.
    - **Cas dégradé** : `calibration.status == "degraded"` ou `"exception"`, `error_msg` renseigné. UI affiche bannière rouge, badge ✕, **7 boutons mouvement grisés** (GOTO + 4 JOG + 2 Continu), STOPs et cimier toujours actifs (sécurité). L'utilisateur clique « Calibrer maintenant » pour relancer un cycle.
 
 ### Étape 7 — Validation terrain (post-MAJ)
@@ -488,14 +507,14 @@ cat /dev/shm/motor_status.json | python3 -m json.tool | head -30
 À observer sur une session d'astrophotographie :
 - Boot motor_service : routine se termine en `ok`, durée et méthode loggés.
 - Mouvement nominal : badge ✓, bannière masquée, GOTO/JOG/tracking fonctionnels.
-- Test arrêt brutal (kill -9 motor_service + redémarrage) : la position chargée depuis `data/last_known_position.json` doit conduire la routine au switch en quelques secondes (pas un sweep complet).
-- Test dégradé simulé (déplacer la coupole off-power avant restart) : bannière rouge, bouton manuel fonctionnel.
+- Test arrêt brutal (kill -9 motor_service + redémarrage) : la routine sweep court doit trouver le switch en ≤30 s (coupole toujours parquée à ~45°).
+- Test dégradé simulé (coupole déplacée hors zone switch avant restart) : bannière rouge, bouton manuel fonctionnel.
 
 ### Si quelque chose tourne mal
 
 - **`calibration.status` reste `running` >180 s** : timeout dépassé sans transition → coupole bloquée mécaniquement, ou switch HS, ou daemon ems22d ne publie pas `last_calibration_at`. Vérifier `journalctl -u motor_service -f` et `cat /dev/shm/ems22_position.json`.
 - **`motor_service` redémarre en boucle** : le watchdog tue avant la fin → le thread daemon heartbeat n'est pas effectif. Augmenter temporairement `WatchdogSec` dans `motor_service.service` (à reverter ensuite).
-- **`data/last_known_position.json` jamais créé** : permissions `data/` insuffisantes pour slenk. Cf. étape 4.
+- **Coupole ne trouve pas le switch après sweep** : zone de parking trop éloignée de 45° → augmenter `boot_calibration.fallback_sweep_deg` dans `data/config.json`. Vérifier le microswitch mécaniquement.
 - **Bannière reste affichée même après calibration ok** : cache navigateur (recharger Ctrl+F5), ou `motor_status.json` non rafraîchi (vérifier polling Django).
 
 ---
@@ -537,6 +556,7 @@ cat /dev/shm/motor_status.json | python3 -m json.tool | head -30
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.7-wip** | Juin 2026 | Pivot V3 tout-Shelly cimier (chantier en cours, pas de bump version) : suppression totale du Pico W et de `firmware/cimier/`. Lecture des microswitches HAUT/BAS via Shelly Uni+ RPC (`core/hardware/shelly_switch_reader.py` + `SwitchReaderConfig`). Config template `data/config.json` section `cimier` portée en forme V3 (retrait `host`/`port`/`invert_direction`, ajout `switch_reader`, `motor_shelly.api=legacy`, conventions `motor_on_relay_state`/`open_dir_state`/`switch_reader.invert` à valider au banc). Simulateur `core/hardware/cimier_simulator.py` réécrit comme émulateur Shelly unifié (Uni+ RPC + 3 relais legacy). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Synoptique électronique V3 versionné (`docs/`). |
 | **6.6.2** | Juin 2026 | **Fix OTA cause racine — le stash était mort depuis v5.8.0.** Retour terrain 01/06 (`update.log` de Serge) : `git stash push --include-untracked=false` est une **syntaxe git invalide** (l'option booléenne n'accepte aucune valeur → `option 'include-untracked' n'accepte aucune valeur`). Le stash échouait donc à **chaque** OTA depuis le refactor v5.8.0 (`d311929`), le script tombait dans le fallback « pull sur arbre sale », qui n'avortait que par malchance quand un fichier tracké modifié localement était aussi changé upstream. Toute la saga OTA 2026 (config.json, uv.lock, « supprimer uv.lock à la main ») n'était que les symptômes en aval de ce stash mort — il était censé écarter les modifs locales avant le pull, il ne l'a jamais fait. Sur le terrain 01/06, le fichier colliseur était `scripts/update_driftapp.sh` (copié à la main par Serge, donc tracké+modifié). Correctif 1-ligne : `git stash push -m …` (sans le flag invalide — `git stash push` exclut déjà les untracked par défaut, c'était l'intention). 4 nouveaux tests `tests/test_ota_uvlock.py` (repro flag invalide + blocage pull, validation stash propre, guard anti-régression sur le flag). 103/103 tests OTA/health verts. ⚠️ Livraison : le Pi tourne encore le script bogué → **un déblocage manuel one-shot est requis une seule fois** (`git checkout -- scripts/update_driftapp.sh && git pull --ff-only origin main`), ensuite l'OTA UI fonctionne enfin de bout en bout. |
 | **6.6.1** | Mai 2026 | Fix OTA `uv.lock` (blocage récurrent terrain) : la cause racine était `uv.lock` tracké + `uv sync` **sans `--frozen`** (à l'OTA et au boot `start_web.sh`) qui, avec les contraintes `>=` larges de `pyproject.toml`, réécrivait le lock sur le Pi → divergence locale → collision git à chaque pull (« supprimer uv.lock à la main »). Correctif : (1) `scripts/update_driftapp.sh` normalise `uv.lock` à l'état dépôt **avant** le stash/pull (`git checkout --` si tracké, `rm -f` si untracked) + `uv sync --extra dev --frozen` ; (2) `scripts/update_to_web.sh` et `start_web.sh` passent en `uv sync --frozen` (le Pi ne réécrit plus jamais le lock) ; `start_dev.sh` inchangé (dev régénère le lock normalement). `uv.lock` reste **tracké** (reproductibilité des versions préservée — critique sur système moteur prod). Nouveau `tests/test_ota_uvlock.py` (2 tests scénario git reproduisant bug+fix, 2 guards verrouillant `--frozen` + normalisation). 4 nouveaux tests + 59 tests OTA existants verts. |
 | **6.6.0** | Mai 2026 | Simplification calibration boot (retour terrain 31/05) : (1) `fallback_sweep_deg` default 15° → 7° (séquence `-sweep`/`+2×sweep` = -7°/+14°, soit ≈10s/20s à 40°/min single-speed) — la coupole est toujours parquée près du switch 45°, sweep court suffit pour franchir le capteur. (2) Suppression complète du `PositionPersistor` et de toute la persistance disque de la position absolue : la coupole revient calibrée près de 45° en fin de session, donc inutile de stocker une position qu'on va recalibrer d'emblée au prochain boot — c'est précisément ce que fait le sweep court. Fichiers supprimés : `core/hardware/position_persistor.py` (135 LOC) + `tests/test_position_persistor.py` (~22 tests). Refactor : `core/hardware/calibration_routine.py` (suppression `_attempt_hint_trip` / `_safe_load_hint` / param `persist_path`, `run()` enchaîne directement vers `_attempt_sweep`), `services/motor_service.py` (suppression `PROJECT_ROOT` + param `persist_path` au constructor), `ems22d_calibrated.py` (suppression instanciation + hook `maybe_write`), `core/config/config_loader.py` (suppression dataclass `CalibrationConfig` + parser `_parse_calibration` + champ legacy `overshoot_deg` du `BootCalibrationConfig`), `data/config.json` (section `calibration` supprimée, section `boot_calibration` réduite à 3 clés). Tests refondus : `tests/test_calibration_routine.py` (~150 LOC nettes vs 506 avant), `tests/test_config_loader.py` (`TestCalibrationConfig` supprimé, `TestBootCalibrationConfig` adapté), `tests/test_motor_service.py` + `tests/test_web_views.py` (`method="hint_trip"` → `"sweep"`). Net : ~200 LOC supprimées, plus de bug d'amorçage initial possible (rien à amorcer). |
