@@ -2,8 +2,8 @@
 Cimier Service — orchestre un cycle complet du cimier (Bloc 2 archi Shelly).
 
 Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) :
-  0. preflight     : lit ``GET /status`` du Pico capteur AVANT toute alim
-                     (déjà en butée → noop, both_switches → error,
+  0. preflight     : lit les butées via ``ShellySwitchReader.read()`` AVANT
+                     toute alim (déjà en butée → noop, both_switches → error,
                      unreachable → error).
   1. power_on      : ``power_switch.turn_on()`` (Shelly 220V cascade).
   2. settle        : ``sleep(shelly_settle_s)`` — attente appairage WiFi
@@ -14,9 +14,10 @@ Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) 
                      (relais DIR).
   5. motor_on      : ``motor_shelly.turn_on(timer_s=timer_safety_sec)``
                      (relais MOTOR + filet hardware Shelly toggle_after).
-  6. poll_switch   : boucle ``GET /status`` jusqu'à ``open_switch`` ou
-                     ``closed_switch == True`` (ou ``cycle_timeout_s``,
-                     ou commande stop, ou both_switches → error).
+  6. poll_switch   : boucle ``ShellySwitchReader.read()`` jusqu'à
+                     ``open_switch`` ou ``closed_switch == True``
+                     (ou ``cycle_timeout_s``, ou commande stop, ou
+                     both_switches → error).
   7. motor_off     : ``motor_shelly.turn_off()`` (cleanup, dans finally).
   8. power_off     : ``power_switch.turn_off()`` — TOUJOURS appelé (sécurité
                      220V, invariant).
@@ -27,7 +28,7 @@ Bus : commande-driven via /dev/shm/cimier_command.json (pas de scheduler
 éphémérides — c'est Phase 3 v6.2).
 
 Le service est testable sans hardware : NoopPowerSwitch + SimMotorShelly
-(piloté par CimierMechanismSim) + AutoFakeHttpClient pour ``/status`` Pico.
+(piloté par CimierMechanismSim) + FakeSwitchReader pour les butées.
 """
 
 from __future__ import annotations
@@ -37,8 +38,6 @@ import logging
 import os
 import signal
 import time
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -49,6 +48,7 @@ from core.config.config_loader import (
     MotorShellyConfig,
     PowerSwitchConfig,
     SiteConfig,
+    SwitchReaderConfig,
     load_config,
 )
 from core.hardware.motor_shelly import MotorShelly, NoopMotorShelly
@@ -56,6 +56,11 @@ from core.hardware.power_switch import (
     NoopPowerSwitch,
     PowerSwitchError,
     ShellyPowerSwitch,
+)
+from core.hardware.shelly_switch_reader import (
+    NoopSwitchReader,
+    ShellySwitchReader,
+    SwitchReaderError,
 )
 from core.hardware.weather_provider import (
     NoopWeatherProvider,
@@ -103,52 +108,11 @@ _VALID_CYCLE_ACTIONS = (ACTION_OPEN, ACTION_CLOSE)
 # Polling intervals par défaut (overridables par constructeur pour tests rapides)
 DEFAULT_CYCLE_POLL_INTERVAL_S = 0.5
 DEFAULT_RUN_LOOP_INTERVAL_S = 0.5
-DEFAULT_HTTP_TIMEOUT_S = 3.0
-
-
-class HttpClient:
-    """Client HTTP minimal autour de urllib.request, injectable pour tests."""
-
-    def __init__(
-        self,
-        timeout_s: float = DEFAULT_HTTP_TIMEOUT_S,
-        urlopen: Optional[Callable[..., Any]] = None,
-    ):
-        self._timeout = float(timeout_s)
-        self._urlopen = urlopen or urllib.request.urlopen
-
-    def request(
-        self,
-        method: str,
-        url: str,
-        body: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[int, Dict[str, Any]]:
-        """Émet une requête HTTP. Retourne (status_code, payload_json_dict).
-
-        Lève urllib.error.URLError / OSError sur erreur réseau, propagés
-        jusqu'à la logique cycle qui les transforme en state=error.
-        """
-        data = None
-        headers = {}
-        if body is not None:
-            data = json.dumps(body).encode("utf-8")
-            headers["Content-Type"] = "application/json"
-        req = urllib.request.Request(url, data=data, method=method, headers=headers)
-
-        with self._urlopen(req, timeout=self._timeout) as resp:
-            status = getattr(resp, "status", 200)
-            raw = resp.read()
-
-        if not raw:
-            return status, {}
-        try:
-            return status, json.loads(raw.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
-            return status, {}
 
 
 PowerSwitchProtocol = Any  # duck-typed : turn_on() / turn_off()
 MotorShellyProtocol = Any  # duck-typed : set_direction() / turn_on() / turn_off()
+SwitchReaderProtocol = Any  # duck-typed : read() -> SwitchState
 
 
 def make_power_switch(cfg: PowerSwitchConfig) -> PowerSwitchProtocol:
@@ -191,6 +155,28 @@ def make_motor_shelly(cfg: MotorShellyConfig) -> MotorShellyProtocol:
     )
 
 
+def make_switch_reader(cfg: SwitchReaderConfig) -> SwitchReaderProtocol:
+    """Factory : instancie le reader de butées d'après la config.
+
+    type ∈ {noop, shelly_uni}.
+    """
+    t = (cfg.type or "noop").lower()
+    if t == "noop":
+        return NoopSwitchReader()
+    if t == "shelly_uni":
+        if not cfg.host:
+            raise ValueError("SwitchReaderConfig.host vide pour shelly_uni")
+        return ShellySwitchReader(
+            host=cfg.host,
+            api=cfg.api,
+            open_input_id=cfg.open_input_id,
+            closed_input_id=cfg.closed_input_id,
+            invert=cfg.invert,
+            timeout_s=cfg.timeout_s,
+        )
+    raise ValueError("SwitchReaderConfig.type inconnu: " + repr(cfg.type))
+
+
 class CimierService:
     """Orchestrateur cycle cimier — commande-driven via IPC."""
 
@@ -199,7 +185,7 @@ class CimierService:
         cimier_config: CimierConfig,
         power_switch: PowerSwitchProtocol,
         motor_shelly: Optional[MotorShellyProtocol] = None,
-        http_client: Optional[HttpClient] = None,
+        switch_reader: Optional[SwitchReaderProtocol] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
         site_config: Optional[SiteConfig] = None,
@@ -217,7 +203,11 @@ class CimierService:
             if motor_shelly is not None
             else make_motor_shelly(cimier_config.motor_shelly)
         )
-        self._http = http_client or HttpClient()
+        self._switch_reader = (
+            switch_reader
+            if switch_reader is not None
+            else make_switch_reader(cimier_config.switch_reader)
+        )
         self._ipc = ipc_manager or CimierIpcManager()
         self._weather_provider = weather_provider or NoopWeatherProvider()
         self._clock = clock
@@ -228,8 +218,8 @@ class CimierService:
         self._stop_requested = False
         self._cooldown_end_ts: Optional[float] = None
         self._pending_command: Optional[Dict[str, Any]] = None
-        # Switches Pico capteur observés en dernier (alimente le mapping vers
-        # CIMIER_STATE_* pour le scheduler — pas de pico_state legacy).
+        # Butées Shelly Uni+ observées en dernier (alimente le mapping vers
+        # CIMIER_STATE_* pour le scheduler).
         self._last_open_switch: bool = False
         self._last_closed_switch: bool = False
 
@@ -278,24 +268,26 @@ class CimierService:
             )
             return
 
-        if not self._config.host:
+        sr_cfg = self._config.switch_reader
+        if sr_cfg.type == "shelly_uni" and not sr_cfg.host:
             logger.error(
-                "cimier_event=config_error host vide — set cimier.host dans data/config.json"
+                "cimier_event=config_error switch_reader.host vide — "
+                "set cimier.switch_reader.host dans data/config.json"
             )
             self._publish_status(
                 state=STATE_ERROR,
                 phase=PHASE_IDLE,
                 last_action="",
                 command_id="",
-                error_message="host_not_configured",
+                error_message="switch_reader_not_configured",
             )
             return
 
         self._install_signal_handlers()
         logger.info(
-            "cimier_event=started host=%s port=%d motor_host=%s dir_host=%s",
-            self._config.host,
-            self._config.port,
+            "cimier_event=started switch_reader=%s power=%s motor_host=%s dir_host=%s",
+            self._config.switch_reader.host or "(noop)",
+            self._config.power_switch.host or "(noop)",
             self._config.motor_shelly.host_motor or "(noop)",
             self._config.motor_shelly.host_dir or "(noop)",
         )
@@ -433,18 +425,17 @@ class CimierService:
     # ------------------------------------------------------------------
 
     def _preflight_switches(self, action: str, cmd_id: str) -> Tuple[str, str, Dict[str, Any]]:
-        """Lit /status du Pico W avant toute action électrique.
+        """Lit les butées (Shelly Uni+) avant toute action électrique.
 
         Retourne (decision, reason, payload) :
           - decision: "noop"|"proceed"|"error"|"unreachable"
           - reason: chaîne lisible (vide si proceed)
-          - payload: dict /status si lu, {} sinon
+          - payload: dict {open_switch, closed_switch} si lu, {} sinon
         """
-        url = self._base_url() + "/status"
         t0 = self._clock()
         try:
-            status, payload = self._http.request("GET", url)
-        except (urllib.error.URLError, OSError, ConnectionError) as exc:
+            state = self._switch_reader.read()
+        except SwitchReaderError as exc:
             latency_ms = int((self._clock() - t0) * 1000)
             logger.info(
                 "cimier_event=preflight action=%s id=%s decision=unreachable latency_ms=%d exc=%s",
@@ -456,25 +447,16 @@ class CimierService:
             return ("unreachable", "precheck_unreachable", {})
 
         latency_ms = int((self._clock() - t0) * 1000)
-        if status != 200 or not isinstance(payload, dict):
-            logger.info(
-                "cimier_event=preflight action=%s id=%s decision=unreachable "
-                "latency_ms=%d http_status=%s",
-                action,
-                cmd_id,
-                latency_ms,
-                status,
-            )
-            return ("unreachable", "precheck_unreachable", {})
+        open_sw = state.open_switch
+        closed_sw = state.closed_switch
+        payload = {"open_switch": open_sw, "closed_switch": closed_sw}
+        self._last_open_switch = open_sw
+        self._last_closed_switch = closed_sw
 
-        open_sw = bool(payload.get("open_switch", False))
-        closed_sw = bool(payload.get("closed_switch", False))
-
-        if open_sw and closed_sw:
+        if state.both_switches:
             logger.info(
                 "cimier_event=preflight action=%s id=%s decision=error "
-                "reason=both_switches_triggered open_switch=%s closed_switch=%s "
-                "latency_ms=%d",
+                "reason=both_switches_triggered open_switch=%s closed_switch=%s latency_ms=%d",
                 action,
                 cmd_id,
                 str(open_sw).lower(),
@@ -485,8 +467,7 @@ class CimierService:
 
         if action == ACTION_OPEN and open_sw:
             logger.info(
-                "cimier_event=preflight action=%s id=%s decision=noop "
-                "reason=already_open latency_ms=%d",
+                "cimier_event=preflight action=%s id=%s decision=noop reason=already_open latency_ms=%d",
                 action,
                 cmd_id,
                 latency_ms,
@@ -495,8 +476,7 @@ class CimierService:
 
         if action == ACTION_CLOSE and closed_sw:
             logger.info(
-                "cimier_event=preflight action=%s id=%s decision=noop "
-                "reason=already_closed latency_ms=%d",
+                "cimier_event=preflight action=%s id=%s decision=noop reason=already_closed latency_ms=%d",
                 action,
                 cmd_id,
                 latency_ms,
@@ -781,61 +761,57 @@ class CimierService:
             )
 
     # ------------------------------------------------------------------
-    # Phases helpers (HTTP)
+    # Phases helpers (lecture butées Shelly Uni+)
     # ------------------------------------------------------------------
 
     def _poll_target_switch(self, action: str, cmd_id: str) -> str:
-        """Boucle GET /status jusqu'à fin de course cible atteinte.
+        """Boucle de lecture Shelly Uni+ jusqu'à fin de course cible atteinte.
 
         Returns:
-            "ok"       : switch cible passé à True.
+            "ok"       : butée cible atteinte.
             "timeout"  : cycle_timeout_s dépassé.
             "stopped"  : commande stop reçue.
-            "error"    : both_switches_triggered au cours du polling.
+            "error"    : both_switches au cours du polling.
         """
         target_key = "open_switch" if action == ACTION_OPEN else "closed_switch"
-        other_key = "closed_switch" if action == ACTION_OPEN else "open_switch"
         deadline = self._clock() + self._config.cycle_timeout_s
-        url = self._base_url() + "/status"
 
         while self._clock() < deadline:
             if self._stop_requested:
                 return "stopped"
-            stop_seen = self._check_for_stop_command()
-            if stop_seen is not None:
+            if self._check_for_stop_command() is not None:
                 return "stopped"
             try:
                 t0 = self._clock()
-                status, payload = self._http.request("GET", url)
+                state = self._switch_reader.read()
                 latency_ms = int((self._clock() - t0) * 1000)
-                if status == 200 and isinstance(payload, dict):
-                    target_now = bool(payload.get(target_key, False))
-                    other_now = bool(payload.get(other_key, False))
-                    # Mise à jour des derniers switches observés (mapping
-                    # CIMIER_STATE_* pour scheduler).
-                    self._last_open_switch = bool(payload.get("open_switch", False))
-                    self._last_closed_switch = bool(payload.get("closed_switch", False))
-                    if target_now and other_now:
-                        logger.error("cimier_event=poll_both_switches id=%s", cmd_id)
-                        return "error"
-                    if target_now:
-                        logger.info(
-                            "cimier_event=switch_transition switch=%s from=false to=true "
-                            "elapsed_ms=%d id=%s",
-                            target_key,
-                            latency_ms,
-                            cmd_id,
-                        )
-                        return "ok"
-                    if self._config.verbose_logging or os.environ.get("CIMIER_DEV_MODE"):
-                        logger.debug(
-                            "cimier_event=poll_status id=%s open_switch=%s closed_switch=%s",
-                            cmd_id,
-                            str(payload.get("open_switch", False)).lower(),
-                            str(payload.get("closed_switch", False)).lower(),
-                        )
-            except (urllib.error.URLError, OSError, ConnectionError) as exc:
+            except SwitchReaderError as exc:
                 logger.debug("cimier_event=poll_exception id=%s exc=%s", cmd_id, exc)
+                self._sleep(self._cycle_poll_interval_s)
+                continue
+
+            self._last_open_switch = state.open_switch
+            self._last_closed_switch = state.closed_switch
+            target_now = state.open_switch if action == ACTION_OPEN else state.closed_switch
+
+            if state.both_switches:
+                logger.error("cimier_event=poll_both_switches id=%s", cmd_id)
+                return "error"
+            if target_now:
+                logger.info(
+                    "cimier_event=switch_transition switch=%s from=false to=true elapsed_ms=%d id=%s",
+                    target_key,
+                    latency_ms,
+                    cmd_id,
+                )
+                return "ok"
+            if self._config.verbose_logging or os.environ.get("CIMIER_DEV_MODE"):
+                logger.debug(
+                    "cimier_event=poll_status id=%s open_switch=%s closed_switch=%s",
+                    cmd_id,
+                    str(state.open_switch).lower(),
+                    str(state.closed_switch).lower(),
+                )
             self._sleep(self._cycle_poll_interval_s)
         return "timeout"
 
@@ -866,7 +842,7 @@ class CimierService:
         """Cas où "stop" arrive alors qu'aucun cycle n'est en cours.
 
         On publie last_action=stop dans le status pour traçabilité, mais on
-        ne touche ni au power_switch ni au pico — c'est un no-op métier.
+        ne touche ni au power_switch ni au moteur — c'est un no-op métier.
         """
         logger.info("cimier_event=stop_idle id=%s", cmd_id)
         self._publish_status(
@@ -913,7 +889,7 @@ class CimierService:
             "last_action_ts": self._clock(),
             "command_id": command_id,
             "error_message": error_message,
-            # Switches Pico capteur (alimente UI + scheduler mapping).
+            # Butées Shelly Uni+ (alimente UI + scheduler mapping).
             "open_switch": self._last_open_switch,
             "closed_switch": self._last_closed_switch,
             # v6.0 Phase 4 : mode automation + prochains horaires de trigger
@@ -967,9 +943,6 @@ class CimierService:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _base_url(self) -> str:
-        return "http://" + self._config.host + ":" + str(self._config.port)
-
     def _install_signal_handlers(self) -> None:
         """Handlers SIGINT/SIGTERM pour arrêt gracieux. Ignore si déjà installé
         ou si on n'est pas dans le main thread (cas tests)."""
@@ -997,7 +970,7 @@ class CimierService:
 # l'environnement. Ne touchent jamais data/config.json sur disque — patch
 # en mémoire seulement. Permettent à `start_dev.sh` de lancer
 # `cimier_service` contre le simulateur HTTP local (`localhost:8001`)
-# au lieu du Pico W réel (cimier.host de data/config.json) sans modifier le template repo.
+# au lieu des Shelly réels (cimier.switch_reader.host de data/config.json) sans modifier le template repo.
 _DEV_MODE_TRUTHY = {"1", "true", "yes", "on"}
 
 
@@ -1007,17 +980,33 @@ def _is_dev_mode_enabled() -> bool:
 
 
 def _apply_dev_mode_overrides(cimier_cfg) -> None:
-    """Patche en place la config cimier pour pointer le simulateur dev.
+    """Patche en place la config cimier pour pointer le simulateur dev unifié.
 
-    Force enabled=True (sinon court-circuit boot), host=127.0.0.1 port=8001
-    (cimier_simulator localhost), power_switch.type="noop" (pas de Shelly
-    réelle). Les autres champs (cycle_timeout_s, automation, weather_provider)
-    sont préservés tels quels de data/config.json.
+    Le simulateur (`core.hardware.cimier_simulator`) émule sur 127.0.0.1:8001 :
+      - les butées Shelly Uni+ (RPC Input.GetStatus id=0 BAS / id=1 HAUT),
+      - 3 relais legacy : id=0 → 24V, id=1 → MOT, id=2 → UPDN.
+    Conventions naturelles côté sim (relais ON = actif) ; les conventions
+    terrain potentiellement inversées sont validées au banc, pas en dev.
+    Ne touche jamais data/config.json sur disque (patch mémoire seulement).
     """
     cimier_cfg.enabled = True
-    cimier_cfg.host = "127.0.0.1"
-    cimier_cfg.port = 8001
-    cimier_cfg.power_switch.type = "noop"
+    cimier_cfg.switch_reader.type = "shelly_uni"
+    cimier_cfg.switch_reader.host = "127.0.0.1:8001"
+    cimier_cfg.switch_reader.api = "rpc"
+    cimier_cfg.switch_reader.open_input_id = 1
+    cimier_cfg.switch_reader.closed_input_id = 0
+    cimier_cfg.switch_reader.invert = True
+    cimier_cfg.power_switch.type = "shelly_gen1"
+    cimier_cfg.power_switch.host = "127.0.0.1:8001"
+    cimier_cfg.power_switch.switch_id = 0
+    cimier_cfg.motor_shelly.host_motor = "127.0.0.1:8001"
+    cimier_cfg.motor_shelly.host_dir = "127.0.0.1:8001"
+    cimier_cfg.motor_shelly.relay_motor = 1
+    cimier_cfg.motor_shelly.relay_dir = 2
+    cimier_cfg.motor_shelly.api = "legacy"
+    cimier_cfg.motor_shelly.motor_on_relay_state = True
+    cimier_cfg.motor_shelly.open_dir_state = True
+    cimier_cfg.motor_shelly.timer_safety_sec = 0.0
 
 
 def _build_service_from_config(config_path=None) -> CimierService:
@@ -1026,16 +1015,17 @@ def _build_service_from_config(config_path=None) -> CimierService:
     if _is_dev_mode_enabled():
         _apply_dev_mode_overrides(cfg.cimier)
         logger.info(
-            "cimier_dev_mode=on host=%s:%d power_switch=%s",
-            cfg.cimier.host,
-            cfg.cimier.port,
-            cfg.cimier.power_switch.type,
+            "cimier_dev_mode=on switch_reader=%s power=%s",
+            cfg.cimier.switch_reader.host,
+            cfg.cimier.power_switch.host,
         )
     power_switch = make_power_switch(cfg.cimier.power_switch)
+    switch_reader = make_switch_reader(cfg.cimier.switch_reader)
     weather_provider = make_weather_provider(cfg.cimier.weather_provider)
     return CimierService(
         cimier_config=cfg.cimier,
         power_switch=power_switch,
+        switch_reader=switch_reader,
         weather_provider=weather_provider,
         site_config=cfg.site,
     )
