@@ -8,12 +8,9 @@ N'utilise PAS la boucle événementielle (run()) — appelle les méthodes direc
 """
 
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 
 @pytest.fixture
@@ -22,21 +19,21 @@ def ipc_files(tmp_path):
     cmd_file = tmp_path / "motor_command.json"
     status_file = tmp_path / "motor_status.json"
     encoder_file = tmp_path / "ems22_position.json"
-    (PROJECT_ROOT / "logs").mkdir(parents=True, exist_ok=True)
     return cmd_file, status_file, encoder_file
 
 
 @pytest.fixture
-def motor_service(ipc_files):
+def motor_service(ipc_files, tmp_path):
     """MotorService patchée avec fichiers IPC temporaires."""
     cmd_file, status_file, encoder_file = ipc_files
 
     import services.ipc_manager as ipc_module
+    import services.motor_service as motor_module
     with patch.object(ipc_module, 'COMMAND_FILE', cmd_file), \
          patch.object(ipc_module, 'STATUS_FILE', status_file), \
-         patch.object(ipc_module, 'ENCODER_FILE', encoder_file):
-        from services.motor_service import MotorService
-        service = MotorService()
+         patch.object(ipc_module, 'ENCODER_FILE', encoder_file), \
+         patch.object(motor_module, 'LOGS_DIR', tmp_path):
+        service = motor_module.MotorService()
         yield service
 
 
