@@ -26,7 +26,9 @@ from services.cimier_scheduler import (
 
 
 def _site():
-    return SiteConfig(latitude=44.15, longitude=5.23, altitude=800.0, nom="Test", fuseau="Europe/Paris")
+    return SiteConfig(
+        latitude=44.15, longitude=5.23, altitude=800.0, nom="Test", fuseau="Europe/Paris"
+    )
 
 
 def _automation(**overrides):
@@ -206,6 +208,36 @@ def test_rising_with_closed_cimier_skips_state():
     assert decision.trigger == "skip:state"
     assert cimier.commands == []
     assert motor.calls == []
+
+
+def test_rising_alt_future_runtime_error_logs_warning_and_falls_back(caplog):
+    """RuntimeError sur le calcul alt_future → warning loggué + fallback alt_now.
+
+    Avant fix : le fallback était silencieux — une fermeture déclenchée par
+    ce chemin était inexplicable dans les logs terrain.
+    """
+    call_count = [0]
+
+    def alt_fn(when, *a, **kw):
+        idx = call_count[0]
+        call_count[0] += 1
+        if idx == 0:
+            return -10.0  # alt_now OK
+        raise RuntimeError("astropy future computation failed")
+
+    sched, cimier, motor, _ = _scheduler(
+        automation=_automation(),
+        alt_fn=alt_fn,
+        dir_fn=lambda *a, **kw: "rising",
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="services.cimier_scheduler"):
+        decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
+    # Fallback alt_now=-10 < target -6 → pas de close.
+    assert decision.trigger == "skip:state"
+    assert cimier.commands == []
+    assert any("alt_future_error" in rec.message for rec in caplog.records)
 
 
 def test_open_idempotent_within_cooldown_window():
@@ -389,6 +421,7 @@ class TestSchedulerModes:
             i = idx[0]
             idx[0] += 1
             return alt_values[i] if i < len(alt_values) else -10.0
+
         return fn
 
     def test_mode_manual_open_conditions_skipped(self):
@@ -593,6 +626,7 @@ class TestComputeNextTriggers:
 
     def test_astropy_runtime_error_returns_none_none(self):
         """RuntimeError astropy → (None, None) silencieusement (warning loggé)."""
+
         def raise_astropy(*a, **kw):
             raise RuntimeError("astropy down")
 

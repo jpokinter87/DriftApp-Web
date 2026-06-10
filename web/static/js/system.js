@@ -211,7 +211,7 @@ async function fetchCimierAutomation() {
         const mode = data.mode || 'unknown';
         const serviceMode = data.service_mode || mode;
         const serviceRunning = !!data.service_running;
-        const applyPending = !!(data.mode_apply_pending ?? data.restart_required);
+        const applyPending = !!data.mode_apply_pending;
         store.cimierAutomation.mode = mode;
         store.cimierAutomation.serviceMode = serviceMode;
         store.cimierAutomation.serviceRunning = serviceRunning;

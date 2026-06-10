@@ -217,7 +217,13 @@ class CimierService:
 
         self._stop_requested = False
         self._cooldown_end_ts: Optional[float] = None
+        # Erreur du dernier cycle, republiée pendant le cooldown pour rester
+        # visible dans l'UI (sinon écrasée dès le tick suivant — fix review).
+        self._last_cycle_error: str = ""
         self._pending_command: Optional[Dict[str, Any]] = None
+        # Dernière commande traitée (traçabilité status pendant idle/cooldown).
+        self._last_action_value: str = ""
+        self._last_command_id_value: str = ""
         # Butées Shelly Uni+ observées en dernier (alimente le mapping vers
         # CIMIER_STATE_* pour le scheduler).
         self._last_open_switch: bool = False
@@ -361,15 +367,16 @@ class CimierService:
                 if cmd is not None and self._pending_command is None:
                     self._pending_command = cmd
                 self._publish_status(
-                    state=STATE_COOLDOWN,
+                    state=STATE_ERROR if self._last_cycle_error else STATE_COOLDOWN,
                     phase=PHASE_COOLDOWN,
                     last_action=self._last_action_for_status(),
                     command_id=self._last_command_id_for_status(),
-                    error_message="",
+                    error_message=self._last_cycle_error,
                     remaining_quiet_s=remaining,
                 )
                 return
             self._cooldown_end_ts = None
+            self._last_cycle_error = ""
 
         # 2. Cooldown terminé : si commande pending, la traiter.
         cmd = self._pending_command
@@ -750,6 +757,7 @@ class CimierService:
 
             # Cooldown : démarrer la fenêtre anti-bounce.
             self._cooldown_end_ts = self._clock() + self._config.post_off_quiet_s
+            self._last_cycle_error = error_message
             state = STATE_ERROR if error_message else STATE_COOLDOWN
             self._publish_status(
                 state=state,
@@ -909,10 +917,10 @@ class CimierService:
         self._ipc.write_status(payload)
 
     def _last_action_for_status(self) -> str:
-        return getattr(self, "_last_action_value", "")
+        return self._last_action_value
 
     def _last_command_id_for_status(self) -> str:
-        return getattr(self, "_last_command_id_value", "")
+        return self._last_command_id_value
 
     def _derive_current_cimier_state(self) -> str:
         """Mappe l'état interne du service vers les labels CIMIER_STATE_* du scheduler.

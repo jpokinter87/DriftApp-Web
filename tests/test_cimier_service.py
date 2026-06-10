@@ -490,6 +490,51 @@ class TestErrorsAndTimeouts:
         assert last["state"] == STATE_ERROR
         assert last["error_message"] == "cycle_timeout"
 
+    def test_error_state_preserved_during_cooldown_ticks(
+        self,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        """L'état ERROR survit aux ticks de cooldown (diagnostic terrain).
+
+        Avant fix : le tick suivant republiait STATE_COOLDOWN avec
+        error_message="" → l'erreur disparaissait de l'UI après ~0.5 s.
+        """
+        reader = FakeSwitchReader(script=[(False, False)])  # poll → timeout
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=0.2,
+            post_off_quiet_s=10.0,
+            shelly_settle_s=0.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            switch_reader=reader,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "cooldown-err", "action": "open"})
+        assert ipc_manager.history[-1]["state"] == STATE_ERROR
+
+        # Tick pendant le cooldown : l'erreur doit rester visible.
+        clock.advance(1.0)
+        service.tick()
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "cycle_timeout"
+
+        # Cooldown expiré : retour idle, erreur effacée.
+        clock.advance(10.0)
+        service.tick()
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_IDLE
+        assert last["error_message"] == ""
+
     def test_both_switches_during_poll_sets_error(
         self,
         ipc_manager: RecordingIpcManager,
@@ -668,6 +713,22 @@ class TestIpcManager:
         ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
         ipc.write_command({"action": "open"})  # pas d'id
         assert ipc.read_command() is None
+
+    def test_ipc_status_last_update_is_utc_aware(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        """`last_update` doit être ISO 8601 tz-aware UTC (cohérent avec le
+        reste du cimier — scheduler/service publient en UTC). Un timestamp
+        naïf local était ambigu pour les consommateurs (Django, JS Date.parse
+        côté navigateur dans une autre timezone)."""
+        from datetime import datetime, timezone
+
+        cmd_file, status_file = tmp_ipc
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        ipc.write_status({"state": "idle", "phase": "idle"})
+        with open(status_file) as f:
+            payload = json.loads(f.read())
+        dt = datetime.fromisoformat(payload["last_update"])
+        assert dt.tzinfo is not None
+        assert dt.utcoffset() == timezone.utc.utcoffset(None)
 
 
 # ======================================================================

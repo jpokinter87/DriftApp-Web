@@ -62,6 +62,7 @@ CIMIER_STATE_ERROR = "error"
 @dataclass
 class SchedulerDecision:
     """Trace d'une décision : utile pour tests + logs structurés."""
+
     trigger: str
     sun_alt_deg: float
     direction: str
@@ -196,10 +197,7 @@ class CimierScheduler:
 
         # 2. CLOSE trigger : montant + alt projeté(advance + safety) >= target + cimier ouvert ou en cycle
         if direction == "rising":
-            advance_min = (
-                self._cfg.closing_advance_minutes
-                + self._cfg.clock_safety_margin_minutes
-            )
+            advance_min = self._cfg.closing_advance_minutes + self._cfg.clock_safety_margin_minutes
             future = now + timedelta(minutes=advance_min)
             try:
                 alt_future = self._sun_altitude_fn(
@@ -208,7 +206,12 @@ class CimierScheduler:
                     self._site.longitude,
                     self._site.altitude,
                 )
-            except RuntimeError:
+            except RuntimeError as exc:
+                logger.warning(
+                    "scheduler_event=alt_future_error exc=%s fallback_alt_now=%.2f",
+                    exc,
+                    alt_now,
+                )
                 alt_future = alt_now
             if alt_future >= self._cfg.closing_target_sun_altitude_deg:
                 if current_cimier_state in (CIMIER_STATE_OPEN, CIMIER_STATE_CYCLE):
@@ -274,8 +277,7 @@ class CimierScheduler:
         sampling = timedelta(minutes=self._NEXT_TRIGGER_SAMPLING_MINUTES)
         horizon = timedelta(hours=self._NEXT_TRIGGER_HORIZON_HOURS)
         close_offset = timedelta(
-            minutes=self._cfg.closing_advance_minutes
-            + self._cfg.clock_safety_margin_minutes
+            minutes=self._cfg.closing_advance_minutes + self._cfg.clock_safety_margin_minutes
         )
         delta_for_dir = timedelta(seconds=60)
 
@@ -284,7 +286,9 @@ class CimierScheduler:
         # attendra qu'elle redevienne fausse puis vraie à nouveau (= prochaine
         # transition légitime).
         try:
-            prev_open_match = self._open_condition_at(now, delta_for_dir) if not skip_open else False
+            prev_open_match = (
+                self._open_condition_at(now, delta_for_dir) if not skip_open else False
+            )
             prev_close_match = self._close_condition_at(now, delta_for_dir, close_offset)
         except RuntimeError as exc:
             logger.warning("scheduler_event=compute_next_triggers_astropy_error exc=%s", exc)
@@ -314,30 +318,41 @@ class CimierScheduler:
         """True si la condition d'ouverture (descending + alt<=threshold) est
         remplie au temps t. Helper pour détection de transition."""
         direction = self._sun_direction_fn(
-            t, t - delta_for_dir,
-            self._site.latitude, self._site.longitude, self._site.altitude,
+            t,
+            t - delta_for_dir,
+            self._site.latitude,
+            self._site.longitude,
+            self._site.altitude,
         )
         if direction != "descending":
             return False
         alt = self._sun_altitude_fn(
             t,
-            self._site.latitude, self._site.longitude, self._site.altitude,
+            self._site.latitude,
+            self._site.longitude,
+            self._site.altitude,
         )
         return alt <= self._cfg.opening_sun_altitude_deg
 
-    def _close_condition_at(self, t: datetime, delta_for_dir: timedelta,
-                            close_offset: timedelta) -> bool:
+    def _close_condition_at(
+        self, t: datetime, delta_for_dir: timedelta, close_offset: timedelta
+    ) -> bool:
         """True si la condition de fermeture (rising + alt(t+offset)>=target)
         est remplie au temps t. Helper pour détection de transition."""
         direction = self._sun_direction_fn(
-            t, t - delta_for_dir,
-            self._site.latitude, self._site.longitude, self._site.altitude,
+            t,
+            t - delta_for_dir,
+            self._site.latitude,
+            self._site.longitude,
+            self._site.altitude,
         )
         if direction != "rising":
             return False
         alt_future = self._sun_altitude_fn(
             t + close_offset,
-            self._site.latitude, self._site.longitude, self._site.altitude,
+            self._site.latitude,
+            self._site.longitude,
+            self._site.altitude,
         )
         return alt_future >= self._cfg.closing_target_sun_altitude_deg
 

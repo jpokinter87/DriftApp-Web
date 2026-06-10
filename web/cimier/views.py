@@ -11,8 +11,8 @@ seule, etc.).
 Phase 4 (sub-plan v6.0-04-01) ajoute :
 - `AutomationView` : GET retourne le mode courant + next_open_at + next_close_at
   (depuis cimier_status.json). POST persiste un nouveau mode dans data/config.json
-  (atomique). `restart_required` indique que cimier_service doit être redémarré
-  pour prise en compte (lecture config au boot uniquement, pas de hot-reload).
+  (atomique). `apply_pending` indique que le cimier_service rechargera le mode
+  au prochain tick scheduler (≤60s, hot-reload — pas de redémarrage requis).
 - `ParkingSessionView` : POST atomique = `tracking_stop` motor IPC + GOTO
   `parking_target_azimuth_deg` + `close` cimier IPC. Best-effort (les
   3 commandes sont émises même si l'une échoue, priorité protection).
@@ -187,11 +187,20 @@ class AutomationView(APIView):
 
             # Stubs minimaux : compute_next_triggers n'utilise ni cimier_ipc ni motor_ipc.
             class _NoopIpc:
-                def write_command(self, *a, **kw): pass
-                def send_goto(self, *a, **kw): return True
-                def send_jog(self, *a, **kw): return True
-                def send_tracking_stop(self, *a, **kw): return True
-                def send_stop(self, *a, **kw): return True
+                def write_command(self, *a, **kw):
+                    pass
+
+                def send_goto(self, *a, **kw):
+                    return True
+
+                def send_jog(self, *a, **kw):
+                    return True
+
+                def send_tracking_stop(self, *a, **kw):
+                    return True
+
+                def send_stop(self, *a, **kw):
+                    return True
 
             scheduler = CimierScheduler(
                 automation_config=cfg.cimier.automation,
@@ -200,9 +209,7 @@ class AutomationView(APIView):
                 cimier_ipc=_NoopIpc(),
                 motor_ipc=_NoopIpc(),
             )
-            next_open, next_close = scheduler.compute_next_triggers(
-                datetime.now(timezone.utc)
-            )
+            next_open, next_close = scheduler.compute_next_triggers(datetime.now(timezone.utc))
             value = (
                 next_open.isoformat() if next_open else None,
                 next_close.isoformat() if next_close else None,
@@ -212,9 +219,8 @@ class AutomationView(APIView):
         except Exception as exc:
             # Log discret, pas critique (l'UI affichera juste '--').
             import logging
-            logging.getLogger(__name__).warning(
-                "compute_next_triggers_fallback failed: %s", exc
-            )
+
+            logging.getLogger(__name__).warning("compute_next_triggers_fallback failed: %s", exc)
             return None
 
     @classmethod
@@ -224,18 +230,18 @@ class AutomationView(APIView):
         Critère : `last_update` ISO 8601 présent ET écart < 90 s. Si absent ou
         trop vieux, le service est considéré arrêté.
 
-        Important : les services écrivent `last_update = datetime.now().isoformat()`
-        donc en HEURE LOCALE naive (cf. cimier_ipc_manager.py:118 et
-        motor_service.py:393). On compare donc naive vs naive (heure locale)
-        pour éviter une dérive de la timezone (ex: CEST UTC+2 inverserait
-        artificiellement le signe de la diff et le check < 90 s passerait
-        toujours, fix bug 2026-05-02 21:30).
+        Important : `cimier_ipc_manager.write_status` publie désormais
+        `last_update` en ISO 8601 tz-aware UTC (branche tz-aware ci-dessous) ;
+        `motor_service.py` publie encore en heure locale naive. Les deux cas
+        sont normalisés en naive local avant comparaison avec datetime.now()
+        (fix dérive timezone bug 2026-05-02 21:30).
         """
         last_update_iso = status_payload.get("last_update")
         if not last_update_iso:
             return False
         try:
             from datetime import datetime
+
             dt = datetime.fromisoformat(last_update_iso)
             # Si le timestamp est tz-aware (cas atypique), on le convertit en
             # naive local pour comparer cohéremment avec datetime.now() naive.
@@ -301,9 +307,9 @@ class AutomationView(APIView):
                 {"error": f"Écriture config.json impossible : {exc}"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        return Response(
-            {"mode": mode, "applied": True, "restart_required": True}
-        )
+        # `apply_pending` : le cimier_service recharge le mode au prochain
+        # tick scheduler (≤60s) — aucun redémarrage requis (cf. docstring GET).
+        return Response({"mode": mode, "applied": True, "apply_pending": True})
 
     @staticmethod
     def _write_atomic(target: Path, data: dict) -> None:
@@ -352,26 +358,24 @@ class ParkingSessionView(APIView):
         except (IOError, OSError, ValueError):
             parking_deg = 45.0
 
-        motor_writer = MotorIpcWriter(
-            command_file=Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"])
-        )
+        motor_writer = MotorIpcWriter(command_file=Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"]))
         # Étape 1 : tracking_stop. Laisse motor_service consommer + couper le
         # thread tracking avant la prochaine commande.
         tracking_stopped = motor_writer.send_tracking_stop()
         time.sleep(self._MOTOR_IPC_INTER_COMMAND_DELAY_S)
         # Étape 2 : GOTO parking. Va passer motor en initializing/idle puis
         # rejoindre la cible (45° par défaut, configurable).
-        goto_45_sent = motor_writer.send_goto(parking_deg)
+        goto_parking_sent = motor_writer.send_goto(parking_deg)
         time.sleep(self._MOTOR_IPC_INTER_COMMAND_DELAY_S)
         # Étape 3 : close cimier. IPC séparé (cimier_command.json), pas de
         # collision avec motor.
         cimier_close_sent = cimier_client.send_command("close")
 
-        all_ok = tracking_stopped and goto_45_sent and cimier_close_sent
+        all_ok = tracking_stopped and goto_parking_sent and cimier_close_sent
         body = {
             "applied": all_ok,
             "tracking_stopped": tracking_stopped,
-            "goto_45_sent": goto_45_sent,
+            "goto_parking_sent": goto_parking_sent,
             "cimier_close_sent": cimier_close_sent,
             "parking_target_deg": parking_deg,
         }

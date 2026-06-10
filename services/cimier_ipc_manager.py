@@ -21,7 +21,7 @@ import fcntl
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -112,10 +112,10 @@ class CimierIpcManager:
     def write_status(self, status: Dict[str, Any]) -> None:
         """Écrit l'état cimier dans le fichier IPC (atomique, verrou exclusif).
 
-        Le champ `last_update` (ISO local) est ajouté automatiquement.
+        Le champ `last_update` (ISO 8601 tz-aware UTC) est ajouté automatiquement.
         """
         payload = dict(status)
-        payload["last_update"] = datetime.now().isoformat()
+        payload["last_update"] = datetime.now(timezone.utc).isoformat()
 
         try:
             tmp_file = self.status_file.with_suffix(".tmp")

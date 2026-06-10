@@ -342,7 +342,7 @@ function initEventListeners() {
         elements.btnCimierCloseCancel.addEventListener('click', closeCimierCloseConfirmModal);
     }
     if (elements.btnCimierCloseConfirm) {
-        elements.btnCimierCloseConfirm.addEventListener('click', () => {
+        elements.btnCimierCloseConfirm.addEventListener('click', async () => {
             // Double-garde côté code en plus du :disabled du template.
             if (Alpine.store('dashboard').cimierCloseConfirmCountdown > 0) return;
             closeCimierCloseConfirmModal();
@@ -350,7 +350,9 @@ function initEventListeners() {
             // doit donc stopper le tracking avant de fermer le cimier.
             // confirmCimierClose ne s'affiche que si tracking actif (cf.
             // ligne 837), donc trackingActive=true à ce point.
-            stopTracking();
+            // await : sans lui, le close partait avant que le stop tracking
+            // soit enregistré côté backend (race condition).
+            await stopTracking();
             sendCimierAction('close');
         });
     }
@@ -394,7 +396,20 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 
     try {
         const response = await fetch(`${API_BASE}${endpoint}`, options);
-        return await response.json();
+        let payload;
+        try {
+            payload = await response.json();
+        } catch (parseError) {
+            // Réponse non-JSON (ex. page HTML 502 pendant un restart Django).
+            console.error(`API Error: ${endpoint}`, `HTTP ${response.status} non-JSON`);
+            return { error: `HTTP ${response.status}` };
+        }
+        // Statut HTTP d'erreur : garantit que les consommateurs qui testent
+        // result.error le voient, sans écraser un body d'erreur déjà détaillé.
+        if (!response.ok && payload && payload.error === undefined) {
+            payload.error = `HTTP ${response.status}`;
+        }
+        return payload;
     } catch (error) {
         console.error(`API Error: ${endpoint}`, error);
         return { error: error.message };
@@ -797,6 +812,17 @@ const CIMIER_PHASE_LABELS = {
     cooldown: 'Anti-rebond'
 };
 
+// Seuils de vivacité du cimier_service (fraîcheur de status.last_update).
+const CIMIER_STALE_MS = 90_000;   // service considéré arrêté (lock boutons, skip parking)
+const CIMIER_SILENT_MS = 60_000;  // cascade ouverture tracking bypassée
+
+// True si le status cimier est absent/illisible/trop vieux.
+function isCimierStale(lastUpdate, thresholdMs = CIMIER_STALE_MS) {
+    return !lastUpdate ||
+        !Number.isFinite(Date.parse(lastUpdate)) ||
+        (Date.now() - Date.parse(lastUpdate)) > thresholdMs;
+}
+
 // Grise/réactive Ouvrir+Fermer pendant un cycle (pattern v5.12.1).
 // STOP reste TOUJOURS actif (sécurité — interrompt le cycle en cours).
 function setCimierControlsDisabled(disabled) {
@@ -808,7 +834,9 @@ async function pollCimierStatus() {
     const status = await apiCall('/api/cimier/status/');
     const store = Alpine.store('dashboard');
 
-    if (!status || status.error && status.state === undefined) {
+    // Couvre : réponse absente, erreur sans state, et state null/non-string
+    // (un payload partiel ferait TypeError sur .toLowerCase() plus bas).
+    if (!status || typeof status.state !== 'string') {
         // Service Django KO complet — on reset à null sans spammer les logs.
         store.cimier = null;
         setCimierControlsDisabled(true);
@@ -835,10 +863,7 @@ async function pollCimierStatus() {
     // désormais piloté uniquement par `fetchAutomationState()` qui interroge
     // `/api/cimier/automation/` (source vérité = data/config.json côté backend
     // depuis fix smoke 2026-05-02).
-    const lastUpdate = status?.last_update;
-    const statusStale = !lastUpdate ||
-        !Number.isFinite(Date.parse(lastUpdate)) ||
-        (Date.now() - Date.parse(lastUpdate)) > 90_000;
+    const statusStale = isCimierStale(status?.last_update);
     if (!statusStale) {
         // Service vivant : ses calculs prennent priorité.
         store.automationNextOpenAt = status.next_open_at || null;
@@ -882,10 +907,7 @@ async function sendCimierAction(action) {
     // un message timeline clair pour éviter à l'utilisateur de se demander
     // pourquoi ÉTAT/PHASE ne changent pas.
     const cimier = Alpine.store('dashboard').cimier;
-    const lastUpdate = cimier?.last_update;
-    const cimierStale = !lastUpdate ||
-        !Number.isFinite(Date.parse(lastUpdate)) ||
-        (Date.now() - Date.parse(lastUpdate)) > 90_000;
+    const cimierStale = isCimierStale(cimier?.last_update);
 
     log(`Cimier : ${labels[action]} demandée`, 'info');
     if (cimierStale) {
@@ -950,10 +972,10 @@ async function ensureCimierOpenForTracking() {
     const cimier = store.cimier;
     const cimierState = store.displayedCimierState() ?? 'unknown';
 
-    // Service silencieux (status non rafraîchi >60 s) : tracking direct.
+    // Service silencieux (status non rafraîchi > CIMIER_SILENT_MS) : tracking direct.
     if (cimier?.last_update) {
         const lastUpdateMs = Date.parse(cimier.last_update);
-        if (Number.isFinite(lastUpdateMs) && (Date.now() - lastUpdateMs) > 60_000) {
+        if (Number.isFinite(lastUpdateMs) && (Date.now() - lastUpdateMs) > CIMIER_SILENT_MS) {
             log('Cimier Service inactif — tracking lancé sans cascade ouverture cimier', 'info');
             pushCimierTimeline('INFO', 'Cimier service inactif — tracking sans cascade');
             return true;
@@ -1073,7 +1095,7 @@ function recomputeAutomationCountdown() {
 // Appelée au boot ET sur intervalle (30 s) pour capter une éventuelle modif
 // venue d'un autre onglet/device.
 // Utilise la vue 04-01 enrichie post-smoke : retourne {mode, service_mode,
-// restart_required, next_open_at, next_close_at}.
+// mode_apply_pending, service_running, next_open_at, next_close_at}.
 async function fetchAutomationState() {
     try {
         const data = await apiCall('/api/cimier/automation/');
@@ -1228,7 +1250,7 @@ async function executeParkingSession() {
 
     // Étape 2 (en cours) : GOTO émis, on attend que motor passe par
     // initializing/idle ET position ≈ target.
-    if (result && result.goto_45_sent) {
+    if (result && result.goto_parking_sent) {
         store.parkingStepGoto = 'in_progress';
         pushCimierTimeline('INFO', `2/3 ⏳ GOTO ${store.parkingTargetDeg}° en cours…`);
     } else {
@@ -1240,10 +1262,7 @@ async function executeParkingSession() {
     // Détection d'un service cimier inactif (status stale > 90s ou absent) :
     // dans ce cas on skip l'attente — le watcher timeoutait sinon à 2 min sans
     // gain (ex: machine dev avec cimier.enabled=false).
-    const cimierLastUpdate = store.cimier?.last_update;
-    const cimierIsStale = !cimierLastUpdate ||
-        !Number.isFinite(Date.parse(cimierLastUpdate)) ||
-        (Date.now() - Date.parse(cimierLastUpdate)) > 90_000;
+    const cimierIsStale = isCimierStale(store.cimier?.last_update);
     if (result && result.cimier_close_sent && !cimierIsStale) {
         store.parkingStepCimier = 'cycle';
         pushCimierTimeline('INFO', '3/3 ⏳ Fermeture cimier en cours…');
@@ -1954,7 +1973,11 @@ function drawCompass() {
     ctx.stroke();
 
     // Marqueur Parking à 45° (parking_target_azimuth_deg dans data/config.json)
-    drawParkingMarker(ctx, cx, cy, domeRadius + 22, 45);
+    // Cible parking configurable (parking_target_azimuth_deg) — 45° par défaut.
+    // window.Alpine?. : drawCompass est aussi appelé au DOMContentLoaded,
+    // potentiellement avant l'init d'Alpine.
+    const parkingDeg = window.Alpine?.store('dashboard')?.parkingTargetDeg ?? 45;
+    drawParkingMarker(ctx, cx, cy, domeRadius + 22, parkingDeg);
 
     // =========================================================================
     // COUCHE 7: Télescope au centre avec timer

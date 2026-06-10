@@ -16,6 +16,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
+import os
 import uuid
 from pathlib import Path
 from typing import Any, Dict
@@ -35,15 +36,22 @@ class MotorIpcWriter:
         """Émet une commande IPC. Retourne True si écriture réussie."""
         payload: Dict[str, Any] = {"id": str(uuid.uuid4()), "command": command, **params}
         try:
-            if not self.command_file.exists():
-                self.command_file.touch(mode=0o666)
-            with open(self.command_file, "w") as f:
+            # Écriture atomique tmp+rename (pattern CimierIpcManager) : un échec
+            # en cours d'écriture ne tronque jamais la dernière commande valide.
+            tmp_file = self.command_file.with_suffix(".tmp")
+            content = json.dumps(payload)
+            with open(tmp_file, "w") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
-                    f.write(json.dumps(payload))
+                    f.write(content)
                     f.flush()
                 finally:
                     fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+            # 666 : les services tournent en root (systemd) mais Django
+            # (non-root) écrit aussi ce fichier — le rename ne doit pas
+            # remplacer un fichier 666 par un 644 (umask root).
+            os.chmod(tmp_file, 0o666)
+            tmp_file.rename(self.command_file)
             return True
         except (IOError, OSError) as exc:
             logger.error("motor_ipc_writer error: cmd=%s exc=%s", command, exc)

@@ -74,6 +74,40 @@ def test_send_creates_file_if_missing(tmp_path):
     assert cmd["command"] == "jog" and cmd["delta"] == 0.5
 
 
+def test_failed_send_does_not_corrupt_previous_command(writer, tmp_path, monkeypatch):
+    """Écriture atomique tmp+rename : un échec en cours d'écriture ne doit
+    pas tronquer/corrompre la dernière commande valide du fichier cible."""
+    import services.motor_ipc_writer as m
+
+    target = tmp_path / "motor_command.json"
+    assert writer.send_goto(45.0) is True
+
+    def _boom(*args):
+        raise OSError("flock failed")
+
+    monkeypatch.setattr(m.fcntl, "flock", _boom)
+    assert writer.send_jog(1.0) is False
+    # La commande précédente reste intacte et parsable.
+    cmd = json.loads(target.read_text())
+    assert cmd["command"] == "goto"
+    assert cmd["angle"] == 45.0
+
+
+def test_send_leaves_file_world_writable(writer, tmp_path):
+    """Le fichier cible doit rester mode 666 après chaque write : les services
+    tournent en root (systemd) mais Django (non-root) écrit aussi dedans."""
+    import os
+
+    target = tmp_path / "motor_command.json"
+    # umask restrictif simulant un service root (umask 022 → 644 par défaut).
+    old_umask = os.umask(0o022)
+    try:
+        assert writer.send_goto(45.0) is True
+    finally:
+        os.umask(old_umask)
+    assert (target.stat().st_mode & 0o777) == 0o666
+
+
 def test_send_returns_false_on_ioerror(writer):
     """Patch open pour lever OSError → False, pas d'exception remontée au caller."""
     with patch("builtins.open", side_effect=OSError("disk full")):
@@ -91,6 +125,7 @@ def test_send_jog_with_negative_delta(writer, tmp_path):
 def test_motor_ipc_writer_has_no_django_import():
     """Vérifie module Python pur — pas d'import Django."""
     import services.motor_ipc_writer as m
+
     src_text = Path(m.__file__).read_text()
     # Pas de "from django" ni "import django" dans le module
     assert "from django" not in src_text

@@ -195,22 +195,30 @@ class TestNoHardcodedIps:
 def writable_config_file(tmp_path, monkeypatch):
     """Pointe settings.DRIFTAPP_CONFIG vers un fichier tmp + payload réaliste."""
     from django.conf import settings as dj_settings
+
     cfg = {
         "site": {
-            "latitude": 44.15, "longitude": 5.23, "altitude": 800,
-            "nom": "Test", "fuseau": "Europe/Paris",
+            "latitude": 44.15,
+            "longitude": 5.23,
+            "altitude": 800,
+            "nom": "Test",
+            "fuseau": "Europe/Paris",
         },
         "moteur": {
             "gpio_pins": {"dir": 17, "step": 18},
-            "steps_per_revolution": 200, "microsteps": 4,
-            "gear_ratio": 2230, "steps_correction_factor": 1.08849,
-            "motor_delay_base": 0.002, "motor_delay_min": 0.00001,
+            "steps_per_revolution": 200,
+            "microsteps": 4,
+            "gear_ratio": 2230,
+            "steps_correction_factor": 1.08849,
+            "motor_delay_base": 0.002,
+            "motor_delay_min": 0.00001,
             "motor_delay_max": 0.01,
             "max_speed_steps_per_sec": 1000,
             "acceleration_steps_per_sec2": 500,
         },
         "suivi": {
-            "seuil_correction_deg": 0.5, "intervalle_verification_sec": 60,
+            "seuil_correction_deg": 0.5,
+            "intervalle_verification_sec": 60,
             "abaque_file": "data/Loi_coupole.xlsx",
         },
         "encodeur": {"enabled": True, "spi": {}, "mecanique": {}},
@@ -236,6 +244,7 @@ class TestAutomationView:
         # Service vivant : last_update = datetime.now() (heure locale naive,
         # format service via cimier_ipc_manager.py:118 et motor_service.py:393).
         from datetime import datetime as _dt
+
         fresh_iso = _dt.now().isoformat()
         status_payload = {
             "state": "idle",
@@ -255,7 +264,7 @@ class TestAutomationView:
         assert body["next_open_at"] == "2026-05-15T21:30:00+00:00"
         assert body["next_close_at"] == "2026-05-16T04:45:00+00:00"
 
-    def test_get_returns_restart_required_when_config_differs_from_service_mode(
+    def test_get_returns_apply_pending_when_config_differs_from_service_mode(
         self, api_client, mock_cimier_ipc, writable_config_file
     ):
         # Config user choice = full (vient de POSTer) ; service en mémoire = manual
@@ -264,6 +273,7 @@ class TestAutomationView:
         cfg["cimier"]["automation"] = {"mode": "full"}
         writable_config_file.write_text(json.dumps(cfg))
         from datetime import datetime as _dt
+
         fresh_iso = _dt.now().isoformat()
         status_payload = {
             "state": "idle",
@@ -292,6 +302,7 @@ class TestAutomationView:
         writable_config_file.write_text(json.dumps(cfg))
         # Status présent mais last_update vieux de 5 min.
         from datetime import datetime as _dt, timedelta
+
         stale_iso = (_dt.now() - timedelta(minutes=5)).isoformat()
         status_payload = {
             "state": "idle",
@@ -339,15 +350,13 @@ class TestAutomationView:
         body = response.json()
         assert body["mode"] == "full"
 
-    def test_post_valid_mode_persists_to_config_json(
-        self, api_client, writable_config_file
-    ):
-        response = api_client.post(
-            "/api/cimier/automation/", {"mode": "semi"}, format="json"
-        )
+    def test_post_valid_mode_persists_to_config_json(self, api_client, writable_config_file):
+        response = api_client.post("/api/cimier/automation/", {"mode": "semi"}, format="json")
         assert response.status_code == 200
         body = response.json()
-        assert body == {"mode": "semi", "applied": True, "restart_required": True}
+        # `apply_pending` (et non `restart_required`) : le cimier_service
+        # recharge le mode au prochain tick scheduler (≤60s), sans restart.
+        assert body == {"mode": "semi", "applied": True, "apply_pending": True}
         # Fichier réécrit avec mode="semi"
         cfg = json.loads(writable_config_file.read_text())
         assert cfg["cimier"]["automation"]["mode"] == "semi"
@@ -359,9 +368,7 @@ class TestAutomationView:
         self, api_client, writable_config_file
     ):
         original = writable_config_file.read_text()
-        response = api_client.post(
-            "/api/cimier/automation/", {"mode": "yolo"}, format="json"
-        )
+        response = api_client.post("/api/cimier/automation/", {"mode": "yolo"}, format="json")
         assert response.status_code == 400
         body = response.json()
         assert "error" in body
@@ -370,21 +377,15 @@ class TestAutomationView:
         assert writable_config_file.read_text() == original
 
     def test_post_missing_mode_returns_400(self, api_client, writable_config_file):
-        response = api_client.post(
-            "/api/cimier/automation/", {}, format="json"
-        )
+        response = api_client.post("/api/cimier/automation/", {}, format="json")
         assert response.status_code == 400
 
-    def test_post_strips_legacy_enabled_key(
-        self, api_client, writable_config_file
-    ):
+    def test_post_strips_legacy_enabled_key(self, api_client, writable_config_file):
         # Pré-écriture : config legacy avec enabled
         cfg = json.loads(writable_config_file.read_text())
         cfg["cimier"]["automation"] = {"enabled": True}
         writable_config_file.write_text(json.dumps(cfg))
-        response = api_client.post(
-            "/api/cimier/automation/", {"mode": "semi"}, format="json"
-        )
+        response = api_client.post("/api/cimier/automation/", {"mode": "semi"}, format="json")
         assert response.status_code == 200
         cfg_after = json.loads(writable_config_file.read_text())
         assert cfg_after["cimier"]["automation"]["mode"] == "semi"
@@ -400,6 +401,7 @@ class TestAutomationView:
 def mock_motor_ipc(tmp_path, monkeypatch):
     """Pointe settings.MOTOR_SERVICE_IPC['COMMAND_FILE'] vers tmp."""
     from django.conf import settings as dj_settings
+
     motor_cmd = tmp_path / "motor_command.json"
     new_ipc = dict(dj_settings.MOTOR_SERVICE_IPC)
     new_ipc["COMMAND_FILE"] = str(motor_cmd)
@@ -421,7 +423,7 @@ class TestParkingSessionView:
         body = response.json()
         assert body["applied"] is True
         assert body["tracking_stopped"] is True
-        assert body["goto_45_sent"] is True
+        assert body["goto_parking_sent"] is True
         assert body["cimier_close_sent"] is True
         assert body["parking_target_deg"] == 45.0
         # IPC cimier : last write = close
@@ -459,17 +461,16 @@ class TestParkingSessionView:
         writable_config_file,
     ):
         from web.common.cimier_client import cimier_client
+
         # cimier IPC down (send_command renvoie False)
         with patch.object(cimier_client, "send_command", return_value=False):
-            response = api_client.post(
-                "/api/cimier/parking-session/", {}, format="json"
-            )
+            response = api_client.post("/api/cimier/parking-session/", {}, format="json")
         assert response.status_code == 503
         body = response.json()
         assert body["applied"] is False
         # Motor commands quand même envoyées (best-effort)
         assert body["tracking_stopped"] is True
-        assert body["goto_45_sent"] is True
+        assert body["goto_parking_sent"] is True
         assert body["cimier_close_sent"] is False
         assert "error" in body
 
