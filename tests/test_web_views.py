@@ -250,6 +250,25 @@ class TestEncoderView:
         response = api_client.get("/api/hardware/encoder/")
         assert response.status_code == 200
 
+    def test_encoder_exposes_last_calibration_at(self, api_client, mock_ipc):
+        """v6.7.1 : le timestamp de recalage est forwardé pour le signal UI.
+
+        Patch direct sur le module routé par Django (doublon sys.modules
+        `hardware.views` vs `web.hardware.views`, cf. tests calibration ci-dessous).
+        """
+        import hardware.views as routed
+        encoder_payload = {
+            "angle": 45.0,
+            "calibrated": True,
+            "status": "OK",
+            "raw": 512,
+            "last_calibration_at": "2026-06-14T20:05:00+00:00",
+        }
+        with patch.object(routed.motor_client, "get_encoder_status", return_value=encoder_payload):
+            response = api_client.get("/api/hardware/encoder/")
+        assert response.status_code == 200
+        assert response.data["last_calibration_at"] == "2026-06-14T20:05:00+00:00"
+
 
 class TestMotorStatusView:
     def test_status(self, api_client, mock_ipc):

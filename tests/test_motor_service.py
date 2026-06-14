@@ -336,3 +336,117 @@ class TestManualCalibrationCommand:
         assert cal['method'] == 'exception'
         assert 'encoder dead' in (cal['error_msg'] or '')
         assert motor_service.current_status['status'] == 'idle'
+
+
+class TestLiveRecalibration:
+    """v6.7.1 : recalage live au franchissement manuel du microswitch 45°.
+
+    Le daemon encodeur republie `last_calibration_at` à chaque front du switch.
+    `_check_live_recalibration` lève l'état « calibration requise » sans imposer
+    un sweep, en s'appuyant sur le changement de ce timestamp.
+    """
+
+    def _set_calib_status(self, motor_service, status):
+        motor_service.current_status['calibration'] = {
+            'status': status,
+            'method': 'sweep' if status != 'unknown' else None,
+            'last_calibration_at': None,
+            'error_msg': 'boom' if status in ('degraded', 'exception') else None,
+            'duration_sec': None,
+        }
+
+    def test_flips_degraded_to_ok_on_new_timestamp(self, motor_service):
+        """Switch franchi (timestamp change) alors que dégradé → status ok / live_switch."""
+        self._set_calib_status(motor_service, 'degraded')
+        motor_service._last_seen_calibration_at = '2026-06-14T20:00:00+00:00'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': '2026-06-14T20:05:00+00:00'},
+        ):
+            motor_service._check_live_recalibration()
+        cal = motor_service.current_status['calibration']
+        assert cal['status'] == 'ok'
+        assert cal['method'] == 'live_switch'
+        assert cal['last_calibration_at'] == '2026-06-14T20:05:00+00:00'
+        assert cal['error_msg'] is None
+        assert motor_service._last_seen_calibration_at == '2026-06-14T20:05:00+00:00'
+
+    def test_unknown_also_flips_to_ok(self, motor_service):
+        """Même comportement depuis l'état 'unknown'."""
+        self._set_calib_status(motor_service, 'unknown')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': 'T2'},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'ok'
+
+    def test_no_change_is_noop(self, motor_service):
+        """Timestamp identique → aucun changement de statut."""
+        self._set_calib_status(motor_service, 'degraded')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': 'T1'},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'degraded'
+
+    def test_first_observation_sets_baseline_without_flip(self, motor_service):
+        """Premier passage (baseline None) : on enregistre le ts hérité du boot,
+        sans considérer cela comme un franchissement → pas de bascule."""
+        self._set_calib_status(motor_service, 'degraded')
+        motor_service._last_seen_calibration_at = None
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': 'T-boot'},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'degraded'
+        assert motor_service._last_seen_calibration_at == 'T-boot'
+
+    def test_does_not_downgrade_when_already_ok(self, motor_service):
+        """Si déjà ok, un nouveau ts n'altère pas le sous-dict (baseline avance seulement)."""
+        self._set_calib_status(motor_service, 'ok')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': 'T2'},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'ok'
+        assert motor_service.current_status['calibration']['method'] == 'sweep'
+        assert motor_service._last_seen_calibration_at == 'T2'
+
+    def test_does_not_interfere_during_running_sweep(self, motor_service):
+        """Pendant un sweep (running), la routine possède le statut → pas de bascule,
+        mais la baseline avance pour ne pas redéclencher après coup."""
+        self._set_calib_status(motor_service, 'running')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'last_calibration_at': 'T2'},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'running'
+        assert motor_service._last_seen_calibration_at == 'T2'
+
+    def test_missing_status_dict_is_safe(self, motor_service):
+        """read_status renvoie None (daemon indispo) → no-op sans exception."""
+        self._set_calib_status(motor_service, 'degraded')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(motor_service.daemon_reader, 'read_status', return_value=None):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'degraded'
+
+    def test_missing_timestamp_key_is_safe(self, motor_service):
+        """Dict sans last_calibration_at → no-op."""
+        self._set_calib_status(motor_service, 'degraded')
+        motor_service._last_seen_calibration_at = 'T1'
+        with patch.object(
+            motor_service.daemon_reader, 'read_status',
+            return_value={'angle': 45.0},
+        ):
+            motor_service._check_live_recalibration()
+        assert motor_service.current_status['calibration']['status'] == 'degraded'

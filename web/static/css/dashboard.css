@@ -134,6 +134,26 @@ header h1 span {
     color: var(--color-accent-green) !important;
 }
 
+/* Flash bref au franchissement du microswitch 45° (recalage live, v6.7.1).
+   4 pulsations vertes ~2 s puis retrait de la classe côté JS. */
+.enc-item.enc-flash {
+    animation: enc-recal-flash 0.5s ease-in-out 4 !important;
+}
+
+@keyframes enc-recal-flash {
+    0%, 100% {
+        border-color: var(--color-accent-green);
+        box-shadow: none;
+    }
+    50% {
+        border-color: var(--color-accent-green);
+        box-shadow:
+            0 0 8px var(--color-accent-green),
+            0 0 18px var(--color-accent-green),
+            inset 0 0 10px rgba(0, 255, 128, 0.25);
+    }
+}
+
 /* Etat FROZEN — ALERTE ROUGE NEON CLIGNOTANT */
 .enc-item.enc-frozen {
     border-color: #ff0040 !important;

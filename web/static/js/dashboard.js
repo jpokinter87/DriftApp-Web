@@ -134,7 +134,8 @@ let state = {
     lastUpdate: null,
     trackingInfo: {},  // Pour position_cible, etc.
     gotoInfo: null,    // Pour la modal GOTO
-    encoderFrozenLogged: false  // Pour éviter de logger l'alerte plusieurs fois
+    encoderFrozenLogged: false,  // Pour éviter de logger l'alerte plusieurs fois
+    lastSeenCalibrationAt: undefined  // Baseline ts recalage switch 45° (v6.7.1)
 };
 
 // Countdown timer (Correction 1)
@@ -1394,6 +1395,22 @@ async function updateStatus() {
         };
     }
 
+    // v6.7.1 — signal explicite au franchissement du microswitch 45°.
+    // Le daemon republie encoder.last_calibration_at à chaque front du switch ;
+    // un changement = recalage frais. Première observation : on enregistre la
+    // baseline (ts hérité du boot) sans signaler. Le backend lève la bannière en
+    // parallèle (motor.calibration.status → ok) ; ici on donne le feedback humain.
+    const recalTs = encoder && encoder.last_calibration_at;
+    if (recalTs) {
+        if (state.lastSeenCalibrationAt === undefined) {
+            state.lastSeenCalibrationAt = recalTs;  // baseline silencieuse
+        } else if (recalTs !== state.lastSeenCalibrationAt) {
+            state.lastSeenCalibrationAt = recalTs;
+            log('✓ Microswitch 45° atteint — coupole recalée à 45,00°', 'success');
+            flashEncoderCartouche();
+        }
+    }
+
     // Mettre à jour l'interface
     updateServiceStatus(motor, encoder);
     updatePositionDisplay(encoder, motor);
@@ -1425,6 +1442,17 @@ function updateServiceStatus(motor, encoder) {
     } else {
         elements.statusText.textContent = 'Déconnecté';
     }
+}
+
+// v6.7.1 — flash vert bref du cartouche ENC au franchissement du switch 45°.
+function flashEncoderCartouche() {
+    const encItem = elements.encItem;
+    if (!encItem) return;
+    encItem.classList.remove('enc-flash');
+    // Reflow pour relancer l'animation si déjà présente.
+    void encItem.offsetWidth;
+    encItem.classList.add('enc-flash');
+    setTimeout(() => encItem.classList.remove('enc-flash'), 2500);
 }
 
 function updatePositionDisplay(encoder, motor) {

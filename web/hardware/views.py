@@ -189,6 +189,7 @@ class EncoderView(APIView):
                     'calibrated': True,
                     'status': 'simulation',
                     'raw': 0,
+                    'last_calibration_at': None,
                     'simulation': True
                 })
 
@@ -199,14 +200,19 @@ class EncoderView(APIView):
                 'calibrated': False,
                 'status': 'unavailable',
                 'raw': 0,
+                'last_calibration_at': None,
                 'error': encoder_data.get('error', 'Daemon encodeur non disponible')
             })
 
+        # last_calibration_at : timestamp ISO du dernier recalage sur le
+        # microswitch 45°. Change à chaque franchissement → le frontend l'utilise
+        # pour signaler « switch atteint » lors d'une recherche manuelle (v6.7.1).
         return Response({
             'angle': encoder_data.get('angle', 0),
             'calibrated': encoder_data.get('calibrated', False),
             'status': encoder_data.get('status', 'unknown'),
-            'raw': encoder_data.get('raw', 0)
+            'raw': encoder_data.get('raw', 0),
+            'last_calibration_at': encoder_data.get('last_calibration_at')
         })
 
 

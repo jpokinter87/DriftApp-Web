@@ -40,7 +40,8 @@
 {% block content %}
 <!-- ═══ Bannière Calibration (v6.4 Phase 3 Plan 02) ═══
      Visible si calibration ∉ {ok, simulated} OU running.
-     Verrouille les commandes de mouvement, propose un déclencheur manuel. -->
+     Verrouille GOTO/suivi (position absolue) ; le contrôle manuel JOG/Continu
+     reste actif pour amener la coupole sur le 45° (recalibration auto). -->
 <div x-data x-show="$store.dashboard.calibrationBlocked() || $store.dashboard.calibration?.status === 'running'"
      x-cloak
      id="calibration-banner"
@@ -64,8 +65,10 @@
                x-text="'Détail : ' + $store.dashboard.calibration?.error_msg"></p>
             <p class="text-[0.7rem] text-obs-text-muted mt-1"
                x-show="$store.dashboard.calibration?.status !== 'running'">
-                La calibration verrouille les commandes de mouvement.
-                Cliquez pour relancer un cycle (recherche du microswitch 45&deg;).
+                GOTO et suivi sont verrouill&eacute;s (position absolue non fiable).
+                Le contr&ocirc;le manuel (Pas &agrave; pas / Continu) reste actif :
+                amenez la coupole sur le microswitch 45&deg; pour recalibrer automatiquement,
+                ou cliquez pour lancer un sweep.
             </p>
             <p class="text-[0.7rem] text-obs-text-muted mt-1 italic"
                x-show="$store.dashboard.calibration?.status === 'running'"
@@ -221,23 +224,20 @@
             <h3 class="section-title section-title-fire mb-3">Contr&ocirc;le Manuel</h3>
 
             <!-- JOG Buttons -->
-            <!-- v6.4 Phase 3 Plan 02 — :disabled sur tous les boutons mouvement
-                 si calibration ∉ {ok, simulated}. STOP préservé (sécurité). -->
+            <!-- v6.7 — contrôle manuel (JOG/Continu) TOUJOURS actif, même calibration
+                 non ok : permet d'amener la coupole sur le microswitch 45° à distance
+                 (recalibration auto). Seuls GOTO/suivi (position absolue) restent verrouillés. -->
             <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Pas &agrave; pas</span>
             <div x-data class="flex gap-2 mb-1">
                 <button id="btn-jog-ccw-10" class="btn btn-jog"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">-10&deg;</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">-10&deg;</button>
                 <button id="btn-jog-ccw-1" class="btn btn-jog"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">-1&deg;</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">-1&deg;</button>
                 <button id="btn-stop" class="btn btn-stop">STOP</button>
                 <button id="btn-jog-cw-1" class="btn btn-jog"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">+1&deg;</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">+1&deg;</button>
                 <button id="btn-jog-cw-10" class="btn btn-jog"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">+10&deg;</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">+10&deg;</button>
             </div>
 
             <div class="section-divider"></div>
@@ -246,11 +246,9 @@
             <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Continu</span>
             <div x-data class="flex gap-2 mb-1">
                 <button id="btn-cont-ccw" class="btn btn-continuous flex-1" data-direction="ccw"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">&lt; CCW</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">&lt; CCW</button>
                 <button id="btn-cont-cw" class="btn btn-continuous flex-1" data-direction="cw"
-                        :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">CW &gt;</button>
+                        :disabled="$store.dashboard.calibration?.status === 'running'">CW &gt;</button>
             </div>
 
             <div class="section-divider"></div>

@@ -217,6 +217,11 @@ class MotorService:
         self.current_status = self._create_initial_status()
         self._cleanup_on_startup()
 
+        # v6.7.1 — baseline du timestamp de recalage encodeur, pour détecter un
+        # franchissement manuel du microswitch 45° pendant le runtime (cf.
+        # _check_live_recalibration). None = pas encore observé.
+        self._last_seen_calibration_at = None
+
         # Logs de suivi pour l'interface web (deque avec taille max automatique)
         self.recent_tracking_logs = deque(maxlen=20)
 
@@ -242,8 +247,7 @@ class MotorService:
             serial_port = self._open_serial_port()
             if serial_port is None:
                 raise RuntimeError(
-                    "Port serie RP2040 indisponible. "
-                    "Verifiez que le Pi Pico est branche sur USB."
+                    "Port serie RP2040 indisponible. Verifiez que le Pi Pico est branche sur USB."
                 )
             self.moteur = MoteurRP2040(self.config.motor, serial_port)
             # Réutiliser l'instance globale du lecteur daemon
@@ -264,6 +268,7 @@ class MotorService:
         cfg = self.config.motor_driver.serial
         try:
             import serial
+
             port = serial.Serial(
                 port=cfg.port,
                 baudrate=cfg.baudrate,
@@ -482,6 +487,44 @@ class MotorService:
         except RuntimeError:
             return None
 
+    def _check_live_recalibration(self) -> None:
+        """Détecte un recalage « live » sur le microswitch 45° et lève l'état
+        « calibration requise » sans imposer un sweep (v6.7.1).
+
+        Un franchissement manuel du switch (JOG/Continu) fait que le daemon
+        encodeur republie ``last_calibration_at`` (avec anti-rebond). On utilise
+        ce timestamp comme source de vérité unique : quand il change ET que la
+        calibration n'est pas déjà ok/simulated/running, on bascule
+        ``calibration.status`` à ``ok`` (method ``live_switch``). Pendant un
+        sweep (status ``running``), la routine gère elle-même le statut → on
+        n'interfère pas. La baseline avance toujours pour ne pas redéclencher
+        après coup.
+        """
+        status_dict = self.daemon_reader.read_status()
+        if not status_dict:
+            return
+        ts = status_dict.get("last_calibration_at")
+        if not ts or ts == self._last_seen_calibration_at:
+            return
+
+        first_observation = self._last_seen_calibration_at is None
+        self._last_seen_calibration_at = ts
+        if first_observation:
+            # Premier passage : on enregistre la baseline (timestamp hérité du
+            # boot), sans considérer cela comme un nouveau franchissement.
+            return
+
+        with self.status_lock:
+            calib = self.current_status["calibration"]
+            if calib.get("status") in ("ok", "simulated", "running"):
+                return
+            calib["status"] = "ok"
+            calib["method"] = "live_switch"
+            calib["last_calibration_at"] = ts
+            calib["error_msg"] = None
+        self._write_status()
+        logger.info(f"live_recalibration | switch 45° franchi → calibration ok (ts={ts})")
+
     def _check_error_recovery(self):
         """
         Vérifie si un état 'error' doit être remis à 'idle'.
@@ -560,7 +603,9 @@ class MotorService:
         elif cmd_type == "tracking_start":
             object_name = command.get("object", command.get("name"))
             skip_goto = command.get("skip_goto", False)
-            logger.info(f"ipc_command | type=tracking_start object={object_name} skip_goto={skip_goto}")
+            logger.info(
+                f"ipc_command | type=tracking_start object={object_name} skip_goto={skip_goto}"
+            )
             if object_name:
                 self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
             else:
@@ -616,6 +661,7 @@ class MotorService:
         service_start_time = time.time()
         last_heartbeat_time = time.time()
         last_ipc_snapshot_time = time.time()
+        last_recal_check = time.time()
         cmd_count_since_heartbeat = 0
 
         while self.running:
@@ -643,6 +689,11 @@ class MotorService:
                 pos = self.read_encoder_position()
                 if pos is not None and not self.tracking_handler.is_active:
                     self.current_status["position"] = pos
+
+                # Recalage live au franchissement manuel du switch 45° (v6.7.1)
+                if now - last_recal_check >= 1.0:
+                    self._check_live_recalibration()
+                    last_recal_check = now
 
                 # Heartbeat toutes les 10 secondes
                 if now - last_heartbeat_time >= self.WATCHDOG_INTERVAL:
