@@ -415,35 +415,42 @@ class TestAntiBounceCooldown:
         assert ps.on_count == 2
         assert ps.off_count == 2
 
-    def test_cooldown_preserves_command_for_later_dispatch(
+    def test_cooldown_drops_command_no_replay(
         self,
         service_with_fake_reader: Tuple[
             CimierService, CountingPowerSwitch, FakeSwitchReader, MockClock
         ],
         ipc_manager: RecordingIpcManager,
     ) -> None:
+        """Mode drop (retour terrain 14/06) : une commande reçue pendant le cooldown
+        est consommée puis ignorée (jamais rejouée). Seule une commande FRAÎCHE émise
+        après le cooldown s'exécute — pas de file d'ordres périmés en pilotage manuel."""
         service, ps, _reader, clock = service_with_fake_reader
 
         ipc_manager.write_command({"id": "c1", "action": "open"})
         service.tick()
         assert ps.on_count == 1
 
-        # Commande arrivée pendant cooldown
+        # Commande arrivée PENDANT le cooldown → consommée + droppée (pas de file).
         ipc_manager.write_command({"id": "c2", "action": "close"})
         service.tick()
         assert ps.on_count == 1  # pas exécutée
 
-        # Avancer après cooldown — la commande pending doit être dispatched.
+        # Après cooldown : AUCUN rejeu de c2 → reste idle, pas de 2e cycle.
         clock.advance(15.0)
-        # Re-arm reader pour le 2e cycle (close)
+        service.tick()
+        assert ps.on_count == 1, "c2 droppée pendant cooldown → jamais rejouée"
+
+        # Une commande FRAÎCHE émise après le cooldown est bien exécutée.
         service._switch_reader = FakeSwitchReader(
             script=[(False, False), (False, True)]  # preflight proceed, poll closed→ok
         )
+        ipc_manager.write_command({"id": "c3", "action": "close"})
         service.tick()
         assert ps.on_count == 2
         last = ipc_manager.history[-1]
         assert last["last_action"] == ACTION_CLOSE
-        assert last["command_id"] == "c2"
+        assert last["command_id"] == "c3"
 
 
 # ======================================================================

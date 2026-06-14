@@ -220,7 +220,6 @@ class CimierService:
         # Erreur du dernier cycle, republiée pendant le cooldown pour rester
         # visible dans l'UI (sinon écrasée dès le tick suivant — fix review).
         self._last_cycle_error: str = ""
-        self._pending_command: Optional[Dict[str, Any]] = None
         # Dernière commande traitée (traçabilité status pendant idle/cooldown).
         self._last_action_value: str = ""
         self._last_command_id_value: str = ""
@@ -363,9 +362,10 @@ class CimierService:
         if self._cooldown_end_ts is not None:
             remaining = self._cooldown_end_ts - self._clock()
             if remaining > 0:
-                cmd = self._ipc.read_command()
-                if cmd is not None and self._pending_command is None:
-                    self._pending_command = cmd
+                # Mode drop : on consomme (et jette) toute commande reçue pendant
+                # le cooldown pour qu'elle ne soit pas rejouée ensuite — pilotage
+                # manuel, pas de file d'attente d'ordres périmés.
+                self._ipc.read_command()
                 self._publish_status(
                     state=STATE_ERROR if self._last_cycle_error else STATE_COOLDOWN,
                     phase=PHASE_COOLDOWN,
@@ -378,11 +378,8 @@ class CimierService:
             self._cooldown_end_ts = None
             self._last_cycle_error = ""
 
-        # 2. Cooldown terminé : si commande pending, la traiter.
-        cmd = self._pending_command
-        self._pending_command = None
-        if cmd is None:
-            cmd = self._ipc.read_command()
+        # 2. Cooldown terminé : traiter une commande fraîche (mode drop, pas de rejeu).
+        cmd = self._ipc.read_command()
         if cmd is None:
             self._publish_status(
                 state=STATE_IDLE,
@@ -841,8 +838,9 @@ class CimierService:
         """Lit l'IPC sans bloquer pour détecter une commande "stop" entrante.
 
         Retourne le dict si une commande nouvelle d'action="stop" est arrivée,
-        None sinon. Toute autre commande (open/close) reçue pendant un cycle
-        en cours est mémorisée comme pending pour exécution future.
+        None sinon. Mode drop : toute autre commande (open/close) reçue pendant
+        un cycle est lue (donc consommée, jamais rejouée) puis ignorée — pas de
+        file d'attente d'ordres périmés (pilotage manuel).
         """
         cmd = self._ipc.read_command()
         if cmd is None:
@@ -858,9 +856,7 @@ class CimierService:
                 cmd.get("ts", ""),
             )
             return cmd
-        # Commande non-stop pendant cycle : on la garde pending pour plus tard.
-        if self._pending_command is None:
-            self._pending_command = cmd
+        # Mode drop : commande non-stop reçue pendant un cycle → ignorée.
         return None
 
     # ------------------------------------------------------------------
@@ -1057,6 +1053,7 @@ def _build_service_from_config(config_path=None) -> CimierService:
         switch_reader=switch_reader,
         weather_provider=weather_provider,
         site_config=cfg.site,
+        cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,
     )
 
 

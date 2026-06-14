@@ -499,6 +499,15 @@ class TestCimierConfig:
         config = ConfigLoader(config_file).load()
         assert config.cimier.dir_settle_s == 0.5
 
+    def test_cimier_parse_cycle_poll_interval_s(self, tmp_path, sample_config_dict):
+        """cycle_poll_interval_s est lu depuis data/config.json (override du défaut 0.5)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"cycle_poll_interval_s": 0.1}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.cycle_poll_interval_s == 0.1
+
 
 @pytest.mark.parametrize("invalid", [-1.0, 0.0, 0])
 def test_cimier_config_rejects_cycle_timeout_zero_or_negative(invalid):

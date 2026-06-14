@@ -311,6 +311,9 @@ class CimierConfig:
     dir_settle_s: float = (
         0.3  # attente commutation DPDT entre set_direction et turn_on (anti-course sens)
     )
+    cycle_poll_interval_s: float = (
+        0.5  # cadence lecture butées pendant un cycle (0.1 = debug 100ms)
+    )
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
     switch_reader: SwitchReaderConfig = field(default_factory=SwitchReaderConfig)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
@@ -601,6 +604,9 @@ class ConfigLoader:
             post_off_quiet_s=float(c.get("post_off_quiet_s", defaults.post_off_quiet_s)),
             shelly_settle_s=float(c.get("shelly_settle_s", defaults.shelly_settle_s)),
             dir_settle_s=float(c.get("dir_settle_s", defaults.dir_settle_s)),
+            cycle_poll_interval_s=float(
+                c.get("cycle_poll_interval_s", defaults.cycle_poll_interval_s)
+            ),
             verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
             switch_reader=SwitchReaderConfig(
                 type=str(sr.get("type", sr_defaults.type)),
