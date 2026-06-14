@@ -4,9 +4,9 @@ Remplace le Pico W capteur : les 2 microswitches (Haut/Bas) sont câblés sur
 les 2 entrées du Shelly Uni+, lues via l'API RPC Gen 2
 ``GET /rpc/Input.GetStatus?id=<n>`` → ``{"id": n, "state": <bool>}``.
 
-Sémantique terrain (synoptique V3 — **à valider au banc**, donc configurable) :
-  - ``state=True``  = « Ouvert »  = contact ouvert = PAS en butée.
-  - ``state=False`` = « fermé »   = butée atteinte.
+Sémantique terrain (microswitches NC, validée au banc — restée configurable) :
+  - ``state=True``  = contact fermé  = repos = PAS en butée (NC fermé au repos).
+  - ``state=False`` = contact ouvert = butée atteinte (le NC s'ouvre quand actionné).
 Avec ``invert=True`` (défaut) : butée atteinte = input False.
 
 Mapping d'entrées (configurable) :

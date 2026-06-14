@@ -208,7 +208,8 @@ class SwitchReaderConfig:
 
     ``open_input_id`` / ``closed_input_id`` : index d'entrée Shelly Uni+ pour
     les microswitches HAUT et BAS. ``invert`` : True → butée atteinte = input
-    False (« fermé », convention synoptique V3, à valider au banc).
+    False (contact ouvert : les switches sont NC, ils s'ouvrent à l'actionnement ;
+    state=True = contact fermé = repos. Convention NC validée au banc).
 
     IP réelle uniquement dans ``data/config.json`` (terrain) — code Python neutre.
     """
@@ -307,6 +308,9 @@ class CimierConfig:
     boot_poll_timeout_s: float = 30.0  # legacy (boot Pico) — dette, non utilisé en V3
     post_off_quiet_s: float = 10.0
     shelly_settle_s: float = 2.0  # attente appairage WiFi Shelly MOT/UPDN (synoptique "à mesurer")
+    dir_settle_s: float = (
+        0.3  # attente commutation DPDT entre set_direction et turn_on (anti-course sens)
+    )
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
     switch_reader: SwitchReaderConfig = field(default_factory=SwitchReaderConfig)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
@@ -596,6 +600,7 @@ class ConfigLoader:
             boot_poll_timeout_s=float(c.get("boot_poll_timeout_s", defaults.boot_poll_timeout_s)),
             post_off_quiet_s=float(c.get("post_off_quiet_s", defaults.post_off_quiet_s)),
             shelly_settle_s=float(c.get("shelly_settle_s", defaults.shelly_settle_s)),
+            dir_settle_s=float(c.get("dir_settle_s", defaults.dir_settle_s)),
             verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
             switch_reader=SwitchReaderConfig(
                 type=str(sr.get("type", sr_defaults.type)),

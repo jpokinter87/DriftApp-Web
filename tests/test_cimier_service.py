@@ -1425,6 +1425,98 @@ class TestShellyCinematique:
         assert kinds[2] == "turn_on"
         assert kinds[-1] == "turn_off"
 
+    def test_dir_settle_inserted_between_set_direction_and_turn_on(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Le settle DPDT doit survenir APRÈS set_direction et AVANT turn_on.
+
+        Régression terrain 14/06 : sans ce délai, le moteur s'énergisait ~8 ms
+        après l'ordre de sens → DPDT pas encore commuté → sens aléatoire.
+        """
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.5)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        base_sleep = MechanismDrivingSleep(mech, clock)
+
+        # Sleep instrumenté : capture (durée, snapshot des appels moteur déjà faits).
+        records: list[tuple[float, list[str]]] = []
+
+        def recording_sleep(dt: float) -> None:
+            records.append((dt, [c[0] for c in sim_motor.calls]))
+            base_sleep(dt)
+
+        reader = MechanismFakeSwitchReader(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,  # isolé : seul dir_settle produit un sleep de 0.3
+            dir_settle_s=0.3,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            switch_reader=reader,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=recording_sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "20", "action": "open"})
+
+        dir_settle_snaps = [snap for dt, snap in records if dt == 0.3]
+        assert dir_settle_snaps, "un _sleep(dir_settle_s=0.3) doit être émis pendant le cycle"
+        snap = dir_settle_snaps[0]
+        assert "set_direction" in snap, "le settle DPDT vient APRÈS set_direction"
+        assert "turn_on" not in snap, "le settle DPDT vient AVANT turn_on"
+
+    def test_dir_settle_zero_emits_no_extra_sleep(self, ipc_manager: RecordingIpcManager) -> None:
+        """dir_settle_s=0 → aucun sleep intercalé (rétro-compat / opt-out)."""
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.5)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        base_sleep = MechanismDrivingSleep(mech, clock)
+        durations: list[float] = []
+
+        def recording_sleep(dt: float) -> None:
+            durations.append(dt)
+            base_sleep(dt)
+
+        reader = MechanismFakeSwitchReader(mech)
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            dir_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            switch_reader=reader,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=recording_sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "21", "action": "open"})
+
+        assert 0.3 not in durations, "dir_settle_s=0 ne doit émettre aucun sleep DPDT"
+
     def test_power_off_always_called_even_on_motor_exception(
         self, ipc_manager: RecordingIpcManager
     ) -> None:

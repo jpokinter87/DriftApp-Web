@@ -672,6 +672,14 @@ class CimierService:
                 int((self._clock() - cycle_start) * 1000),
             )
 
+            # Settle DPDT : laisser le relais DIR (Shelly UPDN) + le DPDT externe
+            # finir de commuter AVANT d'énergiser le moteur. Sans ce délai, turn_on
+            # part ~quelques ms après set_direction (mesuré ~8 ms terrain), trop tôt
+            # pour une bascule mécanique → sens de rotation indéterminé au démarrage.
+            dir_settle = float(self._config.dir_settle_s)
+            if dir_settle > 0:
+                self._sleep(dir_settle)
+
             # Phase E : turn_on moteur (filet hardware Shelly toggle_after).
             self._publish_phase(PHASE_MOTOR_ON, action, cmd_id, error_message="")
             timer_safety = float(self._config.motor_shelly.timer_safety_sec)
@@ -786,8 +794,14 @@ class CimierService:
 
         while self._clock() < deadline:
             if self._stop_requested:
+                logger.info(
+                    "cimier_event=poll_stopped source=signal action=%s id=%s", action, cmd_id
+                )
                 return "stopped"
             if self._check_for_stop_command() is not None:
+                logger.info(
+                    "cimier_event=poll_stopped source=stop_command action=%s id=%s", action, cmd_id
+                )
                 return "stopped"
             try:
                 t0 = self._clock()
@@ -836,6 +850,13 @@ class CimierService:
         action = str(cmd.get("action", "")).lower()
         if action == ACTION_STOP:
             self._last_command_id_value = str(cmd.get("id", ""))
+            # Traçage de l'émetteur : id + ts d'émission de la commande stop reçue
+            # pendant un cycle (permet de corréler avec le client qui l'a postée).
+            logger.info(
+                "cimier_event=stop_command_received id=%s ts=%s",
+                cmd.get("id", ""),
+                cmd.get("ts", ""),
+            )
             return cmd
         # Commande non-stop pendant cycle : on la garde pending pour plus tard.
         if self._pending_command is None:
@@ -1041,8 +1062,16 @@ def _build_service_from_config(config_path=None) -> CimierService:
 
 def main() -> int:
     """Entry-point CLI : `python -m services.cimier_service`."""
+    # Niveau DEBUG si verbose_logging (ou dev mode) : sans ça, les lignes
+    # `logger.debug` du poll (poll_status open/closed_switch) restent filtrées
+    # par le niveau INFO — verbose_logging était de fait inopérant.
+    verbose = False
+    try:
+        verbose = bool(ConfigLoader().load().cimier.verbose_logging) or _is_dev_mode_enabled()
+    except Exception:  # noqa: BLE001 — défaut sûr si config illisible au boot
+        verbose = _is_dev_mode_enabled()
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
     service = _build_service_from_config()

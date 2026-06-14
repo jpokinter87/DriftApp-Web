@@ -477,6 +477,7 @@ class TestCimierConfig:
         config_file.write_text(json.dumps(cfg))
         config = ConfigLoader(config_file).load()
         assert config.cimier.shelly_settle_s == 2.0
+        assert config.cimier.dir_settle_s == 0.3
         assert config.cimier.verbose_logging is False
 
     def test_cimier_parse_shelly_settle_and_verbose(self, tmp_path, sample_config_dict):
@@ -488,6 +489,15 @@ class TestCimierConfig:
         config = ConfigLoader(config_file).load()
         assert config.cimier.shelly_settle_s == 3.5
         assert config.cimier.verbose_logging is True
+
+    def test_cimier_parse_dir_settle_s(self, tmp_path, sample_config_dict):
+        """dir_settle_s est lu depuis data/config.json (override du défaut 0.3)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"dir_settle_s": 0.5}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.dir_settle_s == 0.5
 
 
 @pytest.mark.parametrize("invalid", [-1.0, 0.0, 0])

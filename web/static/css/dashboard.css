@@ -298,6 +298,22 @@ header h1 span {
 }
 
 /* =========================================================================
+   Boutons désactivés — signal net
+   Le `opacity-50` de Tailwind seul était trop subtil : en pilotage à distance,
+   l'utilisateur ne voyait pas qu'un bouton était inactif et croyait à une
+   commande « qui ne marche pas ». On dégrise franchement (atténuation forte +
+   désaturation) pour que l'état inactif soit immédiatement lisible, sans
+   couleur d'accent. Chargé après tailwind-output.css → surcharge sans recompiler.
+   ========================================================================= */
+
+.btn:disabled,
+.btn:disabled:hover {
+    opacity: 0.4;
+    filter: grayscale(0.85);
+    cursor: not-allowed;
+}
+
+/* =========================================================================
    GOTO Modal — Popup avec animation chevrons
    ========================================================================= */
 

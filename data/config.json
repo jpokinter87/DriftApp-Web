@@ -92,9 +92,10 @@
     "cycle_timeout_s": 90.0,
     "post_off_quiet_s": 10.0,
     "shelly_settle_s": 2.0,
+    "dir_settle_s": 0.3,
     "verbose_logging": false,
     "switch_reader": {
-      "_comment": "type ∈ {shelly_uni, noop}. shelly_uni = Shelly Uni+ RPC. id=1 HAUT, id=0 BAS. invert=true : butée atteinte = input false (fermé).",
+      "_comment": "type ∈ {shelly_uni, noop}. shelly_uni = Shelly Uni+ RPC. id=1 HAUT, id=0 BAS. Switches NC : state=true=contact fermé=repos, state=false=contact ouvert=butée. invert=true : butée atteinte = input false.",
       "type": "noop",
       "host": "192.168.1.84",
       "api": "rpc",
