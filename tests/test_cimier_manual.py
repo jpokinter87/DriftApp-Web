@@ -1,0 +1,56 @@
+"""Tests de la logique pure de scripts/diagnostics/cimier_manual.py.
+
+Le script encode la vérité du synoptique V3 (docs/synoptique electronique cimier V3.pdf).
+Conventions par défaut : moteur tourne quand relais MOT turn=off (logique inversée),
+sens UP = relais UPDN turn=on, butée atteinte quand input state=False.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+# Le script vit dans scripts/diagnostics/ (pas un package) → import par chemin.
+_SPEC = importlib.util.spec_from_file_location(
+    "cimier_manual",
+    Path(__file__).resolve().parent.parent / "scripts" / "diagnostics" / "cimier_manual.py",
+)
+cimier_manual = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(cimier_manual)
+
+
+def default_conv():
+    return dict(cimier_manual.CONV)
+
+
+def test_relay_url():
+    assert cimier_manual.relay_url("192.168.1.85", "off") == "http://192.168.1.85/relay/0?turn=off"
+
+
+def test_input_url():
+    assert (
+        cimier_manual.input_url("192.168.1.84", 1)
+        == "http://192.168.1.84/rpc/Input.GetStatus?id=1"
+    )
+
+
+def test_motor_turn_inverted():
+    conv = default_conv()
+    # Synoptique : moteur TOURNE quand relais turn=off, ARRÊT quand turn=on.
+    assert cimier_manual.motor_turn("run", conv) == "off"
+    assert cimier_manual.motor_turn("stop", conv) == "on"
+
+
+def test_dir_turn():
+    conv = default_conv()
+    assert cimier_manual.dir_turn("up", conv) == "on"
+    assert cimier_manual.dir_turn("down", conv) == "off"
+
+
+def test_butee_atteinte_default():
+    conv = default_conv()
+    # state=False → contact fermé → butée atteinte ; state=True → ouverte → non atteinte.
+    assert cimier_manual.butee_atteinte(False, conv) is True
+    assert cimier_manual.butee_atteinte(True, conv) is False
