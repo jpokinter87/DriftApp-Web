@@ -137,3 +137,86 @@ def cycle(direction: str, conv: dict, timeout: float, settle: float, poll: float
 
     print("9. SHELLY-1-24/OFF : coupure alimentation")
     _call(relay_url(HOSTS["power"], "off"), timeout)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Pilotage manuel cimier V3 (séquencement nu des Shelly).",
+        epilog="Exemples : read | power on | dir up | motor run | open | close | stop",
+    )
+    p.add_argument(
+        "command",
+        choices=["read", "power", "dir", "motor", "open", "close", "stop"],
+    )
+    p.add_argument("arg", nargs="?", help="on/off (power) | up/down (dir) | run/stop (motor)")
+    p.add_argument("--settle", type=float, default=CONV["settle_s"], help="attente appairage (s)")
+    p.add_argument("--poll", type=float, default=CONV["poll_s"], help="intervalle poll butée (s)")
+    p.add_argument("--timeout", type=float, default=CONV["timeout_s"], help="timeout HTTP (s)")
+    p.add_argument("--mot-run", choices=["off", "on"], default=CONV["mot_run"],
+                   help="valeur turn= qui FAIT TOURNER le moteur (synoptique : off)")
+    p.add_argument("--dir-up", choices=["on", "off"], default=CONV["dir_up"],
+                   help="valeur turn= du sens MONTÉE (synoptique : on)")
+    p.add_argument("--switch-closed", choices=["false", "true"], default=CONV["switch_closed"],
+                   help="valeur state= d'une butée ATTEINTE (synoptique : false)")
+    return p
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    conv = {
+        "mot_run": args.mot_run,
+        "dir_up": args.dir_up,
+        "switch_closed": args.switch_closed,
+        "settle_s": args.settle,
+        "poll_s": args.poll,
+        "timeout_s": args.timeout,
+    }
+    cmd, sub = args.command, args.arg
+
+    if cmd == "read":
+        haut = read_switch(HOSTS["uni"], HAUT_ID, args.timeout)
+        bas = read_switch(HOSTS["uni"], BAS_ID, args.timeout)
+        print(f"HAUT (id={HAUT_ID}) : state={haut} -> "
+              f"{'ATTEINTE' if haut is not None and butee_atteinte(haut, conv) else 'ouverte/?'}")
+        print(f"BAS  (id={BAS_ID}) : state={bas} -> "
+              f"{'ATTEINTE' if bas is not None and butee_atteinte(bas, conv) else 'ouverte/?'}")
+        return 0
+
+    if cmd == "power":
+        if sub not in ("on", "off"):
+            print("usage : power on|off")
+            return 2
+        _call(relay_url(HOSTS["power"], sub), args.timeout)
+        return 0
+
+    if cmd == "dir":
+        if sub not in ("up", "down"):
+            print("usage : dir up|down")
+            return 2
+        _call(relay_url(HOSTS["dir"], dir_turn(sub, conv)), args.timeout)
+        return 0
+
+    if cmd == "motor":
+        if sub not in ("run", "stop"):
+            print("usage : motor run|stop")
+            return 2
+        _call(relay_url(HOSTS["motor"], motor_turn(sub, conv)), args.timeout)
+        return 0
+
+    if cmd == "open":
+        cycle("up", conv, args.timeout, args.settle, args.poll)
+        return 0
+
+    if cmd == "close":
+        cycle("down", conv, args.timeout, args.settle, args.poll)
+        return 0
+
+    if cmd == "stop":
+        _call(relay_url(HOSTS["motor"], motor_turn("stop", conv)), args.timeout)
+        return 0
+
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
