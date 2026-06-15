@@ -69,3 +69,28 @@ def butee_atteinte(state: bool, conv: dict) -> bool:
     """True si la butée est atteinte (contact fermé). Par défaut : state=False → atteinte."""
     closed_value = conv["switch_closed"] == "true"
     return state == closed_value
+
+
+def _call(url: str, timeout: float):
+    """GET transparent : imprime l'URL envoyée puis la réponse. None si échec réseau."""
+    print(f"  -> GET {url}")
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", "replace").strip()
+        print(f"  <- {body}")
+        return body
+    except Exception as exc:  # noqa: BLE001 — diagnostic : on veut voir toute erreur réseau
+        print(f"  !! {exc}")
+        return None
+
+
+def read_switch(host: str, input_id: int, timeout: float):
+    """Lit Input.GetStatus → booléen state, ou None si la lecture échoue."""
+    body = _call(input_url(host, input_id), timeout)
+    if body is None:
+        return None
+    try:
+        return bool(json.loads(body)["state"])
+    except (ValueError, KeyError, TypeError) as exc:
+        print(f"  !! réponse illisible : {exc}")
+        return None

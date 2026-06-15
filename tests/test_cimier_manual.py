@@ -54,3 +54,17 @@ def test_butee_atteinte_default():
     # state=False → contact fermé → butée atteinte ; state=True → ouverte → non atteinte.
     assert cimier_manual.butee_atteinte(False, conv) is True
     assert cimier_manual.butee_atteinte(True, conv) is False
+
+
+def test_read_switch_parses_state(monkeypatch):
+    # _call renvoie le corps brut du Shelly Uni+ ; read_switch en extrait le booléen state.
+    monkeypatch.setattr(cimier_manual, "_call", lambda url, timeout: '{"id":1,"state":true}')
+    assert cimier_manual.read_switch(cimier_manual.HOSTS["uni"], 1, 3.0) is True
+
+    monkeypatch.setattr(cimier_manual, "_call", lambda url, timeout: '{"id":0,"state":false}')
+    assert cimier_manual.read_switch(cimier_manual.HOSTS["uni"], 0, 3.0) is False
+
+
+def test_read_switch_returns_none_on_http_failure(monkeypatch):
+    monkeypatch.setattr(cimier_manual, "_call", lambda url, timeout: None)
+    assert cimier_manual.read_switch(cimier_manual.HOSTS["uni"], 1, 3.0) is None
