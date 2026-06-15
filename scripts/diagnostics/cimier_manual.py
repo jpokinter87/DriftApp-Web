@@ -24,18 +24,18 @@ import urllib.request
 
 HOSTS = {
     "power": "192.168.1.83",  # SHELLY-1-24V  — alim module cimier
-    "uni": "192.168.1.84",    # SHELLY Uni+   — lecture butées HAUT/BAS
+    "uni": "192.168.1.84",  # SHELLY Uni+   — lecture butées HAUT/BAS
     "motor": "192.168.1.85",  # SHELLY-1-MOT  — moteur (logique inversée)
-    "dir": "192.168.1.86",    # SHELLY-1-UPDN — sens via DPDT
+    "dir": "192.168.1.86",  # SHELLY-1-UPDN — sens via DPDT
 }
 
 HAUT_ID = 1  # SHELLY-HAUT : Input.GetStatus?id=1
-BAS_ID = 0   # SHELLY-BAS  : Input.GetStatus?id=0
+BAS_ID = 0  # SHELLY-BAS  : Input.GetStatus?id=0
 
 # Conventions du synoptique — surchargeables par flags CLI au banc.
 CONV = {
-    "mot_run": "off",          # relais MOT turn=off → moteur TOURNE
-    "dir_up": "on",            # relais UPDN turn=on → sens MONTÉE
+    "mot_run": "off",  # relais MOT turn=off → moteur TOURNE
+    "dir_up": "on",  # relais UPDN turn=on → sens MONTÉE
     "switch_closed": "false",  # input state=false → butée fermée (atteinte)
     "settle_s": 2.0,
     "poll_s": 0.1,
@@ -152,12 +152,24 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--settle", type=float, default=CONV["settle_s"], help="attente appairage (s)")
     p.add_argument("--poll", type=float, default=CONV["poll_s"], help="intervalle poll butée (s)")
     p.add_argument("--timeout", type=float, default=CONV["timeout_s"], help="timeout HTTP (s)")
-    p.add_argument("--mot-run", choices=["off", "on"], default=CONV["mot_run"],
-                   help="valeur turn= qui FAIT TOURNER le moteur (synoptique : off)")
-    p.add_argument("--dir-up", choices=["on", "off"], default=CONV["dir_up"],
-                   help="valeur turn= du sens MONTÉE (synoptique : on)")
-    p.add_argument("--switch-closed", choices=["false", "true"], default=CONV["switch_closed"],
-                   help="valeur state= d'une butée ATTEINTE (synoptique : false)")
+    p.add_argument(
+        "--mot-run",
+        choices=["off", "on"],
+        default=CONV["mot_run"],
+        help="valeur turn= qui FAIT TOURNER le moteur (synoptique : off)",
+    )
+    p.add_argument(
+        "--dir-up",
+        choices=["on", "off"],
+        default=CONV["dir_up"],
+        help="valeur turn= du sens MONTÉE (synoptique : on)",
+    )
+    p.add_argument(
+        "--switch-closed",
+        choices=["false", "true"],
+        default=CONV["switch_closed"],
+        help="valeur state= d'une butée ATTEINTE (synoptique : false)",
+    )
     return p
 
 
@@ -176,10 +188,14 @@ def main(argv=None) -> int:
     if cmd == "read":
         haut = read_switch(HOSTS["uni"], HAUT_ID, args.timeout)
         bas = read_switch(HOSTS["uni"], BAS_ID, args.timeout)
-        print(f"HAUT (id={HAUT_ID}) : state={haut} -> "
-              f"{'ATTEINTE' if haut is not None and butee_atteinte(haut, conv) else 'ouverte/?'}")
-        print(f"BAS  (id={BAS_ID}) : state={bas} -> "
-              f"{'ATTEINTE' if bas is not None and butee_atteinte(bas, conv) else 'ouverte/?'}")
+        print(
+            f"HAUT (id={HAUT_ID}) : state={haut} -> "
+            f"{'ATTEINTE' if haut is not None and butee_atteinte(haut, conv) else 'ouverte/?'}"
+        )
+        print(
+            f"BAS  (id={BAS_ID}) : state={bas} -> "
+            f"{'ATTEINTE' if bas is not None and butee_atteinte(bas, conv) else 'ouverte/?'}"
+        )
         return 0
 
     if cmd == "power":

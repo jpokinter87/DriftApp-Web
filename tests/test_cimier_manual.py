@@ -11,8 +11,6 @@ import importlib.util
 import json
 from pathlib import Path
 
-import pytest
-
 # Le script vit dans scripts/diagnostics/ (pas un package) → import par chemin.
 _SPEC = importlib.util.spec_from_file_location(
     "cimier_manual",
@@ -32,8 +30,7 @@ def test_relay_url():
 
 def test_input_url():
     assert (
-        cimier_manual.input_url("192.168.1.84", 1)
-        == "http://192.168.1.84/rpc/Input.GetStatus?id=1"
+        cimier_manual.input_url("192.168.1.84", 1) == "http://192.168.1.84/rpc/Input.GetStatus?id=1"
     )
 
 
@@ -91,7 +88,7 @@ def test_cycle_stops_on_butee(monkeypatch):
 
     # Moteur démarré (turn=off) puis arrêté (turn=on) ; alim coupée en fin.
     assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "off") in calls  # run
-    assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "on") in calls   # stop
+    assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "on") in calls  # stop
     assert calls[-1] == cimier_manual.relay_url(cimier_manual.HOSTS["power"], "off")
 
 
