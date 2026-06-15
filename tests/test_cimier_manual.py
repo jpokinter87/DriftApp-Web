@@ -8,6 +8,7 @@ sens UP = relais UPDN turn=on, butée atteinte quand input state=False.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -68,3 +69,47 @@ def test_read_switch_parses_state(monkeypatch):
 def test_read_switch_returns_none_on_http_failure(monkeypatch):
     monkeypatch.setattr(cimier_manual, "_call", lambda url, timeout: None)
     assert cimier_manual.read_switch(cimier_manual.HOSTS["uni"], 1, 3.0) is None
+
+
+def test_cycle_stops_on_butee(monkeypatch):
+    # La butée HAUT lue est d'abord "ouverte" (True), puis "atteinte" (False) au 2e poll.
+    # On capture les URLs envoyées pour vérifier l'arrêt moteur + coupure alim.
+    calls = []
+    switch_states = iter([True, True, False])  # pré-check ouverte, poll1 ouverte, poll2 atteinte
+
+    def fake_call(url, timeout):
+        calls.append(url)
+        if "Input.GetStatus" in url:
+            state = next(switch_states)
+            return json.dumps({"state": state})
+        return "OK"
+
+    monkeypatch.setattr(cimier_manual, "_call", fake_call)
+    monkeypatch.setattr(cimier_manual.time, "sleep", lambda s: None)
+
+    cimier_manual.cycle("up", default_conv(), timeout=3.0, settle=0.0, poll=0.0)
+
+    # Moteur démarré (turn=off) puis arrêté (turn=on) ; alim coupée en fin.
+    assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "off") in calls  # run
+    assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "on") in calls   # stop
+    assert calls[-1] == cimier_manual.relay_url(cimier_manual.HOSTS["power"], "off")
+
+
+def test_cycle_skips_when_already_at_butee(monkeypatch):
+    # Pré-check : butée déjà atteinte (False) → pas de démarrage moteur, alim coupée direct.
+    calls = []
+
+    def fake_call(url, timeout):
+        calls.append(url)
+        if "Input.GetStatus" in url:
+            return json.dumps({"state": False})  # déjà fermée = atteinte
+        return "OK"
+
+    monkeypatch.setattr(cimier_manual, "_call", fake_call)
+    monkeypatch.setattr(cimier_manual.time, "sleep", lambda s: None)
+
+    cimier_manual.cycle("up", default_conv(), timeout=3.0, settle=0.0, poll=0.0)
+
+    # Le moteur n'a jamais démarré (run = turn=off jamais envoyé).
+    assert cimier_manual.relay_url(cimier_manual.HOSTS["motor"], "off") not in calls
+    assert calls[-1] == cimier_manual.relay_url(cimier_manual.HOSTS["power"], "off")

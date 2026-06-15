@@ -94,3 +94,46 @@ def read_switch(host: str, input_id: int, timeout: float):
     except (ValueError, KeyError, TypeError) as exc:
         print(f"  !! réponse illisible : {exc}")
         return None
+
+
+def cycle(direction: str, conv: dict, timeout: float, settle: float, poll: float) -> None:
+    """Séquence d'ouverture (direction='up') ou de fermeture ('down') — cinématique synoptique V3."""
+    switch_id = HAUT_ID if direction == "up" else BAS_ID
+    nom = "HAUT" if direction == "up" else "BAS"
+
+    print("1. SHELLY-1-24/ON : alimentation du module cimier")
+    _call(relay_url(HOSTS["power"], "on"), timeout)
+
+    print(f"2. Attente {settle}s (appairage Wifi des Shelly)")
+    time.sleep(settle)
+
+    print("3. Moteur au repos (relais MOT à l'arrêt)")
+    _call(relay_url(HOSTS["motor"], motor_turn("stop", conv)), timeout)
+
+    print(f"4. Sens {direction.upper()}")
+    _call(relay_url(HOSTS["dir"], dir_turn(direction, conv)), timeout)
+
+    print(f"5. Pré-check butée {nom}")
+    state = read_switch(HOSTS["uni"], switch_id, timeout)
+    if state is not None and butee_atteinte(state, conv):
+        print(f"   butée {nom} déjà atteinte → rien à faire")
+        print("9. SHELLY-1-24/OFF : coupure alimentation")
+        _call(relay_url(HOSTS["power"], "off"), timeout)
+        return
+
+    print("6. SHELLY-1-MOT : démarrage du moteur")
+    _call(relay_url(HOSTS["motor"], motor_turn("run", conv)), timeout)
+
+    print(f"7. Surveillance butée {nom} toutes les {poll}s")
+    while True:
+        state = read_switch(HOSTS["uni"], switch_id, timeout)
+        if state is not None and butee_atteinte(state, conv):
+            print(f"   butée {nom} atteinte")
+            break
+        time.sleep(poll)
+
+    print("8. SHELLY-1-MOT : arrêt du moteur")
+    _call(relay_url(HOSTS["motor"], motor_turn("stop", conv)), timeout)
+
+    print("9. SHELLY-1-24/OFF : coupure alimentation")
+    _call(relay_url(HOSTS["power"], "off"), timeout)
