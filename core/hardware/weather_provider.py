@@ -11,7 +11,7 @@ voudra poser avant d'agir :
 Phase 2 ne livre que NoopWeatherProvider (toujours OK). Aucun capteur reel
 n'est branche : c'est une interface posee pour Phase 3 (scheduler ephemerides
 qui consultera is_safe_to_open avant l'ouverture auto) et pour un milestone
-capteurs ulterieur (v6.4+, capteur sur Pico W cimier d'apres l'interview de
+capteurs ulterieur (v6.4+, capteur cimier d'apres l'interview de
 cadrage 2026-04-29 theme J). Tant qu'aucun capteur reel n'existe, on ne fige
 pas de dataclass WeatherSnapshot ni de seuils dans la config — describe()
 expose un dict opaque pour les logs.
@@ -20,8 +20,8 @@ Implementations disponibles :
   - NoopWeatherProvider : repond toujours True, describe() = {"provider": "noop"}.
 
 A venir (out of scope Phase 2) :
-  - PicoWWeatherProvider : interroge un capteur sur le Pico W cimier (humidite,
-    pluie, vent), evalue les seuils contre une nouvelle section de config.
+  - (futur) provider capteur cimier : humidité / pluie (backlog météo,
+    evalue les seuils contre une nouvelle section de config).
 
 Le module est volontairement court et sans dependance reseau. Il copie le
 pattern de core/hardware/power_switch.py (Strategy + Noop + factory).

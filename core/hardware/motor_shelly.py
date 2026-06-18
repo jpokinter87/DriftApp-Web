@@ -1,40 +1,35 @@
 """
-Pilote moteur cimier via 2 relais Shelly (pivot architectural v6.x).
+Pilote moteur cimier via 2 relais Shelly (archi V3 tout-Shelly).
 
 Contexte
 --------
-Le pilotage STEP/DIR du moteur cimier depuis le Pico W (firmware MicroPython
-→ opto-coupleur DM556T) n'a jamais réussi à faire tourner le moteur malgré
-plusieurs câblages tentés (Darlington ULN2803, réhausseur, commun cathode
-direct). En revanche, le circuit de commande manuel de Serge (oscillateur +
-2 interrupteurs : ON/OFF moteur + DPDT direction) fait tourner le moteur de
-façon parfaitement reproductible.
-
-Le pivot consiste à **automatiser le circuit manuel** :
-  - 2× **Shelly 1 Gen 3** distincts (1 relais chacun, contact sec) :
-      * Shelly MOTOR : ON/OFF moteur (remplace l'interrupteur manuel).
-      * Shelly DIR   : pilote un petit relais DPDT externe qui permute
-                       la ligne DIR (sens du moteur).
-  - Les fins de course haut/bas restent câblées sur le Pico W (qui devient
-    un simple serveur HTTP de capteurs).
+Le pilotage STEP/DIR du moteur cimier n'a jamais réussi à le faire tourner ;
+le circuit de commande manuel (oscillateur + 2 interrupteurs : ON/OFF moteur
++ DPDT direction) le fait tourner de façon reproductible. Le pivot V3
+automatise ce circuit avec des Shelly Gen 1 (contact sec) :
+  - Shelly MOTOR (.85) : ON/OFF moteur (remplace l'interrupteur manuel).
+  - Shelly DIR   (.86) : pilote un relais DPDT externe qui permute la ligne
+                         DIR (sens du moteur).
+Les fins de course haut/bas sont lues via un Shelly Uni+ (.84), cf.
+``core/hardware/shelly_switch_reader.py``.
 
 `cimier_service` (côté Pi) orchestre :
   1. set_direction(open_direction=True) → relais DIR positionné
-  2. turn_on(timer_s=90) → moteur démarre, kill auto Shelly à 90s en cas de
+  2. turn_on(timer_s=90) → moteur démarre, kill auto Shelly à 90 s en cas de
      WiFi-drop (filet de sécurité hardware, indépendant du Pi)
-  3. polling /status du Pico W jusqu'à fin de course
+  3. polling des butées (Shelly Uni+) jusqu'à fin de course
   4. turn_off() → moteur stoppé
 
-Le moteur tourne à vitesse fixe (potard de l'oscillateur), la précision
-positionnelle vient des fins de course mécaniques, pas des pas. C'est
-suffisant pour un cimier (mécanisme binaire open/closed).
+Le moteur tourne à vitesse fixe (potard de l'oscillateur) ; la précision
+positionnelle vient des fins de course mécaniques, pas des pas. Suffisant
+pour un cimier (mécanisme binaire open/closed).
 
 API Shelly supportée
 --------------------
+- ``api="legacy"`` (terrain V3) : Shelly Gen 1
+    URL : ``http://<host>/relay/<relay>?turn=<on|off>[&timer=<N>]``
 - ``api="rpc"`` (défaut) : Shelly Gen 2 / Plus / Pro
     URL : ``http://<host>/rpc/Switch.Set?id=<relay>&on=<true|false>[&toggle_after=<N>]``
-- ``api="legacy"`` : Shelly Gen 1
-    URL : ``http://<host>/relay/<relay>?turn=<on|off>[&timer=<N>]``
 
 L'argument `urlopen` permet d'injecter un mock pour les tests.
 """
@@ -84,7 +79,7 @@ class MotorShelly:
         du Shelly. À régler une fois lors de l'install terrain ; indépendant
         du code Python.
 
-    Architecture **2 Shellys distincts** (Shelly 1 Gen 3 × 2, 1 relais
+    Architecture **2 Shellys distincts** (Shelly Gen 1 × 2, 1 relais
     chacun) :
       - ``host_motor`` + ``relay_motor`` = Shelly MOTOR ;
       - ``host_dir``   + ``relay_dir``   = Shelly DIR.

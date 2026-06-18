@@ -1,9 +1,7 @@
 """Tests du module core.hardware.motor_shelly.
 
-Pivot architectural cimier (v6.x) : remplacement du pilotage STEP/DIR via le
-Pico W par 2 Shellys 1 Gen 3 distincts (1 relais chacun, contact sec) pour
-le moteur cimier. Cf. ``core/hardware/motor_shelly.py`` pour le contexte
-complet.
+Archi V3 tout-Shelly : pilotage moteur cimier via 2 Shelly Gen 1 distincts
+(1 relais chacun, contact sec) — Shelly MOTOR (ON/OFF) + Shelly DIR (DPDT).
 
 Conventions de test :
   - host MOTOR  : "192.168.1.85"
@@ -12,7 +10,7 @@ Conventions de test :
     d'index 0 par défaut → l'index ne discrimine plus).
 
 Pattern miroir de tests/test_power_switch.py : mocks urlopen, format URL,
-gestion d'erreurs, support RPC (Gen 2/3) et legacy (Gen 1).
+gestion d'erreurs, support legacy (Gen 1, terrain) et RPC (Gen 2/Plus).
 """
 
 from __future__ import annotations
@@ -73,7 +71,7 @@ class TestMotorShellyConstruction:
         assert sh.host_dir == HOST_DIR
 
     def test_relay_indices_default_zero_each(self):
-        """Shelly 1 Gen 3 : 1 seul relais d'index 0. Les 2 hôtes étant distincts,
+        """Shelly Gen 1 : 1 seul relais d'index 0. Les 2 hôtes étant distincts,
         rien n'empêche les 2 relais d'avoir le même index."""
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=make_mock_urlopen())
         assert sh.relay_motor == 0
@@ -182,7 +180,7 @@ class TestMotorShellySetDirection:
         url = _called_url(mock)
         assert HOST_DIR in url  # bien le Shelly DIR, pas le MOTOR
         assert HOST_MOTOR not in url
-        assert "id=0" in url  # relay_dir défaut = 0 (Shelly 1 Gen 3)
+        assert "id=0" in url  # relay_dir défaut = 0 (Shelly Gen 1)
         assert "on=true" in url
 
     def test_set_direction_close_default_relay_off_uses_dir_host(self):

@@ -5,7 +5,7 @@ Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) 
   0. preflight     : lit les butées via ``ShellySwitchReader.read()`` AVANT
                      toute alim (déjà en butée → noop, both_switches → error,
                      unreachable → error).
-  1. power_on      : ``power_switch.turn_on()`` (Shelly 220V cascade).
+  1. power_on      : ``power_switch.turn_on()`` (Shelly 24V).
   2. settle        : ``sleep(shelly_settle_s)`` — attente appairage WiFi
                      Shelly MOTOR + DIR après montée 24V.
   3. motor_off     : ``motor_shelly.turn_off()`` défensif (état connu avant
@@ -20,7 +20,7 @@ Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) 
                      both_switches → error).
   7. motor_off     : ``motor_shelly.turn_off()`` (cleanup, dans finally).
   8. power_off     : ``power_switch.turn_off()`` — TOUJOURS appelé (sécurité
-                     220V, invariant).
+                     24V, invariant).
   9. cooldown      : attente ``post_off_quiet_s`` avant d'accepter une
                      nouvelle commande (anti-bounce hardware).
 
@@ -540,7 +540,7 @@ class CimierService:
         → poll_switch → motor_off (cleanup) → power_off → cooldown.
 
         ``power_switch.turn_off()`` et ``motor_shelly.turn_off()`` sont TOUJOURS
-        appelés dans ``finally`` (sécurité 220V + état moteur connu).
+        appelés dans ``finally`` (sécurité 24V + état moteur connu).
         """
         cycle_start = self._clock()
         error_message = ""
@@ -605,7 +605,7 @@ class CimierService:
 
         # ----- Cinématique Shelly (spec §3.1 → §3.4) -----
         try:
-            # Phase A : power_on (Shelly 220V cascade).
+            # Phase A : power_on (Shelly 24V).
             self._publish_phase(PHASE_POWER_ON, action, cmd_id, error_message="")
             try:
                 self._power_switch.turn_on()
@@ -721,7 +721,7 @@ class CimierService:
             # outcome == "ok" → fall through, cleanup ci-dessous.
 
         finally:
-            # Cleanup garanti : motor_off + power_off (invariant 220V).
+            # Cleanup garanti : motor_off + power_off (invariant 24V).
             try:
                 self._motor_shelly.turn_off()
             except Exception as exc:
@@ -942,9 +942,8 @@ class CimierService:
     def _derive_current_cimier_state(self) -> str:
         """Mappe l'état interne du service vers les labels CIMIER_STATE_* du scheduler.
 
-        Archi Shelly (Bloc 2) : le Pico est capteur-only — pas de ``pico_state``
-        legacy. On dérive l'état du cimier des derniers ``open_switch`` /
-        ``closed_switch`` observés.
+        Archi V3 tout-Shelly : on dérive l'état du cimier des derniers
+        ``open_switch`` / ``closed_switch`` observés (Shelly Uni+).
 
         - Cooldown actif → CIMIER_STATE_COOLDOWN
         - both switches True → CIMIER_STATE_ERROR (anomalie capteur)

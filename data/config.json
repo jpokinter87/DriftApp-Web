@@ -87,7 +87,7 @@
     "backup_count": 5
   },
   "cimier": {
-    "_comment": "Archi V3 tout-Shelly (suppression Pico W). Opt-in (enabled=false). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Conventions inversées (motor_on_relay_state, open_dir_state, switch_reader.invert) à VALIDER AU BANC.",
+    "_comment": "Archi V3 tout-Shelly. Opt-in (enabled=false). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Conventions validées terrain 17-18/06 (motor_on_relay_state=false, open_dir_state=true, switch_reader.invert=true).",
     "enabled": false,
     "cycle_timeout_s": 90.0,
     "post_off_quiet_s": 10.0,

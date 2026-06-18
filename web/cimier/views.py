@@ -64,7 +64,7 @@ class StopView(APIView):
     """POST /api/cimier/stop/ — interrompt un cycle en cours.
 
     Le cimier_service réagit en libérant la phase courante (boot_poll ou
-    cycle_poll), passant en `power_off` puis `cooldown` (sécurité 220V).
+    cycle_poll), passant en `power_off` puis `cooldown` (sécurité 24V).
     """
 
     def post(self, request):

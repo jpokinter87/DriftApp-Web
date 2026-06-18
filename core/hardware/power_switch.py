@@ -1,45 +1,19 @@
 """
-Abstraction du switch d'alimentation cimier.
+Coupe / rétablit l'alimentation 24V du module cimier via un Shelly (archi V3).
 
-Permet de couper / retablir l'alimentation du boitier electronique cimier
-(driver DM560T + Pico W) entre les cycles pour economiser la batterie solaire.
-Le DM560T au repos consomme du courant pour maintenir les aimants
-stationnaires du moteur sous tension - couper son alim est plus radical et
-plus efficace qu'agir sur ENA.
+Le Shelly SHELLY-1-24V (.83) alimente le module cimier (contrôleur autonome
+STEP + DM556T). ``cimier_service`` le coupe hors cycle (économie / sécurité)
+et le rétablit en début de cycle, avec une attente d'appairage WiFi des
+Shelly aval (MOTOR/DIR) avant d'énergiser le moteur.
 
-Implementations disponibles :
-  - ShellyPowerSwitch  : commande un Shelly mini relais via REST.
-                         Supporte les deux APIs : Gen 2 RPC (par defaut) et
-                         Gen 1 legacy.
-  - NoopPowerSwitch    : ne fait rien, pour dev / tests sans hardware.
+API supportée :
+  - ``api="legacy"`` (Gen 1) : ``http://<host>/relay/<id>?turn=<on|off>``
+  - ``api="rpc"`` (Gen 2/Plus) : ``http://<host>/rpc/Switch.Set?id=<id>&on=<bool>``
 
-Note Phase 1 — Architecture cascade 220V -> 12V (cadree 2026-04-30) :
+Aucune valeur terrain (IP / index) en dur — tout via le constructeur, rempli
+par ``PowerSwitchConfig`` depuis ``data/config.json``.
 
-    Le boitier cimier est alimente par 2 Shellys en serie :
-    - **Shelly 220V** (commande directement par ce module) : pilote l'alim
-      220V du chargeur 220->12V.
-    - **Shelly 12V** (interne au boitier cimier) : distribue le 12V au driver
-      DM560T et au Pico W (via boitier QC3.0 USB-C).
-
-    Le Shelly 220V envoie un heartbeat au Shelly 12V toutes les 5-10 secondes.
-    Le Shelly 12V s'auto-eteint s'il ne recoit rien pendant > 10 sec. Cela
-    permet de couper le 12V alors meme que le Shelly 220V n'a plus de 220V
-    en entree (puisqu'il s'est lui-meme deconnecte).
-
-    Consequences pour l'orchestration cote `cimier_service.py` Phase 1 :
-
-    - Apres `turn_on()` : compter ~5 s pour que le Shelly 12V s'allume +
-      ~10-15 s pour le boot du Pico W (banner safe-boot 3 s + WiFi connect
-      ~5-10 s) = total **~15-20 s avant que le Pico soit joignable** via
-      HTTP. Polling `<pico>/status` avec retries / timeout 30 s recommande.
-
-    - Apres `turn_off()` : le 12V coupe ~10 s plus tard (heartbeat manque).
-      Ne pas relancer un cycle pendant ce delai. Le service doit garder
-      l'etat "powered_off" coherent meme si la coupure est asynchrone.
-
-    - Couper le Shelly coupe AUSSI le Pico W : `invert_direction` runtime
-      est perdu au reboot. Le service Pi doit re-pousser la config via
-      `<pico>/config` apres chaque rallumage si elle est non-defaut.
+L'argument ``urlopen`` permet d'injecter un mock pour les tests.
 """
 
 from __future__ import annotations

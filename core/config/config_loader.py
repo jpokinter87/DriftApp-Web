@@ -132,7 +132,7 @@ class MeridianAnticipationConfig:
 
 @dataclass
 class PowerSwitchConfig:
-    """Configuration du switch d'alimentation cimier (Shelly 220V).
+    """Configuration du switch d'alimentation cimier (Shelly 24V).
 
     type:
       - "shelly_gen2"  → API moderne RPC `/rpc/Switch.Set?id=<id>&on=...`
@@ -151,7 +151,7 @@ class PowerSwitchConfig:
 class MotorShellyConfig:
     """Configuration du Shelly pilotant le moteur cimier (pivot v6.x).
 
-    Remplace la génération STEP/DIR via Pico W par 2 Shellys 1 Gen 3
+    Archi V3 : pilotage moteur via 2 Shelly Gen 1 (contact sec)
     distincts (1 relais chacun, contact sec) qui automatisent le circuit
     de commande manuel de Serge (interrupteur ON/OFF moteur + DPDT
     direction). Cf. `core/hardware/motor_shelly.py`.
@@ -201,7 +201,7 @@ class MotorShellyConfig:
 class SwitchReaderConfig:
     """Configuration de la lecture des fins de course cimier (Shelly Uni+, V3).
 
-    Remplace le Pico W capteur. Les 2 microswitches Haut/Bas sont lus via les
+    Archi V3 : les 2 microswitches Haut/Bas sont lus via les
     2 entrées du Shelly Uni+ (RPC Gen 2 ``Input.GetStatus``).
 
     type:
@@ -293,7 +293,7 @@ class CimierConfig:
     """Configuration du cimier motorisé (v6.0 Phase 1).
 
     Le service `cimier_service` orchestre un cycle complet (cascade Shelly
-    220V/12V → polling Pico W ready → re-push invert si non-défaut → /open
+    alim 24V → settle WiFi Shelly → set_direction → motor_on → poll butées
     ou /close → polling final → turn_off → anti-bounce). IPs réelles
     uniquement dans `data/config.json` (terrain) — code Python neutre.
 
