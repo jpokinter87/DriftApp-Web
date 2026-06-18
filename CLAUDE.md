@@ -167,7 +167,7 @@ Suppression totale du Pico W. Le cimier est désormais piloté par 4 Shellys Gen
 
 **Simulateur dev** : `core/hardware/cimier_simulator.py` — émule les 4 Shellys (Uni+ RPC + 3 relais legacy). Activé via `CIMIER_DEV_MODE=1` (exporté par `start_dev.sh`).
 
-**Conventions à valider au banc** : `motor_on_relay_state`, `open_dir_state`, `switch_reader.invert` dans `data/config.json` section `motor_shelly` / `switch_reader`.
+**Conventions validées terrain (17-18/06, figées dans `data/config.json`)** : `motor_on_relay_state=false` (le moteur tourne quand le relais MOT est sur `turn=off`), `open_dir_state=true`, `switch_reader.invert=true` (section `motor_shelly` / `switch_reader`).
 
 ---
 
@@ -432,7 +432,7 @@ Le Pico W est supprimé. Le cimier est piloté par 4 Shellys Gen 1 (voir section
 1. Shelly 24V (.83), Uni+ (.84), MOT (.85), UPDN (.86) accessibles sur le réseau local.
 2. IPs DHCP statiques configurées dans l'interface web Shelly de chaque appareil.
 3. Mettre `cimier.enabled=true` + renseigner `switch_reader.host`, `motor_shelly.host_motor`, `motor_shelly.host_dir` dans `data/config.json` terrain (laisser `"noop"` dans le template repo).
-4. Valider les conventions au banc : `motor_on_relay_state`, `open_dir_state`, `switch_reader.invert` (cf. `docs/synoptique electronique cimier V3.pdf`).
+4. Conventions validées terrain (17-18/06), figées dans `data/config.json` : `motor_on_relay_state=false`, `open_dir_state=true`, `switch_reader.invert=true` (cf. `docs/synoptique electronique cimier V3.pdf`). Vérifier qu'elles se comportent comme attendu lors du 1er cycle supervisé.
 
 ### Étape 4 — Configuration `data/config.json` (rétro-compat partielle)
 
