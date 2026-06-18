@@ -670,9 +670,11 @@ class CimierService:
             )
 
             # Settle DPDT : laisser le relais DIR (Shelly UPDN) + le DPDT externe
-            # finir de commuter AVANT d'énergiser le moteur. Sans ce délai, turn_on
-            # part ~quelques ms après set_direction (mesuré ~8 ms terrain), trop tôt
-            # pour une bascule mécanique → sens de rotation indéterminé au démarrage.
+            # finir de commuter AVANT d'énergiser le moteur. C'est l'équivalent
+            # explicite du délai que le standalone (cimier_manual.py) obtient
+            # implicitement via sa lecture pré-check entre set_direction et
+            # motor_run ; le service ne fait pas cette lecture intermédiaire, d'où
+            # ce sleep court pour garantir une bascule mécanique propre du DPDT.
             dir_settle = float(self._config.dir_settle_s)
             if dir_settle > 0:
                 self._sleep(dir_settle)
@@ -848,13 +850,6 @@ class CimierService:
         action = str(cmd.get("action", "")).lower()
         if action == ACTION_STOP:
             self._last_command_id_value = str(cmd.get("id", ""))
-            # Traçage de l'émetteur : id + ts d'émission de la commande stop reçue
-            # pendant un cycle (permet de corréler avec le client qui l'a postée).
-            logger.info(
-                "cimier_event=stop_command_received id=%s ts=%s",
-                cmd.get("id", ""),
-                cmd.get("ts", ""),
-            )
             return cmd
         # Mode drop : commande non-stop reçue pendant un cycle → ignorée.
         return None
