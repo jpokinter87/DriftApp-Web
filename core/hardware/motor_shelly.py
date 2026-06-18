@@ -1,40 +1,35 @@
 """
-Pilote moteur cimier via 2 relais Shelly (pivot architectural v6.x).
+Pilote moteur cimier via 2 relais Shelly (archi V3 tout-Shelly).
 
 Contexte
 --------
-Le pilotage STEP/DIR du moteur cimier depuis le Pico W (firmware MicroPython
-→ opto-coupleur DM556T) n'a jamais réussi à faire tourner le moteur malgré
-plusieurs câblages tentés (Darlington ULN2803, réhausseur, commun cathode
-direct). En revanche, le circuit de commande manuel de Serge (oscillateur +
-2 interrupteurs : ON/OFF moteur + DPDT direction) fait tourner le moteur de
-façon parfaitement reproductible.
-
-Le pivot consiste à **automatiser le circuit manuel** :
-  - 2× **Shelly 1 Gen 3** distincts (1 relais chacun, contact sec) :
-      * Shelly MOTOR : ON/OFF moteur (remplace l'interrupteur manuel).
-      * Shelly DIR   : pilote un petit relais DPDT externe qui permute
-                       la ligne DIR (sens du moteur).
-  - Les fins de course haut/bas restent câblées sur le Pico W (qui devient
-    un simple serveur HTTP de capteurs).
+Le pilotage STEP/DIR du moteur cimier n'a jamais réussi à le faire tourner ;
+le circuit de commande manuel (oscillateur + 2 interrupteurs : ON/OFF moteur
++ DPDT direction) le fait tourner de façon reproductible. Le pivot V3
+automatise ce circuit avec des Shelly Gen 1 (contact sec) :
+  - Shelly MOTOR (.85) : ON/OFF moteur (remplace l'interrupteur manuel).
+  - Shelly DIR   (.86) : pilote un relais DPDT externe qui permute la ligne
+                         DIR (sens du moteur).
+Les fins de course haut/bas sont lues via un Shelly Uni+ (.84), cf.
+``core/hardware/shelly_switch_reader.py``.
 
 `cimier_service` (côté Pi) orchestre :
   1. set_direction(open_direction=True) → relais DIR positionné
-  2. turn_on(timer_s=90) → moteur démarre, kill auto Shelly à 90s en cas de
+  2. turn_on(timer_s=90) → moteur démarre, kill auto Shelly à 90 s en cas de
      WiFi-drop (filet de sécurité hardware, indépendant du Pi)
-  3. polling /status du Pico W jusqu'à fin de course
+  3. polling des butées (Shelly Uni+) jusqu'à fin de course
   4. turn_off() → moteur stoppé
 
-Le moteur tourne à vitesse fixe (potard de l'oscillateur), la précision
-positionnelle vient des fins de course mécaniques, pas des pas. C'est
-suffisant pour un cimier (mécanisme binaire open/closed).
+Le moteur tourne à vitesse fixe (potard de l'oscillateur) ; la précision
+positionnelle vient des fins de course mécaniques, pas des pas. Suffisant
+pour un cimier (mécanisme binaire open/closed).
 
 API Shelly supportée
 --------------------
+- ``api="legacy"`` (terrain V3) : Shelly Gen 1
+    URL : ``http://<host>/relay/<relay>?turn=<on|off>[&timer=<N>]``
 - ``api="rpc"`` (défaut) : Shelly Gen 2 / Plus / Pro
     URL : ``http://<host>/rpc/Switch.Set?id=<relay>&on=<true|false>[&toggle_after=<N>]``
-- ``api="legacy"`` : Shelly Gen 1
-    URL : ``http://<host>/relay/<relay>?turn=<on|off>[&timer=<N>]``
 
 L'argument `urlopen` permet d'injecter un mock pour les tests.
 """
@@ -58,21 +53,18 @@ class MotorShelly:
     Conventions paramétriques (réglées côté config terrain, pas dans le code) :
 
       ``motor_on_relay_state`` :
-        - True (défaut) : ``turn_on()`` met le relais MOTOR à ON. Convention
-          intuitive pour un câblage NO (Normally Open) où contact fermé =
-          circuit alimenté.
-        - False : convention **inversée** (cas terrain Serge). L'oscillateur
-          de commande manuelle déclenche le moteur **quand le circuit est
-          ouvert** (interrupteur câblé NC). Donc ``turn_on()`` doit mettre
-          le relais à OFF (contact ouvert) pour démarrer le moteur, et
-          ``turn_off()`` doit le mettre à ON pour l'arrêter.
+        - False (défaut, **convention validée terrain 17-18/06**) : le moteur
+          tourne quand le relais MOTOR est **ouvert** (oscillateur câblé NC).
+          ``turn_on()`` met donc le relais à OFF (``turn=off`` / ``on=false``)
+          pour démarrer, et ``turn_off()`` à ON pour arrêter.
+        - True : convention « intuitive » NO (contact fermé = circuit
+          alimenté). ``turn_on()`` met le relais à ON. Non utilisé en V3.
 
       ``open_dir_state`` :
-        - True (défaut) : ``set_direction(open_direction=True)`` met le
-          relais DIR à ON (= sens nominal ouverture).
-        - False : convention inversée (utile si le DPDT externe est câblé
-          dans le sens opposé, ou si « contact ouvert = direction
-          ouverture » comme dans le câblage Serge où ouvert = UP).
+        - True (défaut, convention validée terrain) :
+          ``set_direction(open_direction=True)`` met le relais DIR à ON
+          (``turn=on`` = sens montée / ouverture).
+        - False : convention inversée (DPDT externe câblé dans l'autre sens).
 
     Filet de sécurité hardware (``timer_s`` sur ``turn_on``) :
         En API RPC (Gen 2/3), le paramètre Shelly ``toggle_after=N`` fait
@@ -80,14 +72,14 @@ class MotorShelly:
         soit ``motor_on_relay_state``, l'effet reste **« moteur OFF après
         N secondes »** parce que ``toggle_after`` inverse l'état courant.
 
-    Note opérationnelle Shelly Gen 3 — état au boot :
-        Si ``motor_on_relay_state=False``, le ``default_state`` (ou
-        ``initial_state``) du Shelly moteur doit être configuré côté
-        Shelly UI à **« ON »** (relais fermé) pour que le moteur reste
-        à l'arrêt au boot du Shelly. À régler une fois pour toutes lors
-        de l'install terrain ; ne dépend pas du code Python.
+    Note opérationnelle Shelly Gen 1 — état au boot :
+        Avec la convention validée (``motor_on_relay_state=False``), le
+        ``default_state`` du Shelly MOTOR doit être réglé côté Shelly UI à
+        **« ON »** (relais fermé) pour que le moteur reste à l'arrêt au boot
+        du Shelly. À régler une fois lors de l'install terrain ; indépendant
+        du code Python.
 
-    Architecture **2 Shellys distincts** (Shelly 1 Gen 3 × 2, 1 relais
+    Architecture **2 Shellys distincts** (Shelly Gen 1 × 2, 1 relais
     chacun) :
       - ``host_motor`` + ``relay_motor`` = Shelly MOTOR ;
       - ``host_dir``   + ``relay_dir``   = Shelly DIR.
@@ -107,7 +99,7 @@ class MotorShelly:
         relay_motor: int = 0,
         relay_dir: int = 0,
         open_dir_state: bool = True,
-        motor_on_relay_state: bool = True,
+        motor_on_relay_state: bool = False,
         api: str = "rpc",
         timeout_s: float = 3.0,
         urlopen=None,

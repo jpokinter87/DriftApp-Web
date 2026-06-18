@@ -132,7 +132,7 @@ class MeridianAnticipationConfig:
 
 @dataclass
 class PowerSwitchConfig:
-    """Configuration du switch d'alimentation cimier (Shelly 220V).
+    """Configuration du switch d'alimentation cimier (Shelly 24V).
 
     type:
       - "shelly_gen2"  → API moderne RPC `/rpc/Switch.Set?id=<id>&on=...`
@@ -151,7 +151,7 @@ class PowerSwitchConfig:
 class MotorShellyConfig:
     """Configuration du Shelly pilotant le moteur cimier (pivot v6.x).
 
-    Remplace la génération STEP/DIR via Pico W par 2 Shellys 1 Gen 3
+    Archi V3 : pilotage moteur via 2 Shelly Gen 1 (contact sec)
     distincts (1 relais chacun, contact sec) qui automatisent le circuit
     de commande manuel de Serge (interrupteur ON/OFF moteur + DPDT
     direction). Cf. `core/hardware/motor_shelly.py`.
@@ -170,11 +170,13 @@ class MotorShellyConfig:
       - ``open_dir_state``        : convention sens. True → relais DIR ON =
                                     ouverture cimier. False = inversé (cas
                                     Serge : ouvert = UP = ouverture).
-      - ``motor_on_relay_state``  : convention moteur. True (défaut, NO) →
-                                    turn_on met le relais à ON. False (NC,
-                                    cas Serge : oscillateur déclenche quand
-                                    circuit ouvert) → turn_on met le relais
-                                    à OFF.
+      - ``motor_on_relay_state``  : convention moteur. False (défaut,
+                                    convention validée terrain 17-18/06,
+                                    oscillateur câblé NC : le moteur tourne
+                                    quand le relais MOTOR est ouvert) →
+                                    turn_on met le relais à OFF (turn=off).
+                                    True (NO intuitive, non utilisée en V3) →
+                                    turn_on met le relais à ON.
       - ``api``                   : "rpc" (Shelly Gen 2/3/Plus/Pro, défaut)
                                     ou "legacy" (Gen 1).
       - ``timer_safety_sec``      : filet hardware (Shelly toggle_after).
@@ -190,7 +192,7 @@ class MotorShellyConfig:
     relay_motor: int = 0
     relay_dir: int = 0
     open_dir_state: bool = True
-    motor_on_relay_state: bool = True
+    motor_on_relay_state: bool = False
     api: str = "rpc"
     timer_safety_sec: float = 90.0
 
@@ -199,7 +201,7 @@ class MotorShellyConfig:
 class SwitchReaderConfig:
     """Configuration de la lecture des fins de course cimier (Shelly Uni+, V3).
 
-    Remplace le Pico W capteur. Les 2 microswitches Haut/Bas sont lus via les
+    Archi V3 : les 2 microswitches Haut/Bas sont lus via les
     2 entrées du Shelly Uni+ (RPC Gen 2 ``Input.GetStatus``).
 
     type:
@@ -291,7 +293,7 @@ class CimierConfig:
     """Configuration du cimier motorisé (v6.0 Phase 1).
 
     Le service `cimier_service` orchestre un cycle complet (cascade Shelly
-    220V/12V → polling Pico W ready → re-push invert si non-défaut → /open
+    alim 24V → settle WiFi Shelly → set_direction → motor_on → poll butées
     ou /close → polling final → turn_off → anti-bounce). IPs réelles
     uniquement dans `data/config.json` (terrain) — code Python neutre.
 

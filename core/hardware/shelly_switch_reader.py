@@ -1,6 +1,6 @@
 """Lecture des fins de course cimier via un Shelly Uni+ (archi V3).
 
-Remplace le Pico W capteur : les 2 microswitches (Haut/Bas) sont câblés sur
+Archi V3 : les 2 microswitches (Haut/Bas) sont câblés sur
 les 2 entrées du Shelly Uni+, lues via l'API RPC Gen 2
 ``GET /rpc/Input.GetStatus?id=<n>`` → ``{"id": n, "state": <bool>}``.
 

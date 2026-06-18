@@ -87,7 +87,7 @@
     "backup_count": 5
   },
   "cimier": {
-    "_comment": "Archi V3 tout-Shelly (suppression Pico W). Opt-in (enabled=false). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Conventions inversées (motor_on_relay_state, open_dir_state, switch_reader.invert) à VALIDER AU BANC.",
+    "_comment": "Archi V3 tout-Shelly. Opt-in (enabled=false). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Conventions validées terrain 17-18/06 (motor_on_relay_state=false, open_dir_state=true, switch_reader.invert=true).",
     "enabled": false,
     "cycle_timeout_s": 90.0,
     "post_off_quiet_s": 10.0,
@@ -129,13 +129,13 @@
       "retrigger_cooldown_hours": 12
     },
     "motor_shelly": {
-      "_comment": "SHELLY-1-MOT (.85) + SHELLY-1-UPDN (.86), API legacy. Conventions V3 à valider banc : moteur tourne quand relais turn=on (motor_on_relay_state=true), UP=turn=on (open_dir_state=true). host_motor/host_dir vides → NoopMotorShelly tant que non déployé.",
+      "_comment": "SHELLY-1-MOT (.85) + SHELLY-1-UPDN (.86), API legacy. Conventions validées terrain 17-18/06 : moteur tourne quand relais MOT turn=off (motor_on_relay_state=false), UP=turn=on (open_dir_state=true). host_motor/host_dir vides → NoopMotorShelly tant que non déployé.",
       "host_motor": "",
       "host_dir": "",
       "relay_motor": 0,
       "relay_dir": 0,
       "open_dir_state": true,
-      "motor_on_relay_state": true,
+      "motor_on_relay_state": false,
       "api": "legacy",
       "timer_safety_sec": 90.0
     }

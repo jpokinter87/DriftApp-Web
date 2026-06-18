@@ -5,7 +5,7 @@ Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) 
   0. preflight     : lit les butées via ``ShellySwitchReader.read()`` AVANT
                      toute alim (déjà en butée → noop, both_switches → error,
                      unreachable → error).
-  1. power_on      : ``power_switch.turn_on()`` (Shelly 220V cascade).
+  1. power_on      : ``power_switch.turn_on()`` (Shelly 24V).
   2. settle        : ``sleep(shelly_settle_s)`` — attente appairage WiFi
                      Shelly MOTOR + DIR après montée 24V.
   3. motor_off     : ``motor_shelly.turn_off()`` défensif (état connu avant
@@ -20,7 +20,7 @@ Flow d'un cycle (commande "open" ou "close") — cinématique Shelly (spec §3) 
                      both_switches → error).
   7. motor_off     : ``motor_shelly.turn_off()`` (cleanup, dans finally).
   8. power_off     : ``power_switch.turn_off()`` — TOUJOURS appelé (sécurité
-                     220V, invariant).
+                     24V, invariant).
   9. cooldown      : attente ``post_off_quiet_s`` avant d'accepter une
                      nouvelle commande (anti-bounce hardware).
 
@@ -540,7 +540,7 @@ class CimierService:
         → poll_switch → motor_off (cleanup) → power_off → cooldown.
 
         ``power_switch.turn_off()`` et ``motor_shelly.turn_off()`` sont TOUJOURS
-        appelés dans ``finally`` (sécurité 220V + état moteur connu).
+        appelés dans ``finally`` (sécurité 24V + état moteur connu).
         """
         cycle_start = self._clock()
         error_message = ""
@@ -605,7 +605,7 @@ class CimierService:
 
         # ----- Cinématique Shelly (spec §3.1 → §3.4) -----
         try:
-            # Phase A : power_on (Shelly 220V cascade).
+            # Phase A : power_on (Shelly 24V).
             self._publish_phase(PHASE_POWER_ON, action, cmd_id, error_message="")
             try:
                 self._power_switch.turn_on()
@@ -670,9 +670,11 @@ class CimierService:
             )
 
             # Settle DPDT : laisser le relais DIR (Shelly UPDN) + le DPDT externe
-            # finir de commuter AVANT d'énergiser le moteur. Sans ce délai, turn_on
-            # part ~quelques ms après set_direction (mesuré ~8 ms terrain), trop tôt
-            # pour une bascule mécanique → sens de rotation indéterminé au démarrage.
+            # finir de commuter AVANT d'énergiser le moteur. C'est l'équivalent
+            # explicite du délai que le standalone (cimier_manual.py) obtient
+            # implicitement via sa lecture pré-check entre set_direction et
+            # motor_run ; le service ne fait pas cette lecture intermédiaire, d'où
+            # ce sleep court pour garantir une bascule mécanique propre du DPDT.
             dir_settle = float(self._config.dir_settle_s)
             if dir_settle > 0:
                 self._sleep(dir_settle)
@@ -721,7 +723,7 @@ class CimierService:
             # outcome == "ok" → fall through, cleanup ci-dessous.
 
         finally:
-            # Cleanup garanti : motor_off + power_off (invariant 220V).
+            # Cleanup garanti : motor_off + power_off (invariant 24V).
             try:
                 self._motor_shelly.turn_off()
             except Exception as exc:
@@ -848,13 +850,6 @@ class CimierService:
         action = str(cmd.get("action", "")).lower()
         if action == ACTION_STOP:
             self._last_command_id_value = str(cmd.get("id", ""))
-            # Traçage de l'émetteur : id + ts d'émission de la commande stop reçue
-            # pendant un cycle (permet de corréler avec le client qui l'a postée).
-            logger.info(
-                "cimier_event=stop_command_received id=%s ts=%s",
-                cmd.get("id", ""),
-                cmd.get("ts", ""),
-            )
             return cmd
         # Mode drop : commande non-stop reçue pendant un cycle → ignorée.
         return None
@@ -942,9 +937,8 @@ class CimierService:
     def _derive_current_cimier_state(self) -> str:
         """Mappe l'état interne du service vers les labels CIMIER_STATE_* du scheduler.
 
-        Archi Shelly (Bloc 2) : le Pico est capteur-only — pas de ``pico_state``
-        legacy. On dérive l'état du cimier des derniers ``open_switch`` /
-        ``closed_switch`` observés.
+        Archi V3 tout-Shelly : on dérive l'état du cimier des derniers
+        ``open_switch`` / ``closed_switch`` observés (Shelly Uni+).
 
         - Cooldown actif → CIMIER_STATE_COOLDOWN
         - both switches True → CIMIER_STATE_ERROR (anomalie capteur)

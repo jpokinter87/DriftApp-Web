@@ -1,9 +1,7 @@
 """Tests du module core.hardware.motor_shelly.
 
-Pivot architectural cimier (v6.x) : remplacement du pilotage STEP/DIR via le
-Pico W par 2 Shellys 1 Gen 3 distincts (1 relais chacun, contact sec) pour
-le moteur cimier. Cf. ``core/hardware/motor_shelly.py`` pour le contexte
-complet.
+Archi V3 tout-Shelly : pilotage moteur cimier via 2 Shelly Gen 1 distincts
+(1 relais chacun, contact sec) — Shelly MOTOR (ON/OFF) + Shelly DIR (DPDT).
 
 Conventions de test :
   - host MOTOR  : "192.168.1.85"
@@ -12,7 +10,7 @@ Conventions de test :
     d'index 0 par défaut → l'index ne discrimine plus).
 
 Pattern miroir de tests/test_power_switch.py : mocks urlopen, format URL,
-gestion d'erreurs, support RPC (Gen 2/3) et legacy (Gen 1).
+gestion d'erreurs, support legacy (Gen 1, terrain) et RPC (Gen 2/Plus).
 """
 
 from __future__ import annotations
@@ -58,6 +56,7 @@ def _called_urls(mock):
 # Construction + validation
 # ----------------------------------------------------------------------
 
+
 class TestMotorShellyConstruction:
     def test_default_api_is_rpc(self):
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=make_mock_urlopen())
@@ -72,7 +71,7 @@ class TestMotorShellyConstruction:
         assert sh.host_dir == HOST_DIR
 
     def test_relay_indices_default_zero_each(self):
-        """Shelly 1 Gen 3 : 1 seul relais d'index 0. Les 2 hôtes étant distincts,
+        """Shelly Gen 1 : 1 seul relais d'index 0. Les 2 hôtes étant distincts,
         rien n'empêche les 2 relais d'avoir le même index."""
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=make_mock_urlopen())
         assert sh.relay_motor == 0
@@ -81,7 +80,10 @@ class TestMotorShellyConstruction:
     def test_relay_indices_custom(self):
         """Override possible pour Shellys multi-relais (Plus 2PM, etc.)."""
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, relay_motor=2, relay_dir=3,
+            HOST_MOTOR,
+            HOST_DIR,
+            relay_motor=2,
+            relay_dir=3,
             urlopen=make_mock_urlopen(),
         )
         assert sh.relay_motor == 2
@@ -96,20 +98,21 @@ class TestMotorShellyConstruction:
 # turn_on / turn_off — RPC (Gen 2/3), convention normale
 # ----------------------------------------------------------------------
 
+
 class TestMotorShellyOnOffRpc:
     def test_turn_on_url_format_uses_motor_host(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=mock)
         sh.turn_on()
         url = _called_url(mock)
-        assert url == "http://" + HOST_MOTOR + "/rpc/Switch.Set?id=0&on=true"
+        assert url == "http://" + HOST_MOTOR + "/rpc/Switch.Set?id=0&on=false"
 
     def test_turn_off_url_format_uses_motor_host(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=mock)
         sh.turn_off()
         url = _called_url(mock)
-        assert url == "http://" + HOST_MOTOR + "/rpc/Switch.Set?id=0&on=false"
+        assert url == "http://" + HOST_MOTOR + "/rpc/Switch.Set?id=0&on=true"
 
     def test_turn_on_uses_motor_relay_index(self):
         mock = make_mock_urlopen()
@@ -127,7 +130,7 @@ class TestMotorShellyOnOffRpc:
         url = _called_url(mock)
         assert HOST_MOTOR in url
         assert "toggle_after=90" in url
-        assert "on=true" in url
+        assert "on=false" in url
 
     def test_turn_on_zero_timer_omits_param(self):
         mock = make_mock_urlopen()
@@ -140,18 +143,19 @@ class TestMotorShellyOnOffRpc:
 # turn_on / turn_off — legacy (Gen 1)
 # ----------------------------------------------------------------------
 
+
 class TestMotorShellyOnOffLegacy:
     def test_turn_on_url_format(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, api="legacy", urlopen=mock)
         sh.turn_on()
-        assert _called_url(mock) == "http://" + HOST_MOTOR + "/relay/0?turn=on"
+        assert _called_url(mock) == "http://" + HOST_MOTOR + "/relay/0?turn=off"
 
     def test_turn_off_url_format(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, api="legacy", urlopen=mock)
         sh.turn_off()
-        assert _called_url(mock) == "http://" + HOST_MOTOR + "/relay/0?turn=off"
+        assert _called_url(mock) == "http://" + HOST_MOTOR + "/relay/0?turn=on"
 
     def test_turn_on_with_safety_timer_legacy(self):
         mock = make_mock_urlopen()
@@ -159,12 +163,13 @@ class TestMotorShellyOnOffLegacy:
         sh.turn_on(timer_s=90.0)
         url = _called_url(mock)
         assert "timer=90" in url
-        assert "turn=on" in url
+        assert "turn=off" in url
 
 
 # ----------------------------------------------------------------------
 # set_direction — convention open_dir_state, target = host_dir
 # ----------------------------------------------------------------------
+
 
 class TestMotorShellySetDirection:
     def test_set_direction_open_default_relay_on_uses_dir_host(self):
@@ -175,7 +180,7 @@ class TestMotorShellySetDirection:
         url = _called_url(mock)
         assert HOST_DIR in url  # bien le Shelly DIR, pas le MOTOR
         assert HOST_MOTOR not in url
-        assert "id=0" in url  # relay_dir défaut = 0 (Shelly 1 Gen 3)
+        assert "id=0" in url  # relay_dir défaut = 0 (Shelly Gen 1)
         assert "on=true" in url
 
     def test_set_direction_close_default_relay_off_uses_dir_host(self):
@@ -213,18 +218,21 @@ class TestMotorShellySetDirection:
 
 
 # ----------------------------------------------------------------------
-# Convention inversée motor_on_relay_state=False (cas terrain Serge)
+# Convention moteur validée terrain (défaut) : motor_on_relay_state=False
 # ----------------------------------------------------------------------
-# L'oscillateur de commande manuel déclenche le moteur quand le circuit
-# est OUVERT (interrupteur câblé NC). Donc turn_on() doit mettre le relais
-# Shelly à OFF (= contact ouvert) pour démarrer, et turn_off() le mettre à
-# ON pour arrêter.
+# Le moteur tourne quand le circuit MOTOR est OUVERT (oscillateur câblé NC).
+# turn_on() met donc le relais à OFF (turn=off) pour démarrer, et turn_off()
+# le met à ON (turn=on) pour arrêter. Validé du premier coup terrain 17-18/06.
+
 
 class TestMotorShellyInvertedMotorLogic:
     def test_turn_on_with_inverted_state_sets_relay_off(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, motor_on_relay_state=False, urlopen=mock,
+            HOST_MOTOR,
+            HOST_DIR,
+            motor_on_relay_state=False,
+            urlopen=mock,
         )
         sh.turn_on()
         url = _called_url(mock)
@@ -234,7 +242,10 @@ class TestMotorShellyInvertedMotorLogic:
     def test_turn_off_with_inverted_state_sets_relay_on(self):
         mock = make_mock_urlopen()
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, motor_on_relay_state=False, urlopen=mock,
+            HOST_MOTOR,
+            HOST_DIR,
+            motor_on_relay_state=False,
+            urlopen=mock,
         )
         sh.turn_off()
         url = _called_url(mock)
@@ -246,20 +257,25 @@ class TestMotorShellyInvertedMotorLogic:
         passe de ON (relais OFF) à OFF (relais ON) automatiquement."""
         mock = make_mock_urlopen()
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, motor_on_relay_state=False, urlopen=mock,
+            HOST_MOTOR,
+            HOST_DIR,
+            motor_on_relay_state=False,
+            urlopen=mock,
         )
         sh.turn_on(timer_s=90.0)
         url = _called_url(mock)
         assert "on=false" in url
         assert "toggle_after=90" in url
 
-    def test_motor_on_relay_state_default_is_true(self):
+    def test_motor_on_relay_state_default_is_false(self):
         sh = MotorShelly(HOST_MOTOR, HOST_DIR, urlopen=make_mock_urlopen())
-        assert sh.motor_on_relay_state is True
+        assert sh.motor_on_relay_state is False
 
     def test_motor_on_relay_state_property_reflects_constructor(self):
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, motor_on_relay_state=False,
+            HOST_MOTOR,
+            HOST_DIR,
+            motor_on_relay_state=False,
             urlopen=make_mock_urlopen(),
         )
         assert sh.motor_on_relay_state is False
@@ -268,7 +284,10 @@ class TestMotorShellyInvertedMotorLogic:
         """motor_on_relay_state n'impacte que turn_on/turn_off, pas set_direction."""
         mock = make_mock_urlopen()
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR, motor_on_relay_state=False, urlopen=mock,
+            HOST_MOTOR,
+            HOST_DIR,
+            motor_on_relay_state=False,
+            urlopen=mock,
         )
         sh.set_direction(open_direction=True)
         url = _called_url(mock)
@@ -276,9 +295,29 @@ class TestMotorShellyInvertedMotorLogic:
         assert "on=true" in url  # DIR suit open_dir_state défaut
 
 
+class TestMotorShellyRelayOnConvention:
+    """Branche non-défaut : motor_on_relay_state=True (relais ON = moteur ON).
+    Couverture conservée bien que la convention validée terrain soit False."""
+
+    def test_turn_on_relay_on_rpc(self):
+        mock = make_mock_urlopen()
+        sh = MotorShelly(HOST_MOTOR, HOST_DIR, motor_on_relay_state=True, urlopen=mock)
+        sh.turn_on()
+        assert "on=true" in _called_url(mock)
+
+    def test_turn_on_relay_on_legacy(self):
+        mock = make_mock_urlopen()
+        sh = MotorShelly(
+            HOST_MOTOR, HOST_DIR, api="legacy", motor_on_relay_state=True, urlopen=mock
+        )
+        sh.turn_on()
+        assert _called_url(mock) == "http://" + HOST_MOTOR + "/relay/0?turn=on"
+
+
 # ----------------------------------------------------------------------
 # Séquences typiques (utilisées par cimier_service)
 # ----------------------------------------------------------------------
+
 
 class TestMotorShellySequences:
     def test_open_cycle_set_direction_then_turn_on(self):
@@ -293,7 +332,7 @@ class TestMotorShellySequences:
         assert HOST_DIR in urls[0]
         assert "on=true" in urls[0]
         assert HOST_MOTOR in urls[1]
-        assert "on=true" in urls[1]
+        assert "on=false" in urls[1]
         assert "toggle_after=90" in urls[1]
 
     def test_close_cycle_set_direction_then_turn_on(self):
@@ -305,7 +344,7 @@ class TestMotorShellySequences:
         assert HOST_DIR in urls[0]
         assert "on=false" in urls[0]
         assert HOST_MOTOR in urls[1]
-        assert "on=true" in urls[1]
+        assert "on=false" in urls[1]
 
     def test_serge_terrain_open_cycle_inverted_conventions(self):
         """Cas terrain Serge : open_dir_state=False (ouvert=UP) +
@@ -313,8 +352,10 @@ class TestMotorShellySequences:
         DIR Shelly → on=false (UP), MOTOR Shelly → on=false (démarre)."""
         mock = make_mock_urlopen()
         sh = MotorShelly(
-            HOST_MOTOR, HOST_DIR,
-            open_dir_state=False, motor_on_relay_state=False,
+            HOST_MOTOR,
+            HOST_DIR,
+            open_dir_state=False,
+            motor_on_relay_state=False,
             urlopen=mock,
         )
         sh.set_direction(open_direction=True)
@@ -329,6 +370,7 @@ class TestMotorShellySequences:
 # ----------------------------------------------------------------------
 # Erreurs réseau / HTTP
 # ----------------------------------------------------------------------
+
 
 class TestMotorShellyErrors:
     def test_http_500_raises_motor_shelly_error(self):
@@ -364,6 +406,7 @@ class TestMotorShellyErrors:
 # ----------------------------------------------------------------------
 # Timeout urlopen
 # ----------------------------------------------------------------------
+
 
 def test_timeout_passed_to_urlopen():
     mock = make_mock_urlopen()

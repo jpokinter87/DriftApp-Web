@@ -553,7 +553,7 @@ class TestMotorShellyConfig:
         assert ms.relay_motor == 0
         assert ms.relay_dir == 0
         assert ms.open_dir_state is True
-        assert ms.motor_on_relay_state is True
+        assert ms.motor_on_relay_state is False
         assert ms.api == "rpc"
         assert ms.timer_safety_sec == 90.0
 
@@ -570,7 +570,7 @@ class TestMotorShellyConfig:
                     "relay_motor": 2,
                     "relay_dir": 3,
                     "open_dir_state": False,
-                    "motor_on_relay_state": False,
+                    "motor_on_relay_state": True,
                     "api": "legacy",
                     "timer_safety_sec": 60.0,
                 },
@@ -582,7 +582,7 @@ class TestMotorShellyConfig:
         assert ms.relay_motor == 2
         assert ms.relay_dir == 3
         assert ms.open_dir_state is False
-        assert ms.motor_on_relay_state is False
+        assert ms.motor_on_relay_state is True
         assert ms.api == "legacy"
         assert ms.timer_safety_sec == 60.0
 
@@ -935,3 +935,12 @@ class TestLoadConfig:
     def test_load_with_custom_path(self, tmp_config_file):
         config = load_config(tmp_config_file)
         assert config.site.nom == "Observatoire Test"
+
+
+def test_template_config_motor_on_relay_state_is_validated_false():
+    """Convention validée terrain (moteur tourne sur turn=off) : le template
+    data/config.json doit porter motor_on_relay_state=False par défaut."""
+    from core.config.config_loader import ConfigLoader
+
+    config = ConfigLoader().load()
+    assert config.cimier.motor_shelly.motor_on_relay_state is False
