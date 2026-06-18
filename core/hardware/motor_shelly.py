@@ -58,21 +58,18 @@ class MotorShelly:
     Conventions paramétriques (réglées côté config terrain, pas dans le code) :
 
       ``motor_on_relay_state`` :
-        - True (défaut) : ``turn_on()`` met le relais MOTOR à ON. Convention
-          intuitive pour un câblage NO (Normally Open) où contact fermé =
-          circuit alimenté.
-        - False : convention **inversée** (cas terrain Serge). L'oscillateur
-          de commande manuelle déclenche le moteur **quand le circuit est
-          ouvert** (interrupteur câblé NC). Donc ``turn_on()`` doit mettre
-          le relais à OFF (contact ouvert) pour démarrer le moteur, et
-          ``turn_off()`` doit le mettre à ON pour l'arrêter.
+        - False (défaut, **convention validée terrain 17-18/06**) : le moteur
+          tourne quand le relais MOTOR est **ouvert** (oscillateur câblé NC).
+          ``turn_on()`` met donc le relais à OFF (``turn=off`` / ``on=false``)
+          pour démarrer, et ``turn_off()`` à ON pour arrêter.
+        - True : convention « intuitive » NO (contact fermé = circuit
+          alimenté). ``turn_on()`` met le relais à ON. Non utilisé en V3.
 
       ``open_dir_state`` :
-        - True (défaut) : ``set_direction(open_direction=True)`` met le
-          relais DIR à ON (= sens nominal ouverture).
-        - False : convention inversée (utile si le DPDT externe est câblé
-          dans le sens opposé, ou si « contact ouvert = direction
-          ouverture » comme dans le câblage Serge où ouvert = UP).
+        - True (défaut, convention validée terrain) :
+          ``set_direction(open_direction=True)`` met le relais DIR à ON
+          (``turn=on`` = sens montée / ouverture).
+        - False : convention inversée (DPDT externe câblé dans l'autre sens).
 
     Filet de sécurité hardware (``timer_s`` sur ``turn_on``) :
         En API RPC (Gen 2/3), le paramètre Shelly ``toggle_after=N`` fait
@@ -80,12 +77,12 @@ class MotorShelly:
         soit ``motor_on_relay_state``, l'effet reste **« moteur OFF après
         N secondes »** parce que ``toggle_after`` inverse l'état courant.
 
-    Note opérationnelle Shelly Gen 3 — état au boot :
-        Si ``motor_on_relay_state=False``, le ``default_state`` (ou
-        ``initial_state``) du Shelly moteur doit être configuré côté
-        Shelly UI à **« ON »** (relais fermé) pour que le moteur reste
-        à l'arrêt au boot du Shelly. À régler une fois pour toutes lors
-        de l'install terrain ; ne dépend pas du code Python.
+    Note opérationnelle Shelly Gen 1 — état au boot :
+        Avec la convention validée (``motor_on_relay_state=False``), le
+        ``default_state`` du Shelly MOTOR doit être réglé côté Shelly UI à
+        **« ON »** (relais fermé) pour que le moteur reste à l'arrêt au boot
+        du Shelly. À régler une fois lors de l'install terrain ; indépendant
+        du code Python.
 
     Architecture **2 Shellys distincts** (Shelly 1 Gen 3 × 2, 1 relais
     chacun) :
@@ -107,7 +104,7 @@ class MotorShelly:
         relay_motor: int = 0,
         relay_dir: int = 0,
         open_dir_state: bool = True,
-        motor_on_relay_state: bool = True,
+        motor_on_relay_state: bool = False,
         api: str = "rpc",
         timeout_s: float = 3.0,
         urlopen=None,

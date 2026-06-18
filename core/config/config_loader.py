@@ -170,11 +170,13 @@ class MotorShellyConfig:
       - ``open_dir_state``        : convention sens. True → relais DIR ON =
                                     ouverture cimier. False = inversé (cas
                                     Serge : ouvert = UP = ouverture).
-      - ``motor_on_relay_state``  : convention moteur. True (défaut, NO) →
-                                    turn_on met le relais à ON. False (NC,
-                                    cas Serge : oscillateur déclenche quand
-                                    circuit ouvert) → turn_on met le relais
-                                    à OFF.
+      - ``motor_on_relay_state``  : convention moteur. False (défaut,
+                                    convention validée terrain 17-18/06,
+                                    oscillateur câblé NC : le moteur tourne
+                                    quand le relais MOTOR est ouvert) →
+                                    turn_on met le relais à OFF (turn=off).
+                                    True (NO intuitive, non utilisée en V3) →
+                                    turn_on met le relais à ON.
       - ``api``                   : "rpc" (Shelly Gen 2/3/Plus/Pro, défaut)
                                     ou "legacy" (Gen 1).
       - ``timer_safety_sec``      : filet hardware (Shelly toggle_after).
@@ -190,7 +192,7 @@ class MotorShellyConfig:
     relay_motor: int = 0
     relay_dir: int = 0
     open_dir_state: bool = True
-    motor_on_relay_state: bool = True
+    motor_on_relay_state: bool = False
     api: str = "rpc"
     timer_safety_sec: float = 90.0
 

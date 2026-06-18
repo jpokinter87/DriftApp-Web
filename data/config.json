@@ -129,13 +129,13 @@
       "retrigger_cooldown_hours": 12
     },
     "motor_shelly": {
-      "_comment": "SHELLY-1-MOT (.85) + SHELLY-1-UPDN (.86), API legacy. Conventions V3 à valider banc : moteur tourne quand relais turn=on (motor_on_relay_state=true), UP=turn=on (open_dir_state=true). host_motor/host_dir vides → NoopMotorShelly tant que non déployé.",
+      "_comment": "SHELLY-1-MOT (.85) + SHELLY-1-UPDN (.86), API legacy. Conventions validées terrain 17-18/06 : moteur tourne quand relais MOT turn=off (motor_on_relay_state=false), UP=turn=on (open_dir_state=true). host_motor/host_dir vides → NoopMotorShelly tant que non déployé.",
       "host_motor": "",
       "host_dir": "",
       "relay_motor": 0,
       "relay_dir": 0,
       "open_dir_state": true,
-      "motor_on_relay_state": true,
+      "motor_on_relay_state": false,
       "api": "legacy",
       "timer_safety_sec": 90.0
     }
