@@ -351,3 +351,33 @@ class TestWriteUserConfig:
             backup_path=backup,
         )
         assert str(cfg) not in _REPORT_CACHE  # cache invalidé
+
+
+from core.config import config_resilience as _cr  # noqa: E402
+
+
+class TestSchemaRefinements:
+    def test_enum_int_pour_indices_shelly(self):
+        template = {"cimier": {"motor_shelly": {"relay_motor": 0}}}
+        schema = build_config_schema(template)
+        field = schema[0]["fields"][0]
+        assert field["enum"] == [0, 1]
+        assert field["type"] == "int"
+
+    def test_enum_int_mode_spi(self):
+        template = {"encodeur": {"spi": {"mode": 0}}}
+        schema = build_config_schema(template)
+        field = schema[0]["fields"][0]
+        assert field["enum"] == [0, 1, 2, 3]
+
+    def test_help_fallback_registry(self, monkeypatch):
+        monkeypatch.setitem(_cr.HELP_REGISTRY, "site.latitude", "Latitude (degrés).")
+        template = {"site": {"latitude": 44.0}}
+        field = build_config_schema(template)[0]["fields"][0]
+        assert field["help"] == "Latitude (degrés)."
+
+    def test_comment_template_prioritaire_sur_registry(self, monkeypatch):
+        monkeypatch.setitem(_cr.HELP_REGISTRY, "site.latitude", "depuis registry")
+        template = {"site": {"latitude": 44.0, "_latitude_comment": "depuis template"}}
+        field = build_config_schema(template)[0]["fields"][0]
+        assert field["help"] == "depuis template"

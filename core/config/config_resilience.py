@@ -28,7 +28,9 @@ ADVANCED_SECTIONS = {
 }
 
 # Énumérations connues : chemin pointé → options proposées (menu déroulant UI).
-ENUM_REGISTRY: dict[str, list[str]] = {
+# Les listes d'entiers sécurisent les indices/modes matériels (0/1, modes SPI) :
+# le menu déroulant empêche la saisie d'une valeur hors plage.
+ENUM_REGISTRY: dict[str, list] = {
     "cimier.automation.mode": ["manual", "semi", "full"],
     "logging.level": ["DEBUG", "INFO", "WARNING", "ERROR"],
     "motor_driver.type": ["gpio", "rp2040"],
@@ -37,7 +39,22 @@ ENUM_REGISTRY: dict[str, list[str]] = {
     "cimier.weather_provider.type": ["noop"],
     "cimier.motor_shelly.api": ["legacy", "rpc"],
     "cimier.switch_reader.api": ["legacy", "rpc"],
+    # Indices relais/entrées Shelly (0/1).
+    "cimier.motor_shelly.relay_motor": [0, 1],
+    "cimier.motor_shelly.relay_dir": [0, 1],
+    "cimier.power_switch.switch_id": [0, 1],
+    "cimier.switch_reader.open_input_id": [0, 1],
+    "cimier.switch_reader.closed_input_id": [0, 1],
+    # SPI encodeur.
+    "encodeur.spi.bus": [0, 1],
+    "encodeur.spi.device": [0, 1],
+    "encodeur.spi.mode": [0, 1, 2, 3],
 }
+
+# Aide par champ (chemin pointé → texte). Filet pour les champs SANS `_…_comment`
+# voisin dans le template. Le commentaire du template, s'il existe, a priorité.
+# Garde `config.json` épuré (l'aide vit dans le code, pas dans la config terrain).
+HELP_REGISTRY: dict[str, str] = {}
 
 
 def _infer_type(value) -> str:
@@ -67,7 +84,7 @@ def _collect_fields(node: dict, prefix: str, group: str | None, out: list[dict])
                     "label": key,
                     "group": group,
                     "type": _infer_type(value),
-                    "help": node.get(f"_{key}_comment", ""),
+                    "help": node.get(f"_{key}_comment") or HELP_REGISTRY.get(path, ""),
                     "enum": ENUM_REGISTRY.get(path),
                 }
             )
@@ -105,7 +122,7 @@ def build_config_schema(template: dict) -> list[dict]:
                     "label": key,
                     "group": None,
                     "type": _infer_type(value),
-                    "help": template.get(f"_{key}_comment", ""),
+                    "help": template.get(f"_{key}_comment") or HELP_REGISTRY.get(key, ""),
                     "enum": ENUM_REGISTRY.get(key),
                 }
             )

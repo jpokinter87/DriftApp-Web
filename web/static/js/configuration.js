@@ -41,8 +41,8 @@ function configPage() {
         const body = await resp.json();
         this.schema = body.schema;
         this.values = body.values;
-        // Sections terrain ouvertes par défaut, Avancé fermé.
-        this.normalSections.forEach((s) => { this.open[s.key] = true; });
+        // Toutes les sections fermées par défaut — ouvertes seulement au clic.
+        this.schema.forEach((s) => { this.open[s.key] = false; });
         this.open['__advanced__'] = false;
       } catch (e) {
         this.error = 'Impossible de charger la configuration : ' + e.message;
