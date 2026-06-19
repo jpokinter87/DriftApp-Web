@@ -48,6 +48,17 @@ class TestStructuralMerge:
         assert added == []
         assert removed == []
 
+    def test_type_mismatch_garde_valeur_user_sans_crash(self):
+        # template attend un dict, user a un scalaire (et inversement) :
+        # on garde la valeur user, pas de récursion, pas de crash.
+        user = {"a": "scalaire", "b": {"c": 1}}
+        template = {"a": {"x": 0}, "b": 5}
+        merged, added, removed = _structural_merge(user, template)
+        assert merged["a"] == "scalaire"  # valeur user gardée malgré template dict
+        assert merged["b"] == {"c": 1}  # valeur user gardée malgré template scalaire
+        assert added == []
+        assert removed == []
+
 
 class TestAtomicWrite:
     def test_ecrit_via_tmp_puis_remplace(self, tmp_path):
