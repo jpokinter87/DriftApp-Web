@@ -289,9 +289,37 @@ async function refreshConfigBanner() {
             banner.style.display = 'none';
             return;
         }
+        // Signature de l'événement : permet de mémoriser un « fermé » et de ne pas
+        // re-nagger au rechargement pour le MÊME événement (un nouvel événement,
+        // signature différente, réaffiche).
+        const sig = [
+            data.status,
+            (data.added || []).join(','),
+            (data.removed || []).join(','),
+            data.backup_timestamp || ''
+        ].join('|');
+        let dismissed = null;
+        try { dismissed = localStorage.getItem('configBannerDismissed'); } catch (e) { /* */ }
+        if (dismissed === sig) {
+            banner.style.display = 'none';
+            return;
+        }
         msg.textContent = data.message;
         banner.classList.toggle('is-error', data.status === 'corruption_no_backup');
-        banner.style.display = 'block';
+        banner.style.display = 'flex';
+        // La bannière s'affiche après le fetch (post-peinture) : son insertion en
+        // haut, avec le header sticky + le scroll-anchoring du navigateur, peut la
+        // laisser cachée derrière le header. On ramène la vue en haut pour la
+        // rendre visible (cas non-unchanged uniquement, donc sans gêne en nominal).
+        window.scrollTo({ top: 0 });
+        // Bouton × : ferme et mémorise la signature (fermable pour tous les cas).
+        const closeBtn = document.getElementById('config-banner-close');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                try { localStorage.setItem('configBannerDismissed', sig); } catch (e) { /* */ }
+                banner.style.display = 'none';
+            };
+        }
     } catch (e) { /* silencieux */ }
 }
 

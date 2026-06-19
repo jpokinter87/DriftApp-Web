@@ -1046,6 +1046,9 @@ header h1 span {
 
 /* Bannière rapport de résilience config (Chantier A, Task 7) */
 .config-banner {
+    /* display est piloté en inline par le JS (none / flex) */
+    align-items: flex-start;
+    gap: 1rem;
     padding: 0.75rem 1rem;
     margin-bottom: 0.75rem;
     border-radius: 0.5rem;
@@ -1059,4 +1062,32 @@ header h1 span {
     border-color: var(--color-accent-red);
     background: rgba(255, 71, 87, 0.14);
     color: var(--color-accent-red);
+}
+
+#config-banner-msg {
+    flex: 1;
+}
+
+.config-banner-close {
+    flex: none;
+    margin-left: auto;
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.9;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.config-banner-close:hover,
+.config-banner-close:focus-visible {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.15);
+    outline: none;
 }
