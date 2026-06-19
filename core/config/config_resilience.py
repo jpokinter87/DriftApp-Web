@@ -17,6 +17,113 @@ DEFAULT_TEMPLATE_PATH = _PROJECT_ROOT / "data" / "config.template.json"
 DEFAULT_BACKUP_PATH = _PROJECT_ROOT / "data" / ".config.lastgood.json"
 
 
+# --- Chantier B : génération du schéma de formulaire depuis le template ---
+
+ADVANCED_SECTIONS = {
+    "moteur",
+    "encodeur",
+    "motor_driver",
+    "boot_calibration",
+    "thresholds",
+}
+
+# Énumérations connues : chemin pointé → options proposées (menu déroulant UI).
+ENUM_REGISTRY: dict[str, list[str]] = {
+    "cimier.automation.mode": ["manual", "semi", "full"],
+    "logging.level": ["DEBUG", "INFO", "WARNING", "ERROR"],
+    "motor_driver.type": ["gpio", "rp2040"],
+    "cimier.switch_reader.type": ["shelly_uni", "noop"],
+    "cimier.power_switch.type": ["shelly_gen1", "shelly_gen2", "noop"],
+    "cimier.weather_provider.type": ["noop"],
+    "cimier.motor_shelly.api": ["legacy", "rpc"],
+    "cimier.switch_reader.api": ["legacy", "rpc"],
+}
+
+
+def _infer_type(value) -> str:
+    # bool AVANT int : isinstance(True, int) is True.
+    if isinstance(value, bool):
+        return "bool"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "float"
+    return "str"
+
+
+def _collect_fields(node: dict, prefix: str, group: str | None, out: list[dict]) -> None:
+    """Collecte récursivement les feuilles éditables (hors clés _-préfixées)."""
+    for key, value in node.items():
+        if key.startswith("_"):
+            continue
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            _collect_fields(value, path, key, out)
+        else:
+            out.append(
+                {
+                    "path": path,
+                    "key": key,
+                    "label": key,
+                    "group": group,
+                    "type": _infer_type(value),
+                    "help": node.get(f"_{key}_comment", ""),
+                    "enum": ENUM_REGISTRY.get(path),
+                }
+            )
+
+
+def build_config_schema(template: dict) -> list[dict]:
+    """Produit la liste des sections (accordéon) depuis le squelette du template.
+
+    Les scalaires de premier niveau (ex. `simulation`) sont regroupés sous une
+    section synthétique « Général » (`key="_general"`).
+    """
+    sections: list[dict] = []
+    general_fields: list[dict] = []
+
+    for key, value in template.items():
+        if key.startswith("_"):
+            continue
+        if isinstance(value, dict):
+            fields: list[dict] = []
+            _collect_fields(value, key, None, fields)
+            sections.append(
+                {
+                    "key": key,
+                    "label": key,
+                    "help": value.get("_comment", ""),
+                    "advanced": key in ADVANCED_SECTIONS,
+                    "fields": fields,
+                }
+            )
+        else:
+            general_fields.append(
+                {
+                    "path": key,
+                    "key": key,
+                    "label": key,
+                    "group": None,
+                    "type": _infer_type(value),
+                    "help": template.get(f"_{key}_comment", ""),
+                    "enum": ENUM_REGISTRY.get(key),
+                }
+            )
+
+    if general_fields:
+        sections.insert(
+            0,
+            {
+                "key": "_general",
+                "label": "Général",
+                "help": "",
+                "advanced": False,
+                "fields": general_fields,
+            },
+        )
+    return sections
+
+
 def _atomic_write_json(path: Path, data: dict) -> None:
     """Écrit `data` en JSON de façon atomique (tmp unique par process + os.replace)."""
     tmp = path.parent / f"{path.name}.{os.getpid()}.tmp"

@@ -182,3 +182,70 @@ class TestEnsureConfigReady:
         assert isinstance(report, ConfigReport)
         d = asdict(report)
         assert set(d) >= {"status", "added", "removed", "backup_timestamp", "message"}
+
+
+from core.config.config_resilience import (  # noqa: E402
+    ADVANCED_SECTIONS,
+    build_config_schema,
+)
+
+
+class TestBuildConfigSchema:
+    def test_infere_les_types_et_ignore_les_underscore(self):
+        template = {
+            "_comment": "global",
+            "site": {"latitude": 44.15, "altitude": 800, "nom": "Ubik"},
+            "simulation": False,
+        }
+        schema = build_config_schema(template)
+        sections = {s["key"]: s for s in schema}
+
+        # 'simulation' (scalaire top-level) regroupé sous la section synthétique 'Général'
+        assert "_general" in sections
+        gen_fields = {f["key"]: f for f in sections["_general"]["fields"]}
+        assert gen_fields["simulation"]["type"] == "bool"
+
+        site_fields = {f["path"]: f for f in sections["site"]["fields"]}
+        assert site_fields["site.latitude"]["type"] == "float"
+        assert site_fields["site.altitude"]["type"] == "int"
+        assert site_fields["site.nom"]["type"] == "str"
+        # aucune clé _-préfixée n'est devenue un champ
+        assert all(not f["key"].startswith("_") for f in site_fields.values())
+
+    def test_bool_avant_int(self):
+        # isinstance(True, int) is True → bool doit être testé en premier
+        template = {"flags": {"enabled": True}}
+        schema = build_config_schema(template)
+        field = schema[0]["fields"][0]
+        assert field["type"] == "bool"
+
+    def test_section_avancee_marquee(self):
+        template = {
+            "site": {"latitude": 44.0},
+            "moteur": {"microsteps": 4},
+        }
+        schema = {s["key"]: s for s in build_config_schema(template)}
+        assert schema["site"]["advanced"] is False
+        assert schema["moteur"]["advanced"] is True
+        assert "moteur" in ADVANCED_SECTIONS
+
+    def test_aide_extraite_du_comment_voisin(self):
+        template = {
+            "motor_driver": {"serial": {"port": "/dev/ttyACM0", "_port_comment": "Port USB CDC"}}
+        }
+        schema = build_config_schema(template)
+        fields = {f["path"]: f for f in schema[0]["fields"]}
+        assert fields["motor_driver.serial.port"]["help"] == "Port USB CDC"
+
+    def test_enum_detecte_depuis_le_registre(self):
+        template = {"cimier": {"automation": {"mode": "full"}}}
+        schema = build_config_schema(template)
+        field = schema[0]["fields"][0]
+        assert field["path"] == "cimier.automation.mode"
+        assert field["enum"] == ["manual", "semi", "full"]
+
+    def test_groupe_sous_section_renseigne(self):
+        template = {"cimier": {"motor_shelly": {"host_motor": ""}}}
+        schema = build_config_schema(template)
+        field = schema[0]["fields"][0]
+        assert field["group"] == "motor_shelly"
