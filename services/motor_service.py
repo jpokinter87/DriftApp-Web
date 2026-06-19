@@ -769,6 +769,12 @@ class MotorService:
 
 def main():
     """Point d'entrée principal."""
+    # Chantier A : garantir un config.json valide + publier le rapport.
+    from core.config.config_resilience import ensure_config_ready
+    from core.config.config_status_writer import write_config_status
+
+    write_config_status(ensure_config_ready(force=True))
+
     # Créer le répertoire de logs si nécessaire
     logs_dir = Path(__file__).parent.parent / "logs"
     logs_dir.mkdir(exist_ok=True)
