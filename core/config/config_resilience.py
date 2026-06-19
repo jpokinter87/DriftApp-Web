@@ -244,8 +244,9 @@ HELP_REGISTRY: dict[str, str] = {
         "fermeture auto seule. « full » : ouverture et fermeture automatiques."
     ),
     "cimier.automation.opening_sun_altitude_deg": (
-        "Altitude du Soleil (degrés, négatif sous l'horizon) déclenchant l'ouverture "
-        "automatique en descente. Ex. -12."
+        "Altitude du Soleil (degrés, négatif = sous l'horizon) que le Soleil franchit "
+        "en descendant, le soir, pour déclencher l'ouverture automatique du cimier. "
+        "Ex. -12."
     ),
     "cimier.automation.closing_target_sun_altitude_deg": (
         "Altitude du Soleil (degrés) montante visée pour la fermeture automatique en "

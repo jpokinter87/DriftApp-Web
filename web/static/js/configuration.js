@@ -51,7 +51,12 @@ function configPage() {
       }
     },
 
-    toggle(key) { this.open[key] = !this.open[key]; },
+    toggle(key) {
+      // Ouverture unique : ouvrir une section ferme celle qu'on quitte.
+      const wasOpen = this.open[key];
+      Object.keys(this.open).forEach((k) => { this.open[k] = false; });
+      this.open[key] = !wasOpen;
+    },
 
     lastGroup(section, field) {
       // Renvoie le group du champ précédent pour n'afficher l'en-tête qu'au changement.
@@ -61,10 +66,7 @@ function configPage() {
 
     renderField(field) {
       const val = deepGet(this.values, field.path);
-      const help = field.help
-        ? `<span class="cfg-help" title="${field.help.replace(/"/g, '&quot;')}">ⓘ</span>`
-        : '';
-      const label = `<span class="cfg-label">${field.label}${help}</span>`;
+      const label = `<span class="cfg-label">${field.label}</span>`;
       const onChange = `onchange="window.__configSet('${field.path}', this, '${field.type}')"`;
       let input;
       if (field.type === 'bool') {
@@ -81,7 +83,9 @@ function configPage() {
         const safe = (val == null ? '' : String(val)).replace(/"/g, '&quot;');
         input = `<input type="text" class="cfg-input" value="${safe}" ${onChange}>`;
       }
-      return label + input;
+      // Aide toujours visible sous le champ (pas de survol → compatible tactile).
+      const help = field.help ? `<div class="cfg-help-text">${field.help}</div>` : '';
+      return `<div class="cfg-row">${label}${input}</div>${help}`;
     },
 
     async save() {
