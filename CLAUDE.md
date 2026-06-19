@@ -532,21 +532,34 @@ publié dans `/dev/shm/config_status.json` et affiché en bannière dashboard
 (`/api/health/config_status/`). Le diff-UI OTA « choisir local/upstream » est
 supprimé (remplacé par ce rapport automatique).
 
-**Déploiement one-shot sur le Pi terrain** (la version qui dé-tracke config.json) :
+**⚠️ Déploiement one-shot sur le Pi terrain** (la version qui dé-tracke config.json) :
+le commit de migration **renomme** `data/config.json` → `data/config.template.json`
+(git le voit comme un `git mv`). Un simple `git pull` **supprimerait donc
+`config.json` du disque**. On protège les valeurs terrain par une sauvegarde
+explicite, puis on les restaure à leur emplacement runtime (désormais ignoré par git) :
 
     ssh slenk@<pi-host>
     cd ~/DriftApp
-    cp data/config.json data/config.json.bak      # filet manuel avant tout
-    git fetch origin && git pull --ff-only origin main
-    # config.json reste sur le disque (le dé-tracking préserve le working tree) :
-    # les réglages terrain (IP Shelly, conventions cimier) survivent.
+    cp data/config.json data/config.json.bak               # 1. SAUVEGARDE OBLIGATOIRE des valeurs terrain
+    git checkout -- data/config.json 2>/dev/null || true   # 2. arbre propre (annule les modifs locales non commitées)
+    git fetch origin
+    git pull --ff-only origin main                         # 3. applique le rename proprement
+    cp data/config.json.bak data/config.json               # 4. restaure la config terrain (le pull l'avait déplacée)
     sudo systemctl restart ems22d motor_service cimier_service driftapp_web
-    cat /dev/shm/config_status.json   # statut attendu : "unchanged" (ou "migrated" si la MAJ a ajouté des clés)
+    cat /dev/shm/config_status.json   # attendu : "unchanged" (config.json restauré identique)
+                                      # ou "migrated" si la MAJ ajoute des clés (valeurs terrain conservées)
 
-Si `config.json` a des modifs locales non commitées qui bloquent le `git pull` :
-`git stash` (config.json untracked n'est PAS concerné, seuls d'autres fichiers
-trackés le sont), `git pull --ff-only`, puis `git stash pop`. En cas de doute, le
-`data/config.json.bak` permet de tout restaurer à la main.
+**Si le `git pull` est refusé** (« modifications locales seraient écrasées », ou
+« Pas possible d'avancer rapidement » si le Pi a des commits locaux) : **NE PAS
+utiliser `git stash`** (la détection de rename y déplace par erreur les valeurs
+terrain dans `config.template.json` tracké et supprime `config.json`). À la place,
+après le `cp …bak` de l'étape 1 : `git checkout -- data/config.json` (annule les
+modifs locales) — ou `git reset --hard origin/main` si le Pi a des commits locaux —
+puis reprendre à l'étape 3.
+
+**Ne jamais `git add` / committer `data/config.template.json` sur le Pi** : laisser
+le template à sa version dépôt (sinon la prochaine MAJ diverge). Les valeurs terrain
+vivent uniquement dans `data/config.json` (ignoré par git) + `data/config.json.bak`.
 
 ---
 
