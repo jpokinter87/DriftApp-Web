@@ -249,3 +249,43 @@ class TestBuildConfigSchema:
         schema = build_config_schema(template)
         field = schema[0]["fields"][0]
         assert field["group"] == "motor_shelly"
+
+
+import pytest  # noqa: E402
+
+from core.config.config_resilience import (  # noqa: E402
+    ConfigValidationError,
+    validate_and_coerce,
+)
+
+
+class TestValidateAndCoerce:
+    def test_types_corrects_preserves(self):
+        template = {"site": {"latitude": 44.0, "altitude": 800, "nom": "x"}}
+        values = {"site": {"latitude": 45.1, "altitude": 810, "nom": "Ubik"}}
+        out = validate_and_coerce(values, template)
+        assert out == {"site": {"latitude": 45.1, "altitude": 810, "nom": "Ubik"}}
+        assert isinstance(out["site"]["altitude"], int)
+
+    def test_int_vers_float_si_champ_float(self):
+        template = {"site": {"latitude": 44.0}}
+        out = validate_and_coerce({"site": {"latitude": 45}}, template)
+        assert out["site"]["latitude"] == 45.0
+        assert isinstance(out["site"]["latitude"], float)
+
+    def test_chaine_vide_autorisee_pour_str(self):
+        template = {"cimier": {"motor_shelly": {"host_motor": "192.168.1.85"}}}
+        out = validate_and_coerce({"cimier": {"motor_shelly": {"host_motor": ""}}}, template)
+        assert out["cimier"]["motor_shelly"]["host_motor"] == ""
+
+    def test_texte_dans_champ_numerique_rejete(self):
+        template = {"site": {"altitude": 800}}
+        with pytest.raises(ConfigValidationError) as exc:
+            validate_and_coerce({"site": {"altitude": "abc"}}, template)
+        assert exc.value.path == "site.altitude"
+
+    def test_bool_non_accepte_pour_int(self):
+        template = {"site": {"altitude": 800}}
+        with pytest.raises(ConfigValidationError) as exc:
+            validate_and_coerce({"site": {"altitude": True}}, template)
+        assert exc.value.path == "site.altitude"

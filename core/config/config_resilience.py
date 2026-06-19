@@ -124,6 +124,51 @@ def build_config_schema(template: dict) -> list[dict]:
     return sections
 
 
+class ConfigValidationError(ValueError):
+    """Type incohérent pour une clé lors d'une sauvegarde UI."""
+
+    def __init__(self, path: str, message: str = "") -> None:
+        self.path = path
+        super().__init__(message or f"Type invalide pour « {path} »")
+
+
+def validate_and_coerce(values: dict, template: dict, prefix: str = "") -> dict:
+    """Vérifie/coerce les feuilles de `values` selon le type des feuilles du template.
+
+    Ne valide que les chemins présents des deux côtés (le merge structurel gère le
+    reste). Lève ConfigValidationError(path) au premier type incohérent.
+    """
+    out: dict = {}
+    for key, val in values.items():
+        if key.startswith("_"):
+            continue
+        path = f"{prefix}.{key}" if prefix else key
+        if key not in template:
+            continue  # clé inconnue : ignorée ici, retirée par le merge
+        tmpl_val = template[key]
+        if isinstance(tmpl_val, dict) and isinstance(val, dict):
+            out[key] = validate_and_coerce(val, tmpl_val, path)
+            continue
+        expected = _infer_type(tmpl_val)
+        if expected == "bool":
+            if not isinstance(val, bool):
+                raise ConfigValidationError(path)
+            out[key] = val
+        elif expected == "int":
+            if isinstance(val, bool) or not isinstance(val, int):
+                raise ConfigValidationError(path)
+            out[key] = val
+        elif expected == "float":
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                raise ConfigValidationError(path)
+            out[key] = float(val)
+        else:  # str
+            if not isinstance(val, str):
+                raise ConfigValidationError(path)
+            out[key] = val
+    return out
+
+
 def _atomic_write_json(path: Path, data: dict) -> None:
     """Écrit `data` en JSON de façon atomique (tmp unique par process + os.replace)."""
     tmp = path.parent / f"{path.name}.{os.getpid()}.tmp"
