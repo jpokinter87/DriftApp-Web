@@ -69,4 +69,4 @@ firmware/cimier/secrets.py
 # Config terrain résiliente (chantier A) — voir docs/superpowers/specs/2026-06-19-config-resilience-design.md
 data/config.json
 data/.config.lastgood.json
-data/config.json.tmp
+data/config.json.*.tmp

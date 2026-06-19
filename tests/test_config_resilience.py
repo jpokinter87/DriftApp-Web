@@ -66,7 +66,8 @@ class TestAtomicWrite:
         _atomic_write_json(target, {"x": 1})
         assert json.loads(target.read_text()) == {"x": 1}
         # le .tmp ne doit pas subsister
-        assert not (tmp_path / "config.json.tmp").exists()
+        # aucun fichier .tmp résiduel (nom suffixé par PID)
+        assert not list(tmp_path.glob("config.json.*.tmp"))
 
     def test_remplace_un_fichier_existant(self, tmp_path):
         target = tmp_path / "config.json"

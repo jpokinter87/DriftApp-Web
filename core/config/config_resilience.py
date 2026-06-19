@@ -18,12 +18,16 @@ DEFAULT_BACKUP_PATH = _PROJECT_ROOT / "data" / ".config.lastgood.json"
 
 
 def _atomic_write_json(path: Path, data: dict) -> None:
-    """Écrit `data` en JSON de façon atomique (tmp + os.replace)."""
-    tmp = path.parent / (path.name + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-        f.write("\n")
-    os.replace(tmp, path)
+    """Écrit `data` en JSON de façon atomique (tmp unique par process + os.replace)."""
+    tmp = path.parent / f"{path.name}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+            f.write("\n")
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
 
 
 def _collect_leaf_paths(value, prefix: str, out: list[str]) -> None:
@@ -66,16 +70,6 @@ def _structural_merge(
         if key not in template:
             removed.append(f"{prefix}.{key}" if prefix else key)
     return merged, added, removed
-
-
-_VALID_STATUSES = (
-    "unchanged",
-    "migrated",
-    "bootstrapped_from_template",
-    "restored_from_backup",
-    "recovered_corruption",
-    "corruption_no_backup",
-)
 
 
 @dataclass
