@@ -274,6 +274,55 @@ let continuousMovement = null;
 // Flag pour la synchronisation initiale (reconnexion à une session en cours)
 let initialSyncDone = false;
 
+// Bannière rapport de résilience config (Chantier A, Task 7).
+// Un seul poll au chargement de /api/health/config_status/ : affiche data.message
+// sauf si status=unchanged ou message vide. is-error pour corruption_no_backup.
+async function refreshConfigBanner() {
+    try {
+        const resp = await fetch('/api/health/config_status/');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const banner = document.getElementById('config-banner');
+        const msg = document.getElementById('config-banner-msg');
+        if (!banner || !msg) return;
+        if (data.status === 'unchanged' || !data.message) {
+            banner.style.display = 'none';
+            return;
+        }
+        // Signature de l'événement : permet de mémoriser un « fermé » et de ne pas
+        // re-nagger au rechargement pour le MÊME événement (un nouvel événement,
+        // signature différente, réaffiche).
+        const sig = [
+            data.status,
+            (data.added || []).join(','),
+            (data.removed || []).join(','),
+            data.backup_timestamp || ''
+        ].join('|');
+        let dismissed = null;
+        try { dismissed = localStorage.getItem('configBannerDismissed'); } catch (e) { /* */ }
+        if (dismissed === sig) {
+            banner.style.display = 'none';
+            return;
+        }
+        msg.textContent = data.message;
+        banner.classList.toggle('is-error', data.status === 'corruption_no_backup');
+        banner.style.display = 'flex';
+        // La bannière s'affiche après le fetch (post-peinture) : son insertion en
+        // haut, avec le header sticky + le scroll-anchoring du navigateur, peut la
+        // laisser cachée derrière le header. On ramène la vue en haut pour la
+        // rendre visible (cas non-unchanged uniquement, donc sans gêne en nominal).
+        window.scrollTo({ top: 0 });
+        // Bouton × : ferme et mémorise la signature (fermable pour tous les cas).
+        const closeBtn = document.getElementById('config-banner-close');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                try { localStorage.setItem('configBannerDismissed', sig); } catch (e) { /* */ }
+                banner.style.display = 'none';
+            };
+        }
+    } catch (e) { /* silencieux */ }
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -281,6 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         initCompass();
         startPolling();
+        refreshConfigBanner();
         log('Interface initialisée');
     } catch (e) {
         console.error('Erreur initialisation:', e);
@@ -2511,12 +2561,6 @@ function showUpdateModal(data) {
     store.updateShowError = false;
     store.updateButtonsDisabled = false;
     store.updateModalVisible = true;
-
-    // v5.12.0 : reset des boutons + panneau diff config (caché à l'ouverture)
-    document.getElementById('btn-update-now')?.classList.remove('hidden');
-    document.getElementById('btn-update-keep-config')?.classList.add('hidden');
-    document.getElementById('btn-update-reset-config')?.classList.add('hidden');
-    document.getElementById('update-config-diff-panel')?.classList.add('hidden');
 }
 
 /**
@@ -2538,85 +2582,27 @@ function hideUpdateModal() {
 }
 
 /**
- * Préparation MàJ (v5.12.0) — détecte un diff config.json avant de lancer.
- *
- * Si le `data/config.json` local diverge de `origin/main`, présente le diff
- * dans le panneau dédié et remplace le bouton "Mettre à jour" par 2 choix :
- *   - Garder ma config   → applyUpdate('keep')
- *   - Utiliser le dépôt → applyUpdate('reset')
- *
- * Sinon (pas de diff, ou erreur fetch), enchaîne directement sur applyUpdate('keep').
- */
-async function prepareUpdate() {
-    const store = Alpine.store('dashboard');
-    store.updateButtonsDisabled = true;
-
-    let diff = null;
-    try {
-        const response = await fetch('/api/health/update/config_diff/');
-        if (response.ok) diff = await response.json();
-    } catch (error) {
-        console.warn('config_diff fetch exception:', error);
-    }
-    store.updateButtonsDisabled = false;
-
-    const hasDiff = diff && diff.has_diff && Array.isArray(diff.diffs) && diff.diffs.length > 0;
-    if (!hasDiff) {
-        // Pas de divergence (ou endpoint en erreur) → flux simple, stratégie keep par défaut
-        await applyUpdate('keep');
-        return;
-    }
-
-    // Affiche le panneau diff + remplace les boutons
-    renderConfigDiffPanel(diff.diffs);
-    document.getElementById('btn-update-now')?.classList.add('hidden');
-    document.getElementById('btn-update-keep-config')?.classList.remove('hidden');
-    document.getElementById('btn-update-reset-config')?.classList.remove('hidden');
-    log(`config.json diverge — ${diff.diffs.length} différence(s) à arbitrer`, 'warning');
-}
-
-/**
- * Render le panneau de diff config (liste clé/valeur avant→après).
- */
-function renderConfigDiffPanel(diffs) {
-    const panel = document.getElementById('update-config-diff-panel');
-    const list = document.getElementById('update-config-diff-list');
-    if (!panel || !list) return;
-    list.innerHTML = '';
-    diffs.forEach(d => {
-        const li = document.createElement('li');
-        const local = d.local === null ? '(absent)' : JSON.stringify(d.local);
-        const upstream = d.upstream === null ? '(absent)' : JSON.stringify(d.upstream);
-        const op = {added: '＋', removed: '－', modified: '⇄'}[d.op] || d.op;
-        li.innerHTML = `<code>${d.path}</code> <em>${op}</em> ` +
-                       `<span class="diff-local">${local}</span> ` +
-                       `→ <span class="diff-upstream">${upstream}</span>`;
-        list.appendChild(li);
-    });
-    panel.classList.remove('hidden');
-}
-
-/**
  * Apply the update.
  * Lance le script côté serveur (détaché) puis poll /api/health/update/status/
  * jusqu'à done=true. Recharge la page quand Django revient.
  *
- * @param {"keep"|"reset"} configStrategy - défaut "keep"
+ * `data/config.json` est dé-tracké et auto-migré au boot : la MàJ s'applique
+ * directement, sans arbitrage de config.
  */
-async function applyUpdate(configStrategy = 'keep') {
+async function applyUpdate() {
     const store = Alpine.store('dashboard');
 
     store.updateShowProgress = true;
     store.updateShowError = false;
     store.updateButtonsDisabled = true;
     updateProgressUI({phase: 'starting', step: 0, total: 5, message: 'Lancement...'});
-    log(`Mise a jour lancée (config_strategy=${configStrategy})`, 'info');
+    log('Mise a jour lancée', 'info');
 
     try {
         const response = await fetch('/api/health/update/apply/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ config_strategy: configStrategy }),
+            body: JSON.stringify({}),
         });
 
         const result = await response.json();
@@ -2761,14 +2747,8 @@ function initUpdateListeners() {
     const btnLater = document.getElementById('btn-update-later');
     const btnNow = document.getElementById('btn-update-now');
     const btnDetails = document.getElementById('btn-update-details');
-    const btnKeep = document.getElementById('btn-update-keep-config');
-    const btnReset = document.getElementById('btn-update-reset-config');
     if (btnLater) btnLater.addEventListener('click', hideUpdateModal);
-    // v5.12.0 : "Mettre à jour" passe par prepareUpdate() qui détecte un diff
-    // config.json et bascule vers les 2 boutons keep/reset si nécessaire.
-    if (btnNow) btnNow.addEventListener('click', () => prepareUpdate());
-    if (btnKeep) btnKeep.addEventListener('click', () => applyUpdate('keep'));
-    if (btnReset) btnReset.addEventListener('click', () => applyUpdate('reset'));
+    if (btnNow) btnNow.addEventListener('click', () => applyUpdate());
     if (btnDetails) btnDetails.addEventListener('click', toggleUpdateDetails);
 
     // Header update check button

@@ -1053,6 +1053,12 @@ def _build_service_from_config(config_path=None) -> CimierService:
 
 def main() -> int:
     """Entry-point CLI : `python -m services.cimier_service`."""
+    # Chantier A : garantir un config.json valide + publier le rapport.
+    from core.config.config_resilience import ensure_config_ready
+    from core.config.config_status_writer import write_config_status
+
+    write_config_status(ensure_config_ready(force=True))
+
     # Niveau DEBUG si verbose_logging (ou dev mode) : sans ça, les lignes
     # `logger.debug` du poll (poll_status open/closed_switch) restent filtrées
     # par le niveau INFO — verbose_logging était de fait inopérant.

@@ -798,28 +798,6 @@ header h1 span {
     line-height: 1.4;
 }
 
-/* Diff config (v5.12.0) */
-.update-config-diff-list {
-    margin-top: 0.5rem;
-    font-family: 'Fira Mono', 'Courier New', monospace;
-    font-size: 0.8rem;
-    line-height: 1.5;
-}
-.update-config-diff-list li {
-    padding: 0.1rem 0;
-}
-.update-config-diff-list em {
-    font-style: normal;
-    margin: 0 0.4rem;
-    color: var(--color-obs-text-secondary);
-}
-.update-config-diff-list .diff-local {
-    color: #d97757; /* orange : version locale */
-}
-.update-config-diff-list .diff-upstream {
-    color: #6c9b3f; /* vert : version dépôt */
-}
-
 /* Bloc détails dépliable */
 .update-details {
     margin-top: 0.75rem;
@@ -1064,4 +1042,52 @@ header h1 span {
     .goto-modal-current span {
         font-size: 2rem;
     }
+}
+
+/* Bannière rapport de résilience config (Chantier A, Task 7) */
+.config-banner {
+    /* display est piloté en inline par le JS (none / flex) */
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-accent-amber);
+    background: rgba(212, 160, 85, 0.12);
+    color: var(--color-accent-amber-light);
+    font-size: 0.9rem;
+}
+
+.config-banner.is-error {
+    border-color: var(--color-accent-red);
+    background: rgba(255, 71, 87, 0.14);
+    color: var(--color-accent-red);
+}
+
+#config-banner-msg {
+    flex: 1;
+}
+
+.config-banner-close {
+    flex: none;
+    margin-left: auto;
+    align-self: flex-start;
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.9;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.config-banner-close:hover,
+.config-banner-close:focus-visible {
+    opacity: 1;
+    background-color: rgba(255, 255, 255, 0.15);
+    outline: none;
 }

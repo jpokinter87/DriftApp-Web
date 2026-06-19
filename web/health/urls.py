@@ -14,10 +14,10 @@ urlpatterns = [
     path('encoder/', views.encoder_health, name='encoder_health'),
     path('ipc/', views.ipc_status, name='ipc_status'),
     path('diagnostic/', views.diagnostic, name='diagnostic_api'),
+    path('config_status/', views.config_status_view, name='config_status'),
 
     # Endpoints de mise à jour
     path('update/check/', views.check_update, name='update_check'),
-    path('update/config_diff/', views.config_diff_view, name='update_config_diff'),
     path('update/apply/', views.apply_update, name='update_apply'),
     path('update/status/', views.update_status, name='update_status'),
 

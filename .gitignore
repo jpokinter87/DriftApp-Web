@@ -65,3 +65,11 @@ web/data/objets_cache.json
 
 # Credentials WiFi locaux Pico W cimier (créé manuellement par Serge sur la machine de flash)
 firmware/cimier/secrets.py
+
+# Config terrain résiliente (chantier A) — voir docs/superpowers/specs/2026-06-19-config-resilience-design.md
+data/config.json
+data/.config.lastgood.json
+data/config.json.*.tmp
+
+# Superpowers brainstorm (companion visuel)
+.superpowers/

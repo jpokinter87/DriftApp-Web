@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "health",
     "session",
     "cimier",
+    "configuration",
 ]
 
 MIDDLEWARE = [

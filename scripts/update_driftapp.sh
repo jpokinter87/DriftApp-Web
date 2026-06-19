@@ -14,17 +14,14 @@
 #   4. services      : install .service + daemon-reload
 #   5. restart       : start ems22d, motor_service, driftapp_web
 #
-# Préservation config utilisateur (config_strategy, défaut "keep") :
-#   - "keep"  : stash + pop avec priorité user (comportement v5.8.0)
-#               Fichiers trackés modifiés → backup en <file>.user_backup.<ts>
-#               Version upstream conflictuelle disponible en <file>.upstream
-#   - "reset" : data/config.json est checkout sur origin/main AVANT le pull
-#               (l'ancien local est sauvé en data/config.json.user_backup.<ts>)
-#               Le reste du stash (autres fichiers user) est appliqué normalement.
+# Préservation des fichiers utilisateur :
+#   stash + pop avec priorité user (comportement v5.8.0). Fichiers trackés
+#   modifiés → backup en <file>.user_backup.<ts>, version upstream conflictuelle
+#   disponible en <file>.upstream. `data/config.json` est dé-tracké et auto-migré
+#   au boot : le pull ne le touche pas, il n'apparaît pas dans le stash.
 #
 # Usage :
-#   sudo ./scripts/update_driftapp.sh                           # mode UI détaché, keep
-#   sudo ./scripts/update_driftapp.sh --config-strategy reset   # idem, reset config
+#   sudo ./scripts/update_driftapp.sh                           # mode UI détaché
 #   sudo ./scripts/update_driftapp.sh --detached                # mode background
 #   sudo ./scripts/update_driftapp.sh --foreground              # mode manuel (debug)
 # =============================================================================
@@ -43,16 +40,11 @@ TOTAL=5
 mkdir -p "$LOG_DIR"
 
 # =============================================================================
-# Parse args : --config-strategy {keep|reset}, --detached, --foreground
+# Parse args : --detached, --foreground
 # =============================================================================
-CONFIG_STRATEGY="keep"
 RUN_MODE=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --config-strategy)
-            CONFIG_STRATEGY="${2:-keep}"
-            shift 2
-            ;;
         --detached|--foreground)
             RUN_MODE="$1"
             shift
@@ -63,18 +55,13 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ "$CONFIG_STRATEGY" != "keep" ] && [ "$CONFIG_STRATEGY" != "reset" ]; then
-    echo "ERREUR : --config-strategy doit être 'keep' ou 'reset' (reçu: $CONFIG_STRATEGY)" >&2
-    exit 2
-fi
-
 # =============================================================================
 # Détachement automatique (sauf --detached ou --foreground)
 # =============================================================================
 if [ "$RUN_MODE" != "--detached" ] && [ "$RUN_MODE" != "--foreground" ]; then
     # Réinitialiser le status + log pour cette session
     : > "$LOG_FILE"
-    nohup "$0" --detached --config-strategy "$CONFIG_STRATEGY" >> "$LOG_FILE" 2>&1 &
+    nohup "$0" --detached >> "$LOG_FILE" 2>&1 &
     echo "UPDATE_STARTED pid=$!"
     exit 0
 fi
@@ -167,25 +154,7 @@ cd "$PROJECT_DIR" || { write_status "fetch" 2 "cd échoué" false true "cd $PROJ
 chown -R "$REPO_OWNER:$REPO_OWNER" "$PROJECT_DIR/.git" 2>/dev/null || true
 
 OLD_COMMIT="$(run_as_owner git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
-log "HEAD avant : $OLD_COMMIT | config_strategy : $CONFIG_STRATEGY"
-
-# Stratégie reset : checkout upstream de data/config.json AVANT le stash, pour que
-# le pull s'applique sans conflit sur ce fichier. L'ancien local est sauvegardé.
-# Pré-fetch indispensable pour avoir une référence origin/main à jour.
-if [ "$CONFIG_STRATEGY" = "reset" ]; then
-    log "config_strategy=reset : pré-fetch + checkout origin/main de data/config.json"
-    run_as_owner git fetch origin main >> "$LOG_FILE" 2>&1 || log "WARN : pré-fetch échoué"
-    if [ -f "$PROJECT_DIR/data/config.json" ]; then
-        cp -p "$PROJECT_DIR/data/config.json" \
-            "$PROJECT_DIR/data/config.json.user_backup.$TIMESTAMP" 2>/dev/null \
-            && log "Backup local : data/config.json.user_backup.$TIMESTAMP"
-    fi
-    if run_as_owner git checkout origin/main -- data/config.json >> "$LOG_FILE" 2>&1; then
-        log "data/config.json remplacé par la version upstream"
-    else
-        log "WARN : checkout upstream de data/config.json échoué"
-    fi
-fi
+log "HEAD avant : $OLD_COMMIT"
 
 # uv.lock : fichier de lock généré, jamais une personnalisation utilisateur.
 # Le Pi ne doit plus le réécrire (cf. `uv sync --frozen`, étape 3), mais s'il a

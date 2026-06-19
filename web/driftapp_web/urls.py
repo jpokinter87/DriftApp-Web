@@ -15,10 +15,12 @@ urlpatterns = [
     path('api/health/', include('health.urls')),
     path('api/session/', include('session.urls')),
     path('api/cimier/', include('cimier.urls')),
+    path('api/configuration/', include('configuration.urls')),
 
     # Interface web principale
     path('', TemplateView.as_view(template_name='dashboard.html'), name='dashboard'),
     path('session/', TemplateView.as_view(template_name='session.html', extra_context={'active_tab': 'session'}), name='session'),
+    path('configuration/', TemplateView.as_view(template_name='configuration.html', extra_context={'active_tab': 'config'}), name='configuration'),
 
     # Favicon (évite les 404 dans les logs)
     path('favicon.ico', lambda r: HttpResponse(status=204)),

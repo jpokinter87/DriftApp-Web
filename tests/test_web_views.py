@@ -400,3 +400,39 @@ class TestObjectSearchView:
         response = api_client.get("/api/tracking/search/?q=M42")
         # 200 si trouvé dans le cache, 404 sinon
         assert response.status_code in (200, 404)
+
+
+class TestConfigStatusView:
+    # Note : la résolution d'URL importe l'app sous le nom court ``health.views``
+    # (cf. INSTALLED_APPS = "health"), tandis que ``web.health.views`` est un
+    # second objet module pour le même fichier. On patche donc le module
+    # effectivement servi par l'URL pour que le monkeypatch atteigne la vue.
+    def test_config_status_endpoint_lit_le_fichier_ipc(self, api_client, tmp_path, monkeypatch):
+        import health.views as health_views
+
+        status_file = tmp_path / "config_status.json"
+        status_file.write_text(
+            json.dumps(
+                {
+                    "status": "migrated",
+                    "added": ["x"],
+                    "removed": [],
+                    "backup_timestamp": None,
+                    "message": "Configuration migrée",
+                }
+            )
+        )
+        monkeypatch.setattr(health_views, "CONFIG_STATUS_FILE", status_file)
+        resp = api_client.get("/api/health/config_status/")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "migrated"
+
+    def test_config_status_endpoint_absent_renvoie_unchanged(
+        self, api_client, tmp_path, monkeypatch
+    ):
+        import health.views as health_views
+
+        monkeypatch.setattr(health_views, "CONFIG_STATUS_FILE", tmp_path / "absent.json")
+        resp = api_client.get("/api/health/config_status/")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "unchanged"

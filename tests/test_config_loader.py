@@ -44,6 +44,19 @@ from core.config.config_loader import (
 # =============================================================================
 
 
+# Le filet de résilience (ensure_config_ready) fusionne structurellement le
+# config.json testé avec le VRAI data/config.template.json. Les tests legacy de
+# ConfigLoader vérifient une lecture brute des fichiers (fichier manquant ⇒
+# FileNotFoundError, sections absentes ⇒ defaults des parsers) : on neutralise
+# donc le filet par défaut. TestConfigLoaderResilience le réactive explicitement.
+_REAL_ENSURE_READY = ConfigLoader._ensure_ready
+
+
+@pytest.fixture(autouse=True)
+def _neutralize_ensure_ready(monkeypatch):
+    monkeypatch.setattr(ConfigLoader, "_ensure_ready", lambda self: None)
+
+
 @pytest.fixture
 def sample_config_dict():
     """Dict JSON complet pour un config.json de test."""
@@ -230,8 +243,18 @@ class TestConfigLoader:
         assert config.site.latitude == 44.15
         assert config.site.nom == "Observatoire Test"
 
-    def test_load_missing_file(self, tmp_path):
-        """Fichier manquant → FileNotFoundError."""
+    def test_load_missing_file_and_missing_template_raises(self, tmp_path, monkeypatch):
+        """Config absente ET template absent → ensure_config_ready ne peut rien
+        bootstrapper (RuntimeError avalé par _ensure_ready), donc _load_json lève
+        FileNotFoundError. Seul cas où l'absence reste fatale (chantier A)."""
+        from core.config import config_resilience as cr
+
+        cr._REPORT_CACHE.clear()
+        # Réactive le vrai _ensure_ready (la fixture module le neutralise par défaut)
+        monkeypatch.setattr(ConfigLoader, "_ensure_ready", _REAL_ENSURE_READY)
+        # Template/backup pointés vers des chemins inexistants → RuntimeError avalé
+        monkeypatch.setattr(cr, "DEFAULT_TEMPLATE_PATH", tmp_path / "no_template.json")
+        monkeypatch.setattr(cr, "DEFAULT_BACKUP_PATH", tmp_path / "no_backup.json")
         loader = ConfigLoader(tmp_path / "nonexistent.json")
         with pytest.raises(FileNotFoundError):
             loader.load()
@@ -944,3 +967,41 @@ def test_template_config_motor_on_relay_state_is_validated_false():
 
     config = ConfigLoader().load()
     assert config.cimier.motor_shelly.motor_on_relay_state is False
+
+
+class TestConfigLoaderResilience:
+    @pytest.fixture(autouse=True)
+    def _restore_ensure_ready(self, monkeypatch):
+        # Réactive le vrai filet (neutralisé au niveau module pour les tests legacy).
+        monkeypatch.setattr(ConfigLoader, "_ensure_ready", _REAL_ENSURE_READY)
+
+    @pytest.fixture(autouse=True)
+    def _clear_report_cache(self):
+        from core.config import config_resilience as _cr
+
+        _cr._REPORT_CACHE.clear()
+        yield
+        _cr._REPORT_CACHE.clear()
+
+    def test_load_bootstrap_si_config_absent(self, tmp_path, monkeypatch):
+        # template présent, config absent → load() ne doit pas lever, mais bootstrapper
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        template = data_dir / "config.template.json"
+        # contenu minimal valide pour les parsers (sections optionnelles → defaults)
+        template.write_text(
+            json.dumps({"site": {"latitude": 1.0, "longitude": 2.0}}),
+            encoding="utf-8",
+        )
+
+        from core.config import config_resilience as cr
+
+        cr._REPORT_CACHE.clear()
+        monkeypatch.setattr(cr, "DEFAULT_TEMPLATE_PATH", template)
+        monkeypatch.setattr(cr, "DEFAULT_BACKUP_PATH", data_dir / ".config.lastgood.json")
+
+        cfg_path = data_dir / "config.json"
+        loader = ConfigLoader(config_path=cfg_path)
+        config = loader.load()  # ne doit plus lever FileNotFoundError
+        assert cfg_path.exists()
+        assert config.site.latitude == 1.0
