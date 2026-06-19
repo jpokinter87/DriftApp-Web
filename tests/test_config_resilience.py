@@ -73,3 +73,93 @@ class TestAtomicWrite:
         target.write_text('{"old": true}')
         _atomic_write_json(target, {"new": True})
         assert json.loads(target.read_text()) == {"new": True}
+
+
+import json as _json  # noqa: E402
+from dataclasses import asdict  # noqa: E402
+
+from core.config.config_resilience import (  # noqa: E402
+    ensure_config_ready,
+    ConfigReport,
+)
+
+
+def _write(p, data):
+    p.write_text(_json.dumps(data), encoding="utf-8")
+
+
+class TestEnsureConfigReady:
+    def _paths(self, tmp_path):
+        return (
+            tmp_path / "config.json",
+            tmp_path / "config.template.json",
+            tmp_path / ".config.lastgood.json",
+        )
+
+    def test_unchanged_ne_reecrit_pas_le_fichier(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        _write(cfg, {"a": 7})
+        mtime_avant = cfg.stat().st_mtime_ns
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "unchanged"
+        assert cfg.stat().st_mtime_ns == mtime_avant  # intact au bit près
+        assert _json.loads(cfg.read_text()) == {"a": 7}
+
+    def test_migrated_ajoute_nouvelle_cle_garde_valeurs(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0, "nouveau": 42})
+        _write(cfg, {"a": 7})
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "migrated"
+        assert report.added == ["nouveau"]
+        assert _json.loads(cfg.read_text()) == {"a": 7, "nouveau": 42}
+
+    def test_bootstrap_depuis_template_si_absent(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0, "b": 1})
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "bootstrapped_from_template"
+        assert _json.loads(cfg.read_text()) == {"a": 0, "b": 1}
+
+    def test_restore_depuis_backup_si_absent(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        _write(bak, {"a": 7})  # dernière config saine
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "restored_from_backup"
+        assert _json.loads(cfg.read_text()) == {"a": 7}
+
+    def test_recovered_corruption_restaure_backup(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        _write(bak, {"a": 7})
+        cfg.write_text("{ ceci n'est pas du json", encoding="utf-8")
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "recovered_corruption"
+        assert _json.loads(cfg.read_text()) == {"a": 7}
+
+    def test_corruption_no_backup_regenere_template(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        cfg.write_text("CORROMPU", encoding="utf-8")
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert report.status == "corruption_no_backup"
+        assert _json.loads(cfg.read_text()) == {"a": 0}
+
+    def test_lastgood_mis_a_jour_apres_chargement_valide(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        _write(cfg, {"a": 7})
+        ensure_config_ready(cfg, tpl, bak, force=True)
+        assert bak.exists()
+        assert _json.loads(bak.read_text()) == {"a": 7}
+
+    def test_report_est_un_dataclass_serialisable(self, tmp_path):
+        cfg, tpl, bak = self._paths(tmp_path)
+        _write(tpl, {"a": 0})
+        _write(cfg, {"a": 7})
+        report = ensure_config_ready(cfg, tpl, bak, force=True)
+        assert isinstance(report, ConfigReport)
+        d = asdict(report)
+        assert set(d) >= {"status", "added", "removed", "backup_timestamp", "message"}
