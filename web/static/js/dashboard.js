@@ -274,6 +274,27 @@ let continuousMovement = null;
 // Flag pour la synchronisation initiale (reconnexion à une session en cours)
 let initialSyncDone = false;
 
+// Bannière rapport de résilience config (Chantier A, Task 7).
+// Un seul poll au chargement de /api/health/config_status/ : affiche data.message
+// sauf si status=unchanged ou message vide. is-error pour corruption_no_backup.
+async function refreshConfigBanner() {
+    try {
+        const resp = await fetch('/api/health/config_status/');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const banner = document.getElementById('config-banner');
+        const msg = document.getElementById('config-banner-msg');
+        if (!banner || !msg) return;
+        if (data.status === 'unchanged' || !data.message) {
+            banner.style.display = 'none';
+            return;
+        }
+        msg.textContent = data.message;
+        banner.classList.toggle('is-error', data.status === 'corruption_no_backup');
+        banner.style.display = 'block';
+    } catch (e) { /* silencieux */ }
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', () => {
     try {
@@ -281,6 +302,7 @@ document.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         initCompass();
         startPolling();
+        refreshConfigBanner();
         log('Interface initialisée');
     } catch (e) {
         console.error('Erreur initialisation:', e);

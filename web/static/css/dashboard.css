@@ -1065,3 +1065,20 @@ header h1 span {
         font-size: 2rem;
     }
 }
+
+/* Bannière rapport de résilience config (Chantier A, Task 7) */
+.config-banner {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--color-accent-amber);
+    background: rgba(212, 160, 85, 0.12);
+    color: var(--color-accent-amber-light);
+    font-size: 0.9rem;
+}
+
+.config-banner.is-error {
+    border-color: var(--color-accent-red);
+    background: rgba(255, 71, 87, 0.14);
+    color: var(--color-accent-red);
+}

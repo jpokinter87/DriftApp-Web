@@ -92,6 +92,13 @@
     </div>
 </div>
 
+<!-- ═══ Bannière Rapport de résilience config (Chantier A, Task 7) ═══
+     Affiche data.message du endpoint /api/health/config_status/ sauf si
+     status=unchanged. Vanilla JS (refreshConfigBanner) — un poll au chargement. -->
+<div id="config-banner" class="config-banner" style="display:none;" role="status" aria-live="polite">
+  <span id="config-banner-msg"></span>
+</div>
+
 <!-- ═══ Main 2-Column Grid ═══ -->
 <div x-data class="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-4 mb-4">
 
