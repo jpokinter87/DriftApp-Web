@@ -1,8 +1,88 @@
 {% extends "base.html" %}
 {% block title %}Configuration{% endblock %}
-{% block content %}
-<div id="config-root"></div>
+
+{% block extra_css %}
+<style>
+  [x-cloak] { display: none !important; }
+  .cfg-section { border: 1px solid var(--color-border, #2a2a31); border-radius: 8px; margin-bottom: 0.6rem; overflow: hidden; }
+  .cfg-head { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; cursor: pointer; background: rgba(255,255,255,0.02); }
+  .cfg-head:hover { background: rgba(255,255,255,0.04); }
+  .cfg-title { font-weight: 600; color: var(--color-accent-amber); text-transform: capitalize; }
+  .cfg-advanced { border-color: rgba(212,160,85,0.4); }
+  .cfg-body { padding: 0.4rem 1rem 0.9rem; }
+  .cfg-group { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-muted, #8a8a92); margin: 0.7rem 0 0.3rem; }
+  .cfg-field { display: flex; align-items: center; gap: 0.6rem; padding: 0.3rem 0; }
+  .cfg-label { width: 230px; flex: none; font-family: var(--font-mono); font-size: 0.82rem; color: var(--color-text-secondary, #c8c8d0); display: flex; align-items: center; gap: 0.3rem; }
+  .cfg-input { flex: 1; background: #101013; border: 1px solid #33333b; border-radius: 5px; padding: 0.35rem 0.5rem; color: #e8e8ee; font-family: var(--font-mono); font-size: 0.82rem; }
+  .cfg-help { cursor: help; color: var(--color-text-muted, #8a8a92); }
+  .cfg-warn { background: rgba(212,160,85,0.1); color: var(--color-accent-amber); padding: 0.5rem 0.8rem; border-radius: 6px; font-size: 0.8rem; margin-bottom: 0.6rem; }
+  .cfg-savebar { position: sticky; bottom: 0; background: var(--color-bg, #16161a); border-top: 1px solid #2a2a31; padding: 0.8rem 0; display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem; }
+  .cfg-save-btn { background: var(--color-accent-amber); color: #16161a; font-weight: 700; border: none; border-radius: 6px; padding: 0.55rem 1.4rem; cursor: pointer; }
+  .cfg-save-btn:disabled { opacity: 0.4; cursor: default; }
+  .cfg-notice { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.85rem; }
+  .cfg-notice-ok { background: rgba(0,210,106,0.12); color: var(--color-accent-green); }
+  .cfg-notice-err { background: rgba(255,71,87,0.12); color: var(--color-accent-red); }
+</style>
 {% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6" x-data="configPage()" x-init="load()" x-cloak>
+  <h1 class="text-xl font-semibold mb-1">Configuration</h1>
+  <p class="text-sm text-obs-text-muted mb-4">Édition de <code>data/config.json</code>. Les valeurs sont préservées ; un redémarrage des services applique les changements.</p>
+
+  <template x-if="error"><div class="cfg-notice cfg-notice-err mb-4" x-text="error"></div></template>
+  <template x-if="loading"><p class="text-sm text-obs-text-muted">Chargement…</p></template>
+
+  <!-- Sections terrain (non avancées) -->
+  <template x-for="section in normalSections" :key="section.key">
+    <div class="cfg-section">
+      <div class="cfg-head" @click="toggle(section.key)">
+        <span class="cfg-title" x-text="section.label"></span>
+        <span x-text="open[section.key] ? '▾' : '▸'"></span>
+      </div>
+      <div class="cfg-body" x-show="open[section.key]">
+        <template x-if="section.help"><div class="cfg-warn" x-text="section.help"></div></template>
+        <template x-for="field in section.fields" :key="field.path">
+          <div>
+            <template x-if="field.group && field.group !== lastGroup(section, field)">
+              <div class="cfg-group" x-text="field.group"></div>
+            </template>
+            <div class="cfg-field" x-html="renderField(field)"></div>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <!-- Panneau Avancé (replié) -->
+  <template x-if="advancedSections.length">
+    <div class="cfg-section cfg-advanced">
+      <div class="cfg-head" @click="toggle('__advanced__')">
+        <span class="cfg-title">⚠ Avancé — paramètres matériels</span>
+        <span x-text="open['__advanced__'] ? '▾' : '▸'"></span>
+      </div>
+      <div class="cfg-body" x-show="open['__advanced__']">
+        <div class="cfg-warn">Modifier ces paramètres peut empêcher le moteur ou l'encodeur de fonctionner. Ne touche que si tu sais ce que tu fais.</div>
+        <template x-for="section in advancedSections" :key="section.key">
+          <div class="mb-3">
+            <div class="cfg-group" x-text="section.label"></div>
+            <template x-for="field in section.fields" :key="field.path">
+              <div class="cfg-field" x-html="renderField(field)"></div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+  </template>
+
+  <div class="cfg-savebar" x-show="!loading">
+    <button class="cfg-save-btn" :disabled="!dirty || saving" @click="save()" x-text="saving ? 'Enregistrement…' : 'Sauvegarder'"></button>
+    <span x-show="dirty && !notice" class="text-sm text-obs-text-muted">Modifications non enregistrées</span>
+    <template x-if="notice"><span class="cfg-notice cfg-notice-ok" x-text="notice"></span></template>
+  </div>
+</div>
+{% endblock %}
+
 {% block extra_js %}
 <script src="/static/js/configuration.js?v={{ APP_VERSION }}"></script>
 {% endblock %}
