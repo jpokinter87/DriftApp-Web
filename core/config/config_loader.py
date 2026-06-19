@@ -457,10 +457,28 @@ class ConfigLoader:
 
     def load(self) -> DriftAppConfig:
         """Charge et retourne la configuration complète."""
+        self._ensure_ready()
         self._load_json()
         config = self._build_config()
         self._log_summary(config)
         return config
+
+    def _ensure_ready(self) -> None:
+        """Garantit un config.json valide/à jour avant lecture (chantier A).
+
+        Le template/backup sont résolus côté config_resilience. Si le template
+        n'existe pas (dev très ancien), on ne bloque pas la lecture classique.
+        """
+        try:
+            from core.config.config_resilience import (
+                DEFAULT_BACKUP_PATH,
+                DEFAULT_TEMPLATE_PATH,
+                ensure_config_ready,
+            )
+
+            ensure_config_ready(self.config_path, DEFAULT_TEMPLATE_PATH, DEFAULT_BACKUP_PATH)
+        except Exception as exc:  # ne jamais empêcher le chargement à cause du filet
+            self.logger.warning(f"ensure_config_ready a échoué (ignoré) : {exc}")
 
     def _load_json(self):
         """Charge le fichier JSON."""
