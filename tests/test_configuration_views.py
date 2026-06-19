@@ -93,3 +93,12 @@ class TestConfigurationPost:
         assert resp.status_code == 400
         assert resp.json()["path"] == "site.latitude"
         assert cfg.read_text() == avant  # config.json intact
+
+
+class TestConfigurationPage:
+    def test_page_configuration_rend_200(self, api_client):
+        from django.test import Client
+
+        resp = Client().get("/configuration/")
+        assert resp.status_code == 200
+        assert b"configuration.js" in resp.content

@@ -77,6 +77,15 @@
                           {% endif %}">
                     Session
                 </a>
+                <a href="/configuration/"
+                   class="nav-tab px-3 py-1.5 rounded-button text-sm font-medium transition-colors duration-200
+                          {% if active_tab == 'config' %}
+                          bg-accent-amber/15 text-accent-amber
+                          {% else %}
+                          text-obs-text-secondary hover:text-obs-text hover:bg-obs-hover
+                          {% endif %}">
+                    Configuration
+                </a>
                 {% endblock %}
             </nav>
 
