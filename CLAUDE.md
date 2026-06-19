@@ -519,6 +519,37 @@ cat /dev/shm/motor_status.json | python3 -m json.tool | head -30
 
 ---
 
+### Migration config.json dé-tracké (chantier A, juin 2026)
+
+`data/config.json` n'est plus tracké par git ; le gabarit repo vit dans
+`data/config.template.json`. Au boot, `core/config/config_resilience.py`
+(`ensure_config_ready`) garantit un `config.json` valide : bootstrap depuis le
+template si absent, restauration depuis `data/.config.lastgood.json` si illisible,
+et **merge structurel préservant les valeurs** (les nouvelles clés d'une MAJ
+prennent leur défaut, les valeurs terrain existantes sont conservées — un
+changement de *défaut* sur une clé existante n'est jamais propagé). Le rapport est
+publié dans `/dev/shm/config_status.json` et affiché en bannière dashboard
+(`/api/health/config_status/`). Le diff-UI OTA « choisir local/upstream » est
+supprimé (remplacé par ce rapport automatique).
+
+**Déploiement one-shot sur le Pi terrain** (la version qui dé-tracke config.json) :
+
+    ssh slenk@<pi-host>
+    cd ~/DriftApp
+    cp data/config.json data/config.json.bak      # filet manuel avant tout
+    git fetch origin && git pull --ff-only origin main
+    # config.json reste sur le disque (le dé-tracking préserve le working tree) :
+    # les réglages terrain (IP Shelly, conventions cimier) survivent.
+    sudo systemctl restart ems22d motor_service cimier_service driftapp_web
+    cat /dev/shm/config_status.json   # statut attendu : "unchanged" (ou "migrated" si la MAJ a ajouté des clés)
+
+Si `config.json` a des modifs locales non commitées qui bloquent le `git pull` :
+`git stash` (config.json untracked n'est PAS concerné, seuls d'autres fichiers
+trackés le sont), `git pull --ff-only`, puis `git stash pop`. En cas de doute, le
+`data/config.json.bak` permet de tout restaurer à la main.
+
+---
+
 ## Skills Claude Disponibles
 
 ### Diagnostic et Debug
