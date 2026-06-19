@@ -65,9 +65,10 @@ def _structural_merge(
                 merged[key] = user_val  # valeur user sacrée
         else:
             merged[key] = tmpl_val
-            _collect_leaf_paths(tmpl_val, path, added)
+            if not key.startswith("_"):
+                _collect_leaf_paths(tmpl_val, path, added)
     for key in user:
-        if key not in template:
+        if key not in template and not key.startswith("_"):
             removed.append(f"{prefix}.{key}" if prefix else key)
     return merged, added, removed
 

@@ -59,6 +59,24 @@ class TestStructuralMerge:
         assert added == []
         assert removed == []
 
+    def test_cles_metadata_underscore_non_reportees(self):
+        # _comment / _version ne doivent jamais polluer added/removed.
+        user = {"a": 1, "_version": "1.0"}
+        template = {"a": 0, "_version": "2.0", "_comment": "doc", "nouveau": 5}
+        merged, added, removed = _structural_merge(user, template)
+        # la vraie nouvelle clé est reportée, pas les métadonnées
+        assert added == ["nouveau"]
+        assert removed == []
+        # valeur user sacrée préservée sur la clé commune
+        assert merged["a"] == 1
+        assert merged["_version"] == "1.0"
+
+    def test_cle_underscore_obsolete_non_reportee(self):
+        user = {"a": 1, "_vieux_comment": "x"}
+        template = {"a": 0}
+        merged, added, removed = _structural_merge(user, template)
+        assert removed == []  # _vieux_comment retiré du merged mais pas reporté
+
 
 class TestAtomicWrite:
     def test_ecrit_via_tmp_puis_remplace(self, tmp_path):
