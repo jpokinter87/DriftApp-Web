@@ -54,7 +54,267 @@ ENUM_REGISTRY: dict[str, list] = {
 # Aide par champ (chemin pointé → texte). Filet pour les champs SANS `_…_comment`
 # voisin dans le template. Le commentaire du template, s'il existe, a priorité.
 # Garde `config.json` épuré (l'aide vit dans le code, pas dans la config terrain).
-HELP_REGISTRY: dict[str, str] = {}
+HELP_REGISTRY: dict[str, str] = {
+    # --- Général ---
+    "simulation": (
+        "Force le mode simulation (true) : le moteur et l'encodeur sont émulés, "
+        "aucun accès matériel. false = pilotage réel sur le Raspberry Pi."
+    ),
+    # --- thresholds (seuils de mouvement, en degrés) ---
+    "thresholds.feedback_min_deg": (
+        "Delta minimum (degrés) pour utiliser la boucle feedback ; en dessous, "
+        "rotation directe plus fluide. Typiquement 3°."
+    ),
+    "thresholds.large_movement_deg": (
+        "Seuil (degrés) au-delà duquel un déplacement est considéré « grand » "
+        "(logs, détection de transit méridien)."
+    ),
+    "thresholds.feedback_protection_deg": (
+        "Garde-fou (degrés) dans la boucle feedback : abandon si l'erreur dépasse "
+        "ce seuil (protection contre un mouvement anormal)."
+    ),
+    "thresholds.default_tolerance_deg": (
+        "Tolérance par défaut (degrés) pour une rotation avec feedback : précision "
+        "cible avant arrêt."
+    ),
+    # --- site ---
+    "site.latitude": (
+        "Latitude du site en degrés décimaux (positif = hémisphère Nord). Ex. 44.15."
+    ),
+    "site.longitude": (
+        "Longitude du site en degrés décimaux (positif = Est de Greenwich). Ex. 5.23."
+    ),
+    "site.altitude": "Altitude du site en mètres au-dessus du niveau de la mer.",
+    "site.nom": "Nom du site/observatoire (affichage et rapports).",
+    "site.fuseau": (
+        "Fuseau horaire au format IANA (ex. « Europe/Paris ») pour les calculs "
+        "d'éphémérides et l'affichage local."
+    ),
+    # --- suivi ---
+    "suivi.seuil_correction_deg": (
+        "Écart (degrés) déclenchant une correction de suivi. En vitesse unique "
+        "(v5.10) le code impose 0.3° (SINGLE_SPEED_CORRECTION_THRESHOLD_DEG)."
+    ),
+    "suivi.intervalle_verification_sec": (
+        "Intervalle (secondes) entre deux vérifications de suivi. En vitesse unique "
+        "(v5.10) le code impose 30 s (SINGLE_SPEED_CHECK_INTERVAL_S)."
+    ),
+    "suivi.abaque_file": (
+        "Chemin (relatif au projet) du fichier abaque Loi_coupole.xlsx utilisé pour "
+        "l'interpolation 2D azimut coupole ↔ position télescope."
+    ),
+    # --- meridian_anticipation ---
+    "meridian_anticipation.enabled": (
+        "Active l'anticipation du flip méridien (true) : GOTO directif au moment "
+        "optimal pour réduire le lag pendant le retournement. false = comportement "
+        "v5.10 strict."
+    ),
+    # --- motor_driver ---
+    "motor_driver.type": (
+        "Mode de pilotage du moteur. « gpio » : le motor_service pilote le driver "
+        "DM556T directement via GPIO. « rp2040 » : commandes série vers le Pi Pico."
+    ),
+    "motor_driver.serial.baudrate": (
+        "Débit (bauds) de la liaison série USB CDC vers le Pi Pico. Typiquement 115200."
+    ),
+    "motor_driver.serial.timeout": (
+        "Délai d'attente (secondes) de lecture sur le port série du Pi Pico."
+    ),
+    # --- moteur ---
+    "moteur.gpio_pins.dir": (
+        "Broche GPIO (numérotation BCM) du signal DIR (sens) vers le driver DM556T."
+    ),
+    "moteur.gpio_pins.step": (
+        "Broche GPIO (numérotation BCM) du signal STEP (impulsions) vers le driver DM556T."
+    ),
+    "moteur.steps_per_revolution": (
+        "Pas par tour du moteur NEMA avant micro-pas (200 en full step pour un moteur 1,8°)."
+    ),
+    "moteur.steps_correction_factor": (
+        "Facteur correctif mesuré appliqué au nombre de pas (1.0 = aucune correction) "
+        "pour compenser les écarts mécaniques."
+    ),
+    "moteur.max_speed_steps_per_sec": (
+        "Vitesse maximale du moteur en pas par seconde (plafond de la rampe d'accélération)."
+    ),
+    "moteur.acceleration_steps_per_sec2": (
+        "Accélération de la rampe S-curve, en pas par seconde au carré."
+    ),
+    "moteur.motor_delay_base": (
+        "Délai de base (secondes) entre deux pas moteur ; plus il est petit, plus le "
+        "moteur tourne vite."
+    ),
+    # --- encodeur ---
+    "encodeur.spi.bus": ("Bus SPI (0 ou 1) auquel est raccordé l'encodeur magnétique EMS22A."),
+    "encodeur.spi.device": ("Périphérique (chip select) SPI de l'encodeur EMS22A : 0 ou 1."),
+    "encodeur.spi.speed_hz": "Fréquence d'horloge SPI en hertz (ex. 1000000 = 1 MHz).",
+    "encodeur.spi.mode": "Mode SPI (0 à 3). L'EMS22A utilise le mode 0.",
+    "encodeur.mecanique.wheel_diameter_mm": (
+        "Diamètre (mm) de la roue de mesure entraînée par la couronne de la coupole."
+    ),
+    "encodeur.mecanique.ring_diameter_mm": (
+        "Diamètre (mm) de la couronne (anneau) de la coupole ; sert au rapport de "
+        "réduction roue/couronne."
+    ),
+    "encodeur.mecanique.counts_per_rev": (
+        "Nombre de positions par tour de l'encodeur. EMS22A 10 bits = 1024."
+    ),
+    "encodeur.calibration_factor": (
+        "Facteur de calibration (degrés coupole par count encodeur) issu de la "
+        "calibration terrain. Modifier avec précaution."
+    ),
+    # --- logging ---
+    "logging.level": ("Niveau de verbosité des logs : DEBUG, INFO, WARNING ou ERROR."),
+    "logging.log_dir": "Répertoire (relatif au projet) où sont écrits les fichiers de log.",
+    "logging.max_file_size_mb": ("Taille maximale (Mo) d'un fichier de log avant rotation."),
+    "logging.backup_count": ("Nombre de fichiers de log archivés conservés lors de la rotation."),
+    # --- cimier (archi V3 tout-Shelly) ---
+    "cimier.enabled": (
+        "Active le pilotage du cimier (true). false = cimier_service ignoré "
+        "(template repo). À activer uniquement sur le Pi terrain."
+    ),
+    "cimier.cycle_timeout_s": (
+        "Durée maximale (secondes) d'un cycle d'ouverture/fermeture avant arrêt de "
+        "sécurité s'il n'atteint pas la butée."
+    ),
+    "cimier.post_off_quiet_s": (
+        "Temps de calme (secondes) imposé après l'arrêt du moteur, avant d'accepter "
+        "une nouvelle commande."
+    ),
+    "cimier.shelly_settle_s": (
+        "Temps d'établissement (secondes) laissé aux Shelly après commutation d'un "
+        "relais avant l'action suivante."
+    ),
+    "cimier.dir_settle_s": (
+        "Temps (secondes) entre le réglage du sens (DPDT) et la mise en marche du "
+        "moteur, pour laisser le relais de direction s'établir."
+    ),
+    "cimier.cycle_poll_interval_s": (
+        "Période (secondes) de relecture des butées HAUT/BAS pendant un cycle. "
+        "Terrain : 0.1 (100 ms)."
+    ),
+    "cimier.verbose_logging": (
+        "Active les logs détaillés (niveau DEBUG, traces poll_status) du "
+        "cimier_service. true pour le diagnostic, false en prod."
+    ),
+    # cimier.switch_reader (lecture des microswitches via Shelly Uni+)
+    "cimier.switch_reader.type": (
+        "Source de lecture des butées. « shelly_uni » : Shelly Uni+ via RPC. "
+        "« noop » : lecteur factice (dev/template)."
+    ),
+    "cimier.switch_reader.host": (
+        "Hôte/IP du Shelly Uni+ lisant les microswitches HAUT/BAS du cimier."
+    ),
+    "cimier.switch_reader.api": (
+        "Protocole d'accès au Shelly Uni+ : « rpc » (Gen 2+) ou « legacy » (Gen 1)."
+    ),
+    "cimier.switch_reader.open_input_id": (
+        "Index de l'entrée Shelly Uni+ du microswitch d'ouverture (HAUT) : 0 ou 1."
+    ),
+    "cimier.switch_reader.closed_input_id": (
+        "Index de l'entrée Shelly Uni+ du microswitch de fermeture (BAS) : 0 ou 1."
+    ),
+    "cimier.switch_reader.invert": (
+        "Inverse la lecture des microswitches NC (true) : butée atteinte = entrée "
+        "false. Convention validée terrain = true."
+    ),
+    "cimier.switch_reader.timeout_s": (
+        "Délai d'attente (secondes) des requêtes vers le Shelly Uni+."
+    ),
+    # cimier.power_switch (alim 24V du module cimier)
+    "cimier.power_switch.type": (
+        "Type du Shelly d'alimentation 24V du module cimier. « shelly_gen1 » "
+        "(legacy /relay), « shelly_gen2 » (RPC) ou « noop » (factice)."
+    ),
+    "cimier.power_switch.host": (
+        "Hôte/IP du Shelly alimentant le module cimier (coupé hors cycle)."
+    ),
+    "cimier.power_switch.switch_id": (
+        "Index du relais d'alimentation 24V sur le Shelly power : 0 ou 1."
+    ),
+    # cimier.weather_provider
+    "cimier.weather_provider.type": (
+        "Source météo consultée avant ouverture. « noop » = toujours OK (capteur "
+        "pluie : backlog séparé)."
+    ),
+    # cimier.automation (scheduler astropy)
+    "cimier.automation.mode": (
+        "Mode d'automatisation du cimier. « manual » : pilotage manuel. « semi » : "
+        "fermeture auto seule. « full » : ouverture et fermeture automatiques."
+    ),
+    "cimier.automation.opening_sun_altitude_deg": (
+        "Altitude du Soleil (degrés, négatif sous l'horizon) déclenchant l'ouverture "
+        "automatique en descente. Ex. -12."
+    ),
+    "cimier.automation.closing_target_sun_altitude_deg": (
+        "Altitude du Soleil (degrés) montante visée pour la fermeture automatique en "
+        "fin de nuit. Ex. -6."
+    ),
+    "cimier.automation.closing_advance_minutes": (
+        "Avance (minutes) avant l'altitude solaire cible pour anticiper la fermeture."
+    ),
+    "cimier.automation.clock_safety_margin_minutes": (
+        "Marge de sécurité (minutes) ajoutée aux calculs d'horaire d'automatisation."
+    ),
+    "cimier.automation.parking_target_azimuth_deg": (
+        "Azimut (degrés) de parking de la coupole en fin de session. Aligné sur le "
+        "microswitch de calibration (45°)."
+    ),
+    "cimier.automation.parking_timeout_minutes": (
+        "Délai maximal (minutes) accordé au GOTO de parking avant abandon."
+    ),
+    "cimier.automation.deparking_nudge_deg": (
+        "Petit déplacement (degrés) éloignant la coupole de la butée de parking avant "
+        "ouverture, pour libérer le microswitch."
+    ),
+    "cimier.automation.scheduler_interval_seconds": (
+        "Période (secondes) du polling du scheduler d'automatisation cimier."
+    ),
+    "cimier.automation.retrigger_cooldown_hours": (
+        "Délai minimal (heures) avant de pouvoir redéclencher la même action "
+        "automatique (anti-rebond jour/nuit)."
+    ),
+    # cimier.motor_shelly (moteur ON/OFF + sens via DPDT)
+    "cimier.motor_shelly.host_motor": (
+        "Hôte/IP du Shelly MOT (ON/OFF du moteur cimier). Vide → moteur factice (non déployé)."
+    ),
+    "cimier.motor_shelly.host_dir": (
+        "Hôte/IP du Shelly UPDN (sens du moteur via DPDT externe). Vide → factice."
+    ),
+    "cimier.motor_shelly.relay_motor": (
+        "Index du relais ON/OFF moteur sur le Shelly MOT : 0 ou 1."
+    ),
+    "cimier.motor_shelly.relay_dir": (
+        "Index du relais de sens (DPDT) sur le Shelly UPDN : 0 ou 1."
+    ),
+    "cimier.motor_shelly.open_dir_state": (
+        "État du relais UPDN correspondant au sens d'ouverture (true = turn=on). "
+        "Convention validée terrain = true."
+    ),
+    "cimier.motor_shelly.motor_on_relay_state": (
+        "État du relais MOT qui met le moteur EN MARCHE. Convention validée terrain "
+        "= false (le moteur tourne quand le relais est sur turn=off)."
+    ),
+    "cimier.motor_shelly.api": (
+        "Protocole d'accès aux Shelly MOT/UPDN : « legacy » (Gen 1 /relay) ou « rpc »."
+    ),
+    "cimier.motor_shelly.timer_safety_sec": (
+        "Minuterie de sécurité (secondes) côté Shelly coupant le moteur même si "
+        "l'arrêt logiciel échoue."
+    ),
+    # --- boot_calibration ---
+    "boot_calibration.fallback_sweep_deg": (
+        "Amplitude (degrés) du balayage de calibration au boot autour de la position "
+        "courante (séquence -sweep puis +2×sweep). Ex. 7."
+    ),
+    "boot_calibration.timeout_sec": (
+        "Délai maximal (secondes) de la routine de calibration au boot avant passage "
+        "en état dégradé."
+    ),
+    "boot_calibration.poll_interval_sec": (
+        "Période (secondes) de scrutation du microswitch 45° pendant la calibration au boot."
+    ),
+}
 
 
 def _infer_type(value) -> str:

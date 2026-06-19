@@ -381,3 +381,13 @@ class TestSchemaRefinements:
         template = {"site": {"latitude": 44.0, "_latitude_comment": "depuis template"}}
         field = build_config_schema(template)[0]["fields"][0]
         assert field["help"] == "depuis template"
+
+    def test_chaque_champ_du_template_reel_a_une_aide(self):
+        import json
+
+        from core.config.config_resilience import DEFAULT_TEMPLATE_PATH
+
+        tmpl = json.loads(DEFAULT_TEMPLATE_PATH.read_text())
+        schema = build_config_schema(tmpl)
+        sans_aide = [f["path"] for s in schema for f in s["fields"] if not f["help"]]
+        assert sans_aide == [], f"Champs sans info-bulle : {sans_aide}"
