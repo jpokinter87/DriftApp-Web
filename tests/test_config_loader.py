@@ -243,8 +243,18 @@ class TestConfigLoader:
         assert config.site.latitude == 44.15
         assert config.site.nom == "Observatoire Test"
 
-    def test_load_missing_file(self, tmp_path):
-        """Fichier manquant → FileNotFoundError."""
+    def test_load_missing_file_and_missing_template_raises(self, tmp_path, monkeypatch):
+        """Config absente ET template absent → ensure_config_ready ne peut rien
+        bootstrapper (RuntimeError avalé par _ensure_ready), donc _load_json lève
+        FileNotFoundError. Seul cas où l'absence reste fatale (chantier A)."""
+        from core.config import config_resilience as cr
+
+        cr._REPORT_CACHE.clear()
+        # Réactive le vrai _ensure_ready (la fixture module le neutralise par défaut)
+        monkeypatch.setattr(ConfigLoader, "_ensure_ready", _REAL_ENSURE_READY)
+        # Template/backup pointés vers des chemins inexistants → RuntimeError avalé
+        monkeypatch.setattr(cr, "DEFAULT_TEMPLATE_PATH", tmp_path / "no_template.json")
+        monkeypatch.setattr(cr, "DEFAULT_BACKUP_PATH", tmp_path / "no_backup.json")
         loader = ConfigLoader(tmp_path / "nonexistent.json")
         with pytest.raises(FileNotFoundError):
             loader.load()
