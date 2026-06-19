@@ -1,5 +1,6 @@
 """Tests des vues de l'app configuration (GET schema+values, POST save)."""
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -64,3 +65,31 @@ class TestConfigurationGet:
         section_keys = {s["key"] for s in body["schema"]}
         assert {"site", "moteur", "_general"} <= section_keys
         assert body["values"]["site"]["nom"] == "Ubik"
+
+
+class TestConfigurationPost:
+    def test_post_valide_persiste(self, api_client, tmp_config):
+        cfg, _tmpl, _backup = tmp_config
+        payload = {
+            "site": {"latitude": 46.2, "nom": "Nouveau"},
+            "moteur": {"microsteps": 8},
+            "simulation": True,
+        }
+        resp = api_client.post("/api/configuration/", payload, format="json")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "saved"
+        assert resp.json()["restart_required"] is True
+        written = json.loads(cfg.read_text())
+        assert written["site"]["latitude"] == 46.2
+        assert written["site"]["nom"] == "Nouveau"
+        assert written["simulation"] is True
+        # _comment du template réinjecté
+        assert written["site"]["_comment"] == "le site"
+
+    def test_post_type_invalide_400_et_inchange(self, api_client, tmp_config):
+        cfg, _tmpl, _backup = tmp_config
+        avant = cfg.read_text()
+        resp = api_client.post("/api/configuration/", {"site": {"latitude": "haut"}}, format="json")
+        assert resp.status_code == 400
+        assert resp.json()["path"] == "site.latitude"
+        assert cfg.read_text() == avant  # config.json intact
