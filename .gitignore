@@ -70,3 +70,6 @@ firmware/cimier/secrets.py
 data/config.json
 data/.config.lastgood.json
 data/config.json.*.tmp
+
+# Superpowers brainstorm (companion visuel)
+.superpowers/
