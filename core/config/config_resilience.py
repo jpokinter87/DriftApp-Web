@@ -160,8 +160,9 @@ HELP_REGISTRY: dict[str, str] = {
         "Nombre de positions par tour de l'encodeur. EMS22A 10 bits = 1024."
     ),
     "encodeur.calibration_factor": (
-        "Facteur de calibration (degrés coupole par count encodeur) issu de la "
-        "calibration terrain. Modifier avec précaution."
+        "Facteur de calibration : ratio degrés roue → degrés couronne (≈ réduction "
+        "roue/couronne) appliqué à la position. Issu de la calibration terrain. "
+        "Modifier avec précaution."
     ),
     # --- logging ---
     "logging.level": ("Niveau de verbosité des logs : DEBUG, INFO, WARNING ou ERROR."),
@@ -264,8 +265,8 @@ HELP_REGISTRY: dict[str, str] = {
         "Délai maximal (minutes) accordé au GOTO de parking avant abandon."
     ),
     "cimier.automation.deparking_nudge_deg": (
-        "Petit déplacement (degrés) éloignant la coupole de la butée de parking avant "
-        "ouverture, pour libérer le microswitch."
+        "Petit déplacement (degrés) émis à l'ouverture pour faire passer la couronne "
+        "sur le microswitch de calibration 45° et réacquérir la référence encodeur."
     ),
     "cimier.automation.scheduler_interval_seconds": (
         "Période (secondes) du polling du scheduler d'automatisation cimier."
