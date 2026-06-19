@@ -369,6 +369,25 @@ UPDATE_SCRIPT = PROJECT_ROOT / "scripts" / "update_driftapp.sh"
 UPDATE_STATUS_FILE = PROJECT_ROOT / "logs" / "update_status.json"
 UPDATE_LOG_FILE = PROJECT_ROOT / "logs" / "update.log"
 
+# Rapport de résilience config (chantier A) écrit par les entry points dans l'IPC.
+CONFIG_STATUS_FILE = Path("/dev/shm/config_status.json")
+
+
+@api_view(['GET'])
+def config_status_view(request):
+    """État du noyau de résilience config (chantier A). Lu depuis l'IPC."""
+    try:
+        with CONFIG_STATUS_FILE.open(encoding='utf-8') as f:
+            return Response(json.load(f))
+    except (OSError, json.JSONDecodeError):
+        return Response({
+            'status': 'unchanged',
+            'added': [],
+            'removed': [],
+            'backup_timestamp': None,
+            'message': '',
+        })
+
 
 @api_view(['GET'])
 def check_update(request):
