@@ -305,6 +305,8 @@ def _run_ensure(config_path: Path, template_path: Path, backup_path: Path) -> Co
 
 
 def _message_for(status, added, removed, backup_ts) -> str:
+    if status == "saved":
+        return "Configuration enregistrée. Redémarre les services pour l'appliquer."
     if status == "unchanged":
         return "Configuration inchangée."
     if status == "migrated":
@@ -324,6 +326,38 @@ def _message_for(status, added, removed, backup_ts) -> str:
             "chargées, reconfiguration requise."
         )
     return ""
+
+
+def write_user_config(
+    values: dict,
+    config_path: Path = DEFAULT_CONFIG_PATH,
+    template_path: Path = DEFAULT_TEMPLATE_PATH,
+    backup_path: Path = DEFAULT_BACKUP_PATH,
+) -> ConfigReport:
+    """Persiste les valeurs éditées par l'UI, à travers le noyau A.
+
+    Valide les types vs template, merge la structure (réinjecte les _comment et
+    écarte toute clé inconnue), écrit atomiquement, rafraîchit lastgood, invalide
+    la mémoïsation. Lève ConfigValidationError(path) si un type est incohérent.
+    """
+    template = _load_json_or_none(template_path)
+    if template is None:
+        raise RuntimeError(f"Template introuvable ou invalide : {template_path}")
+
+    coerced = validate_and_coerce(values, template)
+    merged, added, removed = _structural_merge(coerced, template)
+
+    _atomic_write_json(config_path, merged)
+    _atomic_write_json(backup_path, merged)
+    _REPORT_CACHE.pop(str(config_path), None)
+
+    return ConfigReport(
+        status="saved",
+        added=added,
+        removed=removed,
+        backup_timestamp=_backup_mtime_iso(backup_path),
+        message=_message_for("saved", added, removed, None),
+    )
 
 
 def ensure_config_ready(

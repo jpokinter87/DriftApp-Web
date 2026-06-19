@@ -289,3 +289,65 @@ class TestValidateAndCoerce:
         with pytest.raises(ConfigValidationError) as exc:
             validate_and_coerce({"site": {"altitude": True}}, template)
         assert exc.value.path == "site.altitude"
+
+
+from core.config.config_resilience import _REPORT_CACHE, write_user_config  # noqa: E402
+
+
+class TestWriteUserConfig:
+    def _paths(self, tmp_path):
+        return (
+            tmp_path / "config.json",
+            tmp_path / "config.template.json",
+            tmp_path / ".config.lastgood.json",
+        )
+
+    def test_ecrit_valeurs_et_reinjecte_comment(self, tmp_path):
+        cfg, tmpl, backup = self._paths(tmp_path)
+        _atomic_write_json(
+            tmpl,
+            {
+                "_comment": "gabarit",
+                "site": {"_comment": "le site", "latitude": 44.0, "nom": "x"},
+            },
+        )
+        report = write_user_config(
+            {"site": {"latitude": 45.5, "nom": "Ubik"}},
+            config_path=cfg,
+            template_path=tmpl,
+            backup_path=backup,
+        )
+        written = json.loads(cfg.read_text())
+        assert written["site"]["latitude"] == 45.5
+        assert written["site"]["nom"] == "Ubik"
+        assert written["site"]["_comment"] == "le site"  # _comment réinjecté
+        assert written["_comment"] == "gabarit"
+        assert report.status == "saved"
+        # lastgood rafraîchi à l'identique
+        assert json.loads(backup.read_text()) == written
+
+    def test_type_invalide_leve_et_n_ecrit_pas(self, tmp_path):
+        cfg, tmpl, backup = self._paths(tmp_path)
+        _atomic_write_json(tmpl, {"site": {"altitude": 800}})
+        with pytest.raises(ConfigValidationError):
+            write_user_config(
+                {"site": {"altitude": "haut"}},
+                config_path=cfg,
+                template_path=tmpl,
+                backup_path=backup,
+            )
+        assert not cfg.exists()  # rien écrit
+
+    def test_invalide_le_cache_report(self, tmp_path):
+        cfg, tmpl, backup = self._paths(tmp_path)
+        _atomic_write_json(tmpl, {"site": {"nom": "x"}})
+        _atomic_write_json(cfg, {"site": {"nom": "ancien"}})
+        ensure_config_ready(cfg, tmpl, backup)  # peuple _REPORT_CACHE
+        assert str(cfg) in _REPORT_CACHE
+        write_user_config(
+            {"site": {"nom": "neuf"}},
+            config_path=cfg,
+            template_path=tmpl,
+            backup_path=backup,
+        )
+        assert str(cfg) not in _REPORT_CACHE  # cache invalidé
