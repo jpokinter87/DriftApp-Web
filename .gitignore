@@ -73,3 +73,20 @@ data/config.json.*.tmp
 
 # Superpowers brainstorm (companion visuel)
 .superpowers/
+
+# Runtime Claude Code (versionner uniquement les skills projet)
+.claude/*
+!.claude/skills/
+
+# Sessions de suivi (données runtime ; garder le dossier)
+data/sessions/*.json
+!data/sessions/.gitkeep
+
+# Matériel de référence local volumineux (non versionné)
+sc/
+UPAN/
+
+# Rapports/PDF générés (les sources .md/.odt sont versionnées)
+docs/deploiement_v6.7.0_terrain.pdf
+docs/rapport_NGC4151_20260416.pdf
+docs/rapport_anticipation_meridien_v511.pdf

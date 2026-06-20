@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1520 1080" font-family="'DejaVu Sans', Arial, sans-serif">
+
+  <defs>
+    <marker id="arrowEnd" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#333"/>
+    </marker>
+  </defs>
+
+  <rect width="1520" height="1080" fill="#fbfbf9"/>
+
+  <!-- ============ Titre ============ -->
+  <text x="760" y="36" text-anchor="middle" font-size="23" font-weight="bold" fill="#1a1a1a">
+    74HC00 — câblage broche par broche (sécurité butées cimier)
+  </text>
+  <text x="760" y="60" text-anchor="middle" font-size="13" fill="#555">
+    Vue de dessus du DIP-14 · ce que l'on soude sur CHAQUE patte · DriftApp v6.x
+  </text>
+
+  <!-- ============ Légende ============ -->
+  <g transform="translate(40, 80)">
+    <rect width="430" height="92" fill="white" stroke="#bbb" stroke-width="1" rx="4"/>
+    <text x="14" y="20" font-size="12.5" font-weight="bold">Deux familles de soudure (à ne pas confondre)</text>
+
+    <rect x="14" y="32" width="26" height="13" fill="#fff3e0" stroke="#d68910" stroke-width="2"/>
+    <text x="48" y="43" font-size="11.5"><tspan font-weight="bold">Fil externe</tspan> — vient d'ailleurs (DIR, switch, +5V, GND, ENA-)</text>
+
+    <rect x="14" y="54" width="26" height="13" fill="#eeeeee" stroke="#777" stroke-width="2" stroke-dasharray="4,2"/>
+    <text x="48" y="65" font-size="11.5"><tspan font-weight="bold">Pont (strap)</tspan> — petit fil soudé d'une patte à une autre patte</text>
+
+    <text x="14" y="84" font-size="10.5" fill="#666">Le numéro entre parenthèses (ex. « → pin 12 ») dit où va l'autre bout du pont.</text>
+  </g>
+
+  <!-- ============ Rappel orientation DIP ============ -->
+  <g transform="translate(500, 80)">
+    <rect width="300" height="92" fill="white" stroke="#bbb" stroke-width="1" rx="4"/>
+    <text x="14" y="20" font-size="12.5" font-weight="bold">Repérage du boîtier</text>
+    <text x="14" y="40" font-size="11">Encoche (demi-lune) ou point = repère.</text>
+    <text x="14" y="57" font-size="11">Encoche placée EN HAUT → pin 1 en haut</text>
+    <text x="14" y="71" font-size="11">à gauche, numérotation anti-horaire :</text>
+    <text x="14" y="86" font-size="11" fill="#666">1→7 descend à gauche, 8→14 remonte à droite.</text>
+  </g>
+
+  <!-- ============ Convertisseur DC-DC (source +5V) ============ -->
+  <g transform="translate(820, 80)">
+    <rect width="280" height="92" fill="#fdebd0" stroke="#c41e3a" stroke-width="2" rx="4"/>
+    <text x="140" y="20" text-anchor="middle" font-size="12.5" font-weight="bold">Convertisseur DC-DC 5 V</text>
+    <text x="140" y="40" text-anchor="middle" font-size="11">Entrée : 220 V PERMANENTE</text>
+    <text x="140" y="55" text-anchor="middle" font-size="11" fill="#c41e3a" font-weight="bold">(en amont du Shelly POWER)</text>
+    <text x="140" y="73" text-anchor="middle" font-size="10" fill="#666">Sortie +5V → patte 14 + les 2 pull-ups.</text>
+    <text x="140" y="86" text-anchor="middle" font-size="10" fill="#666">74HC00 actif même module PWM éteint.</text>
+  </g>
+
+  <!-- ============ BOM ============ -->
+  <g transform="translate(1120, 80)">
+    <rect width="360" height="92" fill="white" stroke="#bbb" stroke-width="1" rx="4"/>
+    <text x="180" y="18" text-anchor="middle" font-size="12.5" font-weight="bold">À se procurer (BOM ~1,20 €)</text>
+    <text x="14" y="36" font-size="10.5">• 1× 74HC00N (quad NAND CMOS, DIP-14) + support</text>
+    <text x="14" y="51" font-size="10.5">• 2× résistance 10 kΩ 1/4 W (R1, R2)</text>
+    <text x="14" y="66" font-size="10.5">• 1× condensateur céramique 100 nF (C1)</text>
+    <text x="14" y="81" font-size="10.5">• DC-DC 5 V (déjà dispo) + plaque pastillée 3×4 cm</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- ===================== DIP-14 + étiquettes pattes ===================== -->
+  <!-- ====================================================================== -->
+
+  <!-- Boîtier : pins gauche 1..7 (y=210,274,338,402,466,530,594) ;
+       pins droite 14,13,12,11,10,9,8 (mêmes y) -->
+
+  <!-- corps -->
+  <rect x="640" y="180" width="200" height="450" fill="#2b2b2b" stroke="#000" stroke-width="2" rx="6"/>
+  <text x="740" y="395" text-anchor="middle" font-size="22" font-weight="bold" fill="#fff">74HC00</text>
+  <text x="740" y="418" text-anchor="middle" font-size="12" fill="#bbb">quad NAND CMOS</text>
+  <text x="740" y="436" text-anchor="middle" font-size="11" fill="#888">vue de DESSUS</text>
+  <!-- encoche haut -->
+  <path d="M 715 180 A 25 25 0 0 0 765 180 Z" fill="#fbfbf9" stroke="#000" stroke-width="2"/>
+  <!-- pastille pin 1 -->
+  <circle cx="668" cy="208" r="5" fill="#fbfbf9"/>
+
+  <!-- ============ PATTES GAUCHE (fils sortant vers la gauche) ============ -->
+  <!-- Chaque patte : petit stub + boîte étiquette adjacente -->
+
+  <!-- helper visuel : stub de patte -->
+  <!-- PIN 1 : DIR (fil externe) -->
+  <rect x="615" y="201" width="25" height="14" fill="#888"/>
+  <text x="652" y="212" font-size="12" font-weight="bold" fill="#fff">1</text>
+  <text x="628" y="200" font-size="9" fill="#fff" text-anchor="end" transform="translate(0,0)"></text>
+  <line x1="615" y1="208" x2="470" y2="208" stroke="#d68910" stroke-width="2.5"/>
+  <g transform="translate(40, 188)">
+    <rect width="430" height="40" fill="#fff3e0" stroke="#d68910" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#9c5b00">pin 1 (1A) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">DIR</tspan> (signal en aval du Shelly DIR = côté DM556T.DIR-)</text>
+  </g>
+
+  <!-- PIN 2 : pont vers pin 1 (strap) -->
+  <rect x="615" y="265" width="25" height="14" fill="#888"/>
+  <text x="652" y="276" font-size="12" font-weight="bold" fill="#fff">2</text>
+  <line x1="615" y1="272" x2="470" y2="272" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(40, 252)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 2 (1B) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT → pin 1</tspan> (les 2 entrées reliées = inverseur ; voit aussi DIR)</text>
+  </g>
+  <!-- arc strap 1<->2 visible le long du bord -->
+  <path d="M 600 208 q -24 32 0 64" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="5,3"/>
+
+  <!-- PIN 3 : sortie NOT_DIR, pont vers pin 4 -->
+  <rect x="615" y="329" width="25" height="14" fill="#888"/>
+  <text x="652" y="340" font-size="12" font-weight="bold" fill="#fff">3</text>
+  <line x1="615" y1="336" x2="470" y2="336" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(40, 316)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 3 (1Y) — SORTIE (= NOT_DIR)</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT → pin 4</tspan> (calculé en interne, rien à amener de l'extérieur)</text>
+  </g>
+
+  <!-- PIN 4 : pont depuis pin 3 -->
+  <rect x="615" y="393" width="25" height="14" fill="#888"/>
+  <text x="652" y="404" font-size="12" font-weight="bold" fill="#fff">4</text>
+  <line x1="615" y1="400" x2="470" y2="400" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(40, 380)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 4 (2A) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT ← pin 3</tspan> (reçoit NOT_DIR)</text>
+  </g>
+  <!-- arc strap 3<->4 -->
+  <path d="M 600 336 q -24 32 0 64" fill="none" stroke="#777" stroke-width="2" stroke-dasharray="5,3"/>
+
+  <!-- PIN 5 : SW_OPEN + pull-up R1 -->
+  <rect x="615" y="457" width="25" height="14" fill="#888"/>
+  <text x="652" y="468" font-size="12" font-weight="bold" fill="#fff">5</text>
+  <line x1="615" y1="464" x2="470" y2="464" stroke="#1e8449" stroke-width="2.5"/>
+  <g transform="translate(40, 444)">
+    <rect width="430" height="40" fill="#e8f5e9" stroke="#1e8449" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#13632f">pin 5 (2B) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">SW_OPEN</tspan> &#160;+&#160; pull-up <tspan font-weight="bold">R1 10 kΩ</tspan> vers +5V</text>
+  </g>
+
+  <!-- PIN 6 : sortie OPEN_OK, pont vers pin 12 -->
+  <rect x="615" y="521" width="25" height="14" fill="#888"/>
+  <text x="652" y="532" font-size="12" font-weight="bold" fill="#fff">6</text>
+  <line x1="615" y1="528" x2="470" y2="528" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(40, 508)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 6 (2Y) — SORTIE (= OPEN_OK)</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT → pin 12</tspan> (un fil traverse vers l'autre rangée)</text>
+  </g>
+
+  <!-- PIN 7 : GND + C1 -->
+  <rect x="615" y="585" width="25" height="14" fill="#888"/>
+  <text x="652" y="596" font-size="12" font-weight="bold" fill="#fff">7</text>
+  <line x1="615" y1="592" x2="470" y2="592" stroke="#1e4a9e" stroke-width="2.5"/>
+  <g transform="translate(40, 572)">
+    <rect width="430" height="40" fill="#e7edf7" stroke="#1e4a9e" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#15346e">pin 7 (GND) — ALIMENTATION</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">GND</tspan> (0 V commun) &#160;+&#160; une patte de <tspan font-weight="bold">C1</tspan> (→ pin 14)</text>
+  </g>
+
+  <!-- ============ PATTES DROITE (fils sortant vers la droite) ============ -->
+
+  <!-- PIN 14 : +5V + C1 -->
+  <rect x="840" y="201" width="25" height="14" fill="#888"/>
+  <text x="828" y="212" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">14</text>
+  <line x1="865" y1="208" x2="1010" y2="208" stroke="#c41e3a" stroke-width="2.5"/>
+  <g transform="translate(1010, 188)">
+    <rect width="430" height="40" fill="#fce4ec" stroke="#c41e3a" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#8c1226">pin 14 (VCC) — ALIMENTATION</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">+5V</tspan> (DC-DC) &#160;+&#160; R1 &#160;+&#160; R2 &#160;+&#160; l'autre patte de <tspan font-weight="bold">C1</tspan></text>
+  </g>
+
+  <!-- PIN 13 : pont depuis pin 8 -->
+  <rect x="840" y="265" width="25" height="14" fill="#888"/>
+  <text x="828" y="276" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">13</text>
+  <line x1="865" y1="272" x2="1010" y2="272" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(1010, 252)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 13 (4B) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT ← pin 8</tspan> (reçoit CLOSE_OK)</text>
+  </g>
+
+  <!-- PIN 12 : pont depuis pin 6 -->
+  <rect x="840" y="329" width="25" height="14" fill="#888"/>
+  <text x="828" y="340" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">12</text>
+  <line x1="865" y1="336" x2="1010" y2="336" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(1010, 316)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 12 (4A) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT ← pin 6</tspan> (reçoit OPEN_OK)</text>
+  </g>
+
+  <!-- PIN 11 : sortie ENA- -->
+  <rect x="840" y="393" width="25" height="14" fill="#888"/>
+  <text x="828" y="404" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">11</text>
+  <line x1="865" y1="400" x2="1010" y2="400" stroke="#222" stroke-width="3" marker-end="url(#arrowEnd)"/>
+  <g transform="translate(1010, 380)">
+    <rect width="430" height="40" fill="#fff8d6" stroke="#222" stroke-width="2.5" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold">pin 11 (4Y) — SORTIE FINALE (= ENA-)</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">→ borne ENA- du DM556T</tspan> (jusqu'ici non câblée)</text>
+  </g>
+
+  <!-- PIN 10 : SW_CLOSED + pull-up R2 -->
+  <rect x="840" y="457" width="25" height="14" fill="#888"/>
+  <text x="828" y="468" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">10</text>
+  <line x1="865" y1="464" x2="1010" y2="464" stroke="#1e8449" stroke-width="2.5"/>
+  <g transform="translate(1010, 444)">
+    <rect width="430" height="40" fill="#e8f5e9" stroke="#1e8449" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#13632f">pin 10 (3B) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">SW_CLOSED</tspan> &#160;+&#160; pull-up <tspan font-weight="bold">R2 10 kΩ</tspan> vers +5V</text>
+  </g>
+
+  <!-- PIN 9 : DIR -->
+  <rect x="840" y="521" width="25" height="14" fill="#888"/>
+  <text x="828" y="532" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">9</text>
+  <line x1="865" y1="528" x2="1010" y2="528" stroke="#d68910" stroke-width="2.5"/>
+  <g transform="translate(1010, 508)">
+    <rect width="430" height="40" fill="#fff3e0" stroke="#d68910" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#9c5b00">pin 9 (3A) — ENTRÉE</text>
+    <text x="10" y="33" font-size="11.5">Fil <tspan font-weight="bold">DIR</tspan> (le même signal que pins 1 et 2)</text>
+  </g>
+
+  <!-- PIN 8 : sortie CLOSE_OK, pont vers pin 13 -->
+  <rect x="840" y="585" width="25" height="14" fill="#888"/>
+  <text x="828" y="596" font-size="12" font-weight="bold" fill="#fff" text-anchor="end">8</text>
+  <line x1="865" y1="592" x2="1010" y2="592" stroke="#777" stroke-width="2.5" stroke-dasharray="5,3"/>
+  <g transform="translate(1010, 572)">
+    <rect width="430" height="40" fill="#eeeeee" stroke="#777" stroke-width="2" rx="4"/>
+    <text x="10" y="17" font-size="11.5" font-weight="bold" fill="#444">pin 8 (3Y) — SORTIE (= CLOSE_OK)</text>
+    <text x="10" y="33" font-size="11.5"><tspan font-weight="bold">PONT → pin 13</tspan> (un fil traverse vers l'autre rangée)</text>
+  </g>
+
+  <!-- ============ récap des 4 ponts traversants ============ -->
+  <g transform="translate(640, 660)">
+    <rect width="200" height="110" fill="#f5f5f5" stroke="#777" stroke-width="1.5" rx="4"/>
+    <text x="100" y="20" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#444">Les 4 ponts (straps)</text>
+    <text x="14" y="40" font-size="10.5">pin 1 ── pin 2&#160;&#160;(adjacents)</text>
+    <text x="14" y="57" font-size="10.5">pin 3 ── pin 4&#160;&#160;(adjacents)</text>
+    <text x="14" y="74" font-size="10.5">pin 6 ── pin 12&#160;(traverse)</text>
+    <text x="14" y="91" font-size="10.5">pin 8 ── pin 13&#160;(traverse)</text>
+    <text x="14" y="105" font-size="9" fill="#888" font-style="italic">= petits fils internes au module</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- ============ Câblage des périphériques (switches/pull-ups) =========== -->
+  <!-- ====================================================================== -->
+
+  <g transform="translate(40, 660)">
+    <rect width="560" height="180" fill="white" stroke="#bbb" stroke-width="1" rx="4"/>
+    <text x="14" y="22" font-size="13" font-weight="bold">Branchement de chaque switch (rappel)</text>
+
+    <!-- SW_OPEN -->
+    <text x="14" y="46" font-size="11.5" font-weight="bold" fill="#13632f">SWITCH_OPEN (contact NC, existant) :</text>
+    <text x="28" y="63" font-size="11">• une borne → <tspan font-weight="bold">GND</tspan></text>
+    <text x="28" y="79" font-size="11">• autre borne → nœud SW_OPEN = pin 5 du 74HC00 + R1 (vers +5V)</text>
+
+    <!-- SW_CLOSED -->
+    <text x="14" y="104" font-size="11.5" font-weight="bold" fill="#13632f">SWITCH_CLOSED (contact NC, existant) :</text>
+    <text x="28" y="121" font-size="11">• une borne → <tspan font-weight="bold">GND</tspan></text>
+    <text x="28" y="137" font-size="11">• autre borne → nœud SW_CLOSED = pin 10 du 74HC00 + R2 (vers +5V)</text>
+
+    <text x="14" y="162" font-size="10" fill="#666">Repos (NC fermé) : patte tirée à GND = 0. Butée atteinte (NC ouvert) :</text>
+    <text x="14" y="175" font-size="10" fill="#666">la pull-up tire la patte à +5V = 1. Le 74HC00 lit le switch via SA PROPRE pull-up (indépendant du Pico W).</text>
+  </g>
+
+  <!-- ============ Note C1 ============ -->
+  <g transform="translate(880, 660)">
+    <rect width="560" height="110" fill="#f3eaf7" stroke="#7b2cbf" stroke-width="1.5" rx="4"/>
+    <text x="14" y="22" font-size="12.5" font-weight="bold" fill="#5a1e8c">Condensateur de découplage C1 (100 nF)</text>
+    <text x="14" y="44" font-size="11">Soudé directement entre <tspan font-weight="bold">pin 14 (VCC)</tspan> et <tspan font-weight="bold">pin 7 (GND)</tspan>,</text>
+    <text x="14" y="61" font-size="11">au plus court (&lt; 2 cm), collé contre le boîtier.</text>
+    <text x="14" y="84" font-size="10.5" fill="#666">Non polarisé (céramique) : sens indifférent. Stabilise l'alim de</text>
+    <text x="14" y="98" font-size="10.5" fill="#666">l'IC contre les pics de commutation. À ne pas oublier.</text>
+  </g>
+
+  <!-- ====================================================================== -->
+  <!-- ============================ Table de vérité ========================= -->
+  <!-- ====================================================================== -->
+
+  <g transform="translate(40, 870)">
+    <text x="0" y="0" font-size="14" font-weight="bold">Comportement résultant (ENA- pilote l'enable du DM556T : 0 = moteur autorisé, 1 = coupé)</text>
+
+    <g transform="translate(0, 14)" font-size="11.5">
+      <!-- header -->
+      <rect x="0" y="0" width="1440" height="24" fill="#dfe3e8"/>
+      <line x1="0" y1="24" x2="1440" y2="24" stroke="#999"/>
+      <text x="12"  y="16" font-weight="bold">Scénario</text>
+      <text x="470" y="16" font-weight="bold" text-anchor="middle">DIR</text>
+      <text x="560" y="16" font-weight="bold" text-anchor="middle">SW_OPEN</text>
+      <text x="670" y="16" font-weight="bold" text-anchor="middle">SW_CLOSED</text>
+      <text x="800" y="16" font-weight="bold" text-anchor="middle">OPEN_OK (6)</text>
+      <text x="940" y="16" font-weight="bold" text-anchor="middle">CLOSE_OK (8)</text>
+      <text x="1090" y="16" font-weight="bold" text-anchor="middle">ENA- (11)</text>
+      <text x="1230" y="16" font-weight="bold" text-anchor="middle">Moteur</text>
+
+      <!-- lignes -->
+      <g font-size="11.5">
+        <!-- 1 -->
+        <text x="12" y="44">Repos / montée (pas en butée)</text>
+        <text x="470" y="44" text-anchor="middle">0</text>
+        <text x="560" y="44" text-anchor="middle">0</text>
+        <text x="670" y="44" text-anchor="middle">0</text>
+        <text x="800" y="44" text-anchor="middle">1</text>
+        <text x="940" y="44" text-anchor="middle">1</text>
+        <text x="1090" y="44" text-anchor="middle" font-weight="bold" fill="#1e8449">0</text>
+        <text x="1230" y="44" text-anchor="middle" fill="#1e8449">tourne</text>
+        <line x1="0" y1="52" x2="1440" y2="52" stroke="#eee"/>
+        <!-- 2 -->
+        <text x="12" y="70">Repos / descente (pas en butée)</text>
+        <text x="470" y="70" text-anchor="middle">1</text>
+        <text x="560" y="70" text-anchor="middle">0</text>
+        <text x="670" y="70" text-anchor="middle">0</text>
+        <text x="800" y="70" text-anchor="middle">1</text>
+        <text x="940" y="70" text-anchor="middle">1</text>
+        <text x="1090" y="70" text-anchor="middle" font-weight="bold" fill="#1e8449">0</text>
+        <text x="1230" y="70" text-anchor="middle" fill="#1e8449">tourne</text>
+        <line x1="0" y1="78" x2="1440" y2="78" stroke="#eee"/>
+        <!-- 3 -->
+        <rect x="0" y="80" width="1440" height="26" fill="#fdecec"/>
+        <text x="12" y="98" font-weight="bold">Butée HAUTE atteinte ET sens = montée</text>
+        <text x="470" y="98" text-anchor="middle">0</text>
+        <text x="560" y="98" text-anchor="middle">1</text>
+        <text x="670" y="98" text-anchor="middle">0</text>
+        <text x="800" y="98" text-anchor="middle">0</text>
+        <text x="940" y="98" text-anchor="middle">1</text>
+        <text x="1090" y="98" text-anchor="middle" font-weight="bold" fill="#c41e3a">1</text>
+        <text x="1230" y="98" text-anchor="middle" font-weight="bold" fill="#c41e3a">COUPÉ</text>
+        <line x1="0" y1="106" x2="1440" y2="106" stroke="#eee"/>
+        <!-- 4 -->
+        <text x="12" y="124">Butée HAUTE mais sens = descente (on libère)</text>
+        <text x="470" y="124" text-anchor="middle">1</text>
+        <text x="560" y="124" text-anchor="middle">1</text>
+        <text x="670" y="124" text-anchor="middle">0</text>
+        <text x="800" y="124" text-anchor="middle">1</text>
+        <text x="940" y="124" text-anchor="middle">1</text>
+        <text x="1090" y="124" text-anchor="middle" font-weight="bold" fill="#1e8449">0</text>
+        <text x="1230" y="124" text-anchor="middle" fill="#1e8449">tourne</text>
+        <line x1="0" y1="132" x2="1440" y2="132" stroke="#eee"/>
+        <!-- 5 -->
+        <rect x="0" y="134" width="1440" height="26" fill="#fdecec"/>
+        <text x="12" y="152" font-weight="bold">Butée BASSE atteinte ET sens = descente</text>
+        <text x="470" y="152" text-anchor="middle">1</text>
+        <text x="560" y="152" text-anchor="middle">0</text>
+        <text x="670" y="152" text-anchor="middle">1</text>
+        <text x="800" y="152" text-anchor="middle">1</text>
+        <text x="940" y="152" text-anchor="middle">0</text>
+        <text x="1090" y="152" text-anchor="middle" font-weight="bold" fill="#c41e3a">1</text>
+        <text x="1230" y="152" text-anchor="middle" font-weight="bold" fill="#c41e3a">COUPÉ</text>
+      </g>
+    </g>
+    <text x="0" y="218" font-size="10.5" fill="#666">DIR : 0 = montée, 1 = descente. SW = 0 au repos, 1 quand la butée correspondante est atteinte. La coupure (ENA- = 1) n'arrive QUE si l'on pousse dans la butée déjà atteinte.</text>
+  </g>
+
+</svg>
