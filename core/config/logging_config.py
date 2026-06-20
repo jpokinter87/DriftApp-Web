@@ -220,7 +220,7 @@ if __name__ == "__main__":
     close_logging()
 
     print(f"Logs ecrits dans : {log_file}")
-    print(f"\nContenu du fichier :\n")
+    print("\nContenu du fichier :\n")
 
     # Afficher le contenu
     with open(log_file, 'r', encoding='utf-8') as f:

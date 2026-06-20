@@ -70,8 +70,6 @@ class AstronomicalCalculations:
         Returns:
             Tuple (ad_jnow, dec_jnow) en degrés
         """
-        from astropy.coordinates import CIRS
-
         # Créer une coordonnée J2000
         coord_j2000 = SkyCoord(ra=ad_j2000 * u.degree, dec=dec_j2000 * u.degree,
                                frame='icrs')
