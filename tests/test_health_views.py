@@ -41,35 +41,37 @@ def api_client():
 
 
 @pytest.fixture
-def health_ipc(tmp_path):
-    """Fichiers IPC pour tests health."""
+def health_ipc(tmp_path, monkeypatch):
+    """Environnement IPC isolé pour les tests health.
+
+    Redirige par monkeypatch (auto-révoqué en fin de test) les chemins lus par
+    les vues — via ``settings``, relu à chaque appel — et le singleton
+    ``motor_client`` qui, lui, fige ses chemins à la construction. On évite
+    ``importlib.reload`` : il rechargeait des modules partagés sans jamais
+    restaurer leur état, ce qui faisait fuir les chemins entre tests et
+    provoquait des échecs aléatoires sous pytest-xdist (suite parallèle CI).
+    """
+    from django.conf import settings
+    from web.common.ipc_client import motor_client
+
     cmd_file = tmp_path / "motor_command.json"
     status_file = tmp_path / "motor_status.json"
     encoder_file = tmp_path / "ems22_position.json"
 
-    status_data = {
+    status_file.write_text(json.dumps({
         "status": "idle",
         "position": 45.0,
         "mode": "idle",
         "simulation": True,
         "tracking_object": None,
         "last_update": "2025-01-01T00:00:00",
-    }
-    status_file.write_text(json.dumps(status_data))
-
-    encoder_data = {
+    }))
+    encoder_file.write_text(json.dumps({
         "angle": 45.0,
         "calibrated": True,
         "status": "OK",
         "raw_value": 512,
-    }
-    encoder_file.write_text(json.dumps(encoder_data))
-
-    ipc_settings = {
-        "COMMAND_FILE": str(cmd_file),
-        "STATUS_FILE": str(status_file),
-        "ENCODER_FILE": str(encoder_file),
-    }
+    }))
 
     config_file = tmp_path / "config.json"
     config_file.write_text(json.dumps({
@@ -80,22 +82,37 @@ def health_ipc(tmp_path):
         "simulation": False,
     }))
 
-    with patch("django.conf.settings.MOTOR_SERVICE_IPC", ipc_settings), \
-         patch("django.conf.settings.DRIFTAPP_CONFIG", str(config_file)):
-        import importlib
-        import web.health.views as health_views
-        importlib.reload(health_views)
+    ipc_settings = {
+        "COMMAND_FILE": str(cmd_file),
+        "STATUS_FILE": str(status_file),
+        "ENCODER_FILE": str(encoder_file),
+    }
+    monkeypatch.setattr(settings, "MOTOR_SERVICE_IPC", ipc_settings)
+    monkeypatch.setattr(settings, "DRIFTAPP_CONFIG", str(config_file))
+    monkeypatch.setattr(motor_client, "command_file", cmd_file)
+    monkeypatch.setattr(motor_client, "status_file", status_file)
+    monkeypatch.setattr(motor_client, "encoder_file", encoder_file)
 
-        import web.common.ipc_client as ipc_module
-        importlib.reload(ipc_module)
-        health_views.motor_client = ipc_module.motor_client
+    return {
+        "cmd_file": cmd_file,
+        "status_file": status_file,
+        "encoder_file": encoder_file,
+        "config_file": config_file,
+    }
 
-        yield {
-            "cmd_file": cmd_file,
-            "status_file": status_file,
-            "encoder_file": encoder_file,
-            "config_file": config_file,
-        }
+
+@pytest.fixture
+def lenient_freshness(monkeypatch):
+    """Désarme la course mtime/STALE_THRESHOLD sur runner lent (CI parallèle).
+
+    Les tests « healthy » des endpoints valident le code (fichiers présents et
+    lus → 200), pas le seuil de fraîcheur de 10 s — ce dernier est couvert
+    isolément par ``TestCheckFileFreshness``. Sans cela, un runner CI sous
+    charge peut dépasser 10 s entre l'écriture du fichier et la requête, et
+    rendre un faux 503.
+    """
+    import web.health.views as health_views
+    monkeypatch.setattr(health_views, "STALE_THRESHOLD_SEC", 3600.0)
 
 
 # =============================================================================
@@ -170,7 +187,7 @@ class TestReadIpcFileContent:
 # =============================================================================
 
 class TestHealthCheck:
-    def test_healthy(self, api_client, health_ipc):
+    def test_healthy(self, api_client, health_ipc, lenient_freshness):
         response = api_client.get("/api/health/")
         assert response.status_code == 200
         assert response.data["healthy"] is True
@@ -184,7 +201,7 @@ class TestHealthCheck:
 
 
 class TestMotorHealth:
-    def test_healthy(self, api_client, health_ipc):
+    def test_healthy(self, api_client, health_ipc, lenient_freshness):
         response = api_client.get("/api/health/motor/")
         assert response.status_code == 200
         assert response.data["healthy"] is True
@@ -197,7 +214,7 @@ class TestMotorHealth:
 
 
 class TestEncoderHealth:
-    def test_healthy(self, api_client, health_ipc):
+    def test_healthy(self, api_client, health_ipc, lenient_freshness):
         response = api_client.get("/api/health/encoder/")
         assert response.status_code == 200
         assert response.data["healthy"] is True
