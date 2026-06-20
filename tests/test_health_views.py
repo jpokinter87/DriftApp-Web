@@ -357,7 +357,12 @@ class TestCheckUpdate:
 
 class TestApplyUpdate:
     def test_apply_script_missing(self, api_client, health_ipc):
-        with patch("web.health.views.UPDATE_SCRIPT", Path("/nonexistent/script.sh")):
+        # Django route via l'app "health" (INSTALLED_APPS + include('health.urls')),
+        # donc la vue exécutée est health.views.apply_update. À cause du
+        # sys.path.insert(web) du bootstrap, web.health.views et health.views sont
+        # deux objets module distincts : il faut patcher CELUI que Django utilise,
+        # sinon le patch est sans effet (échec aléatoire sous xdist : 200 ≠ 500).
+        with patch("health.views.UPDATE_SCRIPT", Path("/nonexistent/script.sh")):
             response = api_client.post("/api/health/update/apply/")
             assert response.status_code == 500
             assert response.data["success"] is False
