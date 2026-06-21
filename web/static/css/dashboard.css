@@ -1151,3 +1151,22 @@ header h1 span {
     .log-container { max-height: 8rem; }
     .tracking-under-compass { margin-top: 0.4rem; padding: 0.4rem 0.55rem; }
 }
+
+/* =========================================================================
+   Badge état cimier (v6.11.1) — clarté OUVERT/FERMÉ
+   La couleur du texte (vert/ambre/rouge) est portée par cimierStateClass().
+   Le chip se tinte automatiquement à la couleur d'état via currentColor là où
+   color-mix est supporté (Chromium/Firefox récents) ; sinon chip neutre lisible.
+   ========================================================================= */
+.cimier-state-badge {
+    border: 1px solid var(--color-obs-border);
+    background: var(--color-obs-input);
+    white-space: nowrap;
+}
+
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+    .cimier-state-badge {
+        border-color: color-mix(in srgb, currentColor 40%, transparent);
+        background: color-mix(in srgb, currentColor 12%, transparent);
+    }
+}

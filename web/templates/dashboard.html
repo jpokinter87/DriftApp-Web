@@ -23,9 +23,14 @@
         'text-accent-red':   $store.dashboard.displayedCimierState() === 'error',
         'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
       }"
-      x-text="({open:'●', closed:'○', opening:'↑', closing:'↓', cycle:'◉', error:'⚠', cooldown:'◯', idle:'○', disabled:'⊘', unknown:'?'})[$store.dashboard.displayedCimierState()] || '○'"
+      x-text="$store.dashboard.cimierStateDot()"
       :title="'Cimier — ' + ($store.dashboard.displayedCimierState() ?? 'unknown')"
       aria-label="État du cimier"></span>
+<!-- Libellé état cimier en clair pour le pilotage à distance (v6.11.1). -->
+<span x-data id="cimier-header-state"
+      class="hidden sm:inline text-xs font-mono font-bold tracking-wider mr-3 leading-none transition-colors duration-300"
+      :class="$store.dashboard.cimierStateClass()"
+      x-text="$store.dashboard.cimier ? $store.dashboard.cimierStateLabel() : ''"></span>
 <button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
     <span class="update-check-icon">&#x21BB;</span>
     <span class="update-check-text">MAJ</span>
@@ -129,32 +134,19 @@
              ligne 4 : CORRECTIONS (col-span-2)
              Le cartouche MODE (CONTINUOUS) est retiré (vitesse unique v5.10). -->
         <div x-data class="grid grid-cols-2 gap-2 text-xs font-mono">
-            <!-- CIMIER unifié (azimut + état/phase) — col-span-2 (v6.3.3).
-                 Format : « CIMIER : 192.73° / OUVERTURE ». Évite la
-                 redondance des 2 anciens cartouches « CIMIER : ». -->
+            <!-- CIMIER état seul — col-span-2 (v6.11.1). L'état OUVERT/FERMÉ vient
+                 des butées (open_switch/closed_switch) via cimierStateLabel(). L'azimut
+                 coupole a été retiré (redondant avec ENC + boussole, et trompeur sous le
+                 label CIMIER : le cimier n'a pas d'azimut). #dome-position reste présent
+                 mais caché → dashboard.js continue d'y écrire state.position sans erreur. -->
             <div class="cimier-state-cartouche col-span-2 flex justify-between items-center p-2 bg-obs-input rounded-button">
                 <label class="text-accent-amber font-bold">CIMIER:</label>
-                <div class="flex items-center gap-2 font-bold">
-                    <span id="dome-position" class="coupole-value text-accent-amber-light">--&deg;</span>
-                    <span class="text-obs-text-muted">/</span>
-                    <span class="uppercase tracking-wider transition-colors duration-300"
-                          :class="{
-                              'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
-                              'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
-                              'cimier-cycle-shimmer': ['cycle','opening','closing'].includes($store.dashboard.displayedCimierState()),
-                              'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
-                              'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
-                          }"
-                          x-text="({open:'OUVERT',closed:'FERMÉ',opening:'OUVERTURE',closing:'FERMETURE',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
-                    <!-- Phase rapatriée ici (v6.11, piste 2) — ne s'affiche que si renseignée. -->
-                    <template x-if="$store.dashboard.cimier?.phase">
-                        <span class="flex items-center gap-2">
-                            <span class="text-obs-text-muted">·</span>
-                            <span id="cimier-phase-text" class="text-accent-amber-light"
-                                  x-text="$store.dashboard.cimier?.phase"></span>
-                        </span>
-                    </template>
-                </div>
+                <span class="flex items-center gap-2 font-bold uppercase tracking-wider transition-colors duration-300"
+                      :class="$store.dashboard.cimierStateClass()">
+                    <span x-text="$store.dashboard.cimierStateDot()">○</span>
+                    <span x-text="$store.dashboard.cimierStateLabel()">--</span>
+                </span>
+                <span id="dome-position" class="hidden">--&deg;</span>
             </div>
             <!-- ENC -->
             <div class="enc-item flex justify-between items-center p-2 bg-obs-input rounded-button border-3 border-obs-border" id="enc-item">
@@ -338,16 +330,30 @@
             </div>
         </div>
 
-        <!-- Cimier — pilotage Pico W via cascade Shelly (v6.0 Phase 1) -->
+        <!-- Cimier — pilotage V3 tout-Shelly -->
         <div x-data class="panel panel-astro">
-            <h3 class="section-title section-title-fire mb-3">Cimier</h3>
-            <!-- ÉTAT/PHASE retirés du panneau (v6.11, piste 2) : déjà affichés sous la
-                 boussole (cartouche unifié « CIMIER : <az> / <état> · <phase> »). -->
-            <!-- Parking déplacé inline à droite de Fermer (4ᵉ bouton). -->
+            <!-- Badge état dédié dans le titre (v6.11.1) : OUVERT vert / FERMÉ ambre /
+                 mouvement clignotant / ERREUR rouge. Le gradient « fire » reste sur le
+                 seul mot « Cimier » ; le badge porte sa propre couleur d'état. -->
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="section-title section-title-fire">Cimier</h3>
+                <span class="cimier-state-badge flex items-center gap-2 text-sm font-mono font-bold
+                             tracking-wider px-3 py-1 rounded-badge transition-colors duration-300"
+                      :class="$store.dashboard.cimierStateClass()"
+                      x-show="$store.dashboard.cimier" x-cloak
+                      role="status" aria-live="polite" aria-label="État du cimier">
+                    <span x-text="$store.dashboard.cimierStateDot()">○</span>
+                    <span x-text="$store.dashboard.cimierStateLabel()">--</span>
+                </span>
+            </div>
+            <!-- Boutons contextuels (v6.11.1) : le bouton LUMINEUX = l'action disponible
+                 (Ouvrir si fermé, Fermer si ouvert) ; l'autre est atténué mais cliquable. -->
             <div class="button-group">
-                <button id="btn-cimier-open" class="btn btn-primary">Ouvrir</button>
+                <button id="btn-cimier-open" class="btn"
+                        :class="$store.dashboard.cimierOpenBtnClass()">Ouvrir</button>
                 <button id="btn-cimier-stop" class="btn btn-stop">STOP</button>
-                <button id="btn-cimier-close" class="btn btn-secondary">Fermer</button>
+                <button id="btn-cimier-close" class="btn"
+                        :class="$store.dashboard.cimierCloseBtnClass()">Fermer</button>
                 <button id="btn-cimier-parking" class="btn btn-stop whitespace-nowrap"
                         title="Stop tracking + GOTO 45° + close cimier"
                         aria-label="Lancer la séquence parking session">

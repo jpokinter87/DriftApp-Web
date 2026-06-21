@@ -68,23 +68,68 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // v6.3.2 / v6.3.3 — État cimier dérivé pour affichage UI.
-        // Le service publie state=idle quand sa boucle est passive et state=cycle
-        // pendant un cycle d'ouverture/fermeture. L'état physique précis vit dans
-        // pico_state. Stratégie :
-        //   - state=idle + pico_state ∈ {open,closed} → pico (OUVERT/FERMÉ)
-        //   - state=cycle + pico_state ∈ {opening,closing} → pico (CYCLE détaillé)
-        //   - sinon → state (cooldown/error/disabled/etc.)
+        // v6.11.1 — Archi V3 tout-Shelly : `pico_state` est MORT (supprimé au pivot
+        // v6.7). L'état physique réel vit dans `open_switch` / `closed_switch`
+        // (Shelly Uni+), publiés par cimier_service et forwardés jusqu'au store
+        // (cf. /api/cimier/status/). On les dérive ici, en miroir exact de
+        // services/cimier_service.py::_derive_current_cimier_state. Avant ce fix,
+        // l'UI lisait `pico_state` (undefined) → retombait toujours sur `state`
+        // (idle) → n'affichait jamais OUVERT/FERMÉ au repos (bug terrain Serge).
         displayedCimierState() {
             const c = this.cimier;
             if (!c) return null;
-            if (c.state === 'idle' && (c.pico_state === 'open' || c.pico_state === 'closed')) {
-                return c.pico_state;
+            if (c.state === 'disabled') return 'disabled';
+            // Cycle actif : mouvement en cours → sens dérivé de la dernière action.
+            if (c.state === 'cycle') {
+                if (c.last_action === 'open') return 'opening';
+                if (c.last_action === 'close') return 'closing';
+                return 'cycle';
             }
-            if (c.state === 'cycle' && (c.pico_state === 'opening' || c.pico_state === 'closing')) {
-                return c.pico_state;
-            }
-            return c.state;
+            // Au repos (idle / cooldown / error service) : vérité = les butées.
+            const open = c.open_switch === true;
+            const closed = c.closed_switch === true;
+            if (open && closed) return 'error';   // anomalie capteur (2 butées actives)
+            if (open) return 'open';
+            if (closed) return 'closed';
+            return c.state === 'error' ? 'error' : 'unknown';
+        },
+
+        // Badge état cimier (v6.11.1) — libellé, pastille et couleur dérivés de
+        // displayedCimierState(). Réutilisés par le badge panneau, le cartouche
+        // sous boussole et l'icône d'en-tête global.
+        cimierStateLabel() {
+            return ({
+                open: 'OUVERT', closed: 'FERMÉ',
+                opening: 'OUVERTURE…', closing: 'FERMETURE…', cycle: 'CYCLE…',
+                cooldown: 'STABILISATION', error: 'ERREUR',
+                disabled: 'DÉSACTIVÉ', unknown: 'INCONNU',
+            })[this.displayedCimierState()] || 'INCONNU';
+        },
+        cimierStateDot() {
+            return ({
+                open: '●', closed: '○', opening: '↑', closing: '↓',
+                cycle: '◉', error: '⚠', cooldown: '◯', disabled: '⊘', unknown: '?',
+            })[this.displayedCimierState()] || '○';
+        },
+        cimierStateClass() {
+            const s = this.displayedCimierState();
+            if (s === 'open') return 'text-accent-green';
+            if (s === 'closed') return 'text-accent-amber-light';
+            if (['opening', 'closing', 'cycle'].includes(s)) return 'text-accent-amber-light animate-pulse';
+            if (s === 'error') return 'text-accent-red';
+            return 'text-obs-text-muted';
+        },
+        // Boutons contextuels (v6.11.1) : le bouton LUMINEUX = l'action disponible.
+        // Jamais désactivé par l'état (sécurité : pouvoir re-fermer si la butée ment) —
+        // le verrouillage cycle/cooldown reste géré par setCimierControlsDisabled.
+        cimierOpenBtnClass() {
+            return this.displayedCimierState() === 'open' ? 'btn-secondary opacity-50' : 'btn-primary';
+        },
+        cimierCloseBtnClass() {
+            const s = this.displayedCimierState();
+            if (s === 'closed') return 'btn-secondary opacity-50';
+            if (s === 'open') return 'btn-primary';
+            return 'btn-secondary';
         },
 
         // Helpers calibration (v6.4 Phase 3 Plan 02) — Alpine réagit à la lecture
@@ -930,21 +975,16 @@ async function pollCimierStatus() {
     const lockedStates = ['cycle', 'cooldown', 'disabled', 'unknown'];
     setCimierControlsDisabled(lockedStates.includes(status.state));
 
-    // Ligne détail : phase + pico_state + erreur éventuelle.
+    // Ligne détail (v6.11.1) : seulement erreur ou stabilisation en cours —
+    // l'état OUVERT/FERMÉ est désormais porté sans ambiguïté par le badge.
+    // (« Pico : … » retiré : champ mort en V3 ; « Dernière action » retiré :
+    // redondant avec le badge et source de confusion signalée terrain.)
     if (elements.cimierDetail) {
         const parts = [];
         if (status.state === 'error' && status.error_message) {
             parts.push(`Erreur : ${status.error_message}`);
-        } else {
-            if (status.last_action) {
-                parts.push(`Dernière action : ${status.last_action}`);
-            }
-            if (status.pico_state && status.pico_state !== 'unknown') {
-                parts.push(`Pico : ${status.pico_state}`);
-            }
-            if (status.remaining_quiet_s !== undefined && status.remaining_quiet_s > 0) {
-                parts.push(`Anti-rebond ${status.remaining_quiet_s.toFixed(0)}s`);
-            }
+        } else if (status.remaining_quiet_s !== undefined && status.remaining_quiet_s > 0) {
+            parts.push(`Stabilisation ${status.remaining_quiet_s.toFixed(0)} s`);
         }
         elements.cimierDetail.textContent = parts.join('  •  ');
     }
