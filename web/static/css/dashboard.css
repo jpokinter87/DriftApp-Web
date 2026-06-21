@@ -1091,3 +1091,63 @@ header h1 span {
     background-color: rgba(255, 255, 255, 0.15);
     outline: none;
 }
+
+/* =========================================================================
+   Suivi actif sous la boussole (v6.11, piste 3)
+   Bloc compact rendu dans la colonne gauche au lieu d'un panneau intercalé.
+   IDs conservés (tracking-info / tracking-object / tracking-az / tracking-alt).
+   ========================================================================= */
+.tracking-under-compass {
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border-radius: var(--radius-button, 0.5rem);
+    background: rgba(0, 210, 106, 0.05);
+}
+
+.tracking-under-sep {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-accent-green);
+    text-align: center;
+    margin-bottom: 0.35rem;
+}
+
+.tracking-under-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+.tracking-under-object {
+    color: var(--color-accent-green);
+    font-weight: 700;
+}
+
+.tracking-under-meta { color: var(--color-obs-text); }
+.tracking-under-meta .lbl { color: var(--color-obs-text-muted); }
+.tracking-under-meta .sep { color: var(--color-obs-text-muted); margin: 0 0.25rem; }
+
+/* =========================================================================
+   Mode compact « écran bas » (≤ 760px de haut) — v6.11
+   Cible l'écran tactile 720p de l'observatoire : resserre paddings, gaps et
+   marges pour que tout tienne sans scroll, suivi actif inclus. Le desktop
+   (haut > 760px) reste strictement inchangé. dashboard.css se charge après
+   Tailwind → ces overrides priment sans recompilation.
+   ========================================================================= */
+@media (max-height: 760px) {
+    .dashboard-grid { gap: 0.6rem !important; margin-bottom: 0.6rem !important; }
+    .dashboard-right { gap: 0.6rem !important; }
+    .panel { padding: 0.6rem 0.85rem; }
+    .section-title { margin-bottom: 0.4rem !important; font-size: 0.78rem; }
+    .btn { padding-top: 0.45rem !important; padding-bottom: 0.45rem !important; }
+    .btn-jog, .btn-stop { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+    .input-field { padding-top: 0.4rem !important; padding-bottom: 0.4rem !important; }
+    .section-divider { margin: 0.45rem 0 !important; }
+    .log-container { max-height: 8rem; }
+    .tracking-under-compass { margin-top: 0.4rem; padding: 0.4rem 0.55rem; }
+}

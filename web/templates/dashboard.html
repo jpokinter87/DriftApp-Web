@@ -102,7 +102,7 @@
 </div>
 
 <!-- ═══ Main 2-Column Grid ═══ -->
-<div x-data class="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-4 mb-4">
+<div x-data class="dashboard-grid grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-4 mb-4">
 
     <!-- ══ Left Column: Compass ══ -->
     <section class="panel panel-astro">
@@ -146,6 +146,14 @@
                               'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
                           }"
                           x-text="({open:'OUVERT',closed:'FERMÉ',opening:'OUVERTURE',closing:'FERMETURE',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
+                    <!-- Phase rapatriée ici (v6.11, piste 2) — ne s'affiche que si renseignée. -->
+                    <template x-if="$store.dashboard.cimier?.phase">
+                        <span class="flex items-center gap-2">
+                            <span class="text-obs-text-muted">·</span>
+                            <span id="cimier-phase-text" class="text-accent-amber-light"
+                                  x-text="$store.dashboard.cimier?.phase"></span>
+                        </span>
+                    </template>
                 </div>
             </div>
             <!-- ENC -->
@@ -174,10 +182,31 @@
                 </span>
             </div>
         </div>
+
+        <!-- ══ Suivi actif sous la boussole (v6.11, piste 3) ══
+             Déplacé depuis la colonne droite : plus de panneau intercalé qui
+             pousse Contrôle Manuel / Cimier vers le bas. IDs conservés
+             (tracking-info / tracking-object / tracking-az / tracking-alt)
+             → aucun changement JS (updateTrackingDisplay pilote toujours ces ID). -->
+        <div id="tracking-info" class="tracking-under-compass tracking-active-glow hidden">
+            <div class="tracking-under-sep">Suivi actif</div>
+            <div class="tracking-under-body">
+                <span id="tracking-object" class="tracking-under-object">--</span>
+                <span class="tracking-under-meta">
+                    <span class="lbl">Az</span> <span id="tracking-az">--&deg;</span>
+                    <span class="sep">&middot;</span>
+                    <span class="lbl">Alt</span> <span id="tracking-alt">--&deg;</span>
+                </span>
+            </div>
+        </div>
+        <!-- Spans compat (bookkeeping JS interne) — conservés, déplacés ici. -->
+        <span id="tracking-mode" class="hidden">--</span>
+        <span id="tracking-corrections" class="hidden">0</span>
+        <span id="tracking-remaining" class="hidden">--s</span>
     </section>
 
     <!-- ══ Right Column: Controls ══ -->
-    <section class="flex flex-col gap-4">
+    <section class="dashboard-right flex flex-col gap-4">
 
         <!-- Suivi d'Objet -->
         <div class="panel panel-astro">
@@ -204,40 +233,21 @@
             </div>
         </div>
 
-        <!-- Suivi Actif (hidden by default, Alpine.js controlled) -->
-        <div id="tracking-info" class="panel panel-astro tracking-active-glow hidden">
-            <h3 class="text-accent-green font-display font-semibold text-sm mb-3">Suivi Actif</h3>
-            <div class="info-grid">
-                <div class="info-item">
-                    <span class="info-label">Objet</span>
-                    <span id="tracking-object" class="info-value">--</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Azimut</span>
-                    <span id="tracking-az" class="info-value">--&deg;</span>
-                </div>
-                <div class="info-item">
-                    <span class="info-label">Altitude</span>
-                    <span id="tracking-alt" class="info-value">--&deg;</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Hidden compat elements for JS -->
-        <span id="tracking-mode" class="hidden">--</span>
-        <span id="tracking-corrections" class="hidden">0</span>
-        <span id="tracking-remaining" class="hidden">--s</span>
+        <!-- Suivi Actif déplacé sous la boussole (colonne gauche, v6.11 piste 3). -->
 
         <!-- Controle Manuel -->
         <div class="panel panel-astro">
             <h3 class="section-title section-title-fire mb-3">Contr&ocirc;le Manuel</h3>
 
-            <!-- JOG Buttons -->
-            <!-- v6.7 — contrôle manuel (JOG/Continu) TOUJOURS actif, même calibration
-                 non ok : permet d'amener la coupole sur le microswitch 45° à distance
-                 (recalibration auto). Seuls GOTO/suivi (position absolue) restent verrouillés. -->
-            <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Pas &agrave; pas</span>
-            <div x-data class="flex gap-2 mb-1">
+            <!-- Rangée unique (v6.11, piste 1) : continu-CCW · pas-à-pas · STOP · pas-à-pas · continu-CW.
+                 Le sens augmente de gauche à droite ; les chevrons « < / > » distinguent le
+                 continu des degrés (pas de légende → gain de hauteur). IDs conservés → JS inchangé.
+                 v6.7 — contrôle manuel TOUJOURS actif même calibration non ok (recalibration auto).
+                 Seuls GOTO/suivi (position absolue) restent verrouillés. -->
+            <div x-data class="flex gap-2 mb-3">
+                <button id="btn-cont-ccw" class="btn btn-continuous" data-direction="ccw"
+                        style="flex: 1.3;"
+                        :disabled="$store.dashboard.calibration?.status === 'running'">&lt; CCW</button>
                 <button id="btn-jog-ccw-10" class="btn btn-jog"
                         :disabled="$store.dashboard.calibration?.status === 'running'">-10&deg;</button>
                 <button id="btn-jog-ccw-1" class="btn btn-jog"
@@ -247,23 +257,12 @@
                         :disabled="$store.dashboard.calibration?.status === 'running'">+1&deg;</button>
                 <button id="btn-jog-cw-10" class="btn btn-jog"
                         :disabled="$store.dashboard.calibration?.status === 'running'">+10&deg;</button>
-            </div>
-
-            <div class="section-divider"></div>
-
-            <!-- Continuous Movement -->
-            <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Continu</span>
-            <div x-data class="flex gap-2 mb-1">
-                <button id="btn-cont-ccw" class="btn btn-continuous flex-1" data-direction="ccw"
-                        :disabled="$store.dashboard.calibration?.status === 'running'">&lt; CCW</button>
-                <button id="btn-cont-cw" class="btn btn-continuous flex-1" data-direction="cw"
+                <button id="btn-cont-cw" class="btn btn-continuous" data-direction="cw"
+                        style="flex: 1.3;"
                         :disabled="$store.dashboard.calibration?.status === 'running'">CW &gt;</button>
             </div>
 
-            <div class="section-divider"></div>
-
-            <!-- GOTO -->
-            <span class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1 block">Position</span>
+            <!-- GOTO (placeholder « Angle » auto-explicite → légende retirée, v6.11). -->
             <div x-data class="flex gap-2">
                 <input type="text" inputmode="decimal" id="goto-angle" class="input-field flex-1"
                        placeholder="Angle (0-360)">
@@ -342,86 +341,69 @@
         <!-- Cimier — pilotage Pico W via cascade Shelly (v6.0 Phase 1) -->
         <div x-data class="panel panel-astro">
             <h3 class="section-title section-title-fire mb-3">Cimier</h3>
-            <div class="grid grid-cols-2 gap-2 text-xs font-mono mb-3">
-                <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
-                    <label class="font-bold text-obs-text-secondary">&Eacute;TAT&nbsp;:</label>
-                    <span id="cimier-state-text"
-                          class="font-bold uppercase tracking-wider transition-colors duration-300"
-                          :class="{
-                              'text-accent-green': $store.dashboard.displayedCimierState() === 'open',
-                              'text-accent-amber': $store.dashboard.displayedCimierState() === 'closed',
-                              'cimier-cycle-shimmer': ['cycle','opening','closing'].includes($store.dashboard.displayedCimierState()),
-                              'text-accent-red': $store.dashboard.displayedCimierState() === 'error',
-                              'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
-                          }"
-                          x-text="({open:'OUVERT',closed:'FERMÉ',opening:'CYCLE OUVERTURE',closing:'CYCLE FERMETURE',cycle:'CYCLE',cooldown:'COOLDOWN',error:'ERREUR',idle:'IDLE',disabled:'DÉSACTIVÉ',unknown:'INCONNU'})[$store.dashboard.displayedCimierState()] || '--'">--</span>
-                </div>
-                <div class="flex justify-between items-center p-2 bg-obs-input rounded-button">
-                    <label class="font-bold text-obs-text-secondary">PHASE&nbsp;:</label>
-                    <span id="cimier-phase-text" class="font-bold text-accent-amber-light"
-                          x-text="$store.dashboard.cimier?.phase || '--'">--</span>
-                </div>
-            </div>
+            <!-- ÉTAT/PHASE retirés du panneau (v6.11, piste 2) : déjà affichés sous la
+                 boussole (cartouche unifié « CIMIER : <az> / <état> · <phase> »). -->
+            <!-- Parking déplacé inline à droite de Fermer (4ᵉ bouton). -->
             <div class="button-group">
                 <button id="btn-cimier-open" class="btn btn-primary">Ouvrir</button>
                 <button id="btn-cimier-stop" class="btn btn-stop">STOP</button>
                 <button id="btn-cimier-close" class="btn btn-secondary">Fermer</button>
+                <button id="btn-cimier-parking" class="btn btn-stop whitespace-nowrap"
+                        title="Stop tracking + GOTO 45° + close cimier"
+                        aria-label="Lancer la séquence parking session">
+                    &#x1F17F;&nbsp;Parking
+                </button>
             </div>
             <div id="cimier-detail" class="mt-2 text-[0.7rem] text-obs-text-muted font-mono min-h-[1rem]"></div>
 
-            <!-- ─── Automatisation lifecycle session (v6.0 Phase 4 sub-plan 04-02) ─── -->
-            <div class="section-divider mt-3"></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-
-                <!-- Colonne gauche : commandes Mode Auto + Parking + countdown -->
-                <div class="flex flex-col gap-1">
-                    <div class="flex items-center gap-2 text-xs">
-                        <label for="cimier-automation-mode"
-                               class="text-obs-text-muted uppercase tracking-wider whitespace-nowrap">
-                            Mode auto&nbsp;:
-                        </label>
-                        <select id="cimier-automation-mode"
-                                class="bg-obs-input border border-obs-border rounded-button px-2 py-1
-                                       text-obs-text font-mono uppercase tracking-wider
-                                       focus-visible:outline focus-visible:outline-2
-                                       focus-visible:outline-accent-amber focus-visible:outline-offset-2"
-                                x-model="$store.dashboard.automationMode"
-                                @change="window.updateAutomationMode && window.updateAutomationMode($event.target.value)"
-                                aria-label="Mode automatisation cimier">
-                            <option value="manual">Manuel</option>
-                            <option value="semi">Semi-auto</option>
-                            <option value="full">Full auto</option>
-                        </select>
-                        <button id="btn-cimier-parking"
-                                class="btn btn-stop ml-auto whitespace-nowrap"
-                                style="flex: none; padding-top: 0.5rem; padding-bottom: 0.5rem;"
-                                title="Stop tracking + GOTO 45° + close cimier"
-                                aria-label="Lancer la séquence parking session">
-                            &#x1F17F;&nbsp;Parking
-                        </button>
-                    </div>
-                    <div id="cimier-automation-hint"
-                         class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem]"
-                         x-text="$store.dashboard.automationRestartHint"
-                         x-cloak></div>
+            <!-- ─── Automatisation lifecycle session (v6.0 Phase 4 ; timeline repliable v6.11) ─── -->
+            <div class="section-divider mt-2"></div>
+            <div x-data="{ timelineOpen: false }">
+                <div class="flex items-center gap-2 flex-wrap text-xs">
+                    <label for="cimier-automation-mode"
+                           class="text-obs-text-muted uppercase tracking-wider whitespace-nowrap">
+                        Mode auto&nbsp;:
+                    </label>
+                    <select id="cimier-automation-mode"
+                            class="bg-obs-input border border-obs-border rounded-button px-2 py-1
+                                   text-obs-text font-mono uppercase tracking-wider
+                                   focus-visible:outline focus-visible:outline-2
+                                   focus-visible:outline-accent-amber focus-visible:outline-offset-2"
+                            x-model="$store.dashboard.automationMode"
+                            @change="window.updateAutomationMode && window.updateAutomationMode($event.target.value)"
+                            aria-label="Mode automatisation cimier">
+                        <option value="manual">Manuel</option>
+                        <option value="semi">Semi-auto</option>
+                        <option value="full">Full auto</option>
+                    </select>
                     <div id="cimier-countdown"
-                         class="text-xs font-mono text-obs-text-muted"
+                         class="font-mono text-obs-text-muted"
                          aria-live="polite"
                          x-text="$store.dashboard.automationCountdownLabel || '—'"></div>
-                </div>
-
-                <!-- Colonne droite : timeline notifications cimier (buffer 50 mémoire) -->
-                <!-- Pattern Journal : toujours visible, scroll interne, fond bg-obs-dark. -->
-                <div class="flex flex-col">
-                    <div class="text-[0.65rem] text-obs-text-muted uppercase tracking-wider mb-1
-                                flex items-center justify-between">
+                    <!-- Toggle timeline repliable (fermée par défaut, v6.11). Tap, pas de survol. -->
+                    <button type="button" @click="timelineOpen = !timelineOpen"
+                            class="ml-auto flex items-center gap-1.5 font-mono text-obs-text-secondary
+                                   border border-obs-border rounded-button px-2.5 py-1
+                                   focus-visible:outline focus-visible:outline-2
+                                   focus-visible:outline-accent-amber focus-visible:outline-offset-2"
+                            :aria-expanded="timelineOpen"
+                            aria-controls="cimier-timeline-list">
+                        <span x-text="timelineOpen ? '▾' : '▸'"></span>
                         <span>Activité cimier</span>
-                        <span class="text-accent-amber-light font-mono"
+                        <span class="text-accent-amber-light"
                               x-text="$store.dashboard.cimierTimeline?.length || 0"></span>
-                    </div>
+                    </button>
+                </div>
+                <div id="cimier-automation-hint"
+                     class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem] mt-1"
+                     x-text="$store.dashboard.automationRestartHint"
+                     x-cloak></div>
+
+                <!-- Timeline notifications cimier (buffer 50 mémoire) — repliable. -->
+                <div x-show="timelineOpen" x-cloak class="mt-2">
                     <div id="cimier-timeline-list"
                          class="bg-obs-dark border border-obs-border rounded-button p-2
-                                font-mono text-[0.65rem] h-16 overflow-y-auto leading-tight">
+                                font-mono text-[0.65rem] h-24 overflow-y-auto leading-tight">
                         <template x-for="entry in $store.dashboard.cimierTimeline" :key="entry.id">
                             <div class="flex gap-1.5 py-0.5">
                                 <span class="text-obs-text-muted shrink-0"
