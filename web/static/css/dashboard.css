@@ -1126,9 +1126,14 @@ header h1 span {
 .tracking-under-object {
     color: var(--color-accent-green);
     font-weight: 700;
+    min-width: 0;             /* autorise le flex-shrink : l'objet long cède l'espace... */
 }
 
-.tracking-under-meta { color: var(--color-obs-text); }
+.tracking-under-meta {
+    color: var(--color-obs-text);
+    white-space: nowrap;      /* ...pour que Az/Alt et leurs valeurs restent solidaires */
+    flex-shrink: 0;           /* le meta garde sa largeur, jamais de retour à la ligne */
+}
 .tracking-under-meta .lbl { color: var(--color-obs-text-muted); }
 .tracking-under-meta .sep { color: var(--color-obs-text-muted); margin: 0 0.25rem; }
 
