@@ -78,6 +78,13 @@ class FakeMotorIpc:
         self.calls.append(("tracking_stop",))
         return True
 
+    def wait_tracking_stopped(self, timeout_s: float = None) -> bool:
+        # Non enregistré dans `calls` : ces tests assertent l'ordre des commandes
+        # IPC émises. L'attente intercalée est couverte par
+        # tests/test_cimier_parking_sequence.py (consommateur 20 Hz réel).
+        self.tracking_stop_confirmed = True
+        return True
+
     def send_stop(self) -> bool:
         self.calls.append(("stop",))
         return True

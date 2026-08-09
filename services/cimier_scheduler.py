@@ -11,10 +11,11 @@ Polling 60 s : compute sun_alt(now) + sun_alt(now-60s) → détecte rising/desce
 
 - Trigger CLOSE : sun montant + alt(now + advance + safety) >= closing_target
                   + cimier open|cycle
-                  → emit "tracking_stop" + "goto 45°" motor IPC
+                  → emit "tracking_stop" motor IPC, attente de sa consommation
+                  (slot IPC unique lu à 20 Hz), puis "goto 45°" motor IPC
                   + emit "close" cimier IPC
-                  (3 commandes parallèles, pas de waiting ; "fermeture forcée
-                  sans parking au timeout 5 min" = propriété du design parallèle)
+                  (le cimier a son propre fichier IPC : il se ferme en parallèle
+                  du parking coupole, sans attendre)
 
 Idempotence intra-jour : after a trigger, ignore re-triggers for retrigger_cooldown_hours.
 État désiré (pas event-driven) : au reboot, mémoire perdue → re-trigger si
@@ -374,17 +375,23 @@ class CimierScheduler:
     def _trigger_close(self) -> None:
         """Emit tracking_stop + goto 45° motor IPC + close cimier IPC.
 
-        3 commandes IPC séquentielles dans le code, mais exécution parallèle
-        côté motor_service / cimier_service indépendants.
+        Les deux commandes motor partagent un slot IPC unique lu à 20 Hz : on
+        attend la confirmation de l'arrêt du suivi avant d'émettre le GOTO,
+        sinon celui-ci écrase le `tracking_stop` (bug terrain 08-09/08/2026 —
+        suivi resté actif, coupole dérivant hors du parking). La commande cimier
+        passe par un fichier IPC distinct : aucune collision de ce côté.
         """
         self._motor_ipc.send_tracking_stop()
+        tracking_stop_confirmed = self._motor_ipc.wait_tracking_stopped()
         self._motor_ipc.send_goto(self._cfg.parking_target_azimuth_deg)
         cimier_cmd_id = str(uuid.uuid4())
         self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"})
         logger.info(
-            "cimier_event=automation_close_triggered cimier_cmd_id=%s parking_target_deg=%.2f",
+            "cimier_event=automation_close_triggered cimier_cmd_id=%s parking_target_deg=%.2f "
+            "tracking_stop_confirmed=%s",
             cimier_cmd_id,
             self._cfg.parking_target_azimuth_deg,
+            tracking_stop_confirmed,
         )
 
     # ------------------------------------------------------------------

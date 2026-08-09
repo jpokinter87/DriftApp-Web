@@ -399,12 +399,17 @@ class TestAutomationView:
 
 @pytest.fixture
 def mock_motor_ipc(tmp_path, monkeypatch):
-    """Pointe settings.MOTOR_SERVICE_IPC['COMMAND_FILE'] vers tmp."""
+    """Pointe settings.MOTOR_SERVICE_IPC['COMMAND_FILE'/'STATUS_FILE'] vers tmp."""
     from django.conf import settings as dj_settings
 
     motor_cmd = tmp_path / "motor_command.json"
+    motor_status = tmp_path / "motor_status.json"
+    # Status « aucun suivi en cours » : la vue parking attend cette confirmation
+    # avant d'émettre le GOTO (cf. MotorIpcWriter.wait_tracking_stopped).
+    motor_status.write_text(json.dumps({"status": "idle", "tracking_object": None}))
     new_ipc = dict(dj_settings.MOTOR_SERVICE_IPC)
     new_ipc["COMMAND_FILE"] = str(motor_cmd)
+    new_ipc["STATUS_FILE"] = str(motor_status)
     monkeypatch.setattr(dj_settings, "MOTOR_SERVICE_IPC", new_ipc)
     return motor_cmd
 

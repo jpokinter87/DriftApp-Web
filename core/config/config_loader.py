@@ -282,7 +282,6 @@ class CimierAutomationConfig:
     closing_advance_minutes: int = 10
     clock_safety_margin_minutes: int = 5
     parking_target_azimuth_deg: float = 45.0
-    parking_timeout_minutes: int = 5
     deparking_nudge_deg: float = 1.0
     scheduler_interval_seconds: int = 60
     retrigger_cooldown_hours: int = 12
@@ -664,9 +663,6 @@ class ConfigLoader:
                 ),
                 parking_target_azimuth_deg=float(
                     au.get("parking_target_azimuth_deg", au_defaults.parking_target_azimuth_deg)
-                ),
-                parking_timeout_minutes=int(
-                    au.get("parking_timeout_minutes", au_defaults.parking_timeout_minutes)
                 ),
                 deparking_nudge_deg=float(
                     au.get("deparking_nudge_deg", au_defaults.deparking_nudge_deg)

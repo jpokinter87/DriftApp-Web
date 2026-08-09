@@ -87,6 +87,34 @@ class TestProcessCommand:
             assert mock_execute.call_args[0][0] == 90.0
             assert mock_execute.call_args[0][2] == 0.001
 
+    def test_process_command_goto_stops_active_tracking_first(self, motor_service):
+        """Un GOTO prend la main sur la coupole: le suivi en cours est arrete avant.
+
+        Un GOTO est toujours un repositionnement absolu decide ailleurs que par la
+        boucle de suivi (commande manuelle, ou parking de fin de session). Laisser
+        le suivi actif le fait reprendre la main juste apres, avec une position
+        interne devenue fausse (bug terrain parking 08-09/08/2026).
+        """
+        motor_service.tracking_handler.active = True
+        calls = []
+        with patch.object(motor_service.tracking_handler, 'stop',
+                          side_effect=lambda status: calls.append('tracking_stop')), \
+             patch.object(motor_service.goto_handler, 'execute',
+                          side_effect=lambda *a, **kw: (calls.append('goto'), {'status': 'idle'})[1]):
+            motor_service.process_command({'command': 'goto', 'angle': 45.0})
+
+        assert calls == ['tracking_stop', 'goto']
+
+    def test_process_command_goto_leaves_tracking_alone_when_idle(self, motor_service):
+        """Aucun suivi actif: le GOTO ne declenche pas d'arret superflu."""
+        motor_service.tracking_handler.active = False
+        with patch.object(motor_service.tracking_handler, 'stop') as mock_stop, \
+             patch.object(motor_service.goto_handler, 'execute',
+                          return_value={'status': 'idle'}):
+            motor_service.process_command({'command': 'goto', 'angle': 45.0})
+
+        mock_stop.assert_not_called()
+
     def test_process_command_jog(self, motor_service):
         """process_command handles JOG correctly."""
         with patch.object(motor_service.jog_handler, 'execute') as mock_execute:

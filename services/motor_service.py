@@ -581,6 +581,15 @@ class MotorService:
             angle = command.get("angle", 0)
             speed = command.get("speed")
             logger.info(f"ipc_command | type=goto angle={angle} speed={speed}")
+            # Un GOTO est un repositionnement absolu décidé hors de la boucle de
+            # suivi (commande manuelle, ou parking de fin de session) : il prend
+            # la main sur la coupole. Le GOTO initial d'une session, lui, est
+            # interne à TrackingSession.start() et ne passe pas par ici.
+            # Sans cet arrêt, le suivi reprend la main juste après le GOTO avec
+            # une position interne devenue fausse (bug terrain parking 08-09/08/2026).
+            if self.tracking_handler.is_active:
+                logger.info("ipc_command | type=goto tracking_active=True → arrêt du suivi")
+                self.tracking_handler.stop(self.current_status)
             self.current_status = self.goto_handler.execute(angle, self.current_status, speed)
 
         elif cmd_type == "jog":

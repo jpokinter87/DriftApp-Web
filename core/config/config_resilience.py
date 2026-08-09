@@ -262,9 +262,6 @@ HELP_REGISTRY: dict[str, str] = {
         "Azimut (degrés) de parking de la coupole en fin de session. Aligné sur le "
         "microswitch de calibration (45°)."
     ),
-    "cimier.automation.parking_timeout_minutes": (
-        "Délai maximal (minutes) accordé au GOTO de parking avant abandon."
-    ),
     "cimier.automation.deparking_nudge_deg": (
         "Petit déplacement (degrés) émis à l'ouverture pour faire passer la couronne "
         "sur le microswitch de calibration 45° et réacquérir la référence encodeur."

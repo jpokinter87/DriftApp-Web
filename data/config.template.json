@@ -123,7 +123,6 @@
       "closing_advance_minutes": 10,
       "clock_safety_margin_minutes": 5,
       "parking_target_azimuth_deg": 45.0,
-      "parking_timeout_minutes": 5,
       "deparking_nudge_deg": 1.0,
       "scheduler_interval_seconds": 60,
       "retrigger_cooldown_hours": 12

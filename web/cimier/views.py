@@ -21,7 +21,6 @@ Phase 4 (sub-plan v6.0-04-01) ajoute :
 import json
 import os
 import tempfile
-import time
 from pathlib import Path
 
 from django.conf import settings
@@ -340,14 +339,6 @@ class ParkingSessionView(APIView):
     pour la protection) a échoué. Les commandes motor sont always-best-effort.
     """
 
-    # Délai entre les writes IPC successifs vers motor_command.json (un seul slot,
-    # commandes consommées 1×/tick à 20 Hz). Sans cette pause, send_tracking_stop()
-    # est immédiatement écrasé par send_goto() dans le même fichier et motor_service
-    # ne consomme que la dernière commande, laissant le tracking actif à GOTO ignoré.
-    # Fix smoke 2026-05-02 (parking restant à 215° au lieu d'aller à 45°).
-    # 0.2 s = 4 ticks motor_service → marge confortable pour consommer + agir.
-    _MOTOR_IPC_INTER_COMMAND_DELAY_S = 0.2
-
     def post(self, request):
         from core.config.config_loader import load_config
         from services.motor_ipc_writer import MotorIpcWriter
@@ -358,17 +349,22 @@ class ParkingSessionView(APIView):
         except (IOError, OSError, ValueError):
             parking_deg = 45.0
 
-        motor_writer = MotorIpcWriter(command_file=Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"]))
-        # Étape 1 : tracking_stop. Laisse motor_service consommer + couper le
-        # thread tracking avant la prochaine commande.
+        motor_writer = MotorIpcWriter(
+            command_file=Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"]),
+            status_file=Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"]),
+        )
+        # Étape 1 : tracking_stop, puis attente de sa consommation effective —
+        # motor_command.json n'a qu'un slot, un GOTO émis trop tôt l'écraserait
+        # (cf. MotorIpcWriter.wait_tracking_stopped). Remplace la temporisation
+        # fixe de 0,2 s du fix smoke 2026-05-02, qui ne couvrait pas le cas où
+        # l'arrêt de session dépasse ce délai.
         tracking_stopped = motor_writer.send_tracking_stop()
-        time.sleep(self._MOTOR_IPC_INTER_COMMAND_DELAY_S)
+        motor_writer.wait_tracking_stopped()
         # Étape 2 : GOTO parking. Va passer motor en initializing/idle puis
         # rejoindre la cible (45° par défaut, configurable).
         goto_parking_sent = motor_writer.send_goto(parking_deg)
-        time.sleep(self._MOTOR_IPC_INTER_COMMAND_DELAY_S)
         # Étape 3 : close cimier. IPC séparé (cimier_command.json), pas de
-        # collision avec motor.
+        # collision avec motor → pas d'attente nécessaire.
         cimier_close_sent = cimier_client.send_command("close")
 
         all_ok = tracking_stopped and goto_parking_sent and cimier_close_sent
