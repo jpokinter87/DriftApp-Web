@@ -186,7 +186,7 @@ class Journal:
     suit le dernier arrosage EST le temps de séchage du capteur.
     """
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, context=""):
         self.path = path
         self.lines = []
         self.episodes = []  # (état, durée_s) des états clos
@@ -198,6 +198,8 @@ class Journal:
                 "Impossible d'écrire le journal dans " + str(path) + " : " + str(exc)
             ) from exc
         self._write("# campagne démarrée " + timestamp())
+        if context:
+            self._write("# " + context)
 
     def _write(self, text: str) -> None:
         if not self._handle:
@@ -253,9 +255,15 @@ class Journal:
     def summary(self):
         """Lignes du résumé de sortie. C'est CE bloc que Serge nous renvoie."""
         wet = [duration for state, duration in self.episodes if state == WET]
+        final_wet = self.final is not None and self.final[0] == WET
         out = ["", "=== RÉSUMÉ ==="]
         if not wet:
-            out.append("Aucun épisode PLUIE observé.")
+            if final_wet:
+                out.append(
+                    "Aucun épisode PLUIE COMPLET — un épisode était en cours à l'arrêt (voir ci-dessous)."
+                )
+            else:
+                out.append("Aucun épisode PLUIE observé.")
         else:
             out.append(str(len(wet)) + " épisode(s) PLUIE :")
             for index, duration in enumerate(wet, 1):
@@ -273,6 +281,13 @@ class Journal:
                     + " épisode(s) INJOIGNABLE — une lecture perdue coupe un épisode PLUIE"
                     + " en deux : le plus long ci-dessus peut sous-estimer le séchage réel"
                 )
+        if final_wet:
+            out.append(
+                "⚠ campagne arrêtée en plein épisode PLUIE (tenu "
+                + format_duration(self.final[1])
+                + ") — ce n'est PAS un temps de séchage complet : relancer et"
+                + " attendre le retour au vert avant Ctrl-C"
+            )
         if self.final is not None:
             out.append(
                 "État à l'arrêt : "
@@ -353,7 +368,18 @@ def demo_source():
 
 def cmd_monitor(args) -> int:
     beep, sound_label = make_beeper(not args.no_sound)
-    journal = Journal(None if args.no_log else (args.log or default_log_path()))
+    contexte = (
+        "options : host="
+        + ("démo" if args.demo else args.host)
+        + " input="
+        + str(args.input)
+        + " invert="
+        + str(args.invert)
+        + " interval="
+        + str(args.interval)
+        + "s"
+    )
+    journal = Journal(None if args.no_log else (args.log or default_log_path()), contexte)
     source = demo_source() if args.demo else shelly_source(args)
     title = (
         "CAPTEUR DE PLUIE — "
