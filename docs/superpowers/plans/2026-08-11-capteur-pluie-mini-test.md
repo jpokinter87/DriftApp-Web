@@ -642,15 +642,21 @@ Attendu à l'écran :
 
 ```
 === RÉSUMÉ ===
-3 épisode(s) PLUIE :
+2 épisode(s) PLUIE :
   #1 : 2 min 25 s
-  #2 : 30 s
-  #3 : 10 min 05 s
+  #2 : 10 min 05 s
 Le plus long : 10 min 05 s   <-- temps de séchage à retenir pour clear_delay_s
 Journal complet : verif_journal.log
 ```
 
-Attention au piège à vérifier ici : l'épisode `#1` vaut **2 min 25 s** (145 s, la durée de l'état PLUIE *clos par* la transition PLUIE→SEC) — et non 412 s, qui est la durée du SEC qui précédait. Si le résumé affiche 412 s, l'argument `previous` est associé à la mauvaise durée.
+Deux pièges à contrôler ici, et ils sont le cœur de la tâche :
+
+- l'épisode `#1` vaut **2 min 25 s** (145 s, la durée de l'état PLUIE *clos par* la transition
+  PLUIE→SEC) — et non 412 s, qui est la durée du SEC qui précédait. Si le résumé affiche 412 s,
+  l'argument `previous` est associé à la mauvaise durée ;
+- le résumé liste **2** épisodes, pas 3. Les 30 s de la troisième transition closent un état **SEC**
+  (son `previous` vaut `DRY`), et `summary()` ne retient que les états PLUIE. Un résumé à 3 entrées
+  signifierait que le filtre `state == WET` ne fonctionne pas.
 
 Le `cat` doit montrer les 3 lignes horodatées encadrées par `# campagne démarrée` / `# campagne arrêtée`.
 
