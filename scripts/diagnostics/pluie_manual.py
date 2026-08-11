@@ -20,6 +20,7 @@ Ce que ce programme sert à établir sur le terrain (rien n'est figé ici) :
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import math
 import os
@@ -240,6 +241,8 @@ class Journal:
             + format_duration(held_s)
             + " (épisode inachevé, non comptabilisé)"
         )
+        for line in self.summary():
+            self._write(line)
         if self._handle:
             try:
                 self._handle.close()
@@ -262,6 +265,14 @@ class Journal:
                 + format_duration(max(wet))
                 + "   <-- temps de séchage à retenir pour clear_delay_s"
             )
+            perdues = [d for state, d in self.episodes if state == UNREACHABLE]
+            if perdues:
+                out.append(
+                    "⚠ "
+                    + str(len(perdues))
+                    + " épisode(s) INJOIGNABLE — une lecture perdue coupe un épisode PLUIE"
+                    + " en deux : le plus long ci-dessus peut sous-estimer le séchage réel"
+                )
         if self.final is not None:
             out.append(
                 "État à l'arrêt : "
@@ -351,14 +362,14 @@ def cmd_monitor(args) -> int:
         + sound_label
     )
 
-    print("son : " + sound_label)
-    if journal.path:
-        print("journal : " + journal.path)
-    time.sleep(1.5)
-
     state = None
     since = time.monotonic()
     try:
+        print("son : " + sound_label)
+        if journal.path:
+            print("journal : " + journal.path)
+        time.sleep(1.5)
+
         while True:
             new, detail = next(source)
             now = time.monotonic()
@@ -400,6 +411,10 @@ def read_input(host: str, input_id: int, timeout_s: float = DEFAULT_TIMEOUT_S):
         raise ShellyError("injoignable (" + str(exc.reason) + ")") from exc
     except OSError as exc:
         raise ShellyError("erreur socket (" + str(exc) + ")") from exc
+    except (http.client.HTTPException, ValueError, UnicodeError) as exc:
+        # IncompleteRead / InvalidURL n'héritent pas d'OSError : sans ça,
+        # une connexion coupée en cours de réponse tuerait la campagne.
+        raise ShellyError("erreur HTTP inattendue (" + str(exc) + ")") from exc
     if status != 200:
         raise ShellyError("HTTP " + str(status))
     try:
