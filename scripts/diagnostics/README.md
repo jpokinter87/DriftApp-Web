@@ -92,6 +92,14 @@ sudo ./start_web.sh restart
 
 **Prérequis** : aucun. Python 3 stdlib pure, aucune dépendance, aucune configuration. Se lance depuis n'importe quelle machine du réseau local — de préférence le portable emporté à côté du capteur.
 
+**Récupérer le script sur le portable** (une seule fois) :
+
+```bash
+scp slenk@<ip-du-pi>:~/DriftApp/scripts/diagnostics/pluie_manual.py .
+```
+
+Le fichier est autonome : rien d'autre à copier. Les commandes ci-dessous sont écrites depuis la racine du dépôt (cas d'un lancement sur le Pi) ; une fois le fichier copié seul sur le portable, remplacer `scripts/diagnostics/pluie_manual.py` par `pluie_manual.py`.
+
 **Marche à suivre**
 
 1. **Avant de sortir**, vérifier que le son fonctionne sur cette machine :
