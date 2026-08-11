@@ -79,8 +79,11 @@ def _winsound_beeper():
     import winsound  # stdlib, Windows uniquement
 
     def beep(kind: str) -> None:
-        for freq, milliseconds in BEEPS[kind]:
-            winsound.Beep(freq, milliseconds)
+        try:
+            for freq, milliseconds in BEEPS[kind]:
+                winsound.Beep(freq, milliseconds)
+        except RuntimeError:  # machine sans pilote audio : on continue en silence
+            pass
 
     return beep
 
@@ -95,6 +98,8 @@ def _player_beeper(player: str):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
+        except OSError:  # binaire trouvé par which mais inutilisable : on continue en silence
+            pass
         finally:
             os.unlink(path)
 
