@@ -86,6 +86,54 @@ sudo ./start_web.sh restart
 
 ---
 
+### 4. `pluie_manual.py`
+
+**Objectif** : valider sur le terrain le capteur de pluie MH-RD lu par le Shelly Plus Uni (192.168.1.87), avec signal lumineux et sonore — l'écran d'exploitation est à l'intérieur de la coupole, le capteur dehors.
+
+**Prérequis** : aucun. Python 3 stdlib pure, aucune dépendance, aucune configuration. Se lance depuis n'importe quelle machine du réseau local — de préférence le portable emporté à côté du capteur.
+
+**Marche à suivre**
+
+1. **Avant de sortir**, vérifier que le son fonctionne sur cette machine :
+
+   ```bash
+   python3 scripts/diagnostics/pluie_manual.py monitor --demo
+   ```
+
+   Trois signaux doivent être audibles : montant (sec → pluie), descendant (pluie → sec), trois coups graves (Shelly injoignable). Le programme annonce au démarrage lequel il utilise. S'il affiche `son : BEL terminal`, le bip dépend de l'émulateur : monter le volume, ou changer de machine. `Ctrl-C` pour sortir.
+
+2. **Identifier l'entrée et la polarité** — la commande du verre d'eau :
+
+   ```bash
+   python3 scripts/diagnostics/pluie_manual.py read
+   ```
+
+   Arroser la plaque, relancer. L'entrée dont l'état change est celle du capteur. Si l'interprétation est à l'envers (`PLUIE` affiché alors que la plaque est sèche), ajouter `--invert` à toutes les commandes suivantes.
+
+3. **Régler le trimpot** du module : le tourner dans le sens des aiguilles d'une montre augmente la sensibilité. Chercher le point où quelques gouttes suffisent à faire basculer, sans que la rosée du matin déclenche.
+
+4. **Campagne de mesure** — c'est elle qui donne le temps de séchage :
+
+   ```bash
+   python3 scripts/diagnostics/pluie_manual.py monitor
+   ```
+
+   Arroser franchement, **noter l'heure du dernier arrosage**, puis laisser tourner sans y toucher jusqu'au retour au vert. `Ctrl-C` affiche le résumé : la durée de l'épisode PLUIE le plus long est le temps de séchage recherché.
+
+**Ce qu'il faut nous renvoyer**
+
+Le fichier `pluie_test_<horodatage>.log` créé dans le répertoire d'où la commande a été lancée : il contient toutes les transitions horodatées **et** le résumé final. Ne pas rediriger la sortie de l'écran vers un fichier (`> sortie.txt`) : elle est pleine de codes d'affichage et illisible — c'est le `.log` qui fait foi.
+
+Y joindre les réponses à deux questions : quelle entrée (`id=0` ou `id=1`) porte le capteur, et `--invert` a-t-il été nécessaire.
+
+Si le résumé affiche une ligne `⚠ ... épisode(s) INJOIGNABLE`, c'est que la liaison avec le Shelly a été perdue en cours de route : le temps de séchage annoncé est peut-être sous-estimé, le signaler.
+
+**Options** : `--host` (IP du Shelly), `--input {0,1,both}`, `--interval` (secondes entre deux lectures), `--timeout` (timeout HTTP), `--invert`, `--no-sound`, `--log CHEMIN`, `--no-log`, `--demo`.
+
+**Note** : ce script ne pilote rien et ne décide rien — il lit et il affiche. Le capteur n'est pas encore branché à l'automatisation du cimier.
+
+---
+
 ## 📊 Interprétation des résultats
 
 ### TEST A : Boucle moteur
