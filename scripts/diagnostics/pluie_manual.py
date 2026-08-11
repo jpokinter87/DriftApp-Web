@@ -32,6 +32,7 @@ import time
 import urllib.error
 import urllib.request
 import wave
+from datetime import datetime
 
 # Défauts terrain — surchargeables par flags CLI, comme dans cimier_manual.py.
 DEFAULT_HOST = "192.168.1.87"
@@ -148,6 +149,94 @@ def transition_sound(previous: str, new: str) -> str:
     return "down"
 
 
+def timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def format_duration(seconds: float) -> str:
+    total = int(seconds)
+    if total < 60:
+        return str(total) + " s"
+    return str(total // 60) + " min " + str(total % 60).zfill(2) + " s"
+
+
+def default_log_path() -> str:
+    """Répertoire courant, PAS logs/ du dépôt : le portable de Serge n'a pas le dépôt."""
+    return datetime.now().strftime("pluie_test_%Y%m%d_%H%M%S.log")
+
+
+class Journal:
+    """Consigne les transitions à l'écran et dans un fichier (append + flush).
+
+    Le flush à chaque ligne est délibéré : une campagne d'une heure ne doit rien
+    perdre sur un Ctrl-C ou une batterie à plat.
+
+    La durée de l'état PRÉCÉDENT est portée sur la ligne de transition. C'est
+    elle qui répond à la question du séchage : la durée de l'épisode PLUIE qui
+    suit le dernier arrosage EST le temps de séchage du capteur.
+    """
+
+    def __init__(self, path=None):
+        self.path = path
+        self.lines = []
+        self.episodes = []  # (état, durée_s) des états clos
+        self._handle = open(path, "a", encoding="utf-8") if path else None
+        self._write("# campagne démarrée " + timestamp())
+
+    def _write(self, text: str) -> None:
+        if self._handle:
+            self._handle.write(text + "\n")
+            self._handle.flush()
+
+    def transition(self, previous: str, new: str, held_s: float) -> None:
+        line = (
+            timestamp()
+            + " "
+            + previous.ljust(11)
+            + " -> "
+            + new.ljust(11)
+            + " (état précédent tenu "
+            + format_duration(held_s)
+            + ")"
+        )
+        self.lines.append(line)
+        self.episodes.append((previous, held_s))
+        self._write(line)
+
+    def close(self, current: str, held_s: float) -> None:
+        self.episodes.append((current, held_s))
+        self._write(
+            "# campagne arrêtée "
+            + timestamp()
+            + " — état final "
+            + current
+            + " tenu "
+            + format_duration(held_s)
+        )
+        if self._handle:
+            self._handle.close()
+            self._handle = None
+
+    def summary(self):
+        """Lignes du résumé de sortie. C'est CE bloc que Serge nous renvoie."""
+        wet = [duration for state, duration in self.episodes if state == WET]
+        out = ["", "=== RÉSUMÉ ==="]
+        if not wet:
+            out.append("Aucun épisode PLUIE observé.")
+        else:
+            out.append(str(len(wet)) + " épisode(s) PLUIE :")
+            for index, duration in enumerate(wet, 1):
+                out.append("  #" + str(index) + " : " + format_duration(duration))
+            out.append(
+                "Le plus long : "
+                + format_duration(max(wet))
+                + "   <-- temps de séchage à retenir pour clear_delay_s"
+            )
+        if self.path:
+            out.append("Journal complet : " + self.path)
+        return out
+
+
 class ShellyError(Exception):
     """Le Shelly n'a pas répondu, ou pas comme attendu."""
 
@@ -249,6 +338,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--invert", action="store_true", help="inverse la polarité (state=True -> SEC)"
     )
     parser.add_argument("--no-sound", action="store_true", help="coupe les bips")
+    parser.add_argument(
+        "--log",
+        help="fichier journal (défaut : pluie_test_<horodatage>.log dans le répertoire courant)",
+    )
+    parser.add_argument("--no-log", action="store_true", help="n'écrit aucun fichier")
     return parser
 
 
