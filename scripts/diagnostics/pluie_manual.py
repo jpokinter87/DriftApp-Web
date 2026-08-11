@@ -55,6 +55,15 @@ BEEPS = {
     "error": ((220, 150), (220, 150), (220, 300)),  # Shelly injoignable : 3 coups graves
 }
 
+# Couleurs de fond pleines : lisibles d'un coup d'œil sur un écran en extérieur.
+ANSI = {
+    WET: "\033[1;97;41m",  # blanc sur rouge
+    DRY: "\033[1;30;42m",  # noir sur vert
+    UNREACHABLE: "\033[1;30;43m",  # noir sur jaune
+}
+ANSI_RESET = "\033[0m"
+ANSI_CLEAR = "\033[2J\033[H"
+
 
 def _write_wav(notes, rate: int = 22050) -> str:
     """Génère un WAV mono 16 bits pour une suite de (freq_hz, durée_ms). Renvoie un chemin."""
@@ -266,6 +275,108 @@ class Journal:
         return out
 
 
+def render(state: str, since_s: float, history, title: str, detail: str) -> None:
+    """Redessine le bloc en place : l'écran ne doit pas défiler pendant une heure."""
+    lines = [
+        title,
+        "",
+        ANSI[state]
+        + "   "
+        + state.center(30)
+        + "   "
+        + ANSI_RESET
+        + "   depuis "
+        + format_duration(since_s),
+        "   " + detail,
+        "",
+        "Dernières transitions :",
+    ]
+    if history:
+        lines += ["  " + line for line in history[-5:]]
+    else:
+        lines.append("  (aucune pour l'instant)")
+    lines += ["", "Ctrl-C pour arrêter et afficher le résumé."]
+    sys.stdout.write(ANSI_CLEAR + "\n".join(lines) + "\n")
+    sys.stdout.flush()
+
+
+def shelly_source(args):
+    """Générateur (état, détail) lu sur le Shelly.
+
+    En mode 'both' — le défaut, tant qu'on ignore quelle entrée porte le D0 —
+    l'état global est PLUIE si l'UNE des entrées est en pluie, et INJOIGNABLE
+    l'emporte sur tout : une lecture perdue ne doit jamais passer pour du beau
+    temps. Le détail par entrée reste affiché sous le bandeau.
+    """
+    ids = input_ids(args.input)
+    while True:
+        states = []
+        detail = []
+        for input_id in ids:
+            try:
+                raw, _ = read_input(args.host, input_id, args.timeout)
+            except ShellyError as exc:
+                states.append(UNREACHABLE)
+                detail.append("id=" + str(input_id) + " " + UNREACHABLE + " (" + str(exc) + ")")
+            else:
+                value = interpret(raw, args.invert)
+                states.append(value)
+                detail.append("id=" + str(input_id) + " " + value)
+        if UNREACHABLE in states:
+            yield UNREACHABLE, " · ".join(detail)
+        elif WET in states:
+            yield WET, " · ".join(detail)
+        else:
+            yield DRY, " · ".join(detail)
+
+
+def demo_source():
+    """Alterne SEC / PLUIE / INJOIGNABLE sans réseau : vérifier le son avant de sortir."""
+    scenario = ((DRY, 6), (WET, 6), (DRY, 6), (UNREACHABLE, 6))
+    while True:
+        for state, seconds in scenario:
+            deadline = time.monotonic() + seconds
+            while time.monotonic() < deadline:
+                yield state, "démo — aucun réseau, aucun Shelly"
+
+
+def cmd_monitor(args) -> int:
+    beep, sound_label = make_beeper(not args.no_sound)
+    journal = Journal(None if args.no_log else (args.log or default_log_path()))
+    source = demo_source() if args.demo else shelly_source(args)
+    title = (
+        "CAPTEUR DE PLUIE — "
+        + ("DÉMO" if args.demo else "Shelly " + args.host)
+        + "   son : "
+        + sound_label
+    )
+
+    print("son : " + sound_label)
+    if journal.path:
+        print("journal : " + journal.path)
+    time.sleep(1.5)
+
+    state = None
+    since = time.monotonic()
+    try:
+        while True:
+            new, detail = next(source)
+            now = time.monotonic()
+            if state is None:
+                state, since = new, now
+            elif new != state:
+                journal.transition(state, new, now - since)
+                beep(transition_sound(state, new))
+                state, since = new, now
+            render(state, now - since, journal.lines, title, detail)
+            time.sleep(args.interval)
+    except KeyboardInterrupt:
+        if state is not None:
+            journal.close(state, time.monotonic() - since)
+        print("\n".join(journal.summary()))
+    return 0
+
+
 class ShellyError(Exception):
     """Le Shelly n'a pas répondu, ou pas comme attendu."""
 
@@ -372,6 +483,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="fichier journal (défaut : pluie_test_<horodatage>.log dans le répertoire courant)",
     )
     parser.add_argument("--no-log", action="store_true", help="n'écrit aucun fichier")
+    parser.add_argument("--demo", action="store_true", help="états simulés, sans réseau")
     return parser
 
 
@@ -379,8 +491,7 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "read":
         return cmd_read(args)
-    print("monitor : implémenté en Task 4")
-    return 0
+    return cmd_monitor(args)
 
 
 if __name__ == "__main__":
