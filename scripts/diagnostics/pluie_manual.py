@@ -43,9 +43,17 @@ class ShellyError(Exception):
     """Le Shelly n'a pas répondu, ou pas comme attendu."""
 
 
+def clean_host(host: str) -> str:
+    """Tolère une saisie collée depuis un navigateur : http://x/ -> x."""
+    for prefix in ("http://", "https://"):
+        if host.startswith(prefix):
+            host = host[len(prefix) :]
+    return host.rstrip("/")
+
+
 def read_input(host: str, input_id: int, timeout_s: float = DEFAULT_TIMEOUT_S):
     """Lit une entrée digitale. Renvoie (state: bool, payload: dict) ou lève ShellyError."""
-    url = "http://" + host + "/rpc/Input.GetStatus?id=" + str(input_id)
+    url = "http://" + clean_host(host) + "/rpc/Input.GetStatus?id=" + str(input_id)
     try:
         with urllib.request.urlopen(url, timeout=timeout_s) as resp:
             status = getattr(resp, "status", 200)
