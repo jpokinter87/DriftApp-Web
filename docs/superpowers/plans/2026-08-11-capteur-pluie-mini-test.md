@@ -853,31 +853,37 @@ Attendu, en ~26 s : le bandeau change de couleur trois fois (vert → rouge → 
 Un seul script enchaîne tout le scénario : arrosage, séchage, panne réseau, retour, `Ctrl-C`. Le
 `kill -INT` reproduit exactement le `Ctrl-C` de Serge et doit donc déclencher le résumé.
 
+**Ne pas utiliser `pkill -f fake_shelly.py` ici** : le motif matche la ligne de commande du shell qui
+exécute ce script (elle contient la chaîne), qui se tue donc lui-même. Tuer par PID.
+
 ```bash
-pkill -f fake_shelly.py ; sleep 1
-python3 "$SCRATCH/fake_shelly.py" & sleep 1
+python3 "$SCRATCH/fake_shelly.py" & SHELLY=$!
+sleep 1
 python3 scripts/diagnostics/pluie_manual.py monitor --host 127.0.0.1:8099 \
     --interval 0.5 --no-sound --log "$SCRATCH/verif_monitor.log" > "$SCRATCH/verif_ecran.txt" &
 MON=$!
 sleep 4 ; curl -s 'http://127.0.0.1:8099/set?id=1&state=true'  >/dev/null   # arrosage
 sleep 8 ; curl -s 'http://127.0.0.1:8099/set?id=1&state=false' >/dev/null   # séchage
-sleep 4 ; pkill -f fake_shelly.py                                           # panne réseau
-sleep 4 ; python3 "$SCRATCH/fake_shelly.py" & sleep 4                       # retour réseau
+sleep 4 ; kill $SHELLY                                                      # panne réseau
+sleep 4 ; python3 "$SCRATCH/fake_shelly.py" & SHELLY=$! ; sleep 4           # retour réseau
 kill -INT $MON ; sleep 1
 echo "=== JOURNAL ===" ; cat "$SCRATCH/verif_monitor.log"
+kill $SHELLY 2>/dev/null
 ```
 
 Attendu dans le journal — quatre transitions horodatées, encadrées par `# campagne démarrée` et
 `# campagne arrêtée` :
 
 ```
-SEC         -> PLUIE       (état précédent tenu 4 s)
+SEC         -> PLUIE       (état précédent tenu 2 s)
 PLUIE       -> SEC         (état précédent tenu 8 s)
 SEC         -> INJOIGNABLE (état précédent tenu 4 s)
 INJOIGNABLE -> SEC         (état précédent tenu 4 s)
 ```
 
-Les durées peuvent dévier d'une seconde (période de polling), pas davantage. Points à contrôler :
+La **première** durée vaut ~2 s et non 4 : `cmd_monitor` marque une pause de 1,5 s au démarrage pour
+laisser lire le backend son et le chemin du journal, et `since` n'est armé qu'ensuite. Les trois
+autres durées ne doivent pas dévier de plus d'une seconde (période de polling). Points à contrôler :
 
 - l'épisode PLUIE dure bien **~8 s**, la valeur qui alimentera `clear_delay_s` en conditions réelles ;
 - le passage en INJOIGNABLE apparaît **et le programme a continué de poller** — les deux dernières
