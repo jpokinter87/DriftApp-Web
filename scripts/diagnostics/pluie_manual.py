@@ -21,9 +21,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import os
+import shutil
+import struct
+import subprocess
 import sys
+import tempfile
+import time
 import urllib.error
 import urllib.request
+import wave
 
 # Défauts terrain — surchargeables par flags CLI, comme dans cimier_manual.py.
 DEFAULT_HOST = "192.168.1.87"
@@ -37,6 +45,102 @@ DIGITAL_INPUT_IDS = (0, 1)
 WET = "PLUIE"
 DRY = "SEC"
 UNREACHABLE = "INJOIGNABLE"
+
+# Trois signaux distincts, reconnaissables à l'oreille sans regarder l'écran.
+# (fréquence Hz, durée ms) — le sens du glissando porte l'information.
+BEEPS = {
+    "up": ((880, 120), (1320, 160)),  # sec -> pluie : ça monte
+    "down": ((1320, 120), (660, 160)),  # pluie -> sec : ça descend
+    "error": ((220, 150), (220, 150), (220, 300)),  # Shelly injoignable : 3 coups graves
+}
+
+
+def _write_wav(notes, rate: int = 22050) -> str:
+    """Génère un WAV mono 16 bits pour une suite de (freq_hz, durée_ms). Renvoie un chemin."""
+    frames = bytearray()
+    for freq, milliseconds in notes:
+        count = int(rate * milliseconds / 1000)
+        fade = max(1.0, rate * 0.005)  # 5 ms d'attaque/extinction, sinon ça claque
+        for i in range(count):
+            envelope = min(1.0, min(i, count - i) / fade)
+            value = int(16000 * envelope * math.sin(2 * math.pi * freq * i / rate))
+            frames += struct.pack("<h", value)
+    handle, path = tempfile.mkstemp(prefix="pluie_", suffix=".wav")
+    os.close(handle)
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(rate)
+        wav.writeframes(bytes(frames))
+    return path
+
+
+def _winsound_beeper():
+    import winsound  # stdlib, Windows uniquement
+
+    def beep(kind: str) -> None:
+        for freq, milliseconds in BEEPS[kind]:
+            winsound.Beep(freq, milliseconds)
+
+    return beep
+
+
+def _player_beeper(player: str):
+    def beep(kind: str) -> None:
+        path = _write_wav(BEEPS[kind])
+        try:
+            subprocess.run(
+                [player, path],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        finally:
+            os.unlink(path)
+
+    return beep
+
+
+def _bel_beeper():
+    def beep(kind: str) -> None:
+        for _ in range(3 if kind == "error" else 2):
+            sys.stdout.write("\a")
+            sys.stdout.flush()
+            time.sleep(0.15)
+
+    return beep
+
+
+def make_beeper(enabled: bool):
+    """Renvoie (beep, label). beep(kind) avec kind dans {up, down, error}.
+
+    Cascade : winsound (Windows) -> paplay -> aplay -> afplay -> BEL terminal.
+    Le label est affiché au démarrage : Serge doit savoir AVANT de sortir s'il
+    peut compter sur le son.
+    """
+    if not enabled:
+        return (lambda kind: None), "coupé (--no-sound)"
+    if sys.platform.startswith("win"):
+        try:
+            return _winsound_beeper(), "winsound"
+        except ImportError:
+            pass
+    for player in ("paplay", "aplay", "afplay"):
+        if shutil.which(player):
+            return _player_beeper(player), player
+    return (
+        _bel_beeper(),
+        "BEL terminal — beaucoup d'émulateurs le coupent, vérifiez le volume avant de sortir",
+    )
+
+
+def transition_sound(previous: str, new: str) -> str:
+    """Quel signal pour quelle transition. L'état d'arrivée décide."""
+    if new == UNREACHABLE:
+        return "error"
+    if new == WET:
+        return "up"
+    return "down"
 
 
 class ShellyError(Exception):
@@ -139,6 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--invert", action="store_true", help="inverse la polarité (state=True -> SEC)"
     )
+    parser.add_argument("--no-sound", action="store_true", help="coupe les bips")
     return parser
 
 
