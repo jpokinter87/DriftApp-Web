@@ -180,13 +180,28 @@ class Journal:
         self.path = path
         self.lines = []
         self.episodes = []  # (état, durée_s) des états clos
-        self._handle = open(path, "a", encoding="utf-8") if path else None
+        self.final = None
+        try:
+            self._handle = open(path, "a", encoding="utf-8") if path else None
+        except OSError as exc:
+            raise SystemExit(
+                "Impossible d'écrire le journal dans " + str(path) + " : " + str(exc)
+            ) from exc
         self._write("# campagne démarrée " + timestamp())
 
     def _write(self, text: str) -> None:
-        if self._handle:
+        if not self._handle:
+            return
+        try:
             self._handle.write(text + "\n")
             self._handle.flush()
+        except (OSError, ValueError) as exc:
+            # ValueError couvre le cas d'un descripteur déjà fermé (ex. support
+            # débranché entre deux écritures) — même famille de panne que OSError.
+            sys.stderr.write(
+                "! écriture journal impossible (" + str(exc) + ") — poursuite sans fichier\n"
+            )
+            self._handle = None
 
     def transition(self, previous: str, new: str, held_s: float) -> None:
         line = (
@@ -204,7 +219,9 @@ class Journal:
         self._write(line)
 
     def close(self, current: str, held_s: float) -> None:
-        self.episodes.append((current, held_s))
+        # PAS d'append à episodes : cet état n'est pas clos, sa durée n'est pas
+        # un épisode complet et fausserait le temps de séchage.
+        self.final = (current, held_s)
         self._write(
             "# campagne arrêtée "
             + timestamp()
@@ -212,9 +229,13 @@ class Journal:
             + current
             + " tenu "
             + format_duration(held_s)
+            + " (épisode inachevé, non comptabilisé)"
         )
         if self._handle:
-            self._handle.close()
+            try:
+                self._handle.close()
+            except OSError:
+                pass
             self._handle = None
 
     def summary(self):
@@ -231,6 +252,14 @@ class Journal:
                 "Le plus long : "
                 + format_duration(max(wet))
                 + "   <-- temps de séchage à retenir pour clear_delay_s"
+            )
+        if self.final is not None:
+            out.append(
+                "État à l'arrêt : "
+                + self.final[0]
+                + " tenu "
+                + format_duration(self.final[1])
+                + " (épisode inachevé, non compté)"
             )
         if self.path:
             out.append("Journal complet : " + self.path)
