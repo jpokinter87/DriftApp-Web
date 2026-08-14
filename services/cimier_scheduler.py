@@ -45,6 +45,7 @@ from core.hardware.weather_provider import WeatherProvider
 from core.observatoire.sun_altitude import compute_sun_altitude, sun_direction
 from services.cimier_ipc_manager import CimierIpcManager
 from services.motor_ipc_writer import MotorIpcWriter
+from services.session_close_sequence import close_session
 
 logger = logging.getLogger(__name__)
 
@@ -373,25 +374,26 @@ class CimierScheduler:
         )
 
     def _trigger_close(self) -> None:
-        """Emit tracking_stop + goto 45° motor IPC + close cimier IPC.
+        """Fin de nuit : arrêt du suivi, parking coupole, fermeture cimier.
 
-        Les deux commandes motor partagent un slot IPC unique lu à 20 Hz : on
-        attend la confirmation de l'arrêt du suivi avant d'émettre le GOTO,
-        sinon celui-ci écrase le `tracking_stop` (bug terrain 08-09/08/2026 —
-        suivi resté actif, coupole dérivant hors du parking). La commande cimier
-        passe par un fichier IPC distinct : aucune collision de ce côté.
+        Délègue à ``services.session_close_sequence`` — séquence partagée avec
+        le parking manuel et la fermeture pluie (cf. sa docstring pour le bug
+        de parking 6.11.3 qui a motivé la factorisation).
         """
-        self._motor_ipc.send_tracking_stop()
-        tracking_stop_confirmed = self._motor_ipc.wait_tracking_stopped()
-        self._motor_ipc.send_goto(self._cfg.parking_target_azimuth_deg)
         cimier_cmd_id = str(uuid.uuid4())
-        self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"})
-        logger.info(
-            "cimier_event=automation_close_triggered cimier_cmd_id=%s parking_target_deg=%.2f "
-            "tracking_stop_confirmed=%s",
-            cimier_cmd_id,
+
+        def _send_close() -> bool:
+            return bool(self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"}))
+
+        close_session(
+            self._motor_ipc,
+            _send_close,
             self._cfg.parking_target_azimuth_deg,
-            tracking_stop_confirmed,
+            reason="auto",
+        )
+        logger.info(
+            "cimier_event=automation_close_triggered cimier_cmd_id=%s",
+            cimier_cmd_id,
         )
 
     # ------------------------------------------------------------------

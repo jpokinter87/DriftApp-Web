@@ -342,6 +342,7 @@ class ParkingSessionView(APIView):
     def post(self, request):
         from core.config.config_loader import load_config
         from services.motor_ipc_writer import MotorIpcWriter
+        from services.session_close_sequence import close_session
 
         try:
             cfg = load_config(Path(settings.DRIFTAPP_CONFIG))
@@ -353,29 +354,22 @@ class ParkingSessionView(APIView):
             command_file=Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"]),
             status_file=Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"]),
         )
-        # Étape 1 : tracking_stop, puis attente de sa consommation effective —
-        # motor_command.json n'a qu'un slot, un GOTO émis trop tôt l'écraserait
-        # (cf. MotorIpcWriter.wait_tracking_stopped). Remplace la temporisation
-        # fixe de 0,2 s du fix smoke 2026-05-02, qui ne couvrait pas le cas où
-        # l'arrêt de session dépasse ce délai.
-        tracking_stopped = motor_writer.send_tracking_stop()
-        motor_writer.wait_tracking_stopped()
-        # Étape 2 : GOTO parking. Va passer motor en initializing/idle puis
-        # rejoindre la cible (45° par défaut, configurable).
-        goto_parking_sent = motor_writer.send_goto(parking_deg)
-        # Étape 3 : close cimier. IPC séparé (cimier_command.json), pas de
-        # collision avec motor → pas d'attente nécessaire.
-        cimier_close_sent = cimier_client.send_command("close")
-
-        all_ok = tracking_stopped and goto_parking_sent and cimier_close_sent
+        outcome = close_session(
+            motor_writer,
+            lambda: cimier_client.send_command("close"),
+            parking_deg,
+            reason="manual",
+        )
         body = {
-            "applied": all_ok,
-            "tracking_stopped": tracking_stopped,
-            "goto_parking_sent": goto_parking_sent,
-            "cimier_close_sent": cimier_close_sent,
-            "parking_target_deg": parking_deg,
+            "applied": outcome["tracking_stop_sent"]
+            and outcome["goto_sent"]
+            and outcome["cimier_close_sent"],
+            "tracking_stopped": outcome["tracking_stop_sent"],
+            "goto_parking_sent": outcome["goto_sent"],
+            "cimier_close_sent": outcome["cimier_close_sent"],
+            "parking_target_deg": outcome["parking_target_deg"],
         }
-        if all_ok:
+        if body["applied"]:
             return Response(body)
         body["error"] = "Une ou plusieurs commandes IPC ont échoué"
         return Response(body, status=status.HTTP_503_SERVICE_UNAVAILABLE)

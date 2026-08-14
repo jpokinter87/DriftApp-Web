@@ -132,11 +132,17 @@ class CimierIpcManager:
         except (IOError, OSError) as exc:
             logger.error("Erreur écriture status cimier: %s", exc)
 
-    def write_command(self, command: Dict[str, Any]) -> None:
+    def write_command(self, command: Dict[str, Any]) -> bool:
         """Écrit une commande dans le fichier IPC (utilitaire pour clients/tests).
 
         Pas de verrou exclusif côté lecteur pour ne pas bloquer la lecture —
         on accepte que le rename POSIX soit atomique.
+
+        Retourne `True` si l'écriture **et** le rename ont abouti, `False` en
+        cas d'échec d'E/S (jamais d'exception remontée au caller). Les appelants
+        qui rapportent le succès d'une fermeture — `session_close_sequence` sur
+        la branche automatique non supervisée — ont besoin de ce booléen :
+        sans lui, la télémétrie affirmerait le succès d'une écriture perdue.
         """
         try:
             tmp_file = self.command_file.with_suffix(".tmp")
@@ -145,5 +151,7 @@ class CimierIpcManager:
                 f.write(content)
                 f.flush()
             tmp_file.rename(self.command_file)
+            return True
         except (IOError, OSError) as exc:
             logger.error("Erreur écriture commande cimier: %s", exc)
+            return False

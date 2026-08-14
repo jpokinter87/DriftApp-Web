@@ -16,6 +16,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from unittest.mock import patch
 
 import pytest
 
@@ -720,6 +721,22 @@ class TestIpcManager:
         ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
         ipc.write_command({"action": "open"})  # pas d'id
         assert ipc.read_command() is None
+
+    def test_write_command_returns_true_on_success(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        """Le booléen alimente la télémétrie de `session_close_sequence` : sur la
+        branche automatique non supervisée, un `cimier_close_sent` toujours vrai
+        masquerait une écriture IPC perdue."""
+        cmd_file, status_file = tmp_ipc
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        assert ipc.write_command({"id": "ok-1", "action": "close"}) is True
+
+    def test_write_command_returns_false_on_ioerror(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        """Patch open pour lever OSError → False, pas d'exception remontée."""
+        cmd_file, status_file = tmp_ipc
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        with patch("builtins.open", side_effect=OSError("disk full")):
+            ok = ipc.write_command({"id": "ko-1", "action": "close"})
+        assert ok is False
 
     def test_ipc_status_last_update_is_utc_aware(self, tmp_ipc: Tuple[Path, Path]) -> None:
         """`last_update` doit être ISO 8601 tz-aware UTC (cohérent avec le
