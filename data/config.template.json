@@ -112,8 +112,15 @@
       "switch_id": 0
     },
     "weather_provider": {
-      "_comment": "Capteur pluie : backlog séparé. type=noop (toujours OK).",
-      "type": "noop"
+      "_comment": "Capteur de pluie MH-RD sur Shelly Plus Uni (.87), D0 câblé sur l'entrée id=0. type ∈ {noop, shelly_rain} — mettre shelly_rain dans le config.json terrain. Valeurs mesurées le 14/08/2026 : state=true = pluie (invert=false), séchage ≤ 1 min 51 s. protection_enabled=false : le capteur est lu et affiché mais ne commande rien (mode observation).",
+      "type": "noop",
+      "host": "192.168.1.87",
+      "input_id": 0,
+      "invert": false,
+      "timeout_s": 3.0,
+      "protection_enabled": false,
+      "watch_interval_s": 10.0,
+      "confirm_reads": 2
     },
     "automation": {
       "_comment": "Scheduler astropy inchangé. mode ∈ {manual, semi, full}.",

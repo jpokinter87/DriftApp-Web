@@ -35,6 +35,7 @@ from core.config.config_loader import (
     SwitchReaderConfig,
     ThresholdsConfig,
     TrackingConfig,
+    WeatherProviderConfig,
     load_config,
 )
 
@@ -1005,3 +1006,62 @@ class TestConfigLoaderResilience:
         config = loader.load()  # ne doit plus lever FileNotFoundError
         assert cfg_path.exists()
         assert config.site.latitude == 1.0
+
+
+class TestWeatherProviderConfig:
+    """Section cimier.weather_provider étendue (capteur de pluie, 2026-08)."""
+
+    def test_defaults_are_noop_and_disarmed(self):
+        cfg = WeatherProviderConfig()
+        assert cfg.type == "noop"
+        assert cfg.host == ""
+        assert cfg.input_id == 0
+        assert cfg.invert is False
+        assert cfg.timeout_s == 3.0
+        assert cfg.protection_enabled is False
+        assert cfg.watch_interval_s == 10.0
+        assert cfg.confirm_reads == 2
+
+    def test_parses_full_section(self, tmp_path, sample_config_dict):
+        payload = dict(sample_config_dict)
+        payload["cimier"] = {
+            "weather_provider": {
+                "type": "shelly_rain",
+                "host": "10.0.0.9",
+                "input_id": 1,
+                "invert": True,
+                "timeout_s": 1.5,
+                "protection_enabled": True,
+                "watch_interval_s": 5.0,
+                "confirm_reads": 3,
+            }
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(payload))
+        wp = ConfigLoader(config_file).load().cimier.weather_provider
+        assert wp.type == "shelly_rain"
+        assert wp.host == "10.0.0.9"
+        assert wp.input_id == 1
+        assert wp.invert is True
+        assert wp.timeout_s == 1.5
+        assert wp.protection_enabled is True
+        assert wp.watch_interval_s == 5.0
+        assert wp.confirm_reads == 3
+
+    def test_missing_section_stays_retro_compatible(self, tmp_path, sample_config_dict):
+        # Une config antérieure (sans la section) doit se charger et rester noop.
+        payload = dict(sample_config_dict)
+        payload["cimier"] = {"enabled": True}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(payload))
+        wp = ConfigLoader(config_file).load().cimier.weather_provider
+        assert wp.type == "noop"
+        assert wp.protection_enabled is False
+
+    def test_non_dict_section_falls_back_to_defaults(self, tmp_path, sample_config_dict):
+        # Config terrain mal saisie : ne doit pas casser le boot du service.
+        payload = dict(sample_config_dict)
+        payload["cimier"] = {"weather_provider": "oui"}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(payload))
+        assert ConfigLoader(config_file).load().cimier.weather_provider.type == "noop"

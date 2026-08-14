@@ -90,3 +90,7 @@ UPAN/
 docs/deploiement_v6.7.0_terrain.pdf
 docs/rapport_NGC4151_20260416.pdf
 docs/rapport_anticipation_meridien_v511.pdf
+
+# Journaux de nuit cimier (données terrain, cf. data/sessions/)
+data/nights/*.jsonl
+!data/nights/.gitkeep

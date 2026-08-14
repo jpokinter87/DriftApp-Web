@@ -227,15 +227,36 @@ class SwitchReaderConfig:
 
 @dataclass
 class WeatherProviderConfig:
-    """Configuration du provider météo cimier (v6.0 Phase 2).
+    """Configuration du provider météo cimier.
 
-    Phase 2 ne livre que `type="noop"` (interface logique, pas de capteur).
-    Les types réels (ex. `"pico_w_sensor"`) arriveront avec un milestone
-    capteurs ultérieur (v6.4+). Aucun seuil dans la config tant qu'aucun
-    capteur réel n'existe — le contrat figure dans `core.hardware.weather_provider`.
+    ``type="noop"`` (défaut) : provider inerte, toujours OK — comportement
+    historique, aucune régression pour une config non migrée.
+
+    ``type="shelly_rain"`` : capteur de pluie MH-RD lu via un Shelly Plus Uni
+    dédié (RPC ``Input.GetStatus``). Valeurs mesurées sur le terrain le
+    14/08/2026 : D0 sur l'entrée ``id=0``, ``state=true`` = pluie, donc
+    ``invert=false``.
+
+    ``protection_enabled`` est la case « Protection pluie » du dashboard.
+    Désarmée, le capteur est lu, publié et journalisé mais ne commande rien —
+    c'est le mode d'observation qui permet d'éprouver le comportement sous un
+    orage réel sans risque.
+
+    ``confirm_reads`` : nombre de lectures concordantes exigées avant de
+    changer d'état (anti-rebond). ``watch_interval_s`` : cadence de la veille
+    dans ``cimier_service``.
+
+    IP réelle uniquement dans ``data/config.json`` (terrain) — code neutre.
     """
 
     type: str = "noop"
+    host: str = ""
+    input_id: int = 0
+    invert: bool = False
+    timeout_s: float = 3.0
+    protection_enabled: bool = False
+    watch_interval_s: float = 10.0
+    confirm_reads: int = 2
 
 
 VALID_AUTOMATION_MODES = ("manual", "semi", "full")
@@ -608,6 +629,8 @@ class ConfigLoader:
         ms_defaults = MotorShellyConfig()
         ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
         wp = c.get("weather_provider", {}) if isinstance(c, dict) else {}
+        if not isinstance(wp, dict):
+            wp = {}
         au = c.get("automation", {}) if isinstance(c, dict) else {}
         ms = c.get("motor_shelly", {}) if isinstance(c, dict) else {}
         if not isinstance(ms, dict):
@@ -643,6 +666,15 @@ class ConfigLoader:
             ),
             weather_provider=WeatherProviderConfig(
                 type=str(wp.get("type", wp_defaults.type)),
+                host=str(wp.get("host", wp_defaults.host)),
+                input_id=int(wp.get("input_id", wp_defaults.input_id)),
+                invert=bool(wp.get("invert", wp_defaults.invert)),
+                timeout_s=float(wp.get("timeout_s", wp_defaults.timeout_s)),
+                protection_enabled=bool(
+                    wp.get("protection_enabled", wp_defaults.protection_enabled)
+                ),
+                watch_interval_s=float(wp.get("watch_interval_s", wp_defaults.watch_interval_s)),
+                confirm_reads=int(wp.get("confirm_reads", wp_defaults.confirm_reads)),
             ),
             automation=CimierAutomationConfig(
                 mode=self._resolve_automation_mode(au, au_defaults.mode),

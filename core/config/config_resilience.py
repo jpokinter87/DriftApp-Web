@@ -36,7 +36,7 @@ ENUM_REGISTRY: dict[str, list] = {
     "motor_driver.type": ["gpio", "rp2040"],
     "cimier.switch_reader.type": ["shelly_uni", "noop"],
     "cimier.power_switch.type": ["shelly_gen1", "shelly_gen2", "noop"],
-    "cimier.weather_provider.type": ["noop"],
+    "cimier.weather_provider.type": ["noop", "shelly_rain"],
     "cimier.motor_shelly.api": ["legacy", "rpc"],
     "cimier.switch_reader.api": ["legacy", "rpc"],
     # Indices relais/entrées Shelly (0/1).
@@ -45,6 +45,7 @@ ENUM_REGISTRY: dict[str, list] = {
     "cimier.power_switch.switch_id": [0, 1],
     "cimier.switch_reader.open_input_id": [0, 1],
     "cimier.switch_reader.closed_input_id": [0, 1],
+    "cimier.weather_provider.input_id": [0, 1],
     # SPI encodeur.
     "encodeur.spi.bus": [0, 1],
     "encodeur.spi.device": [0, 1],
@@ -233,10 +234,35 @@ HELP_REGISTRY: dict[str, str] = {
     "cimier.power_switch.switch_id": (
         "Index du relais d'alimentation 24V sur le Shelly power : 0 ou 1."
     ),
-    # cimier.weather_provider
+    # cimier.weather_provider (capteur de pluie MH-RD sur Shelly Plus Uni)
     "cimier.weather_provider.type": (
-        "Source météo consultée avant ouverture. « noop » = toujours OK (capteur "
-        "pluie : backlog séparé)."
+        "Source météo consultée avant ouverture. « noop » = toujours OK (défaut). "
+        "« shelly_rain » = capteur de pluie MH-RD lu via Shelly Plus Uni."
+    ),
+    "cimier.weather_provider.host": (
+        "Hôte/IP du Shelly Plus Uni portant le capteur de pluie MH-RD."
+    ),
+    "cimier.weather_provider.input_id": (
+        "Index de l'entrée Shelly Plus Uni câblée sur la sortie D0 du capteur : 0 ou 1."
+    ),
+    "cimier.weather_provider.invert": (
+        "Inverse la lecture du capteur (true) si le câblage terrain donne "
+        "state=false = pluie. Mesuré terrain le 14/08/2026 : state=true = pluie "
+        "(invert=false)."
+    ),
+    "cimier.weather_provider.timeout_s": (
+        "Délai d'attente (secondes) des requêtes RPC vers le Shelly Plus Uni."
+    ),
+    "cimier.weather_provider.protection_enabled": (
+        "Case « Protection pluie » du dashboard. Désarmée (false, défaut) : le "
+        "capteur est lu et affiché mais ne commande rien (mode observation). "
+        "Armée : refuse l'ouverture et déclenche une fermeture d'urgence sous la pluie."
+    ),
+    "cimier.weather_provider.watch_interval_s": (
+        "Cadence (secondes) de la veille du capteur de pluie dans cimier_service."
+    ),
+    "cimier.weather_provider.confirm_reads": (
+        "Nombre de lectures concordantes exigées avant de changer d'état (anti-rebond)."
     ),
     # cimier.automation (scheduler astropy)
     "cimier.automation.mode": (
