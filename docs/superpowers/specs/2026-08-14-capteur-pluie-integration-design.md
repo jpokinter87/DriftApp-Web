@@ -225,10 +225,15 @@ reste en `noop`, comportement strictement inchangé.
   dans la page `/configuration/`, qui se génère depuis le template.
 - Aucune valeur terrain dans le code Python.
 
-L'écriture depuis le dashboard suit le pattern de `AutomationView` (lecture, modification d'une
-clé, écriture atomique tmp+rename), et non `write_user_config` du chantier B : ce dernier réécrit
-la configuration entière à travers le merge structurel, ce qui est justifié pour un formulaire
-complet mais disproportionné pour basculer un booléen. Les deux cohabitent déjà.
+**Écriture de la case — pas de nouvel endpoint.** `AutomationView` (`/api/cimier/automation/`)
+sait déjà lire `config.json`, y modifier une clé et le réécrire atomiquement, et le dashboard la
+sonde déjà à chaque rafraîchissement. La case y est donc **rattachée** plutôt que dotée de sa
+propre vue : le `GET` renvoie `rain_protection` en plus de `mode`, le `POST` accepte l'un, l'autre
+ou les deux. Aucune URL nouvelle, aucun sondage nouveau, aucune duplication de la mécanique
+d'écriture — et l'armement de la pluie est de toute façon une politique d'automatisation du
+cimier, pas un sujet séparé. `write_user_config` du chantier B est écarté : réécrire la
+configuration entière à travers le merge structurel se justifie pour un formulaire complet, pas
+pour basculer un booléen.
 
 `data/nights/` est ajouté au `.gitignore` — comme `data/sessions/`, ce sont des données terrain.
 
@@ -239,8 +244,7 @@ complet mais disproportionné pour basculer un booléen. Les deux cohabitent dé
 ### 5.1 Dashboard — cartouche cimier
 
 - **Case « Protection pluie »**, décochée par défaut, à côté du sélecteur Mode auto.
-  `POST /api/cimier/rain-protection/`, calqué sur `AutomationView` (lecture/écriture atomique de
-  `config.json`, réponse `apply_pending`).
+  Portée par `/api/cimier/automation/` déjà sondé par le dashboard (§4) — pas de nouvelle URL.
 - **Pastille d'état** `SEC` / `PLUIE` / `CAPTEUR ?` à côté de la case. Sans elle, une campagne
   d'observation serait aveugle : décochée, la case ne produit aucun effet visible. Alimentée par
   `cimier_status.json`, déjà transmis brut par `/api/cimier/status/`.
@@ -315,7 +319,8 @@ consomment (garde-fou anti-régression du bug 6.11.3).
 **`tests/test_night_journal.py`** — append/flush, découpage midi→midi, purge 30 jours, robustesse
 sur erreur d'E/S (journalisée, jamais propagée).
 
-**Web** — `GET`/`POST /api/cimier/rain-protection/`, `GET /api/session/night/`.
+**Web** — `GET`/`POST /api/cimier/automation/` étendu (`rain_protection` lu et écrit, `mode` seul
+toujours accepté — non-régression), `GET /api/session/night/`.
 
 **Régression** — suite complète verte (1180 au dernier décompte).
 
