@@ -21,10 +21,10 @@ L'argument ``urlopen`` permet d'injecter un mock pour les tests.
 
 from __future__ import annotations
 
-import json
-import urllib.error
 import urllib.request
 from dataclasses import dataclass
+
+from core.hardware.shelly_rpc import ShellyRpcError, read_input_state
 
 
 class SwitchReaderError(Exception):
@@ -67,24 +67,10 @@ class ShellySwitchReader:
         self._urlopen = urlopen or urllib.request.urlopen
 
     def _read_input(self, input_id: int):
-        url = "http://" + self._host + "/rpc/Input.GetStatus?id=" + str(input_id)
         try:
-            with self._urlopen(url, timeout=self._timeout_s) as resp:
-                status = getattr(resp, "status", 200)
-                raw = resp.read()
-        except urllib.error.URLError as exc:
-            raise SwitchReaderError("Shelly Uni+ unreachable: " + str(exc.reason)) from exc
-        except OSError as exc:
-            raise SwitchReaderError("Shelly Uni+ socket error: " + str(exc)) from exc
-        if status != 200:
-            raise SwitchReaderError("Shelly Uni+ HTTP " + str(status))
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError) as exc:
-            raise SwitchReaderError("Shelly Uni+ JSON invalide: " + str(exc)) from exc
-        if not isinstance(payload, dict) or "state" not in payload:
-            raise SwitchReaderError("Shelly Uni+ payload sans 'state': " + repr(payload))
-        return bool(payload["state"]), payload
+            return read_input_state(self._host, input_id, self._timeout_s, self._urlopen)
+        except ShellyRpcError as exc:
+            raise SwitchReaderError("Shelly Uni+ : " + str(exc)) from exc
 
     def read(self) -> SwitchState:
         haut_state, haut_raw = self._read_input(self._open_input_id)
