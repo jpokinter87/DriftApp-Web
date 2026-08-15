@@ -10,6 +10,9 @@
   - 3 relais legacy (Gen 1) : ``GET /relay/<n>?turn=on|off`` →
     ``{"ison": <bool>}``. n=0 → 24V (alim), n=1 → MOT (moteur), n=2 → UPDN
     (sens : ON = ouverture).
+  - capteur de pluie : entrée ``id=2`` du même Uni+ simulé, basculée par
+    ``GET /dev/rain?on=0|1`` → ``{"raining": <bool>}``. Convention terrain
+    (14/08/2026) : ``state=True`` = pluie.
 
 Un thread animateur fait progresser la position tant que 24V ET MOT sont ON
 (course complète en ``full_travel_s``). Conventions naturelles (relais ON =
@@ -40,6 +43,11 @@ RELAY_UPDN = 2
 
 INPUT_BAS = 0
 INPUT_HAUT = 1
+
+# Le simulateur n'émule qu'un seul Shelly : la pluie y prend une 3e entrée
+# libre. Sur le terrain elle est sur l'entrée id=0 d'un Shelly distinct (.87) —
+# la divergence est absorbée par les overrides de dev-mode.
+INPUT_RAIN = 2
 
 
 class _SilentHandler(BaseHTTPRequestHandler):
@@ -88,6 +96,12 @@ class _SilentHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ison": ison})
             return
 
+        if parsed.path == "/dev/rain":
+            raw = qs.get("on", ["1"])[0].strip().lower()
+            raining = raw in ("1", "true", "yes", "on")
+            self._send_json(200, {"raining": sim.set_rain(raining)})
+            return
+
         self._send_json(404, {"error": "not_found", "path": self.path})
 
     def do_POST(self):  # noqa: N802
@@ -129,6 +143,7 @@ class CimierSimulator:
         self._lock = threading.Lock()
 
         self._power_on = False  # relais 24V
+        self._raining = False  # entrée pluie simulée (bascule via /dev/rain)
         self._last_advance_ts = None
 
     # --- lifecycle -----------------------------------------------------
@@ -207,6 +222,9 @@ class CimierSimulator:
                 return not self._mechanism.open_switch
             if input_id == INPUT_BAS:
                 return not self._mechanism.closed_switch
+            if input_id == INPUT_RAIN:
+                # Convention terrain mesurée le 14/08/2026 : state=true = pluie.
+                return self._raining
             return None
 
     def set_relay(self, relay_id, turn):
@@ -224,6 +242,12 @@ class CimierSimulator:
                 self._mechanism.set_direction(open_direction=on)
                 return on
             return None
+
+    def set_rain(self, raining):
+        """Bascule l'averse simulée. Retourne l'état courant."""
+        with self._lock:
+            self._raining = bool(raining)
+            return self._raining
 
     # --- animation -----------------------------------------------------
     def _advance_locked(self):

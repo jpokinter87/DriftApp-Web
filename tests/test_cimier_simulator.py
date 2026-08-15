@@ -8,7 +8,7 @@ import urllib.request
 
 import pytest
 
-from core.hardware.cimier_simulator import CimierSimulator
+from core.hardware.cimier_simulator import INPUT_RAIN, CimierSimulator
 
 
 @pytest.fixture
@@ -78,3 +78,34 @@ def test_shelly_switch_reader_reads_via_real_http(sim):
     assert state.closed_switch is True
     assert state.open_switch is False
     assert state.both_switches is False
+
+
+# --- entrée pluie simulée (2026-08) ------------------------------------
+
+
+def test_rain_input_is_dry_by_default(sim):
+    payload = _get_json(sim.url + "/rpc/Input.GetStatus?id={}".format(INPUT_RAIN))
+    assert payload["state"] is False
+
+
+def test_dev_rain_on_makes_it_wet(sim):
+    _get_json(sim.url + "/dev/rain?on=1")
+    payload = _get_json(sim.url + "/rpc/Input.GetStatus?id={}".format(INPUT_RAIN))
+    assert payload["state"] is True
+
+
+def test_dev_rain_off_makes_it_dry_again(sim):
+    _get_json(sim.url + "/dev/rain?on=1")
+    _get_json(sim.url + "/dev/rain?on=0")
+    payload = _get_json(sim.url + "/rpc/Input.GetStatus?id={}".format(INPUT_RAIN))
+    assert payload["state"] is False
+
+
+def test_dev_rain_returns_current_state(sim):
+    assert _get_json(sim.url + "/dev/rain?on=1") == {"raining": True}
+
+
+def test_rain_input_does_not_disturb_the_limit_switches(sim):
+    before = _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"]
+    _get_json(sim.url + "/dev/rain?on=1")
+    assert _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"] == before

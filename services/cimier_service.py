@@ -1165,7 +1165,8 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
 
     Le simulateur (`core.hardware.cimier_simulator`) émule sur 127.0.0.1:8001 :
       - les butées Shelly Uni+ (RPC Input.GetStatus id=0 BAS / id=1 HAUT),
-      - 3 relais legacy : id=0 → 24V, id=1 → MOT, id=2 → UPDN.
+      - 3 relais legacy : id=0 → 24V, id=1 → MOT, id=2 → UPDN,
+      - le capteur de pluie sur l'entrée id=2 (GET /dev/rain?on=0|1).
     Conventions naturelles côté sim (relais ON = actif) ; les conventions
     terrain potentiellement inversées sont validées au banc, pas en dev.
     Ne touche jamais data/config.json sur disque (patch mémoire seulement).
@@ -1177,6 +1178,15 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
     cimier_cfg.switch_reader.open_input_id = 1
     cimier_cfg.switch_reader.closed_input_id = 0
     cimier_cfg.switch_reader.invert = True
+    # Capteur de pluie simulé : 3e entrée du Shelly unifié (id=2), basculée
+    # par GET /dev/rain?on=1. Désarmé par défaut, comme en production — c'est
+    # l'UI qui arme, et on veut exercer le mode observation en priorité.
+    cimier_cfg.weather_provider.type = "shelly_rain"
+    cimier_cfg.weather_provider.host = "127.0.0.1:8001"
+    cimier_cfg.weather_provider.input_id = 2
+    cimier_cfg.weather_provider.invert = False
+    cimier_cfg.weather_provider.watch_interval_s = 2.0
+    cimier_cfg.weather_provider.confirm_reads = 2
     cimier_cfg.power_switch.type = "shelly_gen1"
     cimier_cfg.power_switch.host = "127.0.0.1:8001"
     cimier_cfg.power_switch.switch_id = 0
