@@ -633,6 +633,7 @@ class CimierService:
                 duration_ms,
                 reason,
             )
+            night_journal.append_event("cimier", action=action, result="noop", reason=reason)
             return
         if decision in ("error", "unreachable"):
             self._publish_status(
@@ -651,6 +652,7 @@ class CimierService:
                 decision,
                 reason,
             )
+            night_journal.append_event("cimier", action=action, result=decision, reason=reason)
             return
 
         # ----- Cinématique Shelly (spec §3.1 → §3.4) -----
@@ -811,6 +813,7 @@ class CimierService:
                 result,
                 error_message or "none",
             )
+            night_journal.append_event("cimier", action=action, result=result)
 
             # Cooldown : démarrer la fenêtre anti-bounce.
             self._cooldown_end_ts = self._clock() + self._config.post_off_quiet_s

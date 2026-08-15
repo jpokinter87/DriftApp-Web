@@ -2489,3 +2489,88 @@ class TestRainWatchWithRealProvider:
         service.tick()
         assert closer.calls == ["rain"], "2e tour : pluie confirmée → fermeture d'urgence"
         assert rain.latched is True
+
+
+class TestCimierCycleJournaling:
+    def test_preflight_noop_is_written_to_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+        cfg = CimierConfig(enabled=True)
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            # Déjà fermé → preflight noop, cycle court sans matériel.
+            switch_reader=FakeSwitchReader([(False, True)]),
+            ipc_manager=ipc,
+        )
+        service.execute_command({"id": "c1", "action": "close"})
+        cimier_events = [kw for e, kw in recorded if e == "cimier"]
+        assert cimier_events
+        assert cimier_events[-1]["action"] == "close"
+        assert cimier_events[-1]["result"] == "noop"
+
+    def test_nominal_cycle_end_is_written_to_night_journal(
+        self, ipc_manager: RecordingIpcManager, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Le chemin réellement emprunté à chaque ouverture/fermeture (branche
+        ``finally``) : c'est celui-là, pas le préflight ``noop`` ci-dessus, qui
+        alimente la frise de restitution (Tasks 13-14) avec l'état du cimier.
+
+        Montage identique à
+        ``TestOrchestrationLogging.test_full_open_cycle_publishes_expected_events``
+        (mécanisme simulé + horloge simulée) — seul le point de vérification
+        change : ici on observe le journal de nuit, pas les logs.
+        """
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+
+        mech = CimierMechanismSim(initial_state="closed", full_travel_s=0.5)
+        sim_motor = SimMotorShelly(mech)
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        advancing_sleep = MechanismDrivingSleep(mech, clock)
+        reader = MechanismFakeSwitchReader(mech)
+
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=5.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            motor_shelly=MotorShellyConfig(
+                host_motor="203.0.113.85",
+                host_dir="203.0.113.86",
+                timer_safety_sec=90.0,
+            ),
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            motor_shelly=sim_motor,
+            switch_reader=reader,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=advancing_sleep,
+            cycle_poll_interval_s=0.05,
+        )
+        service.execute_command({"id": "ev1", "action": "open"})
+
+        cimier_events = [kw for e, kw in recorded if e == "cimier"]
+        assert cimier_events
+        assert cimier_events[-1]["action"] == "open"
+        assert cimier_events[-1]["result"] == "ok"
