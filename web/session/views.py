@@ -6,6 +6,7 @@ Endpoints:
     GET  /api/session/history/     - Liste des sessions sauvegardées
     GET  /api/session/history/<id>/ - Détail d'une session passée
     POST /api/session/save/        - Sauvegarde manuelle de la session
+    GET  /api/session/night/       - Frise d'une nuit (journal cimier + sessions)
 """
 
 from rest_framework import status
@@ -172,3 +173,74 @@ def delete_session(request, session_id):
             {'error': f'Session non trouvée: {session_id}'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+def night_report(request):
+    """
+    Données de la frise d'une nuit d'observation.
+
+    Query params:
+        date: nuit au format AAAA-MM-JJ (défaut : la plus récente disponible).
+
+    Une nuit couvre midi → midi, découpage propre au journal cimier : une nuit
+    d'observation traverse minuit et ne doit pas être scindée.
+
+    Retourne :
+        - `events`   : journal cimier (pluie, décisions, cycles) ;
+        - `tracking` : sessions de suivi recouvrant la nuit, lues des fichiers
+          déjà persistés — aucun couplage nouveau entre les services ;
+        - `available_nights` : pour peupler le sélecteur de date.
+    """
+    from datetime import datetime, timedelta
+
+    from services import night_journal
+
+    available = night_journal.list_nights()
+    requested = request.query_params.get('date')
+    if requested:
+        try:
+            night_start = datetime.strptime(requested, '%Y-%m-%d')
+        except ValueError:
+            return Response(
+                {'error': 'date invalide, format attendu AAAA-MM-JJ'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif available:
+        requested = available[0]
+        night_start = datetime.strptime(requested, '%Y-%m-%d')
+    else:
+        return Response(
+            {'night': None, 'events': [], 'tracking': [], 'available_nights': []}
+        )
+
+    night_start = night_start.replace(hour=night_journal.NIGHT_BOUNDARY_HOUR)
+    night_end = night_start + timedelta(days=1)
+
+    tracking = []
+    for summary in session_storage.list_sessions(limit=200):
+        start_iso = summary.get('start_time')
+        if not start_iso:
+            continue
+        try:
+            started = datetime.fromisoformat(start_iso)
+        except (TypeError, ValueError):
+            continue
+        if not (night_start <= started < night_end):
+            continue
+        tracking.append({
+            'session_id': summary.get('session_id'),
+            'object_name': summary.get('object_name'),
+            'start_time': start_iso,
+            'end_time': summary.get('end_time'),
+            'duration_seconds': summary.get('duration_seconds', 0),
+        })
+
+    return Response({
+        'night': requested,
+        'night_start': night_start.isoformat(),
+        'night_end': night_end.isoformat(),
+        'events': night_journal.read_night(requested),
+        'tracking': tracking,
+        'available_nights': available,
+    })
