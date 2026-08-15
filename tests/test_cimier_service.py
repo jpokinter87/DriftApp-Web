@@ -2151,3 +2151,341 @@ class TestWeatherProviderViaMechanism:
             "weather payload should be serialized into cycle_start log: " + msg
         )
         assert '"wind_kph":12' in msg
+
+
+# ======================================================================
+# Veille pluie (2026-08)
+# ======================================================================
+
+
+class StubRainProtection:
+    """Double de RainProtection : état pilotable, appels comptés."""
+
+    def __init__(self, state="dry", armed=False):
+        self.state = state
+        self.armed = armed
+        self.latched = False
+        self.read_calls = 0
+
+    def read_now(self):
+        self.read_calls += 1
+        return self.state
+
+    def latch(self):
+        self.latched = True
+
+    def release(self):
+        self.latched = False
+
+    def is_safe_to_open(self):
+        if not self.armed:
+            return True
+        return (not self.latched) and self.state == "dry"
+
+    def is_safe_to_keep_open(self):
+        if not self.armed:
+            return True
+        return self.state != "wet"
+
+    def describe(self):
+        return {
+            "provider": "stub",
+            "state": self.state,
+            "armed": self.armed,
+            "latched": self.latched,
+        }
+
+
+class RecordingCloser:
+    """Capture les appels à la séquence de fermeture."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, reason):
+        self.calls.append(reason)
+        return {"cimier_close_sent": True}
+
+
+def make_rain_service(tmp_path, rain, cimier_open=True, watch_interval_s=0.0, config_path=None):
+    """Service prêt pour la veille, avec un cimier observé ouvert ou fermé.
+
+    ``config_path`` pointe par défaut sur un fichier absent : le rafraîchissement
+    de l'armement depuis la config est alors inerte, et les tests ne dépendent
+    pas du `data/config.json` de la machine.
+    """
+    from core.config.config_loader import WeatherProviderConfig
+
+    cfg = CimierConfig(
+        enabled=True,
+        weather_provider=WeatherProviderConfig(
+            type="shelly_rain", host="1.2.3.4", watch_interval_s=watch_interval_s
+        ),
+    )
+    ipc = CimierIpcManager(command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json")
+    clock = MockClock()
+    service = CimierService(
+        cimier_config=cfg,
+        power_switch=NoopPowerSwitch(),
+        motor_shelly=NoopMotorShelly(),
+        switch_reader=FakeSwitchReader([(cimier_open, not cimier_open)]),
+        ipc_manager=ipc,
+        weather_provider=rain,
+        config_path=config_path if config_path is not None else tmp_path / "absent.json",
+        clock=clock,
+        sleep=clock.sleep,
+    )
+    service._last_open_switch = cimier_open
+    service._last_closed_switch = not cimier_open
+    return service
+
+
+class TestRainWatch:
+    @pytest.fixture(autouse=True)
+    def _isolate_night_journal(self, tmp_path, monkeypatch):
+        """Le journal de nuit écrit dans tmp_path, jamais dans data/nights du dépôt."""
+        from services import night_journal
+
+        monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
+
+    def test_reads_the_sensor_on_each_tick(self, tmp_path):
+        rain = StubRainProtection(state="dry")
+        service = make_rain_service(tmp_path, rain)
+        service.tick()
+        assert rain.read_calls == 1
+
+    def test_armed_rain_on_open_cimier_triggers_close(self, tmp_path):
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_armed_rain_latches_against_reopening(self, tmp_path):
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        assert rain.latched is True
+
+    def test_disarmed_rain_does_not_close(self, tmp_path):
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == []
+
+    def test_disarmed_rain_logs_would_close(self, tmp_path, caplog):
+        import logging
+
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        with caplog.at_level(logging.INFO, logger="services.cimier_service"):
+            service.tick()
+        assert "rain_would_close" in caplog.text
+
+    def test_closed_cimier_is_not_closed_again(self, tmp_path):
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=False)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == []
+
+    def test_unreachable_sensor_never_closes(self, tmp_path):
+        rain = StubRainProtection(state="unreachable", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == []
+
+    def test_rain_state_is_published_in_status(self, tmp_path):
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload["rain"]["state"] == "wet"
+        assert payload["rain"]["armed"] is False
+
+    def test_rain_transition_is_written_to_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        assert any(e == "rain" and kw.get("state") == "wet" for e, kw in recorded)
+
+    def test_stable_state_is_not_journaled_twice(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service.tick()
+        service.tick()
+        assert len([e for e, _ in recorded if e == "rain"]) == 1
+
+    def test_noop_provider_disables_the_watch_entirely(self, tmp_path):
+        # Rétro-compat : une config non migrée ne doit rien changer.
+        from core.hardware.weather_provider import NoopWeatherProvider
+
+        cfg = CimierConfig(enabled=True)
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            switch_reader=FakeSwitchReader([(False, True)]),
+            ipc_manager=ipc,
+            weather_provider=NoopWeatherProvider(),
+        )
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload.get("rain") is None
+
+    def test_manual_open_command_releases_the_latch(self, tmp_path):
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=False)
+        rain.latch()
+        service.execute_command({"id": "x1", "action": "open"})
+        assert rain.latched is False
+
+    def test_armed_flag_is_refreshed_from_config(self, tmp_path):
+        """La case « Protection pluie » prend effet sans redémarrer le service."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": True}}})
+        )
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(tmp_path, rain, config_path=config_file)
+        service.tick()
+        assert rain.armed is True
+
+    def test_unreadable_config_leaves_the_armed_flag_untouched(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text("{ pas du json")
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, config_path=config_file)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        assert rain.armed is True
+
+    def test_structurally_unexpected_config_does_not_break_the_watch(self, tmp_path):
+        """Un config.json valide en JSON mais inattendu en structure.
+
+        Le refresh est la première instruction du tour de veille : s'il levait,
+        la lecture du capteur et la publication seraient perdues à chaque
+        itération. On vérifie donc que le tour va jusqu'au bout.
+        """
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps({"cimier": "pas un objet"}))
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, config_path=config_file)
+        service._rain_watch_tick()
+        assert rain.armed is True
+        assert rain.read_calls == 1
+
+    def test_config_root_not_an_object_does_not_break_the_watch(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(["pas", "un", "objet"]))
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, config_path=config_file)
+        service._rain_watch_tick()
+        assert rain.armed is True
+        assert rain.read_calls == 1
+
+
+# ----------------------------------------------------------------------
+# Intégration : veille câblée sur le vrai provider (pas de stub)
+# ----------------------------------------------------------------------
+
+
+class FakeRainShelly:
+    """urlopen programmable — copié de tests/test_weather_provider.py.
+
+    ``script`` = liste de bool (state renvoyé par Input.GetStatus) ; le dernier
+    élément est répété une fois la liste épuisée.
+    """
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.calls = []
+
+    def __call__(self, url, timeout=None):
+        self.calls.append(url)
+        idx = min(len(self.calls) - 1, len(self._script) - 1)
+        item = self._script[idx]
+        return _FakeRainResp(('{"id":0,"state":%s}' % ("true" if item else "false")).encode())
+
+
+class _FakeRainResp:
+    def __init__(self, body, status=200):
+        self._body = body
+        self.status = status
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class TestRainWatchWithRealProvider:
+    @pytest.fixture(autouse=True)
+    def _isolate_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
+
+    def test_real_provider_needs_two_confirmed_reads_before_closing(self, tmp_path):
+        """L'anti-rebond retarde la fermeture d'un tour de veille — c'est voulu.
+
+        Le vrai ``ShellyRainWeatherProvider`` démarre à ``unreachable`` et exige
+        ``confirm_reads`` (2) lectures concordantes avant de confirmer un état.
+        Sous une pluie continue, la fermeture d'urgence part donc au **deuxième**
+        tour de veille, pas au premier : une lecture aberrante isolée ne doit pas
+        mettre fin à une nuit d'observation. Ce test rend cette latence visible
+        pour qu'elle ne change pas en silence.
+        """
+        from core.hardware.weather_provider import (
+            RainProtection,
+            ShellyRainWeatherProvider,
+        )
+
+        rain = RainProtection(
+            ShellyRainWeatherProvider(host="1.2.3.4", urlopen=FakeRainShelly([True])),
+            armed=True,
+        )
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+
+        service.tick()
+        assert closer.calls == [], "1er tour : état pas encore confirmé, on ne ferme pas"
+        assert rain.latched is False
+
+        service.tick()
+        assert closer.calls == ["rain"], "2e tour : pluie confirmée → fermeture d'urgence"
+        assert rain.latched is True

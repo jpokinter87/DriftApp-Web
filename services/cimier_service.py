@@ -38,6 +38,7 @@ import logging
 import os
 import signal
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -63,10 +64,12 @@ from core.hardware.shelly_switch_reader import (
     SwitchReaderError,
 )
 from core.hardware.weather_provider import (
+    RAIN_WET,
     NoopWeatherProvider,
     WeatherProvider,
     make_weather_provider,
 )
+from services import night_journal
 from services.cimier_ipc_manager import CimierIpcManager
 from services.cimier_scheduler import (
     CIMIER_STATE_CLOSED,
@@ -191,6 +194,7 @@ class CimierService:
         site_config: Optional[SiteConfig] = None,
         scheduler: Optional[CimierScheduler] = None,
         motor_ipc: Optional[MotorIpcWriter] = None,
+        config_path: Optional[Path] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         cycle_poll_interval_s: float = DEFAULT_CYCLE_POLL_INTERVAL_S,
@@ -210,6 +214,14 @@ class CimierService:
         )
         self._ipc = ipc_manager or CimierIpcManager()
         self._weather_provider = weather_provider or NoopWeatherProvider()
+        # config.json relu à chaud (mode d'automatisation, case « Protection
+        # pluie ») — injectable pour que les tests ne dépendent pas du fichier
+        # de la machine.
+        self._config_path = (
+            Path(config_path)
+            if config_path is not None
+            else Path(__file__).resolve().parents[1] / "data" / "config.json"
+        )
         self._clock = clock
         self._sleep = sleep
         self._cycle_poll_interval_s = float(cycle_poll_interval_s)
@@ -228,6 +240,11 @@ class CimierService:
         self._last_open_switch: bool = False
         self._last_closed_switch: bool = False
 
+        # Writer IPC moteur : résolu ici (et pas seulement dans la branche
+        # scheduler) car la veille pluie s'en sert aussi pour sa fermeture
+        # d'urgence, y compris quand l'automatisation est en "manual".
+        motor_ipc = motor_ipc or MotorIpcWriter()
+
         # Phase 3 : scheduler astropy. Court-circuit complet si automation off.
         self._scheduler: Optional[CimierScheduler] = scheduler
         self._last_scheduler_check_ts: Optional[float] = None
@@ -239,7 +256,6 @@ class CimierService:
             if site_config is None:
                 logger.warning("cimier_event=automation_disabled reason=site_config_missing")
             else:
-                motor_ipc = motor_ipc or MotorIpcWriter()
                 self._scheduler = CimierScheduler(
                     automation_config=cimier_config.automation,
                     site_config=site_config,
@@ -247,6 +263,18 @@ class CimierService:
                     cimier_ipc=self._ipc,
                     motor_ipc=motor_ipc,
                 )
+
+        # ---- Veille pluie (2026-08) ----
+        # Active uniquement si le provider sait lire un capteur (RainProtection).
+        # Un provider noop laisse tout ce bloc inerte : rétro-compat stricte.
+        self._rain_enabled = hasattr(self._weather_provider, "read_now")
+        self._rain_watch_interval_s = float(cimier_config.weather_provider.watch_interval_s)
+        self._last_rain_watch_ts: Optional[float] = None
+        self._last_rain_state: Optional[str] = None
+        # Indirection pour les tests : la séquence réelle est branchée à la
+        # première utilisation (elle a besoin des writers IPC).
+        self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
+        self._motor_ipc = motor_ipc
 
         self._publish_status(
             state=STATE_IDLE,
@@ -312,6 +340,20 @@ class CimierService:
 
         Découplé pour les tests (avancer la clock entre ticks).
         """
+        # Veille pluie — placée AVANT le scheduler pour qu'une décision
+        # d'ouverture ne s'appuie jamais sur un état capteur non encore lu.
+        if self._rain_enabled:
+            now_mono = self._clock()
+            if (
+                self._last_rain_watch_ts is None
+                or (now_mono - self._last_rain_watch_ts) >= self._rain_watch_interval_s
+            ):
+                try:
+                    self._rain_watch_tick()
+                except Exception as exc:  # noqa: BLE001 — la veille ne tue jamais le service
+                    logger.error("cimier_event=rain_watch_exception exc=%s", exc)
+                self._last_rain_watch_ts = now_mono
+
         # 0. Phase 3 : scheduler astropy (toutes les scheduler_interval_seconds,
         #    pas à chaque tick). Court-circuit si scheduler None (automation off).
         if self._scheduler is not None:
@@ -327,8 +369,7 @@ class CimierService:
                 # Pas critique si ça échoue (mode courant gardé).
                 try:
                     if hasattr(self._scheduler, "refresh_mode_from_config"):
-                        config_path = Path(__file__).resolve().parents[1] / "data" / "config.json"
-                        self._scheduler.refresh_mode_from_config(config_path)
+                        self._scheduler.refresh_mode_from_config(self._config_path)
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("cimier_event=mode_refresh_exception exc=%s", exc)
                 current_state = self._derive_current_cimier_state()
@@ -406,6 +447,15 @@ class CimierService:
         cmd_id = str(command.get("id", ""))
         self._last_action_value = action
         self._last_command_id_value = cmd_id
+
+        if action == ACTION_OPEN and hasattr(self._weather_provider, "release"):
+            # Une ouverture décidée par un humain lève le verrou anti-réouverture :
+            # c'est le seul geste qui vaut consentement explicite. Le scheduler,
+            # lui, ne peut pas en émettre tant que le verrou tient — son trigger
+            # d'ouverture consulte is_safe_to_open(), qui refuse si latched.
+            if getattr(self._weather_provider, "latched", False):
+                logger.info("cimier_event=rain_latch_released source=manual_open")
+            self._weather_provider.release()
 
         if action == ACTION_STOP:
             self._handle_stop(cmd_id)
@@ -924,6 +974,8 @@ class CimierService:
                 else None
             ),
         }
+        if self._rain_enabled:
+            payload["rain"] = self._weather_provider.describe()
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
         self._ipc.write_status(payload)
@@ -957,6 +1009,113 @@ class CimierService:
         if self._last_closed_switch:
             return CIMIER_STATE_CLOSED
         return "unknown"
+
+    # ------------------------------------------------------------------
+    # Veille pluie
+    # ------------------------------------------------------------------
+
+    def _refresh_rain_armed_from_config(self) -> None:
+        """Relit la case « Protection pluie » depuis data/config.json.
+
+        Même mécanique que le hot-reload du mode d'automatisation : la case
+        cochée dans l'UI prend effet au tour de veille suivant, sans qu'on ait
+        à redémarrer le service. Un échec de lecture laisse l'état courant.
+
+        Un fichier structurellement inattendu (racine non-dict, section
+        ``cimier`` qui n'est pas un objet) est traité comme une absence de
+        valeur, jamais comme une erreur : c'est la première instruction du tour
+        de veille, une exception ici priverait le reste du tour — lecture du
+        capteur comprise — à chaque itération.
+        """
+        provider = self._weather_provider
+        if not hasattr(provider, "armed"):
+            return
+        try:
+            with open(self._config_path, "r") as fh:
+                cfg = json.load(fh)
+        except (IOError, OSError, ValueError) as exc:
+            logger.debug("cimier_event=rain_armed_refresh_skip exc=%s", exc)
+            return
+        if not isinstance(cfg, dict):
+            return
+        cimier_section = cfg.get("cimier")
+        section = (
+            cimier_section.get("weather_provider", {}) if isinstance(cimier_section, dict) else {}
+        )
+        if not isinstance(section, dict) or "protection_enabled" not in section:
+            return
+        armed = bool(section.get("protection_enabled"))
+        if armed != provider.armed:
+            logger.info(
+                "cimier_event=rain_protection_changed from=%s to=%s source=config_hot_reload",
+                provider.armed,
+                armed,
+            )
+            provider.armed = armed
+
+    def _close_session_for_rain(self, reason: str) -> Dict[str, Any]:
+        """Fermeture d'urgence : séquence partagée avec le scheduler et le parking."""
+        from services.session_close_sequence import close_session
+
+        cimier_cmd_id = str(uuid.uuid4())
+
+        def _send_close() -> bool:
+            # Le booléen compte : la télémétrie ne doit pas affirmer le succès
+            # d'une écriture perdue (cf. CimierIpcManager.write_command).
+            return bool(self._ipc.write_command({"id": cimier_cmd_id, "action": "close"}))
+
+        return close_session(
+            self._motor_ipc,
+            _send_close,
+            self._config.automation.parking_target_azimuth_deg,
+            reason=reason,
+        )
+
+    def _rain_watch_tick(self) -> None:
+        """Un tour de veille pluie : rafraîchit l'armement, lit, publie, décide."""
+        self._refresh_rain_armed_from_config()
+        provider = self._weather_provider
+        state = provider.read_now()
+
+        if state != self._last_rain_state:
+            logger.info(
+                "cimier_event=rain_transition from=%s to=%s armed=%s",
+                self._last_rain_state or "unknown",
+                state,
+                getattr(provider, "armed", False),
+            )
+            night_journal.append_event(
+                "rain", state=state, armed=bool(getattr(provider, "armed", False))
+            )
+            self._last_rain_state = state
+
+        # Décision : le cimier doit être observé ouvert. En cooldown ou en
+        # cycle, l'état dérivé n'est pas "open" et on réessaie au tour suivant
+        # — nécessaire, le service étant en mode Drop (une commande écrite
+        # pendant le cooldown serait consommée puis jetée).
+        if self._derive_current_cimier_state() != CIMIER_STATE_OPEN:
+            return
+        # On interroge la mesure, pas ``is_safe_to_keep_open()`` : cette
+        # dernière est bridée par l'armement (elle répond toujours True quand
+        # la protection est désarmée), ce qui rendrait la décision à blanc
+        # ci-dessous inatteignable. ``state != wet`` couvre aussi le fail-safe :
+        # un capteur injoignable ne ferme jamais.
+        if state != RAIN_WET:
+            return
+
+        if not getattr(provider, "armed", False):
+            # Décision à blanc : ce qu'on aurait fait, sans le faire. C'est ce
+            # qui permet de valider le déclenchement avant d'armer.
+            logger.info("cimier_event=rain_would_close state=%s armed=false", state)
+            night_journal.append_event("decision", action="would_close", reason="rain")
+            return
+
+        logger.warning("cimier_event=rain_emergency_close state=%s", state)
+        night_journal.append_event("decision", action="close", reason="rain")
+        closer = self._close_session_fn or self._close_session_for_rain
+        closer("rain")
+        if hasattr(provider, "latch"):
+            provider.latch()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -1047,6 +1206,7 @@ def _build_service_from_config(config_path=None) -> CimierService:
         switch_reader=switch_reader,
         weather_provider=weather_provider,
         site_config=cfg.site,
+        config_path=config_path,
         cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,
     )
 
@@ -1058,6 +1218,7 @@ def main() -> int:
     from core.config.config_status_writer import write_config_status
 
     write_config_status(ensure_config_ready(force=True))
+    night_journal.purge_old()
 
     # Niveau DEBUG si verbose_logging (ou dev mode) : sans ça, les lignes
     # `logger.debug` du poll (poll_status open/closed_switch) restent filtrées
