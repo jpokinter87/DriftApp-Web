@@ -33,6 +33,10 @@ document.addEventListener('alpine:init', () => {
         automationNextOpenAt: null,                // ISO 8601 UTC string ou null
         automationNextCloseAt: null,               // ISO 8601 UTC string ou null
         automationCountdownLabel: '',              // libellé contextualisé pré-calculé
+        // Protection pluie (2026-08) — case décochée par défaut. Le capteur
+        // est lu et affiché en permanence ; la case n'arme que l'action.
+        rainProtection: false,                     // reflet de config.json
+        rainProtectionInFlight: false,             // anti-double-clic POST
         parkingConfirmVisible: false,
         parkingConfirmObject: null,
         parkingConfirmCountdown: 0,
@@ -949,6 +953,24 @@ async function pollCimierStatus() {
         pushCimierTimeline(level, `Cimier : ${from} → ${to}`);
     }
 
+    // Transitions du capteur de pluie → timeline. Comparé avant assignation,
+    // comme l'état cimier juste au-dessus.
+    const prevRain = store.cimier?.rain?.state;
+    const nextRain = status.rain?.state;
+    if (prevRain && nextRain && prevRain !== nextRain) {
+        if (nextRain === 'wet') {
+            pushCimierTimeline('WARNING', 'Capteur de pluie : PLUIE détectée');
+        } else if (nextRain === 'unreachable') {
+            pushCimierTimeline('ERROR', 'Capteur de pluie injoignable — protection aveugle');
+        } else {
+            pushCimierTimeline('INFO', 'Capteur de pluie : retour au sec');
+        }
+    }
+    // Verrou anti-réouverture posé par une fermeture pluie.
+    if (!store.cimier?.rain?.latched && status.rain?.latched) {
+        pushCimierTimeline('WARNING', 'Fermeture pluie — réouverture auto verrouillée');
+    }
+
     store.cimier = status;
 
     // Hydratation des `next_*_at` depuis le status (calculés par le scheduler
@@ -1205,6 +1227,9 @@ async function fetchAutomationState() {
             // (verrou — le backend reflète désormais config.json donc ça ne
             // devrait normalement pas arriver, mais belt-and-suspenders).
         }
+        if (typeof data.rain_protection === 'boolean' && !store.rainProtectionInFlight) {
+            store.rainProtection = data.rain_protection;
+        }
         store.automationNextOpenAt = data.next_open_at || null;
         store.automationNextCloseAt = data.next_close_at || null;
         recomputeAutomationCountdown();
@@ -1257,6 +1282,61 @@ async function updateAutomationMode(newMode) {
     }
 }
 window.updateAutomationMode = updateAutomationMode;
+
+// Libellé de la pastille capteur de pluie. Source : cimier_status.json,
+// publié par la veille de cimier_service (clé `rain`). Absent = provider noop
+// ou service arrêté.
+function rainStateLabel() {
+    const rain = Alpine.store('dashboard').cimier?.rain;
+    if (!rain) return '';
+    if (rain.state === 'wet') return 'PLUIE';
+    if (rain.state === 'dry') return 'SEC';
+    return 'CAPTEUR ?';
+}
+window.rainStateLabel = rainStateLabel;
+
+function rainStateClass() {
+    const rain = Alpine.store('dashboard').cimier?.rain;
+    if (!rain) return '';
+    if (rain.state === 'wet') return 'rain-pill rain-pill-wet';
+    if (rain.state === 'dry') return 'rain-pill rain-pill-dry';
+    return 'rain-pill rain-pill-unknown';
+}
+window.rainStateClass = rainStateClass;
+
+// Avertissement : décochée, la case n'empêche pas le scheduler d'ouvrir au
+// crépuscule. Une campagne d'observation sous orage se mène en manual ou semi.
+function rainModeWarning() {
+    const store = Alpine.store('dashboard');
+    if (store.automationMode === 'full' && !store.rainProtection) {
+        return '⚠ Mode full auto : le cimier s\'ouvrira au crépuscule malgré la pluie';
+    }
+    return '';
+}
+window.rainModeWarning = rainModeWarning;
+
+// Persiste la case via l'endpoint automation (pas d'URL dédiée).
+async function updateRainProtection(enabled) {
+    const store = Alpine.store('dashboard');
+    const previous = store.rainProtection;
+    store.rainProtection = enabled;
+    store.rainProtectionInFlight = true;
+
+    const result = await apiCall('/api/cimier/automation/', 'POST', { rain_protection: enabled });
+
+    store.rainProtectionInFlight = false;
+    if (result && result.applied) {
+        const label = enabled ? 'armée' : 'désarmée';
+        pushCimierTimeline('INFO', `Protection pluie ${label} (prise en compte sous 10 s)`);
+        log(`Cimier : protection pluie ${label}`, 'info');
+    } else {
+        const err = (result && (result.error || result.detail)) || 'erreur inconnue';
+        pushCimierTimeline('ERROR', `Protection pluie : échec (${err})`);
+        log(`Cimier : changement protection pluie échoué (${err})`, 'error');
+        store.rainProtection = previous;
+    }
+}
+window.updateRainProtection = updateRainProtection;
 
 // Ferme la modale parking et nettoie le compteur (pattern modale fermeture cimier).
 function closeParkingConfirmModal() {

@@ -386,6 +386,27 @@
                          class="font-mono text-obs-text-muted"
                          aria-live="polite"
                          x-text="$store.dashboard.automationCountdownLabel || '—'"></div>
+                    <!-- Protection pluie (2026-08) : décochée par défaut. Le capteur
+                         est lu et affiché en permanence ; la case n'arme que l'action
+                         (refus d'ouverture + fermeture d'urgence).
+                         Case en w-5/h-5 (20px) : cible tactile confortable. Le plan
+                         disait w-4/h-4, absents du CSS compilé — w-5/h-5 y sont déjà,
+                         donc pas de recompilation Tailwind à prévoir. -->
+                    <label class="flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                        <input type="checkbox" id="cimier-rain-protection"
+                               class="accent-accent-amber w-5 h-5 shrink-0"
+                               :checked="$store.dashboard.rainProtection"
+                               @change="window.updateRainProtection &&
+                                        window.updateRainProtection($event.target.checked)"
+                               aria-label="Armer la protection pluie">
+                        <span class="text-obs-text-muted uppercase tracking-wider">Protection pluie</span>
+                    </label>
+                    <span id="cimier-rain-state" class="font-mono"
+                          :class="window.rainStateClass ? window.rainStateClass() : ''"
+                          x-text="window.rainStateLabel ? window.rainStateLabel() : ''"
+                          x-show="$store.dashboard.cimier?.rain" x-cloak
+                          role="status" aria-live="polite"
+                          aria-label="État du capteur de pluie"></span>
                     <!-- Toggle timeline repliable (fermée par défaut, v6.11). Tap, pas de survol. -->
                     <button type="button" @click="timelineOpen = !timelineOpen"
                             class="ml-auto flex items-center gap-1.5 font-mono text-obs-text-secondary
@@ -403,6 +424,10 @@
                 <div id="cimier-automation-hint"
                      class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem] mt-1"
                      x-text="$store.dashboard.automationRestartHint"
+                     x-cloak></div>
+                <div id="cimier-rain-warning"
+                     class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem]"
+                     x-text="window.rainModeWarning ? window.rainModeWarning() : ''"
                      x-cloak></div>
 
                 <!-- Timeline notifications cimier (buffer 50 mémoire) — repliable. -->

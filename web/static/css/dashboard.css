@@ -1175,3 +1175,28 @@ header h1 span {
         background: color-mix(in srgb, currentColor 12%, transparent);
     }
 }
+
+/* ── Pastille capteur de pluie (2026-08) ─────────────────────────────────
+   Lisible sans survol : l'écran de l'observatoire est tactile. */
+.rain-pill {
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    border: 1px solid transparent;
+}
+.rain-pill-dry {
+    color: #00d26a;
+    border-color: rgba(0, 210, 106, 0.4);
+    background: rgba(0, 210, 106, 0.08);
+}
+.rain-pill-wet {
+    color: #4aa3ff;
+    border-color: rgba(74, 163, 255, 0.5);
+    background: rgba(74, 163, 255, 0.12);
+}
+.rain-pill-unknown {
+    color: #ffa502;
+    border-color: rgba(255, 165, 2, 0.4);
+    background: rgba(255, 165, 2, 0.08);
+}
