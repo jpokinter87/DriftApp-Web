@@ -8,11 +8,11 @@
 #   - logs/update.log         : log texte détaillé pour debug
 #
 # Étapes (5 au total) :
-#   1. stop_services : stop motor_service, ems22d
+#   1. stop_services : stop motor_service, ems22d, cimier_service
 #   2. fetch         : stash + pull (préserve les modifs locales de l'utilisateur)
 #   3. deps          : uv sync --extra dev --frozen (n'altère jamais uv.lock)
 #   4. services      : install .service + daemon-reload
-#   5. restart       : start ems22d, motor_service, driftapp_web
+#   5. restart       : start ems22d, motor_service, cimier_service, driftapp_web
 #
 # Préservation des fichiers utilisateur :
 #   stash + pop avec priorité user (comportement v5.8.0). Fichiers trackés
@@ -122,7 +122,7 @@ log "Projet : $PROJECT_DIR | Owner dépôt : $REPO_OWNER | TS : $TIMESTAMP"
 # =============================================================================
 # ÉTAPE 1/5 : arrêt services moteur/encodeur
 # =============================================================================
-write_status "stop_services" 1 "Arrêt de motor_service et ems22d..."
+write_status "stop_services" 1 "Arrêt des services (moteur, encodeur, cimier)..."
 log "--- Étape 1/5 : Arrêt services ---"
 
 stop_service() {
@@ -141,6 +141,7 @@ stop_service() {
 
 stop_service "motor_service.service"
 stop_service "ems22d.service"
+stop_service "cimier_service.service"
 pkill -f "motor_service.py" 2>/dev/null || true
 sleep 1
 
@@ -271,7 +272,7 @@ fi
 write_status "services" 4 "Installation des fichiers de service systemd..."
 log "--- Étape 4/5 : services systemd ---"
 
-for svc in ems22d.service motor_service.service driftapp_web.service; do
+for svc in ems22d.service motor_service.service cimier_service.service driftapp_web.service; do
     if [ -f "$PROJECT_DIR/$svc" ]; then
         if cmp -s "$PROJECT_DIR/$svc" "$SERVICE_DIR/$svc" 2>/dev/null; then
             log "$svc : inchangé"
@@ -330,6 +331,7 @@ start_service() {
 
 start_service "ems22d.service"
 start_service "motor_service.service"
+start_service "cimier_service.service"
 
 # Marquer done AVANT de redémarrer Django (sinon le status n'est jamais écrit
 # si Django crashe au restart)

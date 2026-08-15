@@ -23,6 +23,25 @@
   .cfg-notice { padding: 0.5rem 0.9rem; border-radius: 6px; font-size: 0.85rem; }
   .cfg-notice-ok { background: rgba(0,210,106,0.12); color: var(--color-accent-green); }
   .cfg-notice-err { background: rgba(255,71,87,0.12); color: var(--color-accent-red); }
+  /* ── Redémarrage des services ── */
+  .cfg-restart-btn { background: transparent; color: var(--color-accent-amber); border: 1px solid var(--color-accent-amber); border-radius: 6px; padding: 0.5rem 1.1rem; cursor: pointer; font-size: 0.85rem; }
+  .cfg-restart-btn:disabled { opacity: 0.4; cursor: default; }
+  .cfg-restart-report { margin-top: 0.6rem; font-family: var(--font-mono); font-size: 0.78rem; }
+  .cfg-restart-line { display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0; color: var(--color-text-secondary, #c8c8d0); }
+  .cfg-restart-state { color: var(--color-text-muted, #8a8a92); }
+  .cfg-restart-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .cfg-dot-active { background: var(--color-accent-green, #00d26a); }
+  .cfg-dot-failed { background: var(--color-accent-red, #ff4757); }
+  .cfg-dot-absent { background: var(--color-text-muted, #8a8a92); }
+  /* ── Modale de confirmation ── */
+  .cfg-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
+  .cfg-modal { background: var(--color-bg-panel, #1c1c22); border: 1px solid #33333b; border-radius: 10px; padding: 1.3rem; max-width: 30rem; }
+  .cfg-modal-title { color: var(--color-accent-red, #ff4757); font-weight: 700; margin-bottom: 0.7rem; }
+  .cfg-modal-text { font-size: 0.87rem; color: var(--color-text-secondary, #c8c8d0); line-height: 1.5; }
+  .cfg-modal-warn { margin-top: 0.7rem; background: rgba(212,160,85,0.12); color: var(--color-accent-amber); padding: 0.5rem 0.8rem; border-radius: 6px; font-size: 0.84rem; }
+  .cfg-modal-actions { display: flex; gap: 0.7rem; justify-content: flex-end; margin-top: 1.2rem; }
+  .cfg-modal-cancel { background: transparent; color: var(--color-text-secondary, #c8c8d0); border: 1px solid #33333b; border-radius: 6px; padding: 0.5rem 1.1rem; cursor: pointer; }
+  .cfg-modal-confirm { background: var(--color-accent-red, #ff4757); color: #fff; font-weight: 700; border: none; border-radius: 6px; padding: 0.5rem 1.3rem; cursor: pointer; }
 </style>
 {% endblock %}
 
@@ -78,8 +97,49 @@
 
   <div class="cfg-savebar" x-show="!loading">
     <button class="cfg-save-btn" :disabled="!dirty || saving" @click="save()" x-text="saving ? 'Enregistrement…' : 'Sauvegarder'"></button>
+    <!-- Appliquer = redémarrer les services qui lisent config.json. Sans ce
+         bouton, la page n'est utilisable qu'avec un accès SSH. -->
+    <button class="cfg-restart-btn" :disabled="restarting" @click="askRestart()"
+            x-text="restarting ? 'Redémarrage…' : 'Redémarrer les services'"></button>
     <span x-show="dirty && !notice" class="text-sm text-obs-text-muted">Modifications non enregistrées</span>
     <template x-if="notice"><span class="cfg-notice cfg-notice-ok" x-text="notice"></span></template>
+  </div>
+
+  <!-- Détail du dernier redémarrage : quel service est reparti, lequel a échoué. -->
+  <template x-if="restartResult && restartResult.length">
+    <div class="cfg-restart-report">
+      <template x-for="svc in restartResult" :key="svc.name">
+        <div class="cfg-restart-line">
+          <span class="cfg-restart-dot" :class="'cfg-dot-' + svc.state"></span>
+          <span x-text="svc.name"></span>
+          <span class="cfg-restart-state" x-text="{
+            active: 'actif', failed: 'ÉCHEC', absent: 'non installé'
+          }[svc.state] || svc.state"></span>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <!-- Confirmation : le redémarrage coupe un suivi en cours et relance la
+       calibration au boot — la coupole bouge. Jamais sur un simple clic. -->
+  <div class="cfg-modal-backdrop" x-show="confirmRestart" x-cloak @click.self="confirmRestart = false">
+    <div class="cfg-modal" role="dialog" aria-modal="true" aria-labelledby="cfg-restart-title">
+      <h2 id="cfg-restart-title" class="cfg-modal-title">⚠ Redémarrer les services ?</h2>
+      <p class="cfg-modal-text">
+        L'encodeur, le moteur et le cimier vont être relancés pour appliquer la
+        configuration. Le moteur exécute sa calibration au démarrage : <strong>la
+        coupole va bouger</strong>. L'interface reste disponible.
+      </p>
+      <template x-if="trackingObject">
+        <p class="cfg-modal-warn">
+          Un suivi est en cours sur <strong x-text="trackingObject"></strong> — il sera interrompu.
+        </p>
+      </template>
+      <div class="cfg-modal-actions">
+        <button class="cfg-modal-cancel" @click="confirmRestart = false">Annuler</button>
+        <button class="cfg-modal-confirm" @click="restart()">Redémarrer</button>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

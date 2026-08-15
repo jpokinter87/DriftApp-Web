@@ -31,6 +31,13 @@ function configPage() {
     error: '',
     notice: '',
 
+    // Redémarrage des services : une valeur enregistrée ne prend effet
+    // qu'après relance des services qui lisent config.json.
+    confirmRestart: false,
+    restarting: false,
+    trackingObject: null,
+    restartResult: null,
+
     get normalSections() { return this.schema.filter((s) => !s.advanced); },
     get advancedSections() { return this.schema.filter((s) => s.advanced); },
 
@@ -109,6 +116,48 @@ function configPage() {
         this.error = 'Échec de la sauvegarde : ' + e.message;
       } finally {
         this.saving = false;
+      }
+    },
+
+    /**
+     * Ouvre la confirmation, après avoir cherché si un suivi est en cours :
+     * relancer motor_service coupe la session et relance la calibration au
+     * boot — la coupole bouge. L'utilisateur doit le savoir avant de valider.
+     */
+    async askRestart() {
+      this.restartResult = null;
+      this.trackingObject = null;
+      try {
+        const resp = await fetch('/api/health/motor/');
+        const body = await resp.json();
+        this.trackingObject = (body.details || {}).tracking_object || null;
+      } catch (e) {
+        // Motor Service injoignable : pas de suivi à interrompre.
+      }
+      this.confirmRestart = true;
+    },
+
+    async restart() {
+      this.restarting = true;
+      this.error = '';
+      this.notice = '';
+      try {
+        const resp = await fetch('/api/health/restart/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+        });
+        const body = await resp.json();
+        this.restartResult = body.services || [];
+        if (!resp.ok || !body.success) {
+          this.error = 'Redémarrage échoué : ' + (body.error || 'HTTP ' + resp.status);
+        } else {
+          this.notice = body.message || 'Services redémarrés';
+        }
+      } catch (e) {
+        this.error = 'Redémarrage échoué : ' + e.message;
+      } finally {
+        this.restarting = false;
+        this.confirmRestart = false;
       }
     },
 

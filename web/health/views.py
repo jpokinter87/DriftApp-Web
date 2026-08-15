@@ -369,6 +369,12 @@ UPDATE_SCRIPT = PROJECT_ROOT / "scripts" / "update_driftapp.sh"
 UPDATE_STATUS_FILE = PROJECT_ROOT / "logs" / "update_status.json"
 UPDATE_LOG_FILE = PROJECT_ROOT / "logs" / "update.log"
 
+# Redémarrage des services backend (2026-08) : une configuration modifiée
+# depuis /configuration/ ne s'applique qu'après relance des services qui la
+# lisent. Script dédié, whitelisté dans le sudoers.
+RESTART_SCRIPT = PROJECT_ROOT / "scripts" / "restart_services.sh"
+RESTART_STATUS_FILE = PROJECT_ROOT / "logs" / "restart_status.json"
+
 # Rapport de résilience config (chantier A) écrit par les entry points dans l'IPC.
 CONFIG_STATUS_FILE = Path("/dev/shm/config_status.json")
 
@@ -538,3 +544,81 @@ def update_status(request):
             'error': str(e),
             'timestamp': None,
         }, status=500)
+
+@api_view(['POST'])
+def restart_services(request):
+    """
+    Redémarre les services backend (encodeur, moteur, cimier) via sudo.
+
+    Une modification enregistrée depuis /configuration/ n'a d'effet qu'après
+    relance des services qui lisent data/config.json. Sans cet endpoint, la
+    page Configuration exige un accès SSH — impossible à distance.
+
+    Django n'est **pas** redémarré : il porte cette requête, et son cache de
+    configuration est déjà invalidé à la sauvegarde.
+
+    Appel synchrone (le script prend quelques secondes) : la réponse porte
+    l'état final de chaque service, lu dans logs/restart_status.json.
+    """
+    if not RESTART_SCRIPT.exists():
+        return Response({
+            'success': False,
+            'error': f'Script introuvable : {RESTART_SCRIPT}',
+            'services': [],
+        }, status=500)
+
+    logger.info("Redémarrage des services demandé depuis l'interface")
+
+    # Écarter le rapport du redémarrage précédent : si le script ne démarre
+    # pas (sudoers absent), on ne doit pas présenter d'anciens états comme
+    # étant le résultat de cette demande.
+    try:
+        RESTART_STATUS_FILE.unlink()
+    except OSError:
+        pass
+
+    try:
+        result = subprocess.run(
+            ['sudo', '-n', str(RESTART_SCRIPT)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("Timeout au redémarrage des services")
+        return Response({
+            'success': False,
+            'error': 'Timeout : le redémarrage a dépassé 60 s',
+            'services': [],
+        }, status=500)
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.exception("Erreur au redémarrage des services")
+        return Response({'success': False, 'error': str(e), 'services': []}, status=500)
+
+    # Le script détaille chaque service ; on s'y fie de préférence au code de
+    # retour, qui ne dit pas lequel a échoué.
+    report = {}
+    try:
+        with open(RESTART_STATUS_FILE, 'r', encoding='utf-8') as f:
+            report = json.load(f)
+    except (OSError, ValueError):
+        report = {}
+
+    services = report.get('services', [])
+
+    if result.returncode == 0:
+        logger.info("Services redémarrés : %s", services)
+        return Response({
+            'success': True,
+            'message': report.get('message', 'Services redémarrés'),
+            'services': services,
+        })
+
+    err = (result.stderr or '').strip() or report.get('message') or 'Erreur inconnue'
+    logger.error("Redémarrage échoué (rc=%s) : %s", result.returncode, err)
+    return Response({
+        'success': False,
+        'error': err,
+        'services': services,
+    }, status=500)

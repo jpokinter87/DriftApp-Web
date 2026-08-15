@@ -18,3 +18,8 @@ slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --con
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --config-strategy reset
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached --config-strategy keep
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --detached --config-strategy reset
+# 2026-08 — bouton « Redémarrer les services » de la page Configuration : sans
+# lui, un changement de configuration ne s'applique qu'en SSH. Script dédié et
+# sans argument plutôt que systemctl générique, pour conserver la propriété de
+# sécurité ci-dessus.
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/restart_services.sh

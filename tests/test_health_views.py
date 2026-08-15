@@ -366,3 +366,111 @@ class TestApplyUpdate:
             response = api_client.post("/api/health/update/apply/")
             assert response.status_code == 500
             assert response.data["success"] is False
+
+
+class TestRestartServices:
+    """POST /api/health/restart/ — appliquer une config sans SSH.
+
+    Même piège de routage que TestApplyUpdate : patcher `health.views`, le
+    module que Django exécute réellement.
+    """
+
+    def _fake_run(self, returncode=0, stderr=""):
+        class _Result:
+            def __init__(self):
+                self.returncode = returncode
+                self.stdout = ""
+                self.stderr = stderr
+
+        return _Result()
+
+    def _script_writing(self, status_file, payload, returncode=0):
+        """Double fidèle : le vrai script écrit son rapport en s'exécutant."""
+
+        def _run(*args, **kwargs):
+            status_file.write_text(json.dumps(payload), encoding="utf-8")
+            return self._fake_run(returncode=returncode)
+
+        return _run
+
+    def test_script_missing_returns_500(self, api_client):
+        with patch("health.views.RESTART_SCRIPT", Path("/nonexistent/restart.sh")):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 500
+        assert response.data["success"] is False
+
+    def test_successful_restart_reports_each_service(self, api_client, tmp_path):
+        status_file = tmp_path / "restart_status.json"
+        payload = {
+            "done": True,
+            "message": "Services redémarrés",
+            "services": [
+                {"name": "ems22d.service", "state": "active"},
+                {"name": "motor_service.service", "state": "active"},
+                {"name": "cimier_service.service", "state": "active"},
+            ],
+        }
+        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
+            "health.views.subprocess.run", side_effect=self._script_writing(status_file, payload)
+        ):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 200
+        assert response.data["success"] is True
+        assert len(response.data["services"]) == 3
+
+    def test_failed_service_is_reported_as_error(self, api_client, tmp_path):
+        status_file = tmp_path / "restart_status.json"
+        payload = {
+            "done": True,
+            "message": "1 service(s) non redémarré(s)",
+            "services": [{"name": "cimier_service.service", "state": "failed"}],
+        }
+        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
+            "health.views.subprocess.run",
+            side_effect=self._script_writing(status_file, payload, returncode=1),
+        ):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 500
+        assert response.data["success"] is False
+        assert response.data["services"][0]["state"] == "failed"
+
+    def test_sudo_refusal_is_explained(self, api_client, tmp_path):
+        # Sudoers pas encore redéployé sur le Pi : le message doit le dire.
+        with patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"), patch(
+            "health.views.subprocess.run",
+            return_value=self._fake_run(returncode=1, stderr="sudo: a password is required"),
+        ):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 500
+        assert "sudo" in response.data["error"].lower()
+
+    def test_timeout_is_reported(self, api_client, tmp_path):
+        import subprocess as _sp
+
+        with patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"), patch(
+            "health.views.subprocess.run", side_effect=_sp.TimeoutExpired("cmd", 60)
+        ):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 500
+        assert "timeout" in response.data["error"].lower()
+
+    def test_get_is_not_allowed(self, api_client):
+        # Une action matérielle ne doit jamais partir sur une simple navigation.
+        assert api_client.get("/api/health/restart/").status_code == 405
+
+    def test_stale_status_is_not_reported_when_the_script_never_ran(self, api_client, tmp_path):
+        # Un rapport laissé par un redémarrage précédent ne doit pas être
+        # présenté comme le résultat de celui-ci (sudo refusé → rien n'a tourné).
+        status_file = tmp_path / "restart_status.json"
+        status_file.write_text(
+            json.dumps({"services": [{"name": "ems22d.service", "state": "active"}]}),
+            encoding="utf-8",
+        )
+        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
+            "health.views.subprocess.run",
+            return_value=self._fake_run(returncode=1, stderr="sudo: authentication required"),
+        ):
+            response = api_client.post("/api/health/restart/")
+        assert response.status_code == 500
+        assert response.data["services"] == []
+        assert not status_file.exists()
