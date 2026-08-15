@@ -99,6 +99,14 @@
     vertical-align: middle;
     margin-right: 0.25rem;
 }
+/* Pastille de légende de la frise de nuit (carrée, contrairement aux traits
+   de la légende Chart.js au-dessus). */
+.legend-swatch {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
 .legend-dot {
     width: 8px;
     height: 8px;
@@ -284,6 +292,40 @@
     </div>
 </section>
 
+<!-- ═══ Section Nuit (frise pluie / cimier / suivi) ═══ -->
+<section class="panel panel-astro mb-4" x-data>
+    <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <h2 class="section-title section-title-fire">Nuit</h2>
+        <select id="night-selector"
+                class="bg-obs-input border border-obs-border rounded-button px-2 py-1
+                       text-obs-text font-mono text-xs
+                       focus-visible:outline focus-visible:outline-2
+                       focus-visible:outline-accent-amber focus-visible:outline-offset-2"
+                aria-label="Choisir la nuit à afficher"></select>
+    </div>
+    <div id="night-frieze" class="w-full overflow-x-auto"></div>
+    <div class="chart-legend mt-2 text-xs text-obs-text-secondary">
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#4aa3ff"></span><span>Pluie</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#ffa502"></span><span>Capteur injoignable</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#00d26a"></span><span>Cimier ouvert</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#d4a055"></span><span>Suivi</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#ff4757"></span><span>Fermeture pluie</span>
+        </div>
+        <div class="flex items-center gap-1">
+            <span class="legend-swatch" style="background:#ffa502;opacity:.6"></span><span>Aurait fermé</span>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ Section Statistiques ═══ -->
 <section class="panel panel-astro mb-4">
     <h2 class="section-title section-title-fire mb-3">Statistiques</h2>
@@ -388,5 +430,6 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/static/js/night_frieze.js?v={{ APP_VERSION }}"></script>
 <script src="/static/js/session.js?v={{ APP_VERSION }}"></script>
 {% endblock %}

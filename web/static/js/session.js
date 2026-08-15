@@ -763,3 +763,54 @@ function formatDuration(seconds) {
 
     return `${minutes}m ${secs}s`;
 }
+
+// =============================================================================
+// FRISE DE NUIT
+// =============================================================================
+
+// Dernier payload servi : le redimensionnement redessine avec ces données
+// plutôt que de refaire une requête à chaque événement de resize.
+let lastNightPayload = null;
+
+async function loadNight(dateKey) {
+    const container = document.getElementById('night-frieze');
+    const selector = document.getElementById('night-selector');
+    if (!container || !selector) return;
+
+    const url = dateKey ? `/api/session/night/?date=${dateKey}` : '/api/session/night/';
+    let data;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return;
+        data = await response.json();
+    } catch (_e) {
+        return;
+    }
+
+    // Peuple le sélecteur une seule fois, puis reflète la nuit affichée.
+    if (selector.options.length !== (data.available_nights || []).length) {
+        selector.innerHTML = '';
+        (data.available_nights || []).forEach((night) => {
+            const option = document.createElement('option');
+            option.value = night;
+            option.textContent = night;
+            selector.appendChild(option);
+        });
+    }
+    if (data.night) selector.value = data.night;
+
+    lastNightPayload = data;
+    window.renderNightFrieze(container, data);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const selector = document.getElementById('night-selector');
+    if (!selector) return;
+    selector.addEventListener('change', (event) => loadNight(event.target.value));
+    loadNight();
+    // Redessine à la volée : le SVG est calculé pour la largeur du conteneur.
+    window.addEventListener('resize', () => {
+        const container = document.getElementById('night-frieze');
+        if (container && lastNightPayload) window.renderNightFrieze(container, lastNightPayload);
+    });
+});
