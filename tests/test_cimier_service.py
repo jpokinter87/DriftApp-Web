@@ -2342,6 +2342,57 @@ class TestRainWatch:
         service.tick()
         assert len([e for e, _ in recorded if e == "rain"]) == 1
 
+    def test_would_close_is_journaled_once_per_episode(self, tmp_path, monkeypatch):
+        # Le journal enregistre des transitions, pas des échantillons : une
+        # averse de 6 h en mode observation ne doit pas écrire une ligne par
+        # tour de veille (2 160 lignes en prod), sinon la frise est illisible.
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        service.tick()
+        service.tick()
+        assert len([e for e, _ in recorded if e == "decision"]) == 1
+
+    def test_a_new_episode_is_journaled_again(self, tmp_path, monkeypatch):
+        # Une éclaircie puis une reprise de pluie sont bien deux épisodes.
+        from services import night_journal
+
+        recorded = []
+        monkeypatch.setattr(
+            night_journal,
+            "append_event",
+            lambda event, **kw: recorded.append((event, kw)) or True,
+        )
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        service.tick()
+        rain.state = "dry"
+        service.tick()
+        rain.state = "wet"
+        service.tick()
+        assert len([e for e, _ in recorded if e == "decision"]) == 2
+
+    def test_would_close_is_logged_once_per_episode(self, tmp_path, caplog):
+        import logging
+
+        rain = StubRainProtection(state="wet", armed=False)
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        service._close_session_fn = RecordingCloser()
+        with caplog.at_level(logging.INFO, logger="services.cimier_service"):
+            service.tick()
+            service.tick()
+        assert caplog.text.count("rain_would_close") == 1
+
     def test_noop_provider_disables_the_watch_entirely(self, tmp_path):
         # Rétro-compat : une config non migrée ne doit rien changer.
         from core.hardware.weather_provider import NoopWeatherProvider

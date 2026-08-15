@@ -271,6 +271,8 @@ class CimierService:
         self._rain_watch_interval_s = float(cimier_config.weather_provider.watch_interval_s)
         self._last_rain_watch_ts: Optional[float] = None
         self._last_rain_state: Optional[str] = None
+        # Décision à blanc déjà signalée pour l'épisode de pluie en cours.
+        self._rain_would_close_notified = False
         # Indirection pour les tests : la séquence réelle est branchée à la
         # première utilisation (elle a besoin des writers IPC).
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
@@ -1091,6 +1093,8 @@ class CimierService:
                 "rain", state=state, armed=bool(getattr(provider, "armed", False))
             )
             self._last_rain_state = state
+            # Nouvel épisode : la décision à blanc redevient signalable.
+            self._rain_would_close_notified = False
 
         # Décision : le cimier doit être observé ouvert. En cooldown ou en
         # cycle, l'état dérivé n'est pas "open" et on réessaie au tour suivant
@@ -1109,8 +1113,13 @@ class CimierService:
         if not getattr(provider, "armed", False):
             # Décision à blanc : ce qu'on aurait fait, sans le faire. C'est ce
             # qui permet de valider le déclenchement avant d'armer.
-            logger.info("cimier_event=rain_would_close state=%s armed=false", state)
-            night_journal.append_event("decision", action="would_close", reason="rain")
+            # Une seule fois par épisode : la veille repasse ici à chaque tour
+            # tant qu'il pleut, et le journal enregistre des transitions, pas
+            # des échantillons (une averse de 6 h écrirait 2 160 lignes).
+            if not self._rain_would_close_notified:
+                logger.info("cimier_event=rain_would_close state=%s armed=false", state)
+                night_journal.append_event("decision", action="would_close", reason="rain")
+                self._rain_would_close_notified = True
             return
 
         logger.warning("cimier_event=rain_emergency_close state=%s", state)
