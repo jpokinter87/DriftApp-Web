@@ -356,7 +356,11 @@ class TestAutomationView:
         body = response.json()
         # `apply_pending` (et non `restart_required`) : le cimier_service
         # recharge le mode au prochain tick scheduler (≤60s), sans restart.
-        assert body == {"mode": "semi", "applied": True, "apply_pending": True}
+        assert body["mode"] == "semi"
+        assert body["applied"] is True
+        assert body["apply_pending"] is True
+        # La réponse porte désormais aussi l'état de la protection pluie (2026-08).
+        assert body["rain_protection"] is False
         # Fichier réécrit avec mode="semi"
         cfg = json.loads(writable_config_file.read_text())
         assert cfg["cimier"]["automation"]["mode"] == "semi"
@@ -390,6 +394,109 @@ class TestAutomationView:
         cfg_after = json.loads(writable_config_file.read_text())
         assert cfg_after["cimier"]["automation"]["mode"] == "semi"
         assert "enabled" not in cfg_after["cimier"]["automation"]
+
+
+class TestAutomationViewRainProtection:
+    """La case « Protection pluie » voyage sur l'endpoint automation existant."""
+
+    def test_get_returns_rain_protection_false_by_default(
+        self, api_client, mock_cimier_ipc, writable_config_file
+    ):
+        response = api_client.get("/api/cimier/automation/")
+        assert response.status_code == 200
+        assert response.json()["rain_protection"] is False
+
+    def test_get_reflects_configured_value(self, api_client, mock_cimier_ipc, writable_config_file):
+        cfg = json.loads(writable_config_file.read_text())
+        cfg.setdefault("cimier", {})["weather_provider"] = {"protection_enabled": True}
+        writable_config_file.write_text(json.dumps(cfg))
+        response = api_client.get("/api/cimier/automation/")
+        assert response.json()["rain_protection"] is True
+
+    def test_read_rain_protection_returns_false_when_cimier_section_malformed(
+        self, writable_config_file
+    ):
+        # `cimier` n'est pas un dict (config corrompue) : défaut prudent False,
+        # pas d'AttributeError (durcissement écart au plan, cf. rapport).
+        # Testé en appel direct de la méthode plutôt que via GET /automation/ :
+        # ce dernier appelle d'abord `_read_configured_mode`, qui partage la
+        # même fragilité mais n'a pas été durci (hors périmètre de cette tâche)
+        # et lèverait avant d'atteindre `_read_rain_protection`.
+        from web.cimier.views import AutomationView
+
+        cfg = json.loads(writable_config_file.read_text())
+        cfg["cimier"] = "not-a-dict"
+        writable_config_file.write_text(json.dumps(cfg))
+        assert AutomationView._read_rain_protection() is False
+
+    def test_post_persists_rain_protection(self, api_client, writable_config_file):
+        response = api_client.post(
+            "/api/cimier/automation/", {"rain_protection": True}, format="json"
+        )
+        assert response.status_code == 200
+        assert response.json()["rain_protection"] is True
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["weather_provider"]["protection_enabled"] is True
+
+    def test_post_rain_protection_preserves_rest_of_config(self, api_client, writable_config_file):
+        api_client.post("/api/cimier/automation/", {"rain_protection": True}, format="json")
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["site"]["nom"] == "Test"
+        assert cfg["moteur"]["gear_ratio"] == 2230
+
+    def test_post_mode_alone_leaves_rain_protection_untouched(
+        self, api_client, writable_config_file
+    ):
+        api_client.post("/api/cimier/automation/", {"rain_protection": True}, format="json")
+        api_client.post("/api/cimier/automation/", {"mode": "full"}, format="json")
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["weather_provider"]["protection_enabled"] is True
+        assert cfg["cimier"]["automation"]["mode"] == "full"
+
+    def test_post_rain_protection_alone_leaves_mode_untouched(
+        self, api_client, writable_config_file
+    ):
+        api_client.post("/api/cimier/automation/", {"mode": "semi"}, format="json")
+        api_client.post("/api/cimier/automation/", {"rain_protection": True}, format="json")
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["automation"]["mode"] == "semi"
+
+    def test_post_both_fields_at_once(self, api_client, writable_config_file):
+        response = api_client.post(
+            "/api/cimier/automation/", {"mode": "semi", "rain_protection": True}, format="json"
+        )
+        assert response.status_code == 200
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["automation"]["mode"] == "semi"
+        assert cfg["cimier"]["weather_provider"]["protection_enabled"] is True
+
+    def test_post_can_disarm(self, api_client, writable_config_file):
+        api_client.post("/api/cimier/automation/", {"rain_protection": True}, format="json")
+        api_client.post("/api/cimier/automation/", {"rain_protection": False}, format="json")
+        cfg = json.loads(writable_config_file.read_text())
+        assert cfg["cimier"]["weather_provider"]["protection_enabled"] is False
+
+    def test_post_invalid_mode_still_rejected(self, api_client, writable_config_file):
+        response = api_client.post("/api/cimier/automation/", {"mode": "yolo"}, format="json")
+        assert response.status_code == 400
+
+    def test_post_rejects_non_boolean_rain_protection(self, api_client, writable_config_file):
+        # `bool("false")` vaut True en Python — un piège de coercition sur un
+        # organe de sécurité (armement). Doit être rejeté avant toute écriture,
+        # pour les deux formes usuelles : chaîne et entier.
+        original = writable_config_file.read_text()
+
+        response_str = api_client.post(
+            "/api/cimier/automation/", {"rain_protection": "false"}, format="json"
+        )
+        assert response_str.status_code == 400
+        assert writable_config_file.read_text() == original
+
+        response_int = api_client.post(
+            "/api/cimier/automation/", {"rain_protection": 0}, format="json"
+        )
+        assert response_int.status_code == 400
+        assert writable_config_file.read_text() == original
 
 
 # =============================================================================

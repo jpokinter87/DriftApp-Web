@@ -5,8 +5,8 @@ Endpoints:
   POST /api/cimier/close/            -> écrit commande {action:"close"} dans IPC
   POST /api/cimier/stop/             -> écrit commande {action:"stop"} dans IPC
   GET  /api/cimier/status/           -> lit l'état courant publié par cimier_service
-  GET  /api/cimier/automation/       -> mode + next_open_at + next_close_at (Phase 4)
-  POST /api/cimier/automation/       -> persiste le mode dans data/config.json (Phase 4)
+  GET  /api/cimier/automation/       -> mode + rain_protection + next_open_at + next_close_at (Phase 4)
+  POST /api/cimier/automation/       -> persiste mode et/ou rain_protection dans data/config.json (Phase 4)
   POST /api/cimier/parking-session/  -> séquence atomique tracking_stop + GOTO + close (Phase 4)
 """
 

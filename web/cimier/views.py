@@ -103,9 +103,13 @@ class AutomationView(APIView):
         - `next_open_at` / `next_close_at` : prochains triggers calculés par
           le scheduler du service (en mémoire), lus du status.
 
-    POST : persiste `mode` ∈ {manual, semi, full} dans data/config.json.
-    Le `cimier_service` rechargera ce mode au prochain tick scheduler
-    (max 60s) sans nécessiter de redémarrage.
+        - `rain_protection` : état de la case « Protection pluie »
+          (`cimier.weather_provider.protection_enabled`), défaut False.
+
+    POST : persiste `mode` ∈ {manual, semi, full} et/ou `rain_protection`
+    (bool) dans data/config.json. Les deux champs sont optionnels et
+    indépendants. Le `cimier_service` rechargera ces valeurs au prochain
+    tick scheduler (max 60s) sans nécessiter de redémarrage.
     """
 
     # Seuil au-delà duquel cimier_status.json est considéré stale → service
@@ -142,6 +146,7 @@ class AutomationView(APIView):
                 "mode_apply_pending": apply_pending,
                 "next_open_at": next_open_iso,
                 "next_close_at": next_close_iso,
+                "rain_protection": self._read_rain_protection(),
             }
         )
         # Empêche le cache HTTP : la fraîcheur du calcul change toutes les minutes
@@ -276,13 +281,56 @@ class AutomationView(APIView):
             return "full"
         return "manual"
 
+    @staticmethod
+    def _read_rain_protection() -> bool:
+        """Lit `cimier.weather_provider.protection_enabled`, défaut False.
+
+        Défaut prudent : une configuration muette ou mal formée laisse la
+        protection désarmée. C'est un armement, il doit être explicite.
+        """
+        config_path = Path(settings.DRIFTAPP_CONFIG)
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+        except (IOError, json.JSONDecodeError):
+            return False
+        if not isinstance(cfg, dict):
+            return False
+        cimier_section = cfg.get("cimier", {})
+        if not isinstance(cimier_section, dict):
+            return False
+        weather_section = cimier_section.get("weather_provider", {})
+        if not isinstance(weather_section, dict):
+            return False
+        return bool(weather_section.get("protection_enabled", False))
+
     def post(self, request):
+        """Persiste `mode` et/ou `rain_protection` dans data/config.json.
+
+        Les deux champs sont optionnels et indépendants : un POST ne portant
+        que l'un des deux laisse l'autre intact. Un corps vide est une erreur —
+        on ne réécrit pas la configuration pour rien. `rain_protection` doit être
+        un booléen strict (pas de coercition `"false"`/`0` — c'est un armement).
+        """
         mode = request.data.get("mode")
-        if mode not in VALID_AUTOMATION_MODES:
+        rain_protection = request.data.get("rain_protection")
+
+        if mode is None and rain_protection is None:
+            return Response(
+                {"error": "aucun champ à appliquer", "fields": ["mode", "rain_protection"]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if mode is not None and mode not in VALID_AUTOMATION_MODES:
             return Response(
                 {"error": "mode invalide", "valid": list(VALID_AUTOMATION_MODES)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if rain_protection is not None and not isinstance(rain_protection, bool):
+            return Response(
+                {"error": "rain_protection doit être un booléen"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         config_path = Path(settings.DRIFTAPP_CONFIG)
         try:
             with open(config_path, "r") as f:
@@ -293,12 +341,15 @@ class AutomationView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         cimier_section = cfg.setdefault("cimier", {})
-        automation_section = cimier_section.setdefault("automation", {})
-        automation_section["mode"] = mode
-        # Nettoyage : on retire la clé legacy `enabled` si présente — `mode`
-        # est désormais la source de vérité (la rétro-compat reste côté lecture
-        # parser, mais on évite de la perpétuer en écriture).
-        automation_section.pop("enabled", None)
+        if mode is not None:
+            automation_section = cimier_section.setdefault("automation", {})
+            automation_section["mode"] = mode
+            # Nettoyage : `mode` est la source de vérité, la clé legacy
+            # `enabled` n'est plus perpétuée en écriture.
+            automation_section.pop("enabled", None)
+        if rain_protection is not None:
+            weather_section = cimier_section.setdefault("weather_provider", {})
+            weather_section["protection_enabled"] = bool(rain_protection)
         try:
             self._write_atomic(config_path, cfg)
         except OSError as exc:
@@ -306,9 +357,18 @@ class AutomationView(APIView):
                 {"error": f"Écriture config.json impossible : {exc}"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-        # `apply_pending` : le cimier_service recharge le mode au prochain
-        # tick scheduler (≤60s) — aucun redémarrage requis (cf. docstring GET).
-        return Response({"mode": mode, "applied": True, "apply_pending": True})
+        return Response(
+            {
+                "mode": mode if mode is not None else self._read_configured_mode(),
+                "rain_protection": (
+                    bool(rain_protection)
+                    if rain_protection is not None
+                    else self._read_rain_protection()
+                ),
+                "applied": True,
+                "apply_pending": True,
+            }
+        )
 
     @staticmethod
     def _write_atomic(target: Path, data: dict) -> None:
