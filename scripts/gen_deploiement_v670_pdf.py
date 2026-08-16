@@ -345,7 +345,8 @@ def main():
         "Pi + état du matériel V3)."
     )
 
-    out = "/home/jp/PythonProject/Dome_web_v4_6/docs/deploiement_v6.7.0_terrain.pdf"
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = os.path.join(repo_root, "docs", "deploiement_v6.7.0_terrain.pdf")
     pdf.output(out)
     print(f"PDF généré : {out}")
 
