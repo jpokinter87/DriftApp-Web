@@ -238,6 +238,17 @@ class TestNightView:
             write_night_event(mock_nights, datetime(2026, 8, day, 22, 0), state="wet")
         assert api_client.get("/api/session/night/").json()["night"] == "2026-08-14"
 
+    def test_payload_carries_server_now(self, api_client, mock_nights, mock_sessions):
+        # La frise prolonge le dernier état connu jusqu'à la borne qu'on lui
+        # donne. Sans un « maintenant », elle peignait la pluie jusqu'à midi le
+        # lendemain — elle affichait l'avenir (terrain 16/08/2026). L'autorité
+        # horaire est le serveur : c'est lui qui horodate les événements.
+        from datetime import datetime
+
+        write_night_event(mock_nights, datetime(2026, 8, 14, 22, 0), state="wet")
+        data = api_client.get("/api/session/night/?date=2026-08-14").json()
+        assert datetime.fromisoformat(data["now"])
+
     def test_includes_tracking_sessions_of_the_night(self, api_client, mock_nights, mock_sessions):
         # 3e ligne de la frise : lue des sessions déjà persistées, sans
         # coupler cimier_service et motor_service.

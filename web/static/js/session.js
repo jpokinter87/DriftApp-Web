@@ -803,11 +803,26 @@ async function loadNight(dateKey) {
     window.renderNightFrieze(container, data);
 }
 
+// Rafraîchissement de la nuit en cours : sans lui, la frise reste figée à
+// l'heure du chargement — le repère « maintenant » vieillit et les averses qui
+// surviennent pendant qu'on regarde la page n'apparaissent jamais. On ne
+// rafraîchit que la nuit la plus récente : consulter une archive ne doit pas
+// être interrompu. 60 s ≈ 1 pixel de frise.
+const NIGHT_REFRESH_MS = 60000;
+
+function refreshCurrentNight() {
+    if (!lastNightPayload || !lastNightPayload.night) return;
+    const mostRecent = (lastNightPayload.available_nights || [])[0];
+    if (lastNightPayload.night !== mostRecent) return;
+    loadNight(lastNightPayload.night);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const selector = document.getElementById('night-selector');
     if (!selector) return;
     selector.addEventListener('change', (event) => loadNight(event.target.value));
     loadNight();
+    setInterval(refreshCurrentNight, NIGHT_REFRESH_MS);
     // Redessine à la volée : le SVG est calculé pour la largeur du conteneur.
     window.addEventListener('resize', () => {
         const container = document.getElementById('night-frieze');

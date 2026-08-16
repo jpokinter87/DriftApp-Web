@@ -119,8 +119,10 @@
       "invert": false,
       "timeout_s": 3.0,
       "protection_enabled": false,
-      "watch_interval_s": 10.0,
-      "confirm_reads": 2
+      "_watch_interval_s_comment": "Cadence de lecture du capteur, en secondes — c'est la latence maximale de détection d'une averse. Retour terrain 16/08/2026 : ne pas dépasser 10 s.",
+      "watch_interval_s": 5.0,
+      "_confirm_reads_comment": "Lectures concordantes exigées pour SORTIR de l'état « pluie ». Y entrer est immédiat (une seule lecture mouillée suffit) : à l'amorce d'une averse le capteur oscille autour de son seuil, et exiger des lectures consécutives retardait la détection de plusieurs minutes. Ce réglage ne coûte donc plus aucune latence de détection : à 5 s de cadence, 4 lectures = il faut 20 s de « sec » continu pour lever l'état pluie (terrain 16/08/2026 : le capteur repassait à sec sous une averse drue).",
+      "confirm_reads": 4
     },
     "automation": {
       "_comment": "Scheduler astropy inchangé. mode ∈ {manual, semi, full}.",

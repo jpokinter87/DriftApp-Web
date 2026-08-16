@@ -2510,15 +2510,16 @@ class TestRainWatchWithRealProvider:
 
         monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
 
-    def test_real_provider_needs_two_confirmed_reads_before_closing(self, tmp_path):
-        """L'anti-rebond retarde la fermeture d'un tour de veille — c'est voulu.
+    def test_real_provider_closes_on_first_wet_read(self, tmp_path):
+        """La fermeture d'urgence part dès la première lecture mouillée.
 
-        Le vrai ``ShellyRainWeatherProvider`` démarre à ``unreachable`` et exige
-        ``confirm_reads`` (2) lectures concordantes avant de confirmer un état.
-        Sous une pluie continue, la fermeture d'urgence part donc au **deuxième**
-        tour de veille, pas au premier : une lecture aberrante isolée ne doit pas
-        mettre fin à une nuit d'observation. Ce test rend cette latence visible
-        pour qu'elle ne change pas en silence.
+        L'anti-rebond retardait auparavant la fermeture d'un tour de veille
+        (``confirm_reads`` lectures concordantes exigées dans les deux sens).
+        Terrain 16/08/2026 : sous une averse réelle, ce retard n'était pas
+        d'un tour mais de plusieurs minutes, le capteur oscillant autour de son
+        seuil sans jamais aligner deux lectures identiques. Entrer en « pluie »
+        est désormais immédiat. Ce test rend la latence visible pour qu'elle ne
+        change pas en silence.
         """
         from core.hardware.weather_provider import (
             RainProtection,
@@ -2534,12 +2535,34 @@ class TestRainWatchWithRealProvider:
         service._close_session_fn = closer
 
         service.tick()
-        assert closer.calls == [], "1er tour : état pas encore confirmé, on ne ferme pas"
-        assert rain.latched is False
+        assert closer.calls == ["rain"], "1er tour : pluie lue → fermeture d'urgence"
+        assert rain.latched is True
+
+    def test_flapping_sensor_does_not_delay_closing(self, tmp_path):
+        """Le scénario terrain : lectures alternées à l'amorce de l'averse.
+
+        L'ancien anti-rebond ne fermait jamais dans ce cas — le compteur de
+        lectures concordantes repartait de zéro à chaque oscillation.
+        """
+        from core.hardware.weather_provider import (
+            RainProtection,
+            ShellyRainWeatherProvider,
+        )
+
+        rain = RainProtection(
+            ShellyRainWeatherProvider(
+                host="1.2.3.4", urlopen=FakeRainShelly([False, True, False, True])
+            ),
+            armed=True,
+        )
+        service = make_rain_service(tmp_path, rain, cimier_open=True)
+        closer = RecordingCloser()
+        service._close_session_fn = closer
 
         service.tick()
-        assert closer.calls == ["rain"], "2e tour : pluie confirmée → fermeture d'urgence"
-        assert rain.latched is True
+        assert closer.calls == [], "capteur sec : rien ne bouge"
+        service.tick()
+        assert closer.calls == ["rain"], "1re lecture mouillée → fermeture, sans attendre"
 
 
 class TestCimierCycleJournaling:
@@ -2625,3 +2648,57 @@ class TestCimierCycleJournaling:
         assert cimier_events
         assert cimier_events[-1]["action"] == "open"
         assert cimier_events[-1]["result"] == "ok"
+
+
+class TestServiceLogHandlers:
+    """Traces pluie accessibles sans SSH (retour terrain 16/08/2026).
+
+    En production `cimier_service` est un service systemd sans FileHandler :
+    tout partait dans journald, donc rien dans `logs/` — l'opérateur qui zippe
+    ce répertoire ne trouvait aucune trace du capteur de pluie.
+    """
+
+    def test_prod_adds_rotating_file_handler_in_logs_dir(self, tmp_path, monkeypatch):
+        import logging.handlers
+
+        from services import cimier_service
+
+        monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        monkeypatch.setattr(cimier_service, "LOG_DIR", tmp_path / "logs")
+
+        handlers = cimier_service._build_log_handlers()
+
+        file_handlers = [h for h in handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
+        assert len(file_handlers) == 1
+        assert Path(file_handlers[0].baseFilename).name == "cimier_service.log"
+        for h in handlers:
+            h.close()
+
+    def test_dev_mode_keeps_stdout_only(self, tmp_path, monkeypatch):
+        """start_dev.sh redirige déjà stdout vers logs/cimier_service.log :
+        un FileHandler y écrirait chaque ligne en double."""
+        import logging.handlers
+
+        from services import cimier_service
+
+        monkeypatch.setenv("CIMIER_DEV_MODE", "1")
+        monkeypatch.setattr(cimier_service, "LOG_DIR", tmp_path / "logs")
+
+        handlers = cimier_service._build_log_handlers()
+
+        assert not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in handlers)
+        assert len(handlers) == 1
+
+    def test_unwritable_log_dir_does_not_prevent_startup(self, tmp_path, monkeypatch):
+        """Un `logs/` non écrivable ne doit jamais empêcher la protection
+        pluie de tourner : on perd la trace, pas le service."""
+        from services import cimier_service
+
+        monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        blocker = tmp_path / "blocker"
+        blocker.write_text("je ne suis pas un répertoire")
+        monkeypatch.setattr(cimier_service, "LOG_DIR", blocker / "logs")
+
+        handlers = cimier_service._build_log_handlers()
+
+        assert len(handlers) == 1

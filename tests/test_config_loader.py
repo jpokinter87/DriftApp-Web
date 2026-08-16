@@ -1019,8 +1019,13 @@ class TestWeatherProviderConfig:
         assert cfg.invert is False
         assert cfg.timeout_s == 3.0
         assert cfg.protection_enabled is False
-        assert cfg.watch_interval_s == 10.0
-        assert cfg.confirm_reads == 2
+        # Cadence = latence maximale de détection d'une averse. Retour terrain
+        # du 16/08/2026 : ne pas dépasser 10 s.
+        assert cfg.watch_interval_s == 5.0
+        # Ne pèse que sur la SORTIE de l'état pluie depuis l'anti-rebond
+        # asymétrique : 4 lectures × 5 s = 20 s de « sec » continu exigés,
+        # le capteur repassant à sec sous une averse drue (terrain 16/08/2026).
+        assert cfg.confirm_reads == 4
 
     def test_parses_full_section(self, tmp_path, sample_config_dict):
         payload = dict(sample_config_dict)

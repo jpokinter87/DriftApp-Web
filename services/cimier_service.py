@@ -40,6 +40,7 @@ import signal
 import time
 import uuid
 from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -111,6 +112,15 @@ _VALID_CYCLE_ACTIONS = (ACTION_OPEN, ACTION_CLOSE)
 # Polling intervals par défaut (overridables par constructeur pour tests rapides)
 DEFAULT_CYCLE_POLL_INTERVAL_S = 0.5
 DEFAULT_RUN_LOOP_INTERVAL_S = 0.5
+
+# Traces fichier (2026-08) : en prod le service tourne sous systemd et sa
+# sortie standard part dans journald — introuvable pour l'opérateur, qui
+# récupère les incidents en zippant `logs/`. Rotation pour borner le disque
+# d'un service qui tourne 24/7 (verbose_logging peut être bavard).
+LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
+LOG_FILE_NAME = "cimier_service.log"
+LOG_MAX_BYTES = 1_000_000
+LOG_BACKUP_COUNT = 3
 
 
 PowerSwitchProtocol = Any  # duck-typed : turn_on() / turn_off()
@@ -1233,6 +1243,35 @@ def _build_service_from_config(config_path=None) -> CimierService:
     )
 
 
+def _build_log_handlers() -> list:
+    """Handlers de log du service : stdout, plus un fichier hors dev-mode.
+
+    En dev, `start_dev.sh` redirige déjà stdout vers `logs/cimier_service.log` ;
+    y ajouter un FileHandler écrirait chaque ligne deux fois dans le même
+    fichier. En prod (systemd), stdout part dans journald et le fichier est la
+    seule trace récupérable sans SSH.
+
+    Un `logs/` non écrivable n'empêche jamais le démarrage : on perd la trace,
+    pas la protection pluie.
+    """
+    handlers = [logging.StreamHandler()]
+    if _is_dev_mode_enabled():
+        return handlers
+    try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+        handlers.append(
+            RotatingFileHandler(
+                LOG_DIR / LOG_FILE_NAME,
+                maxBytes=LOG_MAX_BYTES,
+                backupCount=LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
+        )
+    except OSError as exc:
+        logger.warning("cimier_event=log_file_unavailable dir=%s exc=%s", LOG_DIR, exc)
+    return handlers
+
+
 def main() -> int:
     """Entry-point CLI : `python -m services.cimier_service`."""
     # Chantier A : garantir un config.json valide + publier le rapport.
@@ -1253,6 +1292,7 @@ def main() -> int:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=_build_log_handlers(),
     )
     service = _build_service_from_config()
     service.run_forever()

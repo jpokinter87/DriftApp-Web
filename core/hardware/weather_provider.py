@@ -26,10 +26,13 @@ core/hardware/power_switch.py (Strategy + Noop + factory).
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Dict, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from core.config.config_loader import WeatherProviderConfig
+
+logger = logging.getLogger(__name__)
 
 
 class WeatherProviderError(Exception):
@@ -88,9 +91,15 @@ class ShellyRainWeatherProvider:
     dernier état connu. Ainsi la veille de ``cimier_service`` et le scheduler
     partagent une lecture unique, sans se marcher dessus ni doubler le trafic.
 
-    **Anti-rebond** : il faut ``confirm_reads`` lectures concordantes pour
-    changer d'état. Une lecture aberrante isolée ne doit pas mettre fin à une
-    nuit d'observation.
+    **Anti-rebond asymétrique** : une seule lecture « mouillé » confirme la
+    pluie ; il faut ``confirm_reads`` lectures concordantes pour en sortir (ou
+    pour passer à ``unreachable``). Un anti-rebond symétrique exigeant N
+    lectures *consécutives* avait un angle mort découvert sous une averse
+    réelle (16/08/2026) : à l'amorce de la pluie, la sortie du comparateur
+    oscille autour du seuil du trimpot, le compteur ne cumule jamais et l'état
+    reste « sec » plusieurs minutes. Le risque est asymétrique — rater la pluie
+    coûte un télescope mouillé, une fermeture de trop coûte une fin de nuit —
+    et la détection l'est donc aussi.
 
     **Asymétrie du fail-safe** — capteur injoignable :
       - ``is_safe_to_open()`` → False : on n'ouvre pas à l'aveugle (refuser est
@@ -151,12 +160,37 @@ class ShellyRainWeatherProvider:
             self._last_error = ""
 
         if observed == self._pending:
-            self._pending_count += 1
+            # Plafonné : seul le franchissement du seuil compte, et un service
+            # qui tourne des nuits entières ne doit pas afficher « count=244/2 ».
+            self._pending_count = min(self._pending_count + 1, self._confirm_reads)
         else:
             self._pending = observed
             self._pending_count = 1
-        if self._pending_count >= self._confirm_reads:
+        # Asymétrie assumée : entrer en « pluie » est immédiat, en sortir
+        # demande ``confirm_reads`` lectures concordantes. Exiger N lectures
+        # *consécutives* dans les deux sens avait un angle mort : à l'amorce
+        # d'une averse, la sortie D0 du comparateur oscille autour du seuil du
+        # trimpot, le compteur ne cumule jamais et l'état reste « sec » sous la
+        # pluie (terrain 16/08/2026, 5 minutes). Sur ce capteur, un « mouillé »
+        # isolé est une goutte — donc de la pluie ; alors qu'un « sec » isolé
+        # au milieu d'une averse n'est qu'un rebond.
+        if observed == RAIN_WET or self._pending_count >= self._confirm_reads:
             self._state = observed
+
+        if observed != self._state:
+            # Lecture qui contredit l'état publié sans (encore) le renverser :
+            # c'est la seule trace d'un capteur qui bavarde. Le journal de nuit
+            # n'enregistre que les transitions *confirmées* — pendant les
+            # 5 minutes du 16/08/2026, il n'a donc rien écrit. Silencieux en
+            # régime établi ; une transition, elle, est déjà journalisée en
+            # amont par la veille de cimier_service.
+            logger.info(
+                "rain_read raw=%s confirmed=%s count=%d/%d",
+                observed,
+                self._state,
+                self._pending_count,
+                self._confirm_reads,
+            )
 
         self._last_read_ts = self._clock()
         return self._state

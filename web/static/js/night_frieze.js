@@ -11,12 +11,13 @@
  */
 
 const FRIEZE = {
-    height: 190,
+    height: 196,
     rowHeight: 30,
     rowGap: 14,
     marginLeft: 74,
     marginRight: 14,
-    marginTop: 16,
+    // Laisse la place au repère « maintenant » posé au-dessus de la 1re ligne.
+    marginTop: 22,
     axisHeight: 22,
     colors: {
         wet: '#4aa3ff',
@@ -28,6 +29,8 @@ const FRIEZE = {
         wouldCloseMarker: '#ffa502',
         axis: 'rgba(255,255,255,0.25)',
         text: '#9aa0a6',
+        future: 'rgba(0,0,0,0.45)',
+        nowLine: 'rgba(255,255,255,0.45)',
     },
 };
 
@@ -86,6 +89,15 @@ function renderNightFrieze(container, data) {
     const startMs = parseIso(data.night_start);
     const endMs = parseIso(data.night_end);
     if (startMs === null || endMs === null || endMs <= startMs) return;
+
+    // Borne de restitution : un état connu vaut jusqu'au suivant, mais pas
+    // au-delà de l'instant présent. Sans ça, la nuit en cours affichait le
+    // dernier état jusqu'à midi le lendemain — de la pluie dans l'avenir
+    // (terrain 16/08/2026). L'heure vient du serveur, qui horodate les
+    // événements ; la tablette de l'observatoire n'est pas l'autorité.
+    const nowMs = parseIso(data.now);
+    const knownEnd = Math.min(endMs, Math.max(nowMs === null ? endMs : nowMs, startMs));
+    const nightInProgress = knownEnd < endMs;
 
     const width = Math.max(container.clientWidth || 720, 480);
     const plotWidth = width - FRIEZE.marginLeft - FRIEZE.marginRight;
@@ -149,7 +161,7 @@ function renderNightFrieze(container, data) {
         (e) => e.event === 'rain',
         (e) => e.state,
         startMs,
-        endMs
+        knownEnd
     ).forEach((seg) => {
         if (seg.value === 'dry') return;
         svg.appendChild(
@@ -170,7 +182,7 @@ function renderNightFrieze(container, data) {
         (e) => e.event === 'cimier' && (e.action === 'open' || e.action === 'close'),
         (e) => e.action,
         startMs,
-        endMs
+        knownEnd
     ).forEach((seg) => {
         if (seg.value !== 'open') return;
         svg.appendChild(
@@ -210,7 +222,9 @@ function renderNightFrieze(container, data) {
     (data.tracking || []).forEach((session) => {
         const from = parseIso(session.start_time);
         if (from === null) return;
-        const to = parseIso(session.end_time) || endMs;
+        // Session encore en cours : elle court jusqu'à maintenant, pas
+        // jusqu'à la fin de la nuit.
+        const to = parseIso(session.end_time) || knownEnd;
         const x = xOf(from);
         const w = Math.max(xOf(to) - x, 2);
         svg.appendChild(
@@ -236,6 +250,47 @@ function renderNightFrieze(container, data) {
             svg.appendChild(name);
         }
     });
+
+    // Nuit en cours : voiler ce qui n'a pas encore eu lieu et marquer
+    // l'instant présent. Le repère est étiqueté en clair — l'écran de
+    // l'observatoire est tactile, rien ne doit dépendre d'un survol.
+    if (nightInProgress) {
+        const nowX = xOf(knownEnd);
+        const rowsTop = yOf(0);
+        const rowsBottom = yOf(ROWS.length - 1) + FRIEZE.rowHeight;
+        svg.appendChild(
+            svgEl('rect', {
+                x: nowX,
+                y: rowsTop,
+                width: FRIEZE.marginLeft + plotWidth - nowX,
+                height: rowsBottom - rowsTop,
+                fill: FRIEZE.colors.future,
+            })
+        );
+        svg.appendChild(
+            svgEl('line', {
+                x1: nowX,
+                x2: nowX,
+                y1: rowsTop - 6,
+                y2: rowsBottom + 4,
+                stroke: FRIEZE.colors.nowLine,
+                'stroke-width': 1,
+            })
+        );
+        // Ancrage à droite du trait, sauf trop près du bord où le libellé
+        // sortirait du cadre.
+        const labelFits = FRIEZE.marginLeft + plotWidth - nowX > 70;
+        const nowLabel = svgEl('text', {
+            x: labelFits ? nowX + 5 : nowX - 5,
+            y: rowsTop - 9,
+            'text-anchor': labelFits ? 'start' : 'end',
+            fill: FRIEZE.colors.text,
+            'font-size': 9,
+            'font-family': 'monospace',
+        });
+        nowLabel.textContent = 'maintenant';
+        svg.appendChild(nowLabel);
+    }
 
     // Axe horaire : une graduation toutes les 2 h.
     const axisY = FRIEZE.marginTop + ROWS.length * (FRIEZE.rowHeight + FRIEZE.rowGap);

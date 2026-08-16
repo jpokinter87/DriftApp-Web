@@ -242,9 +242,11 @@ class WeatherProviderConfig:
     c'est le mode d'observation qui permet d'éprouver le comportement sous un
     orage réel sans risque.
 
-    ``confirm_reads`` : nombre de lectures concordantes exigées avant de
-    changer d'état (anti-rebond). ``watch_interval_s`` : cadence de la veille
-    dans ``cimier_service``.
+    ``confirm_reads`` : nombre de lectures concordantes exigées pour *sortir*
+    de l'état « pluie » (anti-rebond asymétrique — une seule lecture mouillée
+    suffit pour y entrer). ``watch_interval_s`` : cadence de la veille dans
+    ``cimier_service``, donc aussi la latence maximale de détection d'une
+    averse (retour terrain 16/08/2026 : ne pas dépasser 10 s).
 
     IP réelle uniquement dans ``data/config.json`` (terrain) — code neutre.
     """
@@ -255,8 +257,8 @@ class WeatherProviderConfig:
     invert: bool = False
     timeout_s: float = 3.0
     protection_enabled: bool = False
-    watch_interval_s: float = 10.0
-    confirm_reads: int = 2
+    watch_interval_s: float = 5.0
+    confirm_reads: int = 4
 
 
 VALID_AUTOMATION_MODES = ("manual", "semi", "full")

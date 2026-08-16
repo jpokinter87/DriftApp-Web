@@ -240,6 +240,11 @@ def night_report(request):
         'night': requested,
         'night_start': night_start.isoformat(),
         'night_end': night_end.isoformat(),
+        # Borne de restitution : la frise prolonge chaque état connu jusqu'au
+        # suivant, donc le dernier irait jusqu'à `night_end` — midi le
+        # lendemain. Sur une nuit en cours, c'est peindre l'avenir. L'heure de
+        # référence est celle du serveur, qui horodate les événements.
+        'now': datetime.now().isoformat(timespec='seconds'),
         'events': night_journal.read_night(requested),
         'tracking': tracking,
         'available_nights': available,

@@ -135,14 +135,87 @@ class TestShellyRainProviderReading:
         p.read_now()
         assert p.read_now() == RAIN_WET
 
-    def test_single_wet_read_does_not_flip_confirmed_state(self):
-        # sec confirmé, puis UNE lecture humide isolée : l'état ne bascule pas.
-        p = make_provider([False, False, True, False])
+    def test_single_wet_read_confirms_wet_immediately(self):
+        # Retour terrain du 16/08/2026 : sous une averse, le système est resté
+        # « sec » 5 minutes alors que le Shelly rapportait la pluie. L'ancien
+        # anti-rebond symétrique exigeait N lectures *consécutives* — à
+        # l'amorce d'une averse la sortie du comparateur bavarde autour du
+        # seuil du trimpot et le compteur ne cumulait jamais.
+        # Décision : entrer en « pluie » est immédiat, en sortir demande
+        # confirmation. Ce test verrouille l'asymétrie.
+        p = make_provider([False, False, True])
         p.read_now()
         p.read_now()
         assert p.state == RAIN_DRY
+        assert p.read_now() == RAIN_WET
+
+    def test_flapping_sensor_detects_and_holds_rain(self):
+        # Le scénario terrain exact : lectures alternées à l'amorce de
+        # l'averse. La pluie doit être détectée dès le premier « mouillé »,
+        # et un « sec » isolé ne doit pas la lever.
+        p = make_provider([False, False, True, False, True, False, True])
+        p.read_now()
+        p.read_now()
+        assert p.state == RAIN_DRY
+        for _ in range(5):
+            assert p.read_now() == RAIN_WET
+
+    def test_high_confirm_reads_does_not_delay_detection(self):
+        # L'invariant qui rend le réglage de sortie gratuit : durcir
+        # confirm_reads renforce la persistance de l'état « pluie » sans
+        # jamais retarder sa détection. Si un jour l'asymétrie disparaît,
+        # ce test tombe avant que le terrain ne le paie.
+        p = make_provider([False] * 4 + [True], confirm_reads=4)
+        for _ in range(4):
+            p.read_now()
+        assert p.state == RAIN_DRY
+        assert p.read_now() == RAIN_WET
+
+    def test_brief_dry_spell_under_heavy_rain_holds_wet(self):
+        # Terrain 16/08/2026 : sous une averse drue, le capteur a produit
+        # assez de lectures sèches pour lever l'état pluie (18:51 → 18:58).
+        # Avec 4 lectures exigées, une accalmie de lecture ne suffit plus.
+        p = make_provider([True, False, False, False, True], confirm_reads=4)
+        assert p.read_now() == RAIN_WET
+        for _ in range(3):
+            assert p.read_now() == RAIN_WET
+
+    def test_leaving_wet_still_requires_confirmation(self):
+        p = make_provider([True, False, False])
+        assert p.read_now() == RAIN_WET
+        assert p.read_now() == RAIN_WET
         assert p.read_now() == RAIN_DRY
-        assert p.read_now() == RAIN_DRY
+
+    def test_single_unreachable_read_does_not_leave_wet(self):
+        import urllib.error
+
+        p = make_provider([True, urllib.error.URLError("down"), True])
+        assert p.read_now() == RAIN_WET
+        assert p.read_now() == RAIN_WET
+
+    def test_divergent_read_is_logged(self, caplog):
+        # Angle mort du 16/08 : pendant les 5 minutes de bavardage, aucune
+        # ligne n'était écrite (le journal n'enregistre que les transitions
+        # *confirmées*). Une lecture brute qui diverge de l'état confirmé doit
+        # laisser une trace — c'est ce qui discrimine « capteur qui bavarde »
+        # de « seuil du trimpot trop dur ».
+        p = make_provider([True, False, False])
+        p.read_now()
+        caplog.clear()  # la 1re lecture diverge aussi (état initial unreachable)
+        with caplog.at_level("INFO", logger="core.hardware.weather_provider"):
+            p.read_now()
+        assert "rain_read" in caplog.text
+        assert "raw=dry" in caplog.text
+        assert "confirmed=wet" in caplog.text
+
+    def test_steady_state_reads_are_silent(self, caplog):
+        p = make_provider([True, True, True])
+        p.read_now()
+        caplog.clear()  # idem : seul le régime établi qui suit nous intéresse
+        with caplog.at_level("INFO", logger="core.hardware.weather_provider"):
+            p.read_now()
+            p.read_now()
+        assert "rain_read" not in caplog.text
 
     def test_invert_flips_interpretation(self):
         p = make_provider([True, True], invert=True)
