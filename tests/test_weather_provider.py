@@ -120,6 +120,18 @@ def make_provider(script, **kwargs):
     return ShellyRainWeatherProvider(host="1.2.3.4", urlopen=FakeRainShelly(script), **kwargs)
 
 
+def make_provider_raw(bodies, **kwargs):
+    """Provider dont le Shelly renvoie des payloads JSON bruts (cas dégradés)."""
+    seq = list(bodies)
+    calls = []
+
+    def _urlopen(url, timeout=None):
+        calls.append(url)
+        return _FakeResp(seq[min(len(calls) - 1, len(seq) - 1)].encode())
+
+    return ShellyRainWeatherProvider(host="1.2.3.4", urlopen=_urlopen, **kwargs)
+
+
 class TestShellyRainProviderReading:
     def test_initial_state_is_unreachable_before_any_read(self):
         p = make_provider([False])
@@ -205,7 +217,7 @@ class TestShellyRainProviderReading:
         with caplog.at_level("INFO", logger="core.hardware.weather_provider"):
             p.read_now()
         assert "rain_read" in caplog.text
-        assert "raw=dry" in caplog.text
+        assert "read=dry" in caplog.text
         assert "confirmed=wet" in caplog.text
 
     def test_steady_state_reads_are_silent(self, caplog):
@@ -225,6 +237,55 @@ class TestShellyRainProviderReading:
     def test_confirm_reads_one_flips_immediately(self):
         p = make_provider([True], confirm_reads=1)
         assert p.read_now() == RAIN_WET
+
+    def test_null_state_never_reads_as_dry(self):
+        # Terrain 16/08/2026 : sous la pluie, l'app Shelly rapporte l'entrée
+        # active et DriftApp lit « sec ». Une entrée passée en type `button`
+        # (ou désactivée) répond `state: null` : stateless. `bool(None)` = False
+        # = « sec », indéfiniment et sans une ligne de log. Un état non
+        # booléen n'est pas une mesure — c'est un capteur injoignable, donc
+        # refus d'ouvrir mais jamais de fermeture intempestive.
+        p = make_provider_raw(['{"id":0,"state":null}'] * 6, confirm_reads=2)
+        for _ in range(6):
+            assert p.read_now() == RAIN_UNREACHABLE
+        assert p.is_safe_to_open() is False
+        assert p.is_safe_to_keep_open() is True
+        assert "state" in p.describe()["error"]
+
+    def test_log_carries_the_shelly_boolean_and_the_mapping(self, caplog):
+        # `raw=` désignait la valeur *après* inversion : impossible de
+        # distinguer dans les logs « le Shelly répond false » d'« il répond
+        # true et notre invert le retourne » — précisément la question posée
+        # par l'incident du 16/08. Le booléen du Shelly et l'inversion
+        # appliquée doivent figurer dans la trace.
+        p = make_provider([True, True], invert=True)
+        with caplog.at_level("INFO", logger="core.hardware.weather_provider"):
+            p.read_now()
+        assert "shelly_state=true" in caplog.text
+        assert "invert=true" in caplog.text
+        assert "read=dry" in caplog.text
+
+    def test_steady_state_read_is_traced_at_debug(self, caplog):
+        # Silence en régime établi au niveau INFO (test ci-dessus), mais
+        # `verbose_logging` doit permettre de prouver ce que le capteur
+        # répond : sans cela, « il fait sec depuis 20 minutes » et « la veille
+        # est morte » s'écrivent de la même façon dans le journal — rien.
+        p = make_provider([True, True, True])
+        p.read_now()
+        caplog.clear()
+        with caplog.at_level("DEBUG", logger="core.hardware.weather_provider"):
+            p.read_now()
+        assert "rain_read" in caplog.text
+        assert "shelly_state=true" in caplog.text
+
+    def test_describe_exposes_invert_and_last_shelly_state(self):
+        # Publié dans /dev/shm/cimier_status.json : c'est ce qui permet de
+        # trancher une inversion de polarité à distance, sans SSH.
+        p = make_provider([True], invert=True)
+        p.read_now()
+        d = p.describe()
+        assert d["invert"] is True
+        assert d["shelly_state"] is True
 
 
 class TestShellyRainProviderDecisions:

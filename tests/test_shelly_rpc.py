@@ -76,3 +76,23 @@ def test_raises_on_invalid_json():
 def test_raises_on_payload_without_state():
     with pytest.raises(ShellyRpcError):
         read_input_state("1.2.3.4", 0, urlopen=make_urlopen(json.dumps({"id": 0}).encode()))
+
+
+def test_raises_on_null_state():
+    # Une entrée Shelly configurée en type `button` (ou désactivée) répond
+    # `{"id":0,"state":null}` : elle est *stateless*. `bool(None)` valait False,
+    # soit « pas de pluie » pour le capteur et « butée atteinte » pour les
+    # microswitches — dans les deux cas le sens dangereux, et silencieusement.
+    # Un état non booléen est un défaut de configuration, pas une mesure.
+    with pytest.raises(ShellyRpcError) as exc:
+        read_input_state(
+            "1.2.3.4", 0, urlopen=make_urlopen(json.dumps({"id": 0, "state": None}).encode())
+        )
+    assert "state" in str(exc.value)
+
+
+def test_raises_on_non_boolean_state():
+    with pytest.raises(ShellyRpcError):
+        read_input_state(
+            "1.2.3.4", 0, urlopen=make_urlopen(json.dumps({"id": 0, "state": 1}).encode())
+        )

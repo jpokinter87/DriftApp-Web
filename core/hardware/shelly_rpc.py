@@ -36,8 +36,8 @@ def read_input_state(
         à l'appelant, qui seul connaît son câblage).
 
     Raises:
-        ShellyRpcError: hôte injoignable, HTTP ≠ 200, JSON invalide, ou
-            payload sans clé ``state``.
+        ShellyRpcError: hôte injoignable, HTTP ≠ 200, JSON invalide, payload
+            sans clé ``state``, ou ``state`` non booléen (entrée *stateless*).
     """
     opener = urlopen or urllib.request.urlopen
     url = "http://" + host + "/rpc/Input.GetStatus?id=" + str(int(input_id))
@@ -57,4 +57,17 @@ def read_input_state(
         raise ShellyRpcError("Shelly JSON invalide: " + str(exc)) from exc
     if not isinstance(payload, dict) or "state" not in payload:
         raise ShellyRpcError("Shelly payload sans 'state': " + repr(payload))
-    return bool(payload["state"]), payload
+    state = payload["state"]
+    if not isinstance(state, bool):
+        # `state` vaut null quand l'entrée est *stateless* : type `button`
+        # (ou `analog`/`count`), ou entrée désactivée. `bool(None)` valait
+        # False, c'est-à-dire « pas de pluie » côté capteur et « butée
+        # atteinte » côté microswitches — le sens dangereux dans les deux cas,
+        # et sans aucune trace. Une entrée mal typée est un défaut de
+        # configuration, pas une mesure : on la traite comme une lecture
+        # impossible (fail-safe des appelants).
+        raise ShellyRpcError(
+            "Shelly 'state' non booléen (" + repr(state) + ") — entrée en type "
+            "button/analog ou désactivée ? Vérifier Input.GetConfig?id=" + str(int(input_id))
+        )
+    return state, payload

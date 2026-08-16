@@ -62,6 +62,22 @@ def test_invert_default_butee_atteinte_quand_input_false():
     assert state.both_switches is False
 
 
+def test_input_stateless_leve_une_erreur_au_lieu_dune_butee_fantome():
+    # Une entrée passée en type `button` (ou désactivée) répond `state: null`.
+    # `bool(None)` = False, et avec invert=True (défaut terrain) cela signifiait
+    # « butée atteinte » : le preflight aurait vu une coupole déjà ouverte
+    # *et* fermée. Une entrée mal typée doit remonter comme un défaut de
+    # lecture, pas comme une mesure.
+    reader = ShellySwitchReader(
+        host="1.2.3.4",
+        urlopen=_urlopen_map(
+            {1: _FakeResp({"id": 1, "state": None}), 0: _FakeResp({"id": 0, "state": True})}
+        ),
+    )
+    with pytest.raises(SwitchReaderError):
+        reader.read()
+
+
 def test_both_switches_quand_les_deux_en_butee():
     reader = ShellySwitchReader(
         host="1.2.3.4",

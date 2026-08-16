@@ -336,6 +336,17 @@ class CimierService:
             self._config.motor_shelly.host_motor or "(noop)",
             self._config.motor_shelly.host_dir or "(noop)",
         )
+        if self._rain_enabled:
+            # Le log `started` énumérait les 4 Shellys du cimier mais pas le
+            # capteur de pluie : impossible, sur un log terrain, de vérifier
+            # quel hôte, quelle entrée et quelle polarité tournaient vraiment.
+            logger.info(
+                "cimier_event=rain_watch_config weather=%s interval_s=%s",
+                json.dumps(
+                    self._weather_provider.describe(), separators=(",", ":"), sort_keys=True
+                ),
+                self._rain_watch_interval_s,
+            )
 
         while not self._stop_requested:
             self.tick()

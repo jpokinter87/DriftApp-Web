@@ -136,6 +136,10 @@ class ShellyRainWeatherProvider:
         self._pending_count = 0
         self._last_read_ts = None
         self._last_error = ""
+        # Booléen tel que rendu par le Shelly, avant inversion (None = lecture
+        # impossible). Publié et journalisé : c'est lui qui distingue « le
+        # capteur dit sec » d'« il dit pluie et notre polarité le retourne ».
+        self._last_shelly_state = None
 
     @property
     def state(self) -> str:
@@ -152,11 +156,13 @@ class ShellyRainWeatherProvider:
             )
         except ShellyRpcError as exc:
             observed = RAIN_UNREACHABLE
+            self._last_shelly_state = None
             self._last_error = str(exc)
         else:
             # Convention mesurée le 14/08/2026 : state=true = pluie
             # (invert=false). `invert` reste offert si le câblage change.
             observed = RAIN_WET if raw != self._invert else RAIN_DRY
+            self._last_shelly_state = bool(raw)
             self._last_error = ""
 
         if observed == self._pending:
@@ -177,20 +183,26 @@ class ShellyRainWeatherProvider:
         if observed == RAIN_WET or self._pending_count >= self._confirm_reads:
             self._state = observed
 
-        if observed != self._state:
-            # Lecture qui contredit l'état publié sans (encore) le renverser :
-            # c'est la seule trace d'un capteur qui bavarde. Le journal de nuit
-            # n'enregistre que les transitions *confirmées* — pendant les
-            # 5 minutes du 16/08/2026, il n'a donc rien écrit. Silencieux en
-            # régime établi ; une transition, elle, est déjà journalisée en
-            # amont par la veille de cimier_service.
-            logger.info(
-                "rain_read raw=%s confirmed=%s count=%d/%d",
-                observed,
-                self._state,
-                self._pending_count,
-                self._confirm_reads,
-            )
+        # Une lecture qui contredit l'état publié sans (encore) le renverser est
+        # la seule trace d'un capteur qui bavarde : elle passe en INFO. Le
+        # journal de nuit n'enregistre que les transitions *confirmées* —
+        # pendant les 5 minutes du 16/08/2026, il n'a donc rien écrit. En
+        # régime établi la lecture reste en DEBUG (`verbose_logging`) : sans
+        # elle, « il fait sec » et « la veille est morte » s'écrivent
+        # identiquement dans le journal — c'est-à-dire pas du tout.
+        # `shelly_state` est le booléen d'origine, `read` sa lecture après
+        # inversion : les confondre (l'ancien `raw=`) empêchait de distinguer
+        # un capteur qui dit « sec » d'une polarité mal configurée.
+        logger.log(
+            logging.INFO if observed != self._state else logging.DEBUG,
+            "rain_read shelly_state=%s invert=%s read=%s confirmed=%s count=%d/%d",
+            "n/a" if self._last_shelly_state is None else str(self._last_shelly_state).lower(),
+            str(self._invert).lower(),
+            observed,
+            self._state,
+            self._pending_count,
+            self._confirm_reads,
+        )
 
         self._last_read_ts = self._clock()
         return self._state
@@ -212,6 +224,11 @@ class ShellyRainWeatherProvider:
             "state": self._state,
             "host": self._host,
             "input_id": self._input_id,
+            # Polarité effective + dernier booléen du Shelly : de quoi trancher
+            # une inversion de câblage ou de config depuis le dashboard, sans
+            # SSH (publié dans /dev/shm/cimier_status.json).
+            "invert": self._invert,
+            "shelly_state": self._last_shelly_state,
             "last_read_at": last_read_at,
             "error": self._last_error,
         }
