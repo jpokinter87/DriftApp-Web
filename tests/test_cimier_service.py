@@ -2207,12 +2207,25 @@ class RecordingCloser:
         return {"cimier_close_sent": True}
 
 
-def make_rain_service(tmp_path, rain, cimier_open=True, watch_interval_s=0.0, config_path=None):
+def make_rain_service(
+    tmp_path,
+    rain,
+    cimier_open=True,
+    watch_interval_s=0.0,
+    config_path=None,
+    switch_reader=None,
+    last_switches=None,
+):
     """Service prêt pour la veille, avec un cimier observé ouvert ou fermé.
 
     ``config_path`` pointe par défaut sur un fichier absent : le rafraîchissement
     de l'armement depuis la config est alors inerte, et les tests ne dépendent
     pas du `data/config.json` de la machine.
+
+    ``switch_reader`` remplace le reader par défaut (butées cohérentes avec
+    ``cimier_open``) ; ``last_switches`` fixe les *dernières* butées observées,
+    qui peuvent différer de ce que le reader répondra — c'est exactement la
+    situation d'un service qui vient de redémarrer.
     """
     from core.config.config_loader import WeatherProviderConfig
 
@@ -2228,15 +2241,20 @@ def make_rain_service(tmp_path, rain, cimier_open=True, watch_interval_s=0.0, co
         cimier_config=cfg,
         power_switch=NoopPowerSwitch(),
         motor_shelly=NoopMotorShelly(),
-        switch_reader=FakeSwitchReader([(cimier_open, not cimier_open)]),
+        switch_reader=switch_reader
+        if switch_reader is not None
+        else FakeSwitchReader([(cimier_open, not cimier_open)]),
         ipc_manager=ipc,
         weather_provider=rain,
         config_path=config_path if config_path is not None else tmp_path / "absent.json",
         clock=clock,
         sleep=clock.sleep,
     )
-    service._last_open_switch = cimier_open
-    service._last_closed_switch = not cimier_open
+    last_open, last_closed = (
+        last_switches if last_switches is not None else (cimier_open, not cimier_open)
+    )
+    service._last_open_switch = last_open
+    service._last_closed_switch = last_closed
     return service
 
 
@@ -2302,6 +2320,143 @@ class TestRainWatch:
         service._close_session_fn = closer
         service.tick()
         assert closer.calls == []
+
+    def test_partially_open_cimier_is_closed(self, tmp_path):
+        """Terrain 20/08/2026, 15h47 : protection armée, pluie détectée, rien
+        ne s'est fermé — Serge a fermé à la main.
+
+        Le cimier était **entrouvert** (un cycle de fermeture stoppé à 15h08 —
+        `close result=stopped`), donc aucune butée active, donc un état dérivé
+        « unknown ». La garde exigeait « open » : l'état où il faut le plus
+        fermer était précisément celui qui ne fermait pas.
+        """
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(False, False)]),
+            last_switches=(False, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_stale_switches_do_not_block_the_close(self, tmp_path):
+        """Les butées ne sont lues qu'au cours d'un cycle : au repos elles
+        datent du dernier cycle, et valent False/False au démarrage du service
+        (que l'OTA redémarre désormais). Un cimier réellement ouvert ne doit
+        pas être protégé par une connaissance périmée — on relit avant de
+        décider."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(True, False)]),
+            last_switches=(False, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_fresh_switch_read_avoids_a_useless_close(self, tmp_path):
+        """Symétrique du précédent : le cimier est en réalité fermé, la
+        dernière observation dit « ouvert ». Fermer coûterait un GOTO parking
+        (la séquence de fermeture bouge la coupole) pour rien."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(False, True)]),
+            last_switches=(True, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == []
+
+    def test_both_switches_anomaly_still_closes(self, tmp_path):
+        """Deux butées actives = anomalie capteur. Sous la pluie, une anomalie
+        ne vaut pas une autorisation à rester ouvert."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(True, True)]),
+            last_switches=(True, True),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_unreadable_switches_still_close(self, tmp_path):
+        """Butées injoignables : on ne sait pas, donc on ferme. (Le capteur de
+        *pluie* injoignable, lui, ne ferme jamais — c'est l'autre bout du
+        fail-safe, couvert par test_unreachable_sensor_never_closes.)"""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader(raise_error=SwitchReaderError("timeout")),
+            last_switches=(False, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_cooldown_defers_the_close_then_retries(self, tmp_path):
+        """Mode Drop : une commande écrite pendant le cooldown serait consommée
+        puis jetée. On ne ferme donc pas — mais on repasse au tour suivant."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(True, False)]),
+            last_switches=(True, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service._cooldown_end_ts = service._clock() + 10.0
+        service.tick()
+        assert closer.calls == []
+
+        service._clock.advance(11.0)
+        service.tick()
+        assert closer.calls == ["rain"]
+
+    def test_an_unclosed_cimier_is_retried(self, tmp_path):
+        """La fermeture est best-effort : si le cimier n'est pas confirmé fermé
+        et qu'il pleut toujours, la veille réessaie."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader([(True, False)]),
+            last_switches=(True, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        service.tick()
+        service.tick()
+        assert closer.calls == ["rain", "rain"]
+
+    def test_rain_that_commands_nothing_is_logged(self, tmp_path, caplog):
+        """L'angle mort du 20/08 : la veille a vu la pluie, n'a rien fermé, et
+        n'a écrit aucune ligne. Sur le log, « rien à fermer » et « la veille est
+        morte » s'écrivaient identiquement — c'est-à-dire pas du tout."""
+        import logging
+
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(tmp_path, rain, cimier_open=False)
+        service._close_session_fn = RecordingCloser()
+        with caplog.at_level(logging.INFO, logger="services.cimier_service"):
+            service.tick()
+            service.tick()
+        assert caplog.text.count("rain_close_skipped") == 1
+        assert "already_closed" in caplog.text
 
     def test_rain_state_is_published_in_status(self, tmp_path):
         rain = StubRainProtection(state="wet", armed=False)

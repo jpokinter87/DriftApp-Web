@@ -283,6 +283,9 @@ class CimierService:
         self._last_rain_state: Optional[str] = None
         # Décision à blanc déjà signalée pour l'épisode de pluie en cours.
         self._rain_would_close_notified = False
+        # Dernier motif de « il pleut et pourtant on ne ferme pas », pour ne
+        # l'écrire qu'une fois par épisode (cf. _log_rain_skip_once).
+        self._rain_skip_reason: Optional[str] = None
         # Indirection pour les tests : la séquence réelle est branchée à la
         # première utilisation (elle a besoin des writers IPC).
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
@@ -1097,6 +1100,38 @@ class CimierService:
             reason=reason,
         )
 
+    def _read_cimier_state_for_rain(self) -> str:
+        """État du cimier pour la décision pluie, sur une lecture fraîche des butées.
+
+        Les butées ne sont interrogées qu'au cours d'un cycle : au repos,
+        ``_last_open_switch`` / ``_last_closed_switch`` datent du dernier cycle
+        — et valent False/False tant qu'aucun n'a eu lieu, c'est-à-dire après
+        chaque démarrage du service (que la mise à jour OTA provoque depuis la
+        6.14). Décider sur cette connaissance périmée reviendrait à laisser un
+        redémarrage désarmer la protection. Lecture impossible : on retombe sur
+        ce qu'on sait, et l'inconnu ferme.
+        """
+        try:
+            switches = self._switch_reader.read()
+        except SwitchReaderError as exc:
+            logger.info("cimier_event=rain_switch_read_failed exc=%s", exc)
+        else:
+            self._last_open_switch = switches.open_switch
+            self._last_closed_switch = switches.closed_switch
+        return self._derive_current_cimier_state()
+
+    def _log_rain_skip_once(self, reason: str) -> None:
+        """Trace, une fois par motif et par épisode, une pluie qui ne commande rien.
+
+        Le 20/08/2026 la veille a vu la pluie, n'a rien fermé et n'a écrit
+        aucune ligne : sur le log, « rien à fermer » et « la veille est morte »
+        s'écrivaient identiquement, c'est-à-dire pas du tout.
+        """
+        if self._rain_skip_reason == reason:
+            return
+        self._rain_skip_reason = reason
+        logger.info("cimier_event=rain_close_skipped reason=%s", reason)
+
     def _rain_watch_tick(self) -> None:
         """Un tour de veille pluie : rafraîchit l'armement, lit, publie, décide."""
         self._refresh_rain_armed_from_config()
@@ -1116,19 +1151,35 @@ class CimierService:
             self._last_rain_state = state
             # Nouvel épisode : la décision à blanc redevient signalable.
             self._rain_would_close_notified = False
+            self._rain_skip_reason = None
 
-        # Décision : le cimier doit être observé ouvert. En cooldown ou en
-        # cycle, l'état dérivé n'est pas "open" et on réessaie au tour suivant
-        # — nécessaire, le service étant en mode Drop (une commande écrite
-        # pendant le cooldown serait consommée puis jetée).
-        if self._derive_current_cimier_state() != CIMIER_STATE_OPEN:
-            return
         # On interroge la mesure, pas ``is_safe_to_keep_open()`` : cette
         # dernière est bridée par l'armement (elle répond toujours True quand
         # la protection est désarmée), ce qui rendrait la décision à blanc
         # ci-dessous inatteignable. ``state != wet`` couvre aussi le fail-safe :
         # un capteur injoignable ne ferme jamais.
         if state != RAIN_WET:
+            return
+
+        # Mode Drop : une commande écrite pendant le cooldown serait consommée
+        # puis jetée. On ne ferme pas — on repassera ici au tour suivant. Le
+        # reste à courir est recalculé plutôt que lu dans l'état dérivé : ce
+        # dernier n'efface le cooldown que plus loin dans le tick, ce qui
+        # coûterait un tour de veille de retard.
+        if self._cooldown_end_ts is not None and self._cooldown_end_ts > self._clock():
+            self._log_rain_skip_once("cooldown")
+            return
+
+        # Il pleut. La seule raison de ne rien faire est un cimier *confirmé*
+        # fermé : fermer un cimier déjà fermé ne coûte rien, ne pas fermer
+        # coûte le télescope. Terrain 20/08/2026 — le cimier était entrouvert
+        # (cycle de fermeture stoppé), donc sans butée active, donc "unknown" ;
+        # la garde d'alors exigeait "open" et la protection armée n'a rien fait,
+        # en silence. Un état inconnu, une anomalie capteur ou un cimier en
+        # mouvement déclenchent désormais la fermeture.
+        cimier_state = self._read_cimier_state_for_rain()
+        if cimier_state == CIMIER_STATE_CLOSED:
+            self._log_rain_skip_once("already_closed")
             return
 
         if not getattr(provider, "armed", False):
@@ -1143,7 +1194,9 @@ class CimierService:
                 self._rain_would_close_notified = True
             return
 
-        logger.warning("cimier_event=rain_emergency_close state=%s", state)
+        logger.warning(
+            "cimier_event=rain_emergency_close state=%s cimier_state=%s", state, cimier_state
+        )
         night_journal.append_event("decision", action="close", reason="rain")
         closer = self._close_session_fn or self._close_session_for_rain
         closer("rain")
