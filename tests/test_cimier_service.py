@@ -135,6 +135,14 @@ class FailingPowerSwitch(CountingPowerSwitch):
         raise PowerSwitchError("simulated turn_on failure")
 
 
+class FailingOffPowerSwitch(CountingPowerSwitch):
+    """Power switch qui lève PowerSwitchError sur turn_off (turn_on réussit)."""
+
+    def turn_off(self) -> None:
+        self.off_count += 1
+        raise PowerSwitchError("simulated turn_off failure")
+
+
 class MockClock:
     """Horloge mockée + sleep qui avance le clock virtuel (pas de wall-clock)."""
 
@@ -2728,6 +2736,20 @@ class TestRainHeaterSwitch:
         )
         service.tick()
         assert rain.armed is True
+        assert service._rain_heater_status["last_command_ok"] is False
+
+    def test_disarm_failure_does_not_block_disarming(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": False}}})
+        )
+        heater = FailingOffPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        service.tick()
+        assert rain.armed is False
         assert service._rain_heater_status["last_command_ok"] is False
 
     def test_noop_heater_switch_is_not_configured(self, tmp_path):
