@@ -298,6 +298,14 @@ class CimierService:
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
         self._motor_ipc = motor_ipc
 
+        # Résistance chauffante (2026-09) : appliquée une fois ici pour que
+        # l'état corresponde à l'armement dès le premier tick, y compris
+        # après un redémarrage (OTA) avec la case déjà cochée — sans cela,
+        # _refresh_rain_armed_from_config ne détecterait jamais de
+        # transition puisque provider.armed vaut déjà cette valeur.
+        self._rain_heater_status: Dict[str, Any] = {}
+        self._apply_rain_heater_state(bool(getattr(self._weather_provider, "armed", False)))
+
         self._publish_status(
             state=STATE_IDLE,
             phase=PHASE_IDLE,
@@ -1088,6 +1096,40 @@ class CimierService:
                 armed,
             )
             provider.armed = armed
+            self._apply_rain_heater_state(armed)
+
+    def _apply_rain_heater_state(self, armed: bool) -> None:
+        """Commande la résistance chauffante sur transition d'armement.
+
+        Une seule tentative : un échec ne doit jamais bloquer l'armement de la
+        protection pluie elle-même (fail-safe), et se voit dans le statut
+        publié plutôt que de nécessiter une lecture de log. Rien n'est publié
+        si aucun Shelly n'est configuré (`type=noop`) — appeler turn_on/off
+        sur le NoopPowerSwitch reste inoffensif, mais un badge sans matériel
+        réel derrière induirait en erreur.
+        """
+        if not self._rain_heater_configured:
+            return
+        try:
+            if armed:
+                self._rain_heater_switch.turn_on()
+            else:
+                self._rain_heater_switch.turn_off()
+        except PowerSwitchError as exc:
+            logger.error("cimier_event=rain_heater_command_failed armed=%s exc=%s", armed, exc)
+            self._rain_heater_status = {
+                "configured": True,
+                "on": None,
+                "last_command_ok": False,
+                "error": str(exc),
+            }
+        else:
+            self._rain_heater_status = {
+                "configured": True,
+                "on": armed,
+                "last_command_ok": True,
+                "error": None,
+            }
 
     def _close_session_for_rain(self, reason: str) -> Dict[str, Any]:
         """Fermeture d'urgence : séquence partagée avec le scheduler et le parking."""
