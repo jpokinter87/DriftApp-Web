@@ -407,6 +407,12 @@
                           x-show="$store.dashboard.cimier?.rain" x-cloak
                           role="status" aria-live="polite"
                           aria-label="État du capteur de pluie"></span>
+                    <span id="cimier-heater-state" class="font-mono"
+                          :class="window.heaterStateClass ? window.heaterStateClass() : ''"
+                          x-text="window.heaterStateLabel ? window.heaterStateLabel() : ''"
+                          x-show="$store.dashboard.cimier?.rain?.heater" x-cloak
+                          role="status" aria-live="polite"
+                          aria-label="État de la résistance chauffante du capteur de pluie"></span>
                     <!-- Toggle timeline repliable (fermée par défaut, v6.11). Tap, pas de survol. -->
                     <button type="button" @click="timelineOpen = !timelineOpen"
                             class="ml-auto flex items-center gap-1.5 font-mono text-obs-text-secondary

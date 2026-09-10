@@ -1304,6 +1304,27 @@ function rainStateClass() {
 }
 window.rainStateClass = rainStateClass;
 
+// Badge résistance chauffante anti-rosée (2026-09). Source : cimier_status.json,
+// clé `rain.heater` — absente si aucun Shelly n'est configuré (type=noop).
+function heaterStateLabel() {
+    const heater = Alpine.store('dashboard').cimier?.rain?.heater;
+    if (!heater) return '';
+    if (heater.last_command_ok === false) return '⚠ Chauffage injoignable';
+    if (heater.on === true) return 'Chauffage : ON';
+    if (heater.on === false) return 'Chauffage : OFF';
+    return '';
+}
+window.heaterStateLabel = heaterStateLabel;
+
+function heaterStateClass() {
+    const heater = Alpine.store('dashboard').cimier?.rain?.heater;
+    if (!heater) return '';
+    if (heater.last_command_ok === false) return 'rain-pill heater-pill-error';
+    if (heater.on === true) return 'rain-pill heater-pill-on';
+    return 'rain-pill heater-pill-off';
+}
+window.heaterStateClass = heaterStateClass;
+
 // Avertissement : décochée, la case n'empêche pas le scheduler d'ouvrir au
 // crépuscule. Une campagne d'observation sous orage se mène en manual ou semi.
 function rainModeWarning() {
