@@ -7,9 +7,10 @@
     ``{"id": n, "state": <bool>}``. id=0 → microswitch BAS, id=1 → HAUT.
     Convention V3 : ``state=True`` = contact ouvert = PAS en butée ;
     ``state=False`` = contact fermé = butée atteinte.
-  - 3 relais legacy (Gen 1) : ``GET /relay/<n>?turn=on|off`` →
+  - 4 relais legacy (Gen 1) : ``GET /relay/<n>?turn=on|off`` →
     ``{"ison": <bool>}``. n=0 → 24V (alim), n=1 → MOT (moteur), n=2 → UPDN
-    (sens : ON = ouverture).
+    (sens : ON = ouverture), n=3 → résistance chauffante du capteur de pluie
+    (2026-09, sans lien avec le mécanisme).
   - capteur de pluie : entrée ``id=2`` du même Uni+ simulé, basculée par
     ``GET /dev/rain?on=0|1`` → ``{"raining": <bool>}``. Convention terrain
     (14/08/2026) : ``state=True`` = pluie.
@@ -40,6 +41,7 @@ DEFAULT_PORT = 8001
 RELAY_24V = 0
 RELAY_MOT = 1
 RELAY_UPDN = 2
+RELAY_HEATER = 3  # résistance chauffante anti-rosée du capteur de pluie (2026-09)
 
 INPUT_BAS = 0
 INPUT_HAUT = 1
@@ -143,6 +145,7 @@ class CimierSimulator:
         self._lock = threading.Lock()
 
         self._power_on = False  # relais 24V
+        self._heater_on = False  # relais résistance chauffante (id=3)
         self._raining = False  # entrée pluie simulée (bascule via /dev/rain)
         self._last_advance_ts = None
 
@@ -240,6 +243,9 @@ class CimierSimulator:
                 return on
             if relay_id == RELAY_UPDN:
                 self._mechanism.set_direction(open_direction=on)
+                return on
+            if relay_id == RELAY_HEATER:
+                self._heater_on = on
                 return on
             return None
 
