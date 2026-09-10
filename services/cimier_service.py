@@ -199,6 +199,7 @@ class CimierService:
         power_switch: PowerSwitchProtocol,
         motor_shelly: Optional[MotorShellyProtocol] = None,
         switch_reader: Optional[SwitchReaderProtocol] = None,
+        rain_heater_switch: Optional[PowerSwitchProtocol] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
         site_config: Optional[SiteConfig] = None,
@@ -212,6 +213,12 @@ class CimierService:
     ):
         self._config = cimier_config
         self._power_switch = power_switch
+        self._rain_heater_switch = (
+            rain_heater_switch
+            if rain_heater_switch is not None
+            else make_power_switch(cimier_config.rain_heater_switch)
+        )
+        self._rain_heater_configured = not isinstance(self._rain_heater_switch, NoopPowerSwitch)
         self._motor_shelly = (
             motor_shelly
             if motor_shelly is not None
@@ -1273,6 +1280,10 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
     cimier_cfg.power_switch.type = "shelly_gen1"
     cimier_cfg.power_switch.host = "127.0.0.1:8001"
     cimier_cfg.power_switch.switch_id = 0
+    # Résistance chauffante simulée : 4e relais legacy du Shelly unifié (id=3).
+    cimier_cfg.rain_heater_switch.type = "shelly_gen1"
+    cimier_cfg.rain_heater_switch.host = "127.0.0.1:8001"
+    cimier_cfg.rain_heater_switch.switch_id = 3
     cimier_cfg.motor_shelly.host_motor = "127.0.0.1:8001"
     cimier_cfg.motor_shelly.host_dir = "127.0.0.1:8001"
     cimier_cfg.motor_shelly.relay_motor = 1
@@ -1296,11 +1307,13 @@ def _build_service_from_config(config_path=None) -> CimierService:
     power_switch = make_power_switch(cfg.cimier.power_switch)
     switch_reader = make_switch_reader(cfg.cimier.switch_reader)
     weather_provider = make_weather_provider(cfg.cimier.weather_provider)
+    rain_heater_switch = make_power_switch(cfg.cimier.rain_heater_switch)
     return CimierService(
         cimier_config=cfg.cimier,
         power_switch=power_switch,
         switch_reader=switch_reader,
         weather_provider=weather_provider,
+        rain_heater_switch=rain_heater_switch,
         site_config=cfg.site,
         config_path=config_path,
         cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,

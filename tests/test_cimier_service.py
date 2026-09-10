@@ -2620,6 +2620,43 @@ class TestRainWatch:
         assert rain.read_calls == 1
 
 
+# ======================================================================
+# Résistance chauffante capteur de pluie (2026-09)
+# ======================================================================
+
+
+class TestRainHeaterSwitch:
+    @pytest.fixture(autouse=True)
+    def _isolate_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
+
+    def test_default_heater_switch_is_built_from_config(self, tmp_path):
+        """Sans injection explicite, le switch est construit via make_power_switch."""
+        from core.config.config_loader import PowerSwitchConfig, WeatherProviderConfig
+
+        cfg = CimierConfig(
+            enabled=True,
+            weather_provider=WeatherProviderConfig(type="shelly_rain", host="1.2.3.4"),
+            rain_heater_switch=PowerSwitchConfig(type="noop"),
+        )
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            switch_reader=FakeSwitchReader([(True, False)]),
+            ipc_manager=ipc,
+            weather_provider=StubRainProtection(state="dry", armed=False),
+            config_path=tmp_path / "absent.json",
+        )
+        assert isinstance(service._rain_heater_switch, NoopPowerSwitch)
+        assert service._rain_heater_configured is False
+
+
 # ----------------------------------------------------------------------
 # Intégration : veille câblée sur le vrai provider (pas de stub)
 # ----------------------------------------------------------------------
