@@ -493,6 +493,51 @@ class TestCimierConfig:
         assert config.cimier.power_switch.host == "10.0.0.43"
         assert config.cimier.power_switch.switch_id == 2
 
+    def test_cimier_rain_heater_switch_default_when_missing(self, tmp_path, sample_config_dict):
+        """Section cimier sans rain_heater_switch imbriqué → PowerSwitchConfig() par défaut."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert isinstance(config.cimier.rain_heater_switch, PowerSwitchConfig)
+        assert config.cimier.rain_heater_switch.type == "noop"
+        assert config.cimier.rain_heater_switch.host == ""
+        assert config.cimier.rain_heater_switch.switch_id == 0
+
+    def test_cimier_rain_heater_switch_shelly_gen1(self, tmp_path, sample_config_dict):
+        """type=shelly_gen1 + host renseigné → reflété dans la dataclass."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {
+            "enabled": False,
+            "rain_heater_switch": {
+                "type": "shelly_gen1",
+                "host": "192.168.1.78",
+                "switch_id": 0,
+            },
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.rain_heater_switch.type == "shelly_gen1"
+        assert config.cimier.rain_heater_switch.host == "192.168.1.78"
+        assert config.cimier.rain_heater_switch.switch_id == 0
+
+    def test_cimier_rain_heater_switch_independent_of_power_switch(
+        self, tmp_path, sample_config_dict
+    ):
+        """Les deux sections coexistent sans se piétiner (schéma identique, clés distinctes)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {
+            "power_switch": {"type": "shelly_gen1", "host": "192.168.1.83", "switch_id": 0},
+            "rain_heater_switch": {"type": "shelly_gen1", "host": "192.168.1.78", "switch_id": 0},
+        }
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.power_switch.host == "192.168.1.83"
+        assert config.cimier.rain_heater_switch.host == "192.168.1.78"
+
     def test_cimier_shelly_settle_and_verbose_defaults(self, tmp_path, sample_config_dict):
         """shelly_settle_s et verbose_logging : defaults rétro-compatibles (section absente)."""
         cfg = dict(sample_config_dict)

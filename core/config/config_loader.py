@@ -341,6 +341,7 @@ class CimierConfig:
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
     switch_reader: SwitchReaderConfig = field(default_factory=SwitchReaderConfig)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
+    rain_heater_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
     motor_shelly: MotorShellyConfig = field(default_factory=MotorShellyConfig)
@@ -630,6 +631,7 @@ class ConfigLoader:
         au_defaults = CimierAutomationConfig()
         ms_defaults = MotorShellyConfig()
         ps = c.get("power_switch", {}) if isinstance(c, dict) else {}
+        rh = c.get("rain_heater_switch", {}) if isinstance(c, dict) else {}
         wp = c.get("weather_provider", {}) if isinstance(c, dict) else {}
         if not isinstance(wp, dict):
             wp = {}
@@ -665,6 +667,11 @@ class ConfigLoader:
                 type=str(ps.get("type", ps_defaults.type)),
                 host=str(ps.get("host", ps_defaults.host)),
                 switch_id=int(ps.get("switch_id", ps_defaults.switch_id)),
+            ),
+            rain_heater_switch=PowerSwitchConfig(
+                type=str(rh.get("type", ps_defaults.type)),
+                host=str(rh.get("host", ps_defaults.host)),
+                switch_id=int(rh.get("switch_id", ps_defaults.switch_id)),
             ),
             weather_provider=WeatherProviderConfig(
                 type=str(wp.get("type", wp_defaults.type)),
