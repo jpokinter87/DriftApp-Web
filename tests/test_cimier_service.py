@@ -2758,6 +2758,26 @@ class TestRainHeaterSwitch:
         assert service._rain_heater_configured is False
         assert service._rain_heater_status == {}
 
+    def test_heater_status_is_published_when_configured(self, tmp_path):
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, rain_heater_switch=heater)
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload["rain"]["heater"] == {
+            "configured": True,
+            "on": True,
+            "last_command_ok": True,
+            "error": None,
+        }
+
+    def test_heater_status_absent_when_not_configured(self, tmp_path):
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain)  # noop par défaut
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert "heater" not in payload.get("rain", {})
+
 
 # ----------------------------------------------------------------------
 # Intégration : veille câblée sur le vrai provider (pas de stub)

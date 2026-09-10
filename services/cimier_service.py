@@ -1020,6 +1020,8 @@ class CimierService:
         }
         if self._rain_enabled:
             payload["rain"] = self._weather_provider.describe()
+        if self._rain_heater_status.get("configured"):
+            payload.setdefault("rain", {})["heater"] = self._rain_heater_status
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
         self._ipc.write_status(payload)
