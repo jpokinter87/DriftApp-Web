@@ -2778,6 +2778,41 @@ class TestRainHeaterSwitch:
         payload = json.loads((tmp_path / "status.json").read_text())
         assert "heater" not in payload.get("rain", {})
 
+    def test_heater_status_published_even_without_rain_sensor(self, tmp_path):
+        """Chauffage configuré mais AUCUN capteur de pluie réel (_rain_enabled=False,
+        ex. NoopWeatherProvider en bring-up matériel partiel) : ``payload["rain"]``
+        n'existe pas avant la ligne testée, elle doit être créée fraîche par le
+        ``setdefault`` — pas planter en KeyError avec un index direct.
+        """
+        from core.hardware.weather_provider import NoopWeatherProvider
+
+        heater = CountingPowerSwitch()
+        cfg = CimierConfig(enabled=True, power_switch=PowerSwitchConfig(type="noop"))
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            switch_reader=FakeSwitchReader([(False, False)]),
+            rain_heater_switch=heater,
+            ipc_manager=ipc,
+            weather_provider=NoopWeatherProvider(),
+            config_path=tmp_path / "absent.json",
+        )
+        assert service._rain_enabled is False
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload["rain"] == {
+            "heater": {
+                "configured": True,
+                "on": False,
+                "last_command_ok": True,
+                "error": None,
+            }
+        }
+
 
 # ----------------------------------------------------------------------
 # Intégration : veille câblée sur le vrai provider (pas de stub)

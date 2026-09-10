@@ -1021,6 +1021,9 @@ class CimierService:
         if self._rain_enabled:
             payload["rain"] = self._weather_provider.describe()
         if self._rain_heater_status.get("configured"):
+            # setdefault, pas d'index direct : le chauffage peut être configuré
+            # sans capteur de pluie réel (_rain_enabled=False, ex. NoopWeatherProvider
+            # en bring-up matériel partiel) — "rain" n'existe alors pas encore.
             payload.setdefault("rain", {})["heater"] = self._rain_heater_status
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
