@@ -448,7 +448,7 @@ wheels = [
 
 [[package]]
 name = "driftapp-web"
-version = "6.15.2"
+version = "6.15.3"
 source = { editable = "." }
 dependencies = [
     { name = "astropy" },

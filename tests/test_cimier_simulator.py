@@ -34,7 +34,7 @@ def test_uni_inputs_reflect_initial_closed(sim):
 
 
 def test_relay_endpoints_return_200(sim):
-    for relay in (0, 1, 2):
+    for relay in (0, 1, 2, 3):
         payload = _get_json(sim.url + "/relay/{}?turn=on".format(relay))
         assert "ison" in payload
 
@@ -109,3 +109,11 @@ def test_rain_input_does_not_disturb_the_limit_switches(sim):
     before = _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"]
     _get_json(sim.url + "/dev/rain?on=1")
     assert _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"] == before
+
+
+def test_heater_relay_toggles_independently_of_motion(sim):
+    """Relais 3 (résistance chauffante) : ON/OFF simple, sans lien avec le mécanisme."""
+    payload_on = _get_json(sim.url + "/relay/3?turn=on")
+    assert payload_on["ison"] is True
+    payload_off = _get_json(sim.url + "/relay/3?turn=off")
+    assert payload_off["ison"] is False

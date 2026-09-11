@@ -111,6 +111,12 @@
       "host": "192.168.1.83",
       "switch_id": 0
     },
+    "rain_heater_switch": {
+      "_comment": "Résistance chauffante anti-rosée du capteur de pluie, Shelly Gen 1 dédié. type ∈ {shelly_gen1, shelly_gen2, noop}. ON quand la protection pluie est armée, OFF sinon — indépendant de l'état wet/dry du capteur.",
+      "type": "noop",
+      "host": "192.168.1.78",
+      "switch_id": 0
+    },
     "weather_provider": {
       "_comment": "Capteur de pluie MH-RD sur Shelly Plus Uni (.87), D0 câblé sur l'entrée id=0. type ∈ {noop, shelly_rain} — mettre shelly_rain dans le config.json terrain. Valeurs mesurées le 14/08/2026 : state=true = pluie (invert=false), séchage ≤ 1 min 51 s. protection_enabled=false : le capteur est lu et affiché mais ne commande rien (mode observation).",
       "type": "noop",

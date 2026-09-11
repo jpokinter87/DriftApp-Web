@@ -1200,3 +1200,18 @@ header h1 span {
     border-color: rgba(255, 165, 2, 0.4);
     background: rgba(255, 165, 2, 0.08);
 }
+.heater-pill-on {
+    color: #00d26a;
+    border-color: rgba(0, 210, 106, 0.4);
+    background: rgba(0, 210, 106, 0.08);
+}
+.heater-pill-off {
+    color: #9aa4b2;
+    border-color: rgba(154, 164, 178, 0.4);
+    background: rgba(154, 164, 178, 0.08);
+}
+.heater-pill-error {
+    color: #ffa502;
+    border-color: rgba(255, 165, 2, 0.4);
+    background: rgba(255, 165, 2, 0.08);
+}

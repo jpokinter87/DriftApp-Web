@@ -143,6 +143,38 @@ class TestCimierViewsStatus:
         assert body["phase"] == "cycle_poll"
         assert body["pico_state"] == "opening"
 
+    def test_status_forwards_rain_heater_payload(self, api_client, mock_cimier_ipc):
+        status_payload = {
+            "state": "idle",
+            "phase": "idle",
+            "last_action": None,
+            "command_id": None,
+            "error_message": "",
+            "last_update": "2026-09-10T12:34:56",
+            "rain": {
+                "state": "dry",
+                "armed": True,
+                "heater": {
+                    "configured": True,
+                    "on": True,
+                    "last_command_ok": True,
+                    "error": None,
+                },
+            },
+        }
+        mock_cimier_ipc["status_file"].write_text(json.dumps(status_payload))
+
+        response = api_client.get("/api/cimier/status/")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["rain"]["heater"] == {
+            "configured": True,
+            "on": True,
+            "last_command_ok": True,
+            "error": None,
+        }
+
     def test_status_returns_unknown_when_file_missing(self, api_client, mock_cimier_ipc):
         # Le status_file n'existe pas (pas de write au préalable)
         assert not mock_cimier_ipc["status_file"].exists()

@@ -36,6 +36,7 @@ ENUM_REGISTRY: dict[str, list] = {
     "motor_driver.type": ["gpio", "rp2040"],
     "cimier.switch_reader.type": ["shelly_uni", "noop"],
     "cimier.power_switch.type": ["shelly_gen1", "shelly_gen2", "noop"],
+    "cimier.rain_heater_switch.type": ["shelly_gen1", "shelly_gen2", "noop"],
     "cimier.weather_provider.type": ["noop", "shelly_rain"],
     "cimier.motor_shelly.api": ["legacy", "rpc"],
     "cimier.switch_reader.api": ["legacy", "rpc"],
@@ -43,6 +44,7 @@ ENUM_REGISTRY: dict[str, list] = {
     "cimier.motor_shelly.relay_motor": [0, 1],
     "cimier.motor_shelly.relay_dir": [0, 1],
     "cimier.power_switch.switch_id": [0, 1],
+    "cimier.rain_heater_switch.switch_id": [0, 1],
     "cimier.switch_reader.open_input_id": [0, 1],
     "cimier.switch_reader.closed_input_id": [0, 1],
     "cimier.weather_provider.input_id": [0, 1],
@@ -233,6 +235,18 @@ HELP_REGISTRY: dict[str, str] = {
     ),
     "cimier.power_switch.switch_id": (
         "Index du relais d'alimentation 24V sur le Shelly power : 0 ou 1."
+    ),
+    # cimier.rain_heater_switch (résistance chauffante anti-rosée du capteur de pluie)
+    "cimier.rain_heater_switch.type": (
+        "Type du Shelly pilotant la résistance chauffante du capteur de pluie. "
+        "« shelly_gen1 » (legacy /relay), « shelly_gen2 » (RPC) ou « noop » (factice)."
+    ),
+    "cimier.rain_heater_switch.host": (
+        "Hôte/IP du Shelly de la résistance chauffante. ON quand la protection "
+        "pluie est armée, OFF sinon."
+    ),
+    "cimier.rain_heater_switch.switch_id": (
+        "Index du relais de la résistance chauffante sur son Shelly : 0 ou 1."
     ),
     # cimier.weather_provider (capteur de pluie MH-RD sur Shelly Plus Uni)
     "cimier.weather_provider.type": (

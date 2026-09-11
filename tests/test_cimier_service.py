@@ -135,6 +135,14 @@ class FailingPowerSwitch(CountingPowerSwitch):
         raise PowerSwitchError("simulated turn_on failure")
 
 
+class FailingOffPowerSwitch(CountingPowerSwitch):
+    """Power switch qui lève PowerSwitchError sur turn_off (turn_on réussit)."""
+
+    def turn_off(self) -> None:
+        self.off_count += 1
+        raise PowerSwitchError("simulated turn_off failure")
+
+
 class MockClock:
     """Horloge mockée + sleep qui avance le clock virtuel (pas de wall-clock)."""
 
@@ -2215,6 +2223,7 @@ def make_rain_service(
     config_path=None,
     switch_reader=None,
     last_switches=None,
+    rain_heater_switch=None,
 ):
     """Service prêt pour la veille, avec un cimier observé ouvert ou fermé.
 
@@ -2244,6 +2253,7 @@ def make_rain_service(
         switch_reader=switch_reader
         if switch_reader is not None
         else FakeSwitchReader([(cimier_open, not cimier_open)]),
+        rain_heater_switch=rain_heater_switch,
         ipc_manager=ipc,
         weather_provider=rain,
         config_path=config_path if config_path is not None else tmp_path / "absent.json",
@@ -2618,6 +2628,190 @@ class TestRainWatch:
         service._rain_watch_tick()
         assert rain.armed is True
         assert rain.read_calls == 1
+
+
+# ======================================================================
+# Résistance chauffante capteur de pluie (2026-09)
+# ======================================================================
+
+
+class TestRainHeaterSwitch:
+    @pytest.fixture(autouse=True)
+    def _isolate_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
+
+    def test_default_heater_switch_is_built_from_config(self, tmp_path):
+        """Sans injection explicite, le switch est construit via make_power_switch."""
+        from core.config.config_loader import PowerSwitchConfig, WeatherProviderConfig
+
+        cfg = CimierConfig(
+            enabled=True,
+            weather_provider=WeatherProviderConfig(type="shelly_rain", host="1.2.3.4"),
+            rain_heater_switch=PowerSwitchConfig(type="noop"),
+        )
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            switch_reader=FakeSwitchReader([(True, False)]),
+            ipc_manager=ipc,
+            weather_provider=StubRainProtection(state="dry", armed=False),
+            config_path=tmp_path / "absent.json",
+        )
+        assert isinstance(service._rain_heater_switch, NoopPowerSwitch)
+        assert service._rain_heater_configured is False
+
+    def test_arming_turns_heater_on(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": True}}})
+        )
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        # La construction applique déjà l'état initial (armed=False → turn_off,
+        # cf. test_initial_state_applied_at_construction_when_already_armed) :
+        # on repart de zéro pour isoler la seule transition déclenchée par tick().
+        heater.on_count = 0
+        heater.off_count = 0
+        service.tick()
+        assert heater.on_count == 1
+        assert heater.off_count == 0
+
+    def test_disarming_turns_heater_off(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": False}}})
+        )
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        # Idem : la construction a déjà appliqué armed=True → turn_on().
+        heater.on_count = 0
+        heater.off_count = 0
+        service.tick()
+        assert heater.off_count == 1
+        assert heater.on_count == 0
+
+    def test_unchanged_armed_state_does_not_recommand(self, tmp_path):
+        """Idempotence : pas de re-commande tant que l'armement ne change pas."""
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": True}}})
+        )
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        service.tick()
+        service.tick()
+        assert heater.on_count == 1
+
+    def test_initial_state_applied_at_construction_when_already_armed(self, tmp_path):
+        """Redémarrage (OTA) avec la case déjà cochée : le chauffage suit dès le 1er tick."""
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        make_rain_service(tmp_path, rain, rain_heater_switch=heater)
+        assert heater.on_count == 1
+
+    def test_command_failure_does_not_block_arming(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": True}}})
+        )
+        heater = FailingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        service.tick()
+        assert rain.armed is True
+        assert service._rain_heater_status["last_command_ok"] is False
+
+    def test_disarm_failure_does_not_block_disarming(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text(
+            json.dumps({"cimier": {"weather_provider": {"protection_enabled": False}}})
+        )
+        heater = FailingOffPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, config_path=config_file, rain_heater_switch=heater
+        )
+        service.tick()
+        assert rain.armed is False
+        assert service._rain_heater_status["last_command_ok"] is False
+
+    def test_noop_heater_switch_is_not_configured(self, tmp_path):
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain)  # rain_heater_switch=None → noop
+        assert service._rain_heater_configured is False
+        assert service._rain_heater_status == {}
+
+    def test_heater_status_is_published_when_configured(self, tmp_path):
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, rain_heater_switch=heater)
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload["rain"]["heater"] == {
+            "configured": True,
+            "on": True,
+            "last_command_ok": True,
+            "error": None,
+        }
+
+    def test_heater_status_absent_when_not_configured(self, tmp_path):
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain)  # noop par défaut
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert "heater" not in payload.get("rain", {})
+
+    def test_heater_status_published_even_without_rain_sensor(self, tmp_path):
+        """Chauffage configuré mais AUCUN capteur de pluie réel (_rain_enabled=False,
+        ex. NoopWeatherProvider en bring-up matériel partiel) : ``payload["rain"]``
+        n'existe pas avant la ligne testée, elle doit être créée fraîche par le
+        ``setdefault`` — pas planter en KeyError avec un index direct.
+        """
+        from core.hardware.weather_provider import NoopWeatherProvider
+
+        heater = CountingPowerSwitch()
+        cfg = CimierConfig(enabled=True, power_switch=PowerSwitchConfig(type="noop"))
+        ipc = CimierIpcManager(
+            command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json"
+        )
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            motor_shelly=NoopMotorShelly(),
+            switch_reader=FakeSwitchReader([(False, False)]),
+            rain_heater_switch=heater,
+            ipc_manager=ipc,
+            weather_provider=NoopWeatherProvider(),
+            config_path=tmp_path / "absent.json",
+        )
+        assert service._rain_enabled is False
+        service.tick()
+        payload = json.loads((tmp_path / "status.json").read_text())
+        assert payload["rain"] == {
+            "heater": {
+                "configured": True,
+                "on": False,
+                "last_command_ok": True,
+                "error": None,
+            }
+        }
 
 
 # ----------------------------------------------------------------------

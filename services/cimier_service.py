@@ -199,6 +199,7 @@ class CimierService:
         power_switch: PowerSwitchProtocol,
         motor_shelly: Optional[MotorShellyProtocol] = None,
         switch_reader: Optional[SwitchReaderProtocol] = None,
+        rain_heater_switch: Optional[PowerSwitchProtocol] = None,
         ipc_manager: Optional[CimierIpcManager] = None,
         weather_provider: Optional[WeatherProvider] = None,
         site_config: Optional[SiteConfig] = None,
@@ -212,6 +213,12 @@ class CimierService:
     ):
         self._config = cimier_config
         self._power_switch = power_switch
+        self._rain_heater_switch = (
+            rain_heater_switch
+            if rain_heater_switch is not None
+            else make_power_switch(cimier_config.rain_heater_switch)
+        )
+        self._rain_heater_configured = not isinstance(self._rain_heater_switch, NoopPowerSwitch)
         self._motor_shelly = (
             motor_shelly
             if motor_shelly is not None
@@ -290,6 +297,14 @@ class CimierService:
         # première utilisation (elle a besoin des writers IPC).
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
         self._motor_ipc = motor_ipc
+
+        # Résistance chauffante (2026-09) : appliquée une fois ici pour que
+        # l'état corresponde à l'armement dès le premier tick, y compris
+        # après un redémarrage (OTA) avec la case déjà cochée — sans cela,
+        # _refresh_rain_armed_from_config ne détecterait jamais de
+        # transition puisque provider.armed vaut déjà cette valeur.
+        self._rain_heater_status: Dict[str, Any] = {}
+        self._apply_rain_heater_state(bool(getattr(self._weather_provider, "armed", False)))
 
         self._publish_status(
             state=STATE_IDLE,
@@ -1005,6 +1020,11 @@ class CimierService:
         }
         if self._rain_enabled:
             payload["rain"] = self._weather_provider.describe()
+        if self._rain_heater_status.get("configured"):
+            # setdefault, pas d'index direct : le chauffage peut être configuré
+            # sans capteur de pluie réel (_rain_enabled=False, ex. NoopWeatherProvider
+            # en bring-up matériel partiel) — "rain" n'existe alors pas encore.
+            payload.setdefault("rain", {})["heater"] = self._rain_heater_status
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
         self._ipc.write_status(payload)
@@ -1081,6 +1101,40 @@ class CimierService:
                 armed,
             )
             provider.armed = armed
+            self._apply_rain_heater_state(armed)
+
+    def _apply_rain_heater_state(self, armed: bool) -> None:
+        """Commande la résistance chauffante sur transition d'armement.
+
+        Une seule tentative : un échec ne doit jamais bloquer l'armement de la
+        protection pluie elle-même (fail-safe), et se voit dans le statut
+        publié plutôt que de nécessiter une lecture de log. Rien n'est publié
+        si aucun Shelly n'est configuré (`type=noop`) — appeler turn_on/off
+        sur le NoopPowerSwitch reste inoffensif, mais un badge sans matériel
+        réel derrière induirait en erreur.
+        """
+        if not self._rain_heater_configured:
+            return
+        try:
+            if armed:
+                self._rain_heater_switch.turn_on()
+            else:
+                self._rain_heater_switch.turn_off()
+        except PowerSwitchError as exc:
+            logger.error("cimier_event=rain_heater_command_failed armed=%s exc=%s", armed, exc)
+            self._rain_heater_status = {
+                "configured": True,
+                "on": None,
+                "last_command_ok": False,
+                "error": str(exc),
+            }
+        else:
+            self._rain_heater_status = {
+                "configured": True,
+                "on": armed,
+                "last_command_ok": True,
+                "error": None,
+            }
 
     def _close_session_for_rain(self, reason: str) -> Dict[str, Any]:
         """Fermeture d'urgence : séquence partagée avec le scheduler et le parking."""
@@ -1273,6 +1327,10 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
     cimier_cfg.power_switch.type = "shelly_gen1"
     cimier_cfg.power_switch.host = "127.0.0.1:8001"
     cimier_cfg.power_switch.switch_id = 0
+    # Résistance chauffante simulée : 4e relais legacy du Shelly unifié (id=3).
+    cimier_cfg.rain_heater_switch.type = "shelly_gen1"
+    cimier_cfg.rain_heater_switch.host = "127.0.0.1:8001"
+    cimier_cfg.rain_heater_switch.switch_id = 3
     cimier_cfg.motor_shelly.host_motor = "127.0.0.1:8001"
     cimier_cfg.motor_shelly.host_dir = "127.0.0.1:8001"
     cimier_cfg.motor_shelly.relay_motor = 1
@@ -1296,11 +1354,13 @@ def _build_service_from_config(config_path=None) -> CimierService:
     power_switch = make_power_switch(cfg.cimier.power_switch)
     switch_reader = make_switch_reader(cfg.cimier.switch_reader)
     weather_provider = make_weather_provider(cfg.cimier.weather_provider)
+    rain_heater_switch = make_power_switch(cfg.cimier.rain_heater_switch)
     return CimierService(
         cimier_config=cfg.cimier,
         power_switch=power_switch,
         switch_reader=switch_reader,
         weather_provider=weather_provider,
+        rain_heater_switch=rain_heater_switch,
         site_config=cfg.site,
         config_path=config_path,
         cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,
