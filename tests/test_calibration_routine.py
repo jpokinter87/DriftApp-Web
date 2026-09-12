@@ -49,7 +49,12 @@ class FakeDaemonReader:
 
 
 class ResponsiveMoteur:
-    """Mock moteur dont rotation() bloque jusqu'à request_stop() ou timeout interne."""
+    """Mock moteur dont rotation() bloque jusqu'à request_stop() ou timeout interne.
+
+    Les petits mouvements (< 1°, typiquement l'overshoot post-switch) ne
+    bloquent pas : ils ne sont pas surveillés par le watcher et n'ont donc
+    personne pour les débloquer via request_stop().
+    """
 
     def __init__(self, max_block_sec: float = 0.5):
         self._stop_event = threading.Event()
@@ -58,6 +63,9 @@ class ResponsiveMoteur:
         self.request_stop = MagicMock(side_effect=self._stop)
 
     def _rotate(self, *args, **kwargs):
+        delta = args[0] if args else 0.0
+        if abs(delta) < 1.0:
+            return
         self._stop_event.wait(timeout=self.max_block_sec)
         self._stop_event.clear()
 
@@ -196,11 +204,14 @@ class TestSweep:
 
         assert result.status == "ok"
         assert result.method == "sweep"
-        # Seule la 1ère branche du sweep est appelée
-        assert moteur.rotation.call_count == 1
-        called_delta = moteur.rotation.call_args.args[0]
+        # 1ère branche du sweep + overshoot post-switch
+        assert moteur.rotation.call_count == 2
+        called_delta = moteur.rotation.call_args_list[0].args[0]
         assert called_delta < 0  # première branche = -sweep
         assert abs(called_delta + default_config.fallback_sweep_deg) < 0.01
+        overshoot_delta = moteur.rotation.call_args_list[1].args[0]
+        assert overshoot_delta < 0  # même sens que la branche gagnante
+        assert abs(overshoot_delta + default_config.switch_overshoot_deg) < 0.01
 
     def test_second_branch_calibrates(self, default_config, callback_recorder):
         """1ère branche n'arrive pas à calibrer, 2ème branche y arrive."""
@@ -222,11 +233,15 @@ class TestSweep:
 
         assert result.status == "ok"
         assert result.method == "sweep"
-        assert moteur.rotation.call_count == 2
+        # 1ère branche (infructueuse) + 2ème branche (calibre) + overshoot post-switch
+        assert moteur.rotation.call_count == 3
         # 2ème branche est +2*sweep
         second_delta = moteur.rotation.call_args_list[1].args[0]
         assert second_delta > 0
         assert abs(second_delta - 2.0 * default_config.fallback_sweep_deg) < 0.01
+        overshoot_delta = moteur.rotation.call_args_list[2].args[0]
+        assert overshoot_delta > 0  # même sens que la branche gagnante
+        assert abs(overshoot_delta - default_config.switch_overshoot_deg) < 0.01
 
     def test_sweep_complete_failure(self, default_config, callback_recorder):
         """Sweep complet sans calibration → degraded."""
@@ -258,6 +273,57 @@ class TestSweep:
 
         assert result.status == "ok"
         assert moteur.request_stop.call_count >= 1
+
+
+# =============================================================================
+# TestSwitchOvershoot
+# =============================================================================
+
+class OvershootFailingMoteur(ResponsiveMoteur):
+    """Variante où l'appel d'overshoot (petit delta) lève une exception."""
+
+    def _rotate(self, *args, **kwargs):
+        delta = args[0] if args else 0.0
+        if abs(delta) < 1.0:
+            raise RuntimeError("overshoot failed")
+        return super()._rotate(*args, **kwargs)
+
+
+class TestSwitchOvershoot:
+
+    def test_overshoot_disabled_when_zero(self, callback_recorder):
+        """switch_overshoot_deg=0 → pas d'appel supplémentaire après le switch."""
+        config = BootCalibrationConfig(
+            fallback_sweep_deg=7.0,
+            timeout_sec=2.0,
+            poll_interval_sec=0.005,
+            switch_overshoot_deg=0.0,
+        )
+        moteur = ResponsiveMoteur(max_block_sec=0.5)
+        daemon = FakeDaemonReader(calib_at=None)
+        _trigger_calib_after(daemon, 0.05)
+
+        routine = _build_routine(
+            config=config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+        )
+        result = routine.run()
+
+        assert result.status == "ok"
+        assert moteur.rotation.call_count == 1
+
+    def test_overshoot_error_does_not_fail_calibration(self, default_config, callback_recorder):
+        """Une exception lors de l'overshoot ne dégrade pas une calibration déjà acquise."""
+        moteur = OvershootFailingMoteur(max_block_sec=0.5)
+        daemon = FakeDaemonReader(calib_at=None)
+        _trigger_calib_after(daemon, 0.05)
+
+        routine = _build_routine(
+            config=default_config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+        )
+        result = routine.run()
+
+        assert result.status == "ok"
+        assert moteur.rotation.call_count == 2  # branche sweep + tentative overshoot (échouée)
 
 
 # =============================================================================

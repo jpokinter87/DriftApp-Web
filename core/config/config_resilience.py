@@ -353,6 +353,12 @@ HELP_REGISTRY: dict[str, str] = {
     "boot_calibration.poll_interval_sec": (
         "Période (secondes) de scrutation du microswitch 45° pendant la calibration au boot."
     ),
+    "boot_calibration.switch_overshoot_deg": (
+        "Angle (degrés) de rotation supplémentaire après détection du microswitch 45°, "
+        "dans le même sens que le mouvement en cours, pour ne pas laisser le ménisque "
+        "reposer en continu sur la lamelle du rupteur. Ne pas dépasser 0,5° (contacts de "
+        "charge batterie)."
+    ),
 }
 
 

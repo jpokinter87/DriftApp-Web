@@ -363,11 +363,21 @@ class BootCalibrationConfig:
     `timeout_sec` borne la durée totale (mode dégradé après expiration).
     `poll_interval_sec` cadence le watcher qui poll `last_calibration_at`
     dans le payload IPC encodeur.
+
+    `switch_overshoot_deg` (v6.16) : une fois le switch détecté, la routine
+    poursuit la rotation de cet angle supplémentaire (même sens que la
+    branche de sweep en cours) avant de considérer la calibration terminée.
+    Évite que le ménisque ne repose en continu sur la lamelle du rupteur
+    (déformation durable constatée sur le terrain). Nom délibérément
+    distinct de la clé legacy `overshoot_deg` (pré-v6.6, sémantique
+    différente, ignorée) pour ne pas hériter silencieusement d'une
+    ancienne valeur terrain.
     """
 
     fallback_sweep_deg: float = 7.0
     timeout_sec: float = 180.0
     poll_interval_sec: float = 0.1
+    switch_overshoot_deg: float = 0.5
 
 
 @dataclass
@@ -783,24 +793,34 @@ class ConfigLoader:
             )
             timeout_sec = float(section.get("timeout_sec", defaults.timeout_sec))
             poll_interval_sec = float(section.get("poll_interval_sec", defaults.poll_interval_sec))
+            switch_overshoot_deg = float(
+                section.get("switch_overshoot_deg", defaults.switch_overshoot_deg)
+            )
         except (TypeError, ValueError):
             self.logger.warning(
                 "boot_calibration config invalide (types non numériques) — utilisation des defaults"
             )
             return BootCalibrationConfig()
-        if fallback_sweep_deg <= 0 or timeout_sec <= 0 or poll_interval_sec <= 0:
+        if (
+            fallback_sweep_deg <= 0
+            or timeout_sec <= 0
+            or poll_interval_sec <= 0
+            or switch_overshoot_deg < 0
+        ):
             self.logger.warning(
-                "boot_calibration config invalide (sweep=%s, timeout=%s, poll=%s) — "
-                "utilisation des defaults",
+                "boot_calibration config invalide (sweep=%s, timeout=%s, poll=%s, "
+                "switch_overshoot=%s) — utilisation des defaults",
                 fallback_sweep_deg,
                 timeout_sec,
                 poll_interval_sec,
+                switch_overshoot_deg,
             )
             return BootCalibrationConfig()
         return BootCalibrationConfig(
             fallback_sweep_deg=fallback_sweep_deg,
             timeout_sec=timeout_sec,
             poll_interval_sec=poll_interval_sec,
+            switch_overshoot_deg=switch_overshoot_deg,
         )
 
     def _resolve_automation_mode(self, au: dict, default_mode: str) -> str:

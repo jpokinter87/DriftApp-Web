@@ -14,6 +14,9 @@ Architecture du monitoring :
   est détectée (front descendant du switch capté par `ems22d_calibrated.py`),
   il appelle `moteur.request_stop()` pour interrompre la rotation en cours.
 - Un timeout global (`timeout_sec`) borne la durée totale de la routine.
+- Une fois le switch détecté, une rotation supplémentaire de
+  `switch_overshoot_deg` (v6.16) est effectuée dans le même sens, pour ne pas
+  laisser le ménisque reposer en continu sur la lamelle du rupteur.
 
 Pas de dépendance externe (stdlib + utilitaires projet uniquement).
 """
@@ -179,7 +182,35 @@ class CalibrationRoutine:
             calibrated,
             self._timeout_hit,
         )
+
+        if calibrated:
+            self._apply_switch_overshoot(direction_sign=1 if delta_deg >= 0 else -1)
+
         return calibrated
+
+    def _apply_switch_overshoot(self, direction_sign: int) -> None:
+        """Poursuit la rotation après détection du switch (même sens que le sweep en cours).
+
+        Évite que le ménisque ne reste posé en continu sur la lamelle du
+        rupteur (déformation durable constatée sur le terrain). Best-effort :
+        une erreur ici ne remet pas en cause la calibration, déjà acquise.
+        """
+        overshoot = float(self.config.switch_overshoot_deg)
+        if overshoot <= 0:
+            return
+        try:
+            self.moteur.rotation(
+                direction_sign * overshoot,
+                vitesse=SINGLE_SPEED_MOTOR_DELAY,
+                use_ramp=False,
+            )
+            logger.info(
+                "boot_calibration | step=switch_overshoot deg=%.2f direction=%+d",
+                overshoot,
+                direction_sign,
+            )
+        except Exception as e:
+            logger.warning("boot_calibration | step=switch_overshoot error=%s", e)
 
     def _watcher_loop(self, stop_event: threading.Event, baseline: Optional[str]) -> None:
         """Boucle du thread watcher : poll IPC + détection transition + timeout."""
