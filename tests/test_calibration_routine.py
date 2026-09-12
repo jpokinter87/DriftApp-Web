@@ -218,11 +218,19 @@ class TestSweep:
         moteur = ResponsiveMoteur(max_block_sec=0.05)
         daemon = FakeDaemonReader(calib_at=None)
 
-        def fire_during_second_branch():
-            time.sleep(0.07)
+        def fire_when_second_branch_starts():
+            # Synchronisation sur le call_count plutôt qu'un délai fixe : sous
+            # xdist/CI chargé, un sleep fixe peut s'écouler avant même que la
+            # 1ère branche n'ait terminé, et faire calibrer la mauvaise branche
+            # (flaky observé en CI). On attend explicitement que la 2ème
+            # branche ait démarré (call_count == 2, incrémenté par le
+            # MagicMock dès l'appel) avant de déclencher la transition.
+            deadline = time.monotonic() + 2.0
+            while moteur.rotation.call_count < 2 and time.monotonic() < deadline:
+                time.sleep(0.005)
             daemon.set_calib("2026-05-04T12:00:00+00:00")
 
-        t = threading.Thread(target=fire_during_second_branch, daemon=True)
+        t = threading.Thread(target=fire_when_second_branch_starts, daemon=True)
         t.start()
 
         routine = _build_routine(
