@@ -95,6 +95,8 @@
     "dir_settle_s": 0.3,
     "cycle_poll_interval_s": 0.5,
     "verbose_logging": false,
+    "rain_heater_keepalive_interval_s": 240.0,
+    "_rain_heater_keepalive_interval_s_comment": "Renvoi périodique de turn_on() sur rain_heater_switch tant que la protection pluie est armée. Configurer côté app Shelly (hors DriftApp) l'auto_off natif du relais à 300s : chaque turn_on relance ce minuteur. Si le Pi est coupé (plus de signal), le Shelly coupe la résistance seul au bout de 5 min au lieu de rester sous tension indéfiniment (retour terrain 13/09/2026, arrêt électrique manuel après le bug switch_overshoot_deg 6.15.6).",
     "switch_reader": {
       "_comment": "type ∈ {shelly_uni, noop}. shelly_uni = Shelly Uni+ RPC. id=1 HAUT, id=0 BAS. Switches NC : state=true=contact fermé=repos, state=false=contact ouvert=butée. invert=true : butée atteinte = input false.",
       "type": "noop",

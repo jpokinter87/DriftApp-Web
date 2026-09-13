@@ -523,6 +523,23 @@ class TestCimierConfig:
         assert config.cimier.rain_heater_switch.host == "192.168.1.78"
         assert config.cimier.rain_heater_switch.switch_id == 0
 
+    def test_cimier_rain_heater_keepalive_interval_default(self, tmp_path, sample_config_dict):
+        """Section cimier sans rain_heater_keepalive_interval_s → défaut 240s (4 min)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.rain_heater_keepalive_interval_s == 240.0
+
+    def test_cimier_rain_heater_keepalive_interval_override(self, tmp_path, sample_config_dict):
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"enabled": True, "rain_heater_keepalive_interval_s": 120.0}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        config = ConfigLoader(config_file).load()
+        assert config.cimier.rain_heater_keepalive_interval_s == 120.0
+
     def test_cimier_rain_heater_switch_independent_of_power_switch(
         self, tmp_path, sample_config_dict
     ):

@@ -339,6 +339,11 @@ class CimierConfig:
         0.5  # cadence lecture butées pendant un cycle (0.1 = debug 100ms)
     )
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
+    rain_heater_keepalive_interval_s: float = (
+        240.0  # renvoi périodique de turn_on() tant qu'armé (v6.15.8) — relance
+        # l'auto_off du Shelly (à configurer à 300s côté app Shelly, hors DriftApp) :
+        # une coupure du Pi arrête ce signal, le Shelly coupe alors la résistance seul.
+    )
     switch_reader: SwitchReaderConfig = field(default_factory=SwitchReaderConfig)
     power_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
     rain_heater_switch: PowerSwitchConfig = field(default_factory=PowerSwitchConfig)
@@ -664,6 +669,12 @@ class ConfigLoader:
                 c.get("cycle_poll_interval_s", defaults.cycle_poll_interval_s)
             ),
             verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
+            rain_heater_keepalive_interval_s=float(
+                c.get(
+                    "rain_heater_keepalive_interval_s",
+                    defaults.rain_heater_keepalive_interval_s,
+                )
+            ),
             switch_reader=SwitchReaderConfig(
                 type=str(sr.get("type", sr_defaults.type)),
                 host=str(sr.get("host", sr_defaults.host)),

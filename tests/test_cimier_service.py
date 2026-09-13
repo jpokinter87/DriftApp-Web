@@ -2224,6 +2224,7 @@ def make_rain_service(
     switch_reader=None,
     last_switches=None,
     rain_heater_switch=None,
+    heater_keepalive_interval_s=240.0,
 ):
     """Service prêt pour la veille, avec un cimier observé ouvert ou fermé.
 
@@ -2243,6 +2244,7 @@ def make_rain_service(
         weather_provider=WeatherProviderConfig(
             type="shelly_rain", host="1.2.3.4", watch_interval_s=watch_interval_s
         ),
+        rain_heater_keepalive_interval_s=heater_keepalive_interval_s,
     )
     ipc = CimierIpcManager(command_file=tmp_path / "cmd.json", status_file=tmp_path / "status.json")
     clock = MockClock()
@@ -2812,6 +2814,78 @@ class TestRainHeaterSwitch:
                 "error": None,
             }
         }
+
+
+# ======================================================================
+# Keepalive résistance chauffante (2026-09) — relance l'auto_off Shelly
+# ======================================================================
+
+
+class TestRainHeaterKeepalive:
+    @pytest.fixture(autouse=True)
+    def _isolate_night_journal(self, tmp_path, monkeypatch):
+        from services import night_journal
+
+        monkeypatch.setattr(night_journal, "DEFAULT_NIGHTS_DIR", tmp_path / "nights")
+
+    def test_resends_on_after_interval_elapsed_while_armed(self, tmp_path):
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, rain_heater_switch=heater, heater_keepalive_interval_s=60.0
+        )
+        heater.on_count = 0
+        heater.off_count = 0
+        service._clock.advance(60.0)
+        service.tick()
+        assert heater.on_count == 1
+        assert heater.off_count == 0
+
+    def test_does_not_resend_before_interval_elapsed(self, tmp_path):
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, rain_heater_switch=heater, heater_keepalive_interval_s=60.0
+        )
+        heater.on_count = 0
+        service._clock.advance(59.0)
+        service.tick()
+        assert heater.on_count == 0
+
+    def test_does_not_fire_when_disarmed(self, tmp_path):
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=False)
+        service = make_rain_service(
+            tmp_path, rain, rain_heater_switch=heater, heater_keepalive_interval_s=60.0
+        )
+        heater.on_count = 0
+        heater.off_count = 0
+        service._clock.advance(1000.0)
+        service.tick()
+        assert heater.on_count == 0
+        assert heater.off_count == 0
+
+    def test_inert_when_heater_not_configured(self, tmp_path):
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(tmp_path, rain, heater_keepalive_interval_s=60.0)
+        service._clock.advance(1000.0)
+        service.tick()  # ne doit pas lever
+        assert service._rain_heater_configured is False
+
+    def test_resend_resets_the_periodic_timer(self, tmp_path):
+        """Un renvoi (périodique ou transition) repousse la prochaine échéance."""
+        heater = CountingPowerSwitch()
+        rain = StubRainProtection(state="dry", armed=True)
+        service = make_rain_service(
+            tmp_path, rain, rain_heater_switch=heater, heater_keepalive_interval_s=60.0
+        )
+        heater.on_count = 0
+        service._clock.advance(60.0)
+        service.tick()
+        assert heater.on_count == 1
+        service._clock.advance(59.0)
+        service.tick()
+        assert heater.on_count == 1  # pas encore 120s depuis le dernier renvoi
 
 
 # ----------------------------------------------------------------------
