@@ -194,6 +194,12 @@ class CalibrationRoutine:
         Évite que le ménisque ne reste posé en continu sur la lamelle du
         rupteur (déformation durable constatée sur le terrain). Best-effort :
         une erreur ici ne remet pas en cause la calibration, déjà acquise.
+
+        `use_ramp=True` est indispensable : ce mouvement repart de l'arrêt
+        (contre la butée du rupteur) directement à vitesse single-speed.
+        Sans rampe, le couple est insuffisant pour vaincre l'inertie depuis
+        un départ arrêté et le moteur cale au lieu d'avancer (retour terrain
+        post-6.15.4 — bruit de calage, coupole immobile).
         """
         overshoot = float(self.config.switch_overshoot_deg)
         if overshoot <= 0:
@@ -202,7 +208,7 @@ class CalibrationRoutine:
             self.moteur.rotation(
                 direction_sign * overshoot,
                 vitesse=SINGLE_SPEED_MOTOR_DELAY,
-                use_ramp=False,
+                use_ramp=True,
             )
             logger.info(
                 "boot_calibration | step=switch_overshoot deg=%.2f direction=%+d",

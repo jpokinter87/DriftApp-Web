@@ -333,6 +333,27 @@ class TestSwitchOvershoot:
         assert result.status == "ok"
         assert moteur.rotation.call_count == 2  # branche sweep + tentative overshoot (échouée)
 
+    def test_overshoot_uses_acceleration_ramp(self, default_config, callback_recorder):
+        """L'overshoot doit démarrer avec la rampe d'accélération.
+
+        Sans rampe, le moteur repart à l'arrêt directement à la vitesse de
+        croisière (single-speed) contre la butée du rupteur : couple
+        insuffisant pour vaincre l'inertie depuis un départ arrêté → le
+        moteur cale (bruit de calage) au lieu d'avancer des 0.5° demandés
+        (retour terrain post-6.15.4).
+        """
+        moteur = ResponsiveMoteur(max_block_sec=0.5)
+        daemon = FakeDaemonReader(calib_at=None)
+        _trigger_calib_after(daemon, 0.05)
+
+        routine = _build_routine(
+            config=default_config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+        )
+        routine.run()
+
+        overshoot_call = moteur.rotation.call_args_list[1]
+        assert overshoot_call.kwargs["use_ramp"] is True
+
 
 # =============================================================================
 # TestTimeout
