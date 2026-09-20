@@ -118,7 +118,7 @@ class TestDiagnostiquer:
     def test_reproduit_la_saturation_de_decembre_2025(self):
         """L'instrument qui aurait évité la conclusion erronée de 2025.
 
-        Mesures réelles du site (Vitesses.xlsx, 12/12/2025), où la boucle
+        Mesures réelles du site (docs/Vitesses.xlsx, 12/12/2025), où la boucle
         Python ajoutait 121 µs à chaque pas : demander 300 puis 150 µs
         n'a produit que +52 % de vitesse au lieu des +100 % attendus.
         Faute de cette comparaison, le plafond logiciel a été pris pour
