@@ -100,10 +100,60 @@ SITE_TZ_OFFSET: int = get_site_tz_offset()
 ENCODER_MODE: str = str(_config["site"].get("encoder_mode", "relative")).lower()
 SIMULATION: bool = bool(_config["site"].get("simulation", False))
 
-# Vitesse unique du suivi (v5.10) : ex-mode CONTINUOUS validé terrain 22/03/2026.
-# En dur dans le code — si un jour reconfigurable, ajouter une clé
-# `motor_driver.delay_us` dans config.json.
-SINGLE_SPEED_MOTOR_DELAY: float = 0.00026   # 260 µs / pas ≈ 40°/min (limite DM860T)
+# Vitesse unique du suivi (v5.10), reconfigurable depuis v6.16 via la clé
+# `motor_driver.delay_us` de config.json (page Configuration → Avancé).
+#
+# Le défaut 260 µs (≈ 43°/min) reproduit à l'identique le comportement v5.10.
+# Ce n'était pas une limite du driver : les campagnes de décembre 2025 (GPIO) et
+# de mars 2026 (firmware RP2040 v1) ont toutes deux mesuré le plafond de la
+# couche logicielle de l'époque — 121 µs/pas de surcoût Python pour la première,
+# le coût par pas de MicroPython pour la seconde. Depuis que le PIO génère la
+# croisière en autonome (v5.4), plus rien ne borne la vitesse côté logiciel.
+# Bornes : 100 µs (au-delà de l'UPAN mesuré à 96°/min, garde-fou anti-faute de
+# frappe) et 3000 µs (RAMP_START_DELAY_US — au-dessus, la rampe s'inverserait).
+DEFAULT_MOTOR_DELAY_US: float = 260.0
+MOTOR_DELAY_US_MIN: float = 100.0
+MOTOR_DELAY_US_MAX: float = 3000.0
+
+
+def resolve_motor_delay_us(motor_driver_cfg: dict) -> float:
+    """Délai moteur en µs/pas issu de `motor_driver.delay_us`, borné.
+
+    La valeur étant éditable depuis l'interface web, une saisie absente,
+    non numérique ou hors bornes retombe sur une valeur sûre plutôt que
+    d'être transmise telle quelle au moteur.
+
+    Args:
+        motor_driver_cfg: Section `motor_driver` de config.json.
+
+    Returns:
+        Délai en microsecondes par pas.
+    """
+    import logging
+
+    raw = motor_driver_cfg.get("delay_us", DEFAULT_MOTOR_DELAY_US)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logging.getLogger(__name__).warning(
+            f"motor_driver.delay_us invalide ({raw!r}) — repli sur {DEFAULT_MOTOR_DELAY_US} µs"
+        )
+        return DEFAULT_MOTOR_DELAY_US
+
+    if not MOTOR_DELAY_US_MIN <= value <= MOTOR_DELAY_US_MAX:
+        clamped = min(max(value, MOTOR_DELAY_US_MIN), MOTOR_DELAY_US_MAX)
+        logging.getLogger(__name__).warning(
+            f"motor_driver.delay_us={value} µs hors bornes "
+            f"[{MOTOR_DELAY_US_MIN}, {MOTOR_DELAY_US_MAX}] — borné à {clamped} µs"
+        )
+        return clamped
+
+    return value
+
+
+SINGLE_SPEED_MOTOR_DELAY: float = (
+    resolve_motor_delay_us(_config.get("motor_driver", {})) / 1_000_000
+)
 SINGLE_SPEED_CHECK_INTERVAL_S: int = 30     # secondes entre deux corrections
 SINGLE_SPEED_CORRECTION_THRESHOLD_DEG: float = 0.3  # seuil au-delà duquel on corrige
 

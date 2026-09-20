@@ -279,3 +279,47 @@ class TestPathConstants:
         """CACHE_FILE est défini."""
         from core.config.config import CACHE_FILE
         assert isinstance(CACHE_FILE, Path)
+
+
+class TestResolveMotorDelayUs:
+    """Vitesse moteur configurable via motor_driver.delay_us (v6.16)."""
+
+    def test_section_absente_donne_le_defaut_v510(self):
+        """Sans la clé, on retrouve exactement les 260 µs de la v5.10."""
+        from core.config.config import resolve_motor_delay_us
+        assert resolve_motor_delay_us({}) == 260.0
+
+    def test_valeur_configuree_est_respectee(self):
+        """Une valeur dans les bornes est transmise telle quelle."""
+        from core.config.config import resolve_motor_delay_us
+        assert resolve_motor_delay_us({"delay_us": 150}) == 150.0
+
+    def test_chaine_numerique_acceptee(self):
+        """L'UI peut renvoyer une chaîne : elle est convertie."""
+        from core.config.config import resolve_motor_delay_us
+        assert resolve_motor_delay_us({"delay_us": "150"}) == 150.0
+
+    def test_valeur_non_numerique_retombe_sur_le_defaut(self):
+        """Une saisie aberrante ne doit jamais atteindre le moteur."""
+        from core.config.config import resolve_motor_delay_us
+        assert resolve_motor_delay_us({"delay_us": "vite"}) == 260.0
+        assert resolve_motor_delay_us({"delay_us": None}) == 260.0
+
+    def test_valeur_trop_basse_est_bornee(self):
+        """Une faute de frappe (1 au lieu de 100) est bornée, pas obéie."""
+        from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MIN
+        assert resolve_motor_delay_us({"delay_us": 1}) == MOTOR_DELAY_US_MIN
+
+    def test_valeur_trop_haute_est_bornee(self):
+        """Au-dessus de RAMP_START_DELAY_US la rampe s'inverserait."""
+        from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MAX
+        assert resolve_motor_delay_us({"delay_us": 10_000}) == MOTOR_DELAY_US_MAX
+
+    def test_constante_exposee_en_secondes_et_dans_les_bornes(self):
+        """SINGLE_SPEED_MOTOR_DELAY reste un délai en secondes, borné."""
+        from core.config.config import (
+            SINGLE_SPEED_MOTOR_DELAY,
+            MOTOR_DELAY_US_MIN,
+            MOTOR_DELAY_US_MAX,
+        )
+        assert MOTOR_DELAY_US_MIN / 1e6 <= SINGLE_SPEED_MOTOR_DELAY <= MOTOR_DELAY_US_MAX / 1e6

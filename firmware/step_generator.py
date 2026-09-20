@@ -7,7 +7,7 @@ eliminant l'overhead de l'interpreteur MicroPython (~10-20us/pas).
 
 Deux modes :
 - Autonome (croisiere) : PIO recoit N + delai, boucle en interne
-- Variable (rampe) : PIO recoit 1 pas + delai a chaque iteration
+- Table (rampe) : PIO recoit 1 pas + delai par pas, delais pre-calcules
 
 Usage:
     sg = StepGenerator(step_pin=2, dir_pin=3)
@@ -85,7 +85,7 @@ class StepGenerator:
 
     Deux modes :
     - move_steps() : N pas a delai constant, PIO autonome
-    - move_steps_variable() : N pas a delai variable (rampe accel/decel)
+    - move_steps_table() : N pas a delais variables pre-calcules (rampe)
     """
 
     def __init__(self, step_pin=2, dir_pin=3, sm_id=0):
@@ -208,25 +208,45 @@ class StepGenerator:
             self._sm.active(0)
             self._moving = False
 
-    def move_steps_variable(self, steps, delay_func, start_index=0,
-                            stop_checker=None):
+    def delays_to_cycles(self, delays):
         """
-        Execute N pas avec delai variable (pour phases de rampe).
+        Convertit une liste de delais (us) en demi-periodes PIO.
 
-        Utilise le mode pas-par-pas : chaque pas envoie 2 mots au PIO
-        (count=0 pour 1 pas, puis le delai). L'overhead MicroPython est
-        acceptable car les delais de rampe sont grands (3000 → 260us).
+        Appele une fois avant une phase de rampe, pour sortir toute
+        l'arithmetique flottante de la boucle d'emission.
 
         Args:
-            steps: Nombre de pas a executer
-            delay_func: Fonction(index) retournant le delai en us pour ce pas
-            start_index: Index de depart pour delay_func (position absolue)
+            delays: Liste de delais en microsecondes
+
+        Returns:
+            list: Demi-periodes en cycles PIO, une par pas
+        """
+        return [self._delay_us_to_cycles(d) for d in delays]
+
+    def move_steps_table(self, cycles, stop_checker=None):
+        """
+        Execute un pas par entree de `cycles` (delais variables pre-calcules).
+
+        Mode pas-par-pas : chaque pas envoie 2 mots au PIO (count=0 pour
+        1 pas, puis la demi-periode). La boucle ne fait plus que remplir
+        le FIFO — les delais sont deja calcules.
+
+        C'est la correction du bridage : quand le delai etait calcule par pas
+        (trois exp() par appel), le cout MicroPython devenait comparable au
+        delai vise en fin d'acceleration. Le PIO se retrouvait affame, la
+        rampe plafonnait, puis la croisiere basculait d'un coup sur le delai
+        cible — discontinuite de vitesse, donc perte de pas. La rampe peut
+        desormais atteindre la meme cadence que la croisiere.
+
+        Args:
+            cycles: Liste de demi-periodes en cycles PIO, une par pas
             stop_checker: Fonction retournant True si STOP recu
 
         Returns:
             int: Nombre de pas effectivement executes
         """
-        if steps <= 0:
+        total = len(cycles)
+        if total <= 0:
             return 0
 
         self._moving = True
@@ -237,24 +257,26 @@ class StepGenerator:
         self._sm.restart()
         self._sm.active(1)
 
+        put = self._sm.put
         try:
-            for i in range(steps):
-                # Verification STOP periodique
-                if stop_checker and i % STOP_CHECK_INTERVAL == 0 and i > 0:
-                    if stop_checker():
-                        self._stop_flag = True
-                        break
+            # Emission par tranches : STOP verifie entre deux tranches, le FIFO
+            # (2 pas d'avance) couvre la pause Python sans affamer le PIO.
+            index = 0
+            while index < total:
+                if stop_checker and stop_checker():
+                    self._stop_flag = True
+                    break
 
-                delay_us = delay_func(start_index + i)
-                cycles = self._delay_us_to_cycles(delay_us)
+                chunk = cycles[index:index + STOP_CHECK_INTERVAL]
+                for half_period in chunk:
+                    # 1 pas : count=0 (jmp y-- avec Y=0 fait 1 iteration)
+                    put(0)
+                    put(half_period)
+                    # Le prochain put() bloquera si le FIFO est plein,
+                    # ce qui synchronise naturellement avec le PIO
 
-                # 1 pas : count=0 (jmp y-- avec Y=0 fait 1 iteration)
-                self._sm.put(0)
-                self._sm.put(cycles)
-                # Le prochain put() bloquera si le FIFO est plein,
-                # ce qui synchronise naturellement avec le PIO
-
-                steps_done += 1
+                index += len(chunk)
+                steps_done += len(chunk)
         finally:
             self._sm.active(0)
             self._moving = False
