@@ -93,8 +93,8 @@ class StepGenerator:
         Initialise le generateur PIO.
 
         Args:
-            step_pin: Numero GPIO pour STEP (vers PUL+ du DM556T)
-            dir_pin: Numero GPIO pour DIR (vers DIR+ du DM556T)
+            step_pin: Numero GPIO pour STEP (vers PUL+ du DM860T)
+            dir_pin: Numero GPIO pour DIR (vers DIR+ du DM860T)
             sm_id: ID de la state machine PIO (0-7)
         """
         self._step_pin_num = step_pin
@@ -124,7 +124,7 @@ class StepGenerator:
         """
         self._direction = 1 if direction else 0
         self._dir_pin.value(self._direction)
-        # Laisser le temps au DM556T de lire la direction (5 us min)
+        # Laisser le temps au DM860T de lire la direction (5 us min)
         time.sleep_us(10)
 
     def _delay_us_to_cycles(self, delay_us):

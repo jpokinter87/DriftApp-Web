@@ -56,6 +56,7 @@ pdf.title_page(
         "Observatoire Ubik — DriftApp Web",
         "Destinataire : Serge, sur site",
         "Durée : environ 1 h, dont ~20 min coupole en mouvement",
+        "Étapes 1 et 2 déjà faites — commencer à l'étape 3",
         "20 septembre 2026",
     ],
 )
@@ -170,19 +171,34 @@ pdf.success_box(
     "Pico sont identiques à l'octet près."
 )
 
-pdf.h1("3. Ce qu'on ne sait pas encore")
+pdf.h1("3. Le dernier doute est levé")
 
 pdf.body(
-    "La vraie limite du moteur est inconnue. C'est tout l'objet de ce protocole."
+    "Il restait un point physique susceptible de tout bloquer : la tension "
+    "d'alimentation du driver. À 124 µs par pas le moteur tourne à environ 600 tr/min, "
+    "et à cette vitesse le couple en dépend directement."
+)
+pdf.success_box(
+    "Réponse du site, 20/09/2026 : driver DM860T, alimenté en 36 V.\n"
+    "C'est exactement la tension du boîtier UPAN, qui atteint 96°/min avec ce même "
+    "moteur. La combinaison moteur + 36 V est donc déjà démontrée capable de tourner "
+    "à la vitesse visée : ce n'est plus une hypothèse."
 )
 pdf.body(
-    "Un seul point physique peut encore bloquer : la tension d'alimentation du driver. "
-    "À 124 µs par pas, le moteur tourne à environ 600 tr/min, et à cette vitesse le "
-    "couple dépend directement de la tension. Le boîtier UPAN, qui atteint 96°/min, "
-    "alimente son driver en 36 V. Si le nôtre est en 24 V, c'est là que ça butera — et "
-    "ça se corrigera par l'alimentation, pas par le logiciel."
+    "Le calcul le confirme : établir les 2,5 A dans la bobine à 96°/min demande entre "
+    "10 et 22 V selon l'inductance du moteur. Avec 36 V, la marge est confortable."
 )
-pdf.body("D'où l'étape 2 ci-dessous.")
+pdf.body(
+    "Trois faits concordent désormais : le boîtier constructeur fait 90°/min, l'UPAN "
+    "96, et la tension disponible correspond à cet ordre de grandeur. Notre 43°/min "
+    "est le seul chiffre qui détonne — et on sait maintenant pourquoi."
+)
+pdf.warning_box(
+    "Au passage, cette réponse a corrigé une erreur de documentation : deux drivers "
+    "sont montés en parallèle sur le même moteur (le DM860T qui nous concerne, et le "
+    "DM556T du boîtier UPAN). Toute la documentation de câblage désignait le mauvais. "
+    "C'est corrigé : vérifier l'étiquette avant de brancher quoi que ce soit."
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 pdf.add_page()
@@ -201,21 +217,21 @@ pdf.warning_box(
     "démarrage). Choisir un moment tranquille."
 )
 
-pdf.h2("Bloc A — Relevés, sans rien lancer ni démonter")
+pdf.h2("Bloc A — Relevés (1 et 2 déjà faits)")
 
-pdf.step(1, "Relever le modèle exact du driver")
+pdf.h2("Étape 1 — Modèle du driver — FAIT le 20/09/2026")
 pdf.body(
-    "La documentation du projet hésite entre deux modèles. Il faut trancher."
+    "Réponse : DM860T. Cela tranche l'hésitation de la documentation, et confirme que "
+    "c'est bien ce boîtier — et non le DM556T de l'UPAN, monté en parallèle sur le "
+    "même moteur — qui reçoit les signaux de notre Pico."
 )
-pdf.bold_bullet("À faire :", "lire l'étiquette collée sur le boîtier du driver moteur (celui qui reçoit les fils du moteur).")
-pdf.bold_bullet("À rapporter :", "le modèle exact (DM556T ou DM860T, ou autre) et, si elle est lisible, la plage de tension indiquée.")
 
-pdf.step(2, "Mesurer la tension d'alimentation du driver")
-pdf.body("Multimètre en tension continue (DC), calibre 200 V si le réglage est manuel.")
-pdf.bold_bullet("À faire :", "mesurer aux bornes d'alimentation puissance du driver, repérées VDC et GND (ou V+ / V−).")
-pdf.bold_bullet("Attention :", "ne pas confondre avec les bornes PUL+ / DIR+, qui sont les signaux logiques et n'ont rien à voir.")
-pdf.bold_bullet("Attendu :", "une valeur entre 24 et 48 V.")
-pdf.bold_bullet("À rapporter :", "la valeur lue.")
+pdf.h2("Étape 2 — Tension d'alimentation — FAIT le 20/09/2026")
+pdf.body(
+    "Réponse : 36 V, la même tension que l'UPAN. Voir section 3 : le dernier obstacle "
+    "physique est levé, rien ne s'oppose plus à viser les 90°/min."
+)
+pdf.body("→ Commencer à l'étape 3.")
 
 pdf.step(3, "Noter les micro-interrupteurs (DIP)")
 pdf.bold_bullet("À faire :", "photographier ou noter la position des petits interrupteurs sur le côté du driver (ON/OFF, généralement 8).")
@@ -226,9 +242,9 @@ pdf.body(
 )
 
 pdf.info_box(
-    "Les étapes 1 à 3 se font sans rien démonter ni rien lancer. Si la tension relevée "
-    "est basse (24 V), prévenir avant d'aller plus loin : l'objectif de vitesse devra "
-    "peut-être être revu à la baisse."
+    "L'étape 3 se fait sans rien démonter ni rien lancer, et n'est pas bloquante : "
+    "elle sert à confirmer que le courant de phase et le microstepping sont bien ceux "
+    "attendus. Elle peut être faite en même temps que la suite."
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -322,9 +338,9 @@ pdf.h1("5. Résumé de ce qu'il faut rapporter")
 pdf.table(
     ["Étape", "Information attendue"],
     [
-        ["1", "Modèle exact du driver"],
-        ["2", "Tension d'alimentation mesurée"],
-        ["3", "Position des DIP, ou photo"],
+        ["1", "Modèle du driver — FAIT : DM860T"],
+        ["2", "Tension d'alimentation — FAIT : 36 V"],
+        ["**3**", "**Position des DIP, ou photo**"],
         ["5 et 7", "Confirmation que rien n'a changé (après mise à jour, puis après flash)"],
         ["8", "Tableau de mesures complet + fichier logs/calibration_vitesse_*.json"],
     ],

@@ -30,8 +30,8 @@ from ramp import Ramp
 
 
 # Configuration
-STEP_PIN = 2   # GP2 → PUL+ du DM556T
-DIR_PIN = 3    # GP3 → DIR+ du DM556T
+STEP_PIN = 2   # GP2 → PUL+ du DM860T
+DIR_PIN = 3    # GP3 → DIR+ du DM860T
 
 # Pre-allouer le poller pour check_for_stop()
 # Evite creation/destruction d'objet a chaque appel (cause GC)

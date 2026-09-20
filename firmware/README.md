@@ -1,4 +1,4 @@
-# Firmware RP2040 — Pilotage moteur DM556T
+# Firmware RP2040 — Pilotage moteur DM860T
 
 Firmware MicroPython pour Raspberry Pi Pico (RP2040).
 Genere les impulsions STEP/DIR via PIO state machines avec precision 8 ns.
@@ -125,7 +125,7 @@ configuration ni les services.
 ## Etape 3 : Branchements
 
 ```
-Raspberry Pi 5              Pi Pico (RP2040)                DM556T
+Raspberry Pi 5              Pi Pico (RP2040)                DM860T
                         +---------------------+
   USB =================>| USB (alimentation   |
   (donnees + 5V)        |      + serie)       |
@@ -138,7 +138,7 @@ Raspberry Pi 5              Pi Pico (RP2040)                DM556T
 
 ### Connexions (3 fils)
 
-| Pi Pico         | DM556T  | Role          |
+| Pi Pico         | DM860T  | Role          |
 |-----------------|---------|---------------|
 | **GP2** (pin 4) | **PUL+** | Signal STEP   |
 | **GP3** (pin 5) | **DIR+** | Direction     |
@@ -146,10 +146,15 @@ Raspberry Pi 5              Pi Pico (RP2040)                DM556T
 
 ### Precautions
 
-- **Masse commune obligatoire** : le GND du Pico doit etre relie au GND du DM556T
-- **Fils courts** : garder < 30 cm entre Pico et DM556T
-- **Ne PAS alimenter le Pico par le DM556T** — utiliser uniquement l'USB du Pi 5
-- **Deconnecter les fils GPIO** du Pi 5 vers le DM556T (ils ne sont plus utilises)
+- ⚠️ **DEUX drivers sont montes en parallele sur le meme moteur** : le **DM860T**
+  (36 V) pilote par notre Pi Pico, et le **DM556T** du boitier UPAN. Verifier
+  l'etiquette avant de brancher PUL+/DIR+ : c'est le **DM860T** qui nous concerne.
+  (Modele et tension confirmes sur site le 20/09/2026.)
+
+- **Masse commune obligatoire** : le GND du Pico doit etre relie au GND du DM860T
+- **Fils courts** : garder < 30 cm entre Pico et DM860T
+- **Ne PAS alimenter le Pico par le DM860T** — utiliser uniquement l'USB du Pi 5
+- **Deconnecter les fils GPIO** du Pi 5 vers le DM860T (ils ne sont plus utilises)
 
 ## Etape 4 : Verification
 
@@ -194,10 +199,10 @@ sudo usermod -a -G dialout $USER
 
 ### Le moteur ne tourne pas
 
-1. Verifier que le DM556T est sous tension
+1. Verifier que le DM860T est sous tension
 2. Verifier les fils GP2→PUL+, GP3→DIR+, GND→PUL-/DIR-
 3. Tester avec un mouvement lent : `MOVE 200 1 5000 NONE`
-4. Si toujours rien : verifier que le DM556T declenche en 3.3V
+4. Si toujours rien : verifier que le DM860T declenche en 3.3V
    (si non, ajouter un level-shifter 3.3V→5V)
 
 ### Reset du Pico

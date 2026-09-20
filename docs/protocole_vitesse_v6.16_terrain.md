@@ -3,6 +3,7 @@
 Destinataire : Serge, sur site.
 Version concernée : **6.16.0** (20/09/2026).
 Durée totale : ~1 h, dont ~20 min de mesures avec la coupole en mouvement.
+Étapes 1 et 2 déjà faites le 20/09/2026 — **commencer à l'étape 3**.
 
 ---
 
@@ -62,17 +63,28 @@ envoyées au Pico sont identiques à l'octet près.
 
 ---
 
-## 3. Ce qu'on ne sait pas encore
+## 3. Le dernier doute est levé (20/09/2026)
 
-La vraie limite du moteur est **inconnue**. C'est tout l'objet de ce protocole.
+Il restait un point physique susceptible de tout bloquer : **la tension d'alimentation
+du driver**. À 124 µs par pas le moteur tourne à ~600 tr/min, et à cette vitesse le
+couple en dépend directement.
 
-Un seul point physique peut encore bloquer : **la tension d'alimentation du driver**.
-À 124 µs par pas, le moteur tourne à ~600 tr/min, et à cette vitesse le couple dépend
-directement de la tension. Le boîtier UPAN, qui atteint 96 °/min, alimente son driver
-en **36 V**. Si le nôtre est en 24 V, c'est là que ça butera — et ça se corrigera par
-l'alimentation, pas par le logiciel.
+**Réponse du site : driver DM860T, alimenté en 36 V.**
 
-D'où l'étape 1 ci-dessous.
+C'est **exactement la tension du boîtier UPAN**, qui atteint 96 °/min avec ce même
+moteur. Autrement dit, la combinaison moteur + 36 V est déjà *démontrée* capable de
+tourner à la vitesse visée — ce n'est plus une hypothèse.
+
+Le calcul le confirme : établir les 2,5 A dans la bobine à 96 °/min demande entre 10 et
+22 V selon l'inductance du moteur. Avec 36 V, la marge est confortable.
+
+Trois faits concordent désormais : le boîtier constructeur fait 90 °/min, l'UPAN 96, et
+la tension disponible correspond à cet ordre de grandeur. **Notre 43 °/min est le seul
+chiffre qui détonne** — et on sait maintenant pourquoi.
+
+⚠️ Au passage, cette réponse a corrigé une erreur de documentation : **deux drivers sont
+montés en parallèle sur le même moteur** (le DM860T qui nous concerne, et le DM556T de
+l'UPAN). Toute la doc de câblage désignait le mauvais. C'est corrigé.
 
 ---
 
@@ -89,27 +101,18 @@ D'où l'étape 1 ci-dessous.
 > - La mise à jour redémarre les services, donc **la coupole bouge** (calibration au
 >   démarrage). Choisir un moment tranquille.
 
-### Étape 1 — Relever le modèle exact du driver
+### Étape 1 — Modèle du driver ✅ FAIT (20/09/2026)
 
-La documentation du projet hésite entre deux modèles. Il faut trancher.
+**Réponse : DM860T.** Cela tranche l'hésitation de la documentation, et confirme que
+c'est bien ce boîtier — et non le DM556T de l'UPAN, monté en parallèle sur le même
+moteur — qui reçoit les signaux de notre Pico.
 
-**À faire** : lire l'étiquette collée sur le boîtier du driver moteur (celui qui reçoit
-les fils du moteur).
+### Étape 2 — Tension d'alimentation ✅ FAIT (20/09/2026)
 
-**À rapporter** : le modèle exact (`DM556T` ou `DM860T`, ou autre) et, si elle est
-lisible, la plage de tension indiquée.
+**Réponse : 36 V.** Même tension que l'UPAN. Voir section 3 : le dernier obstacle
+physique est levé, rien ne s'oppose plus à viser les 90 °/min.
 
-### Étape 2 — Mesurer la tension d'alimentation du driver
-
-Multimètre en **tension continue (V⎓)**, calibre 200 V si le réglage est manuel.
-
-**À faire** : mesurer aux bornes d'alimentation puissance du driver — repérées `VDC`
-et `GND` (ou `V+` / `V−`). **Ne pas confondre** avec les bornes `PUL+` / `DIR+`, qui
-sont les signaux logiques et n'ont rien à voir.
-
-**Résultat attendu** : une valeur entre 24 et 48 V.
-
-**À rapporter** : la valeur lue.
+**→ Commencer à l'étape 3.**
 
 ### Étape 3 — Noter les micro-interrupteurs (DIP)
 
@@ -123,9 +126,9 @@ du driver (ON/OFF, généralement 8).
 
 ---
 
-*Les étapes 1 à 3 peuvent être faites sans rien démonter ni rien lancer. Si la tension
-relevée est basse (24 V), prévenir avant d'aller plus loin : l'objectif de vitesse
-devra peut-être être revu à la baisse.*
+*L'étape 3 se fait sans rien démonter ni rien lancer, et n'est pas bloquante : elle
+sert à confirmer que le courant de phase et le microstepping sont bien ceux attendus.
+Elle peut être faite en même temps que la suite.*
 
 ---
 
@@ -236,8 +239,8 @@ complet, avec un passage au méridien si possible.
 
 ## 5. Résumé de ce qu'il faut rapporter
 
-1. Modèle exact du driver (étape 1)
-2. Tension d'alimentation mesurée (étape 2)
+1. ~~Modèle du driver~~ — fait : DM860T
+2. ~~Tension d'alimentation~~ — fait : 36 V
 3. Position des DIP, ou photo (étape 3)
 4. Confirmation que rien n'a changé après la mise à jour (étape 5) puis après le
    flash (étape 7)
