@@ -104,8 +104,8 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
 
     Architecture PIO autonome :
     - Croisiere : PIO recoit N pas + delai, tourne en autonome
-    - Accel/decel : PIO recoit 1 pas + delai variable a chaque iteration
-      (overhead MicroPython acceptable car vitesse faible en rampe)
+    - Accel/decel : delais pre-calcules, PIO recoit 1 pas + delai par pas
+      (aucun calcul flottant dans la boucle d'emission)
 
     Args:
         sg: StepGenerator instance
@@ -140,12 +140,12 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
         accel_end = ramp.accel_end
         decel_start = ramp.decel_start
 
-        # Phase 1 : Acceleration (delais variables, PIO pas-par-pas)
+        # Phase 1 : Acceleration (delais pre-calcules, PIO pas-par-pas)
         accel_steps = min(accel_end, steps)
         if accel_steps > 0:
-            done = sg.move_steps_variable(
-                accel_steps, ramp.get_delay, start_index=0,
-                stop_checker=check_for_stop,
+            accel_cycles = sg.delays_to_cycles(ramp.delays_for(0, accel_steps))
+            done = sg.move_steps_table(
+                accel_cycles, stop_checker=check_for_stop,
             )
             steps_done += done
             stopped = sg._stop_flag
@@ -161,13 +161,15 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
                 steps_done += done
                 stopped = sg._stop_flag
 
-        # Phase 3 : Deceleration (delais variables, PIO pas-par-pas)
+        # Phase 3 : Deceleration (delais pre-calcules, PIO pas-par-pas)
         if not stopped:
             decel_steps = steps - decel_start
             if decel_steps > 0:
-                done = sg.move_steps_variable(
-                    decel_steps, ramp.get_delay, start_index=decel_start,
-                    stop_checker=check_for_stop,
+                decel_cycles = sg.delays_to_cycles(
+                    ramp.delays_for(decel_start, decel_steps)
+                )
+                done = sg.move_steps_table(
+                    decel_cycles, stop_checker=check_for_stop,
                 )
                 steps_done += done
                 stopped = sg._stop_flag

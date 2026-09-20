@@ -60,6 +60,68 @@ mpremote cp ramp.py :ramp.py
 4. **Fichier → Enregistrer sous → Raspberry Pi Pico** pour chaque fichier
 5. Redemarrer le Pico (debrancher/rebrancher USB)
 
+## Mise a jour v6.16 : rampe pre-calculee
+
+### Ce qui change
+
+Les delais des phases d'acceleration et de deceleration sont desormais
+calcules **avant** le mouvement, au lieu d'etre evalues a chaque pas
+(`Ramp.get_delay()` fait trois `exp()`, ce qui coutait plusieurs dizaines de
+microsecondes par pas en MicroPython). La boucle d'emission ne fait plus que
+remplir le FIFO du PIO.
+
+Consequence : la rampe peut atteindre la meme cadence que la croisiere. Tant
+que ce n'etait pas le cas, demander une vitesse de croisiere elevee creait une
+marche de vitesse a la sortie de la rampe — le moteur decrochait, ce qui a
+longtemps ete pris pour une limite du driver.
+
+### Le flash est neutre a 260 us
+
+La sequence d'impulsions envoyee au PIO est **strictement identique** a celle
+de la version precedente (verifie sur les phases accel et decel, pour des
+mouvements de 250 a 20000 pas, de 124 a 260 us — voir
+`tests/test_firmware_ramp.py::TestEquivalenceAncienneRampe`). Seul le moment
+du calcul change, pas les valeurs.
+
+Autrement dit : apres le flash, la coupole se comporte exactement comme avant
+tant que `motor_driver.delay_us` reste a 260. La vitesse ne bouge que si on la
+change explicitement.
+
+### Retour arriere
+
+Garder une copie des trois fichiers avant le flash :
+
+```bash
+mkdir -p ~/firmware_backup
+mpremote cp :main.py ~/firmware_backup/main.py
+mpremote cp :step_generator.py ~/firmware_backup/step_generator.py
+mpremote cp :ramp.py ~/firmware_backup/ramp.py
+```
+
+Pour revenir en arriere, recopier ces trois fichiers vers le Pico (meme
+commande dans l'autre sens) et redemarrer le Pico.
+
+### Changer la vitesse
+
+La vitesse n'est plus en dur dans le code : elle vit dans
+`data/config.json` → `motor_driver.delay_us` (microsecondes par pas),
+editable depuis la page **Configuration → Avance** de l'interface web.
+Un redemarrage des services est necessaire pour qu'elle soit prise en compte
+(bouton « Redemarrer les services » de la meme page).
+
+**Ne pas descendre au juge.** Mesurer d'abord la vitesse reellement atteinte,
+palier par palier, avec :
+
+```bash
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run  # plan
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py            # mesure
+```
+
+Le script lit la position sur l'encodeur EMS22A et compare la vitesse obtenue
+a la vitesse demandee : il s'arrete au premier palier ou la coupole ne suit
+plus, et recommande une valeur avec 15 % de marge. Il ne modifie ni la
+configuration ni les services.
+
 ## Etape 3 : Branchements
 
 ```

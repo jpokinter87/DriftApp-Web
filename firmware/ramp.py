@@ -6,7 +6,8 @@ Memes parametres et meme comportement que la version Pi.
 
 Usage:
     ramp = Ramp(total_steps=5000, target_delay_us=150, ramp_type="SCURVE")
-    delays = ramp.compute_delays()  # liste de delais par pas
+    if ramp.compute_delays():                 # rampe active ?
+        delays = ramp.delays_for(0, ramp.accel_end)   # delais de la phase accel
 """
 
 import math
@@ -126,6 +127,22 @@ class Ramp:
 
         # Phase de croisiere
         return target
+
+    def delays_for(self, start_index, count):
+        """
+        Pre-calcule les delais d'une tranche de pas.
+
+        Appele une fois avant la phase, jamais pendant : get_delay() fait
+        trois exp() et plafonnait la cadence quand il etait evalue par pas.
+
+        Args:
+            start_index: Index du premier pas de la tranche
+            count: Nombre de pas
+
+        Returns:
+            list: Delais en microsecondes, un par pas
+        """
+        return [self.get_delay(start_index + i) for i in range(count)]
 
     def compute_delays(self):
         """

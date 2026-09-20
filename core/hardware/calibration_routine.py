@@ -32,6 +32,12 @@ from typing import Callable, Optional
 
 SWITCH_CALIB_ANGLE: float = 45.0
 
+# Délai volontairement fixe, et volontairement découplé de
+# `motor_driver.delay_us` (v6.16) : la routine de calibration tourne sans
+# surveillance à chaque démarrage de service, sur une coupole dont la position
+# n'est pas encore connue. Elle garde donc la vitesse prudente historique —
+# si une valeur de `delay_us` trop agressive fait décrocher le moteur, la
+# coupole reste capable de se recalibrer au boot.
 SINGLE_SPEED_MOTOR_DELAY: float = 0.00026
 
 logger = logging.getLogger(__name__)
