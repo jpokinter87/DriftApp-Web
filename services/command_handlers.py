@@ -464,7 +464,13 @@ class TrackingHandler:
         self._consecutive_errors = 0
         self._calc: Optional[AstronomicalCalculations] = None
 
-    def start(self, object_name: str, current_status: Dict[str, Any], skip_goto: bool = False):
+    def start(
+        self,
+        object_name: str,
+        current_status: Dict[str, Any],
+        skip_goto: bool = False,
+        coords: Optional[Tuple[float, float]] = None,
+    ):
         """
         Démarre le suivi d'un objet céleste.
 
@@ -472,6 +478,7 @@ class TrackingHandler:
             object_name: Nom de l'objet à suivre
             current_status: Statut actuel du moteur
             skip_goto: Si True, ne pas faire de GOTO initial (conserver position actuelle)
+            coords: (RA, DEC) J2000 en degrés saisis à la main (None = catalogue)
         """
         # Rotation du fichier de log pour cette session de suivi
         try:
@@ -530,7 +537,9 @@ class TrackingHandler:
                 goto_callback=on_goto_info,
             )
 
-            success, start_message = self.session.start(object_name, skip_goto=skip_goto)
+            success, start_message = self.session.start(
+                object_name, skip_goto=skip_goto, coords=coords
+            )
 
             if success:
                 self.active = True

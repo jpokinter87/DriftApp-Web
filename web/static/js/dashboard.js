@@ -10,6 +10,81 @@
 // =========================================================================
 
 document.addEventListener('alpine:init', () => {
+    // Formulaire de saisie manuelle AD/Déc J2000 (v6.17). Les champs vides ne sont
+    // pas signalés en rouge pendant la frappe ; « Confirmer » reste grisé tant
+    // que tout n'est pas rempli et dans les bornes.
+    Alpine.data('manualCoordsForm', () => ({
+        name: '',
+        raH: '', raM: '', raS: '',
+        decSign: '+', decD: '', decM: '', decS: '',
+
+        digits(v) { return v.replace(/\D/g, ''); },
+        decimal(v) {
+            const clean = v.replace(',', '.').replace(/[^\d.]/g, '');
+            const [int, ...rest] = clean.split('.');
+            return rest.length ? `${int}.${rest.join('')}` : int;
+        },
+        // Un « - » ou « + » tapé dans les degrés bascule le signe (clavier physique).
+        signedDegrees(v) {
+            const sign = v.match(/[+-]/);
+            if (sign) this.decSign = sign[0];
+            return this.digits(v);
+        },
+
+        // Message d'erreur du champ, ou '' si vide / valide.
+        fieldError(field) {
+            const v = this[field];
+            if (v === '') return '';
+            const n = Number(v);
+            if (isNaN(n)) return 'Valeur non numérique';
+            switch (field) {
+                case 'raH': return n <= 23 ? '' : 'Heures : 0 à 23';
+                case 'raM': return n <= 59 ? '' : 'Minutes : 0 à 59';
+                case 'raS': return n < 60 ? '' : 'Secondes : 0 à 59.9';
+                case 'decD': return n <= 90 ? '' : 'Déclinaison : 0 à 90°';
+                case 'decM':
+                    if (Number(this.decD) === 90 && n > 0) return 'À ±90°, minutes et secondes valent 0';
+                    return n <= 59 ? '' : 'Minutes d\'arc : 0 à 59';
+                case 'decS':
+                    if (Number(this.decD) === 90 && n > 0) return 'À ±90°, minutes et secondes valent 0';
+                    return n < 60 ? '' : 'Secondes d\'arc : 0 à 59.9';
+            }
+            return '';
+        },
+        bad(field) { return this.fieldError(field) !== ''; },
+        fields() { return ['raH', 'raM', 'raS', 'decD', 'decM', 'decS']; },
+        errorMessage() {
+            for (const f of this.fields()) {
+                const err = this.fieldError(f);
+                if (err) return err;
+            }
+            return '';
+        },
+        isValid() {
+            return this.fields().every(f => this[f] !== '' && !this.bad(f));
+        },
+
+        pad(v) {
+            const [int, dec] = String(v).split('.');
+            return int.padStart(2, '0') + (dec ? `.${dec}` : '');
+        },
+        autoName() {
+            if (!this.isValid()) return '';
+            return `RA ${this.pad(this.raH)}h${this.pad(this.raM)}m${this.pad(this.raS)}s `
+                 + `DEC ${this.decSign}${this.pad(this.decD)}°${this.pad(this.decM)}'${this.pad(this.decS)}"`;
+        },
+
+        close() { Alpine.store('dashboard').coordsModalVisible = false; },
+        confirm() {
+            if (!this.isValid()) return;
+            const raDeg = (Number(this.raH) + Number(this.raM) / 60 + Number(this.raS) / 3600) * 15;
+            const decAbs = Number(this.decD) + Number(this.decM) / 60 + Number(this.decS) / 3600;
+            const decDeg = this.decSign === '-' ? -decAbs : decAbs;
+            this.close();
+            applyManualCoords(this.name.trim() || this.autoName(), raDeg, decDeg);
+        },
+    }));
+
     Alpine.store('dashboard', {
         // GOTO Modal visibility
         gotoModalVisible: false,
@@ -37,6 +112,8 @@ document.addEventListener('alpine:init', () => {
         // est lu et affiché en permanence ; la case n'arme que l'action.
         rainProtection: false,                     // reflet de config.json
         rainProtectionInFlight: false,             // anti-double-clic POST
+        // Modale coordonnées manuelles (v6.17) — cibles absentes des bases
+        coordsModalVisible: false,
         parkingConfirmVisible: false,
         parkingConfirmObject: null,
         parkingConfirmCountdown: 0,
@@ -180,6 +257,7 @@ let state = {
     status: 'unknown',
     trackingObject: null,
     searchedObject: null,
+    searchedCoords: null,  // {ra_deg, dec_deg} si saisie manuelle (v6.17), sinon null
     lastUpdate: null,
     trackingInfo: {},  // Pour position_cible, etc.
     gotoInfo: null,    // Pour la modal GOTO
@@ -570,6 +648,7 @@ async function searchObject() {
         return;
     }
 
+    state.searchedCoords = null;  // une recherche catalogue remplace une saisie manuelle
     log(`Recherche de ${name}...`);
     const result = await apiCall(`/api/tracking/search/?q=${encodeURIComponent(name)}`);
 
@@ -600,6 +679,32 @@ async function searchObject() {
         // Focus sur le bouton pour lancer le suivi avec ENTER
         elements.btnStartTracking.focus();
     }
+}
+
+// Saisie manuelle AD/Déc J2000 (v6.17) — même effet qu'une recherche réussie :
+// affiche les coordonnées + cartouche méridien et arme « Démarrer le suivi ».
+async function applyManualCoords(name, raDeg, decDeg) {
+    const result = await apiCall(
+        `/api/tracking/coords/?ra_deg=${raDeg}&dec_deg=${decDeg}`
+    );
+
+    if (result.error) {
+        log(`Coordonnées refusées : ${result.error}`, 'error');
+        return;
+    }
+
+    elements.objectName.value = name;
+    elements.objectCoords.innerHTML =
+        `RA: ${formatHMS(raDeg, 1)} &mdash; DEC: ${formatDMS(decDeg)} (manuel)`;
+    elements.objectInfo.classList.remove('hidden');
+    elements.btnStartTracking.disabled = false;
+    state.searchedObject = name;
+    state.searchedCoords = { ra_deg: raDeg, dec_deg: decDeg };
+    log(`Coordonnées saisies : ${name}`, 'success');
+
+    setMeridianFromApi(result.meridian_seconds, result.meridian_time);
+    flashButtonSuccess(elements.btnStartTracking, 5000);
+    elements.btnStartTracking.focus();
 }
 
 // Effet de clignotement vert sur un bouton
@@ -638,7 +743,8 @@ async function startTracking(skipGoto = false) {
 
     const result = await apiCall('/api/tracking/start/', 'POST', {
         object: name,
-        skip_goto: skipGoto
+        skip_goto: skipGoto,
+        ...(state.searchedCoords || {})
     });
 
     if (result.error) {
@@ -662,6 +768,7 @@ async function stopTracking() {
         elements.btnStopTracking.disabled = true;
         elements.trackingInfo.classList.add('hidden');
         state.searchedObject = null;
+        state.searchedCoords = null;
         setMeridianFromApi(null);
 
         // Fermer la modal GOTO si ouverte

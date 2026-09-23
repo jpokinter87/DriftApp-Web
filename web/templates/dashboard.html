@@ -207,6 +207,9 @@
                 <input type="text" id="object-name" class="input-field flex-1"
                        placeholder="Ex: M31, Vega, Jupiter...">
                 <button id="btn-search" class="btn btn-secondary">Rechercher</button>
+                <!-- v6.17 — cibles faibles absentes des bases : saisie manuelle AD/Déc J2000. -->
+                <button id="btn-manual-coords" class="btn btn-secondary" x-data
+                        @click="$store.dashboard.coordsModalVisible = true">Coordonn&eacute;es</button>
             </div>
             <div id="object-info" class="hidden text-xs text-obs-text-secondary font-mono mb-2 px-1">
                 <span id="object-coords">--</span>
@@ -594,6 +597,71 @@
             <button id="btn-update-now" class="btn btn-primary"
                     :disabled="$store.dashboard.updateButtonsDisabled">Mettre a jour</button>
         </div>
+    </div>
+</div>
+
+<!-- ═══ Modal Coordonnées manuelles (v6.17) ═══
+     Cibles faibles absentes des bases : l'utilisateur saisit AD/Déc J2000.
+     Ordre de tabulation = ordre de lecture (Nom → h → m → s → ± → ° → ′ → ″ → Confirmer).
+     « Confirmer » équivaut à une recherche réussie (pas de démarrage direct du suivi). -->
+<div id="coords-modal" x-data="manualCoordsForm" class="goto-modal"
+     x-show="$store.dashboard.coordsModalVisible" x-cloak
+     @keydown.escape="close()"
+     role="dialog" aria-modal="true" aria-labelledby="coords-modal-title">
+    <div class="goto-modal-content coords-modal-content">
+        <div class="goto-modal-header">
+            <span class="goto-icon">&#x2316;</span>
+            <h3 id="coords-modal-title">Coordonn&eacute;es de l'objet</h3>
+        </div>
+
+        <form class="coords-form" @submit.prevent="confirm()" novalidate>
+            <label class="coords-label" for="coords-name">Nom <span class="coords-hint">(facultatif, pour les logs)</span></label>
+            <input id="coords-name" type="text" class="input-field coords-name" maxlength="40"
+                   x-model="name" :placeholder="autoName() || 'Nom de l\'objet'"
+                   x-init="$watch('$store.dashboard.coordsModalVisible', v => v && setTimeout(() => $el.focus(), 50))">
+
+            <span class="coords-label">Ascension droite <span class="coords-hint">J2000</span></span>
+            <div class="coords-row">
+                <input type="text" inputmode="numeric" maxlength="2" placeholder="hh" aria-label="Heures"
+                       class="input-field coords-field" :class="{ 'coords-invalid': bad('raH') }"
+                       x-model="raH" @input="raH = digits($event.target.value)">
+                <span class="coords-unit">h</span>
+                <input type="text" inputmode="numeric" maxlength="2" placeholder="mm" aria-label="Minutes"
+                       class="input-field coords-field" :class="{ 'coords-invalid': bad('raM') }"
+                       x-model="raM" @input="raM = digits($event.target.value)">
+                <span class="coords-unit">m</span>
+                <input type="text" inputmode="decimal" maxlength="5" placeholder="ss.s" aria-label="Secondes"
+                       class="input-field coords-field coords-field-sec" :class="{ 'coords-invalid': bad('raS') }"
+                       x-model="raS" @input="raS = decimal($event.target.value)">
+                <span class="coords-unit">s</span>
+            </div>
+
+            <span class="coords-label">D&eacute;clinaison <span class="coords-hint">J2000</span></span>
+            <div class="coords-row">
+                <button type="button" class="btn btn-secondary coords-sign" aria-label="Signe de la déclinaison"
+                        @click="decSign = decSign === '+' ? '-' : '+'" x-text="decSign">+</button>
+                <input type="text" inputmode="numeric" maxlength="3" placeholder="dd" aria-label="Degrés"
+                       class="input-field coords-field" :class="{ 'coords-invalid': bad('decD') }"
+                       x-model="decD" @input="decD = signedDegrees($event.target.value)">
+                <span class="coords-unit">&deg;</span>
+                <input type="text" inputmode="numeric" maxlength="2" placeholder="mm" aria-label="Minutes d'arc"
+                       class="input-field coords-field" :class="{ 'coords-invalid': bad('decM') }"
+                       x-model="decM" @input="decM = digits($event.target.value)">
+                <span class="coords-unit">&prime;</span>
+                <input type="text" inputmode="decimal" maxlength="4" placeholder="ss" aria-label="Secondes d'arc"
+                       class="input-field coords-field coords-field-sec" :class="{ 'coords-invalid': bad('decS') }"
+                       x-model="decS" @input="decS = decimal($event.target.value)">
+                <span class="coords-unit">&Prime;</span>
+            </div>
+
+            <p class="coords-message" :class="{ 'coords-message-error': errorMessage() }"
+               x-text="errorMessage() || 'Heures, minutes, secondes : passer d\'un champ à l\'autre avec TAB.'"></p>
+
+            <div class="button-group">
+                <button type="button" class="btn btn-secondary" @click="close()">Annuler</button>
+                <button type="submit" class="btn btn-primary" :disabled="!isValid()">Confirmer</button>
+            </div>
+        </form>
     </div>
 </div>
 

@@ -368,6 +368,64 @@ class TestTrackingStartView:
         assert response.status_code in (200, 404)
 
 
+class TestTrackingStartManualCoords:
+    """Démarrage du suivi sur coordonnées saisies à la main (v6.17).
+
+    Django résout les vues sous `tracking.views` (sys.path contient web/) :
+    c'est ce module qu'il faut patcher, pas `web.tracking.views`.
+    """
+
+    def test_start_with_coords_skips_catalogue(self, api_client):
+        with patch("tracking.views.GestionnaireCatalogue") as cat, \
+             patch("tracking.views.motor_client") as client:
+            client.send_command.return_value = True
+            response = api_client.post(
+                "/api/tracking/start/",
+                {"object": "Cible faible", "ra_deg": 83.8221, "dec_deg": -5.3911},
+                format="json",
+            )
+        cat.assert_not_called()
+        assert response.status_code == 200
+        client.send_command.assert_called_once_with(
+            "tracking_start", object="Cible faible", skip_goto=False,
+            ra_deg=83.8221, dec_deg=-5.3911,
+        )
+
+    @pytest.mark.parametrize("payload", [
+        {"ra_deg": 360.0, "dec_deg": 10.0},
+        {"ra_deg": -1.0, "dec_deg": 10.0},
+        {"ra_deg": 10.0, "dec_deg": 90.5},
+        {"ra_deg": 10.0, "dec_deg": -91.0},
+        {"ra_deg": "abc", "dec_deg": 10.0},
+        {"ra_deg": 10.0},
+        {"dec_deg": 10.0},
+    ])
+    def test_start_invalid_coords(self, api_client, payload):
+        with patch("tracking.views.motor_client") as client:
+            response = api_client.post(
+                "/api/tracking/start/", {"object": "X", **payload}, format="json"
+            )
+        assert response.status_code == 400
+        client.send_command.assert_not_called()
+
+
+class TestManualCoordsView:
+    def test_coords_returns_meridian(self, api_client, mock_ipc):
+        response = api_client.get("/api/tracking/coords/?ra_deg=83.8221&dec_deg=-5.3911")
+        assert response.status_code == 200
+        assert response.data["ra_deg"] == 83.8221
+        assert response.data["dec_deg"] == -5.3911
+        assert isinstance(response.data["meridian_seconds"], int)
+        assert "h" in response.data["meridian_time"]
+
+    @pytest.mark.parametrize("query", [
+        "", "ra_deg=10", "ra_deg=400&dec_deg=0", "ra_deg=10&dec_deg=95", "ra_deg=x&dec_deg=0",
+    ])
+    def test_coords_invalid(self, api_client, mock_ipc, query):
+        response = api_client.get(f"/api/tracking/coords/?{query}")
+        assert response.status_code == 400
+
+
 class TestTrackingStopView:
     def test_stop(self, api_client, mock_ipc):
         response = api_client.post("/api/tracking/stop/")

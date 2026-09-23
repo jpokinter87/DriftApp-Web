@@ -10,4 +10,5 @@ urlpatterns = [
     path('status/', views.TrackingStatusView.as_view(), name='tracking-status'),
     path('objects/', views.ObjectListView.as_view(), name='object-list'),
     path('search/', views.ObjectSearchView.as_view(), name='object-search'),
+    path('coords/', views.ManualCoordsView.as_view(), name='manual-coords'),
 ]

@@ -227,3 +227,28 @@ class TestRechercherObjet:
         if success:
             assert session.ra_deg is not None
             assert session.dec_deg is not None
+
+    def test_rechercher_objet_coords_manuelles(self, session):
+        """Coordonnées fournies → utilisées telles quelles, catalogue non consulté."""
+        from unittest.mock import patch
+
+        with patch("core.tracking.tracking_goto_mixin.GestionnaireCatalogue") as cat:
+            success, msg = session._rechercher_objet(
+                "Cible faible", coords=(83.8221, -5.3911)
+            )
+        cat.assert_not_called()
+        assert success is True
+        assert session.objet == "Cible faible"
+        assert session.ra_deg == 83.8221
+        assert session.dec_deg == -5.3911
+        assert session.is_planet is False
+
+    def test_start_transmet_coords(self, session):
+        """start(coords=...) transmet les coordonnées à _rechercher_objet."""
+        from unittest.mock import patch
+
+        with patch.object(
+            session, "_rechercher_objet", return_value=(False, "stop")
+        ) as rech:
+            session.start("Cible", coords=(10.0, 20.0))
+        rech.assert_called_once_with("Cible", coords=(10.0, 20.0))

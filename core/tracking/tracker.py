@@ -202,7 +202,12 @@ class TrackingSession(
     # DÉMARRAGE DU SUIVI
     # =========================================================================
 
-    def start(self, objet_name: str, skip_goto: bool = False) -> Tuple[bool, str]:
+    def start(
+        self,
+        objet_name: str,
+        skip_goto: bool = False,
+        coords: Optional[Tuple[float, float]] = None,
+    ) -> Tuple[bool, str]:
         """
         Démarre le suivi d'un objet.
 
@@ -219,12 +224,14 @@ class TrackingSession(
             objet_name: Nom de l'objet à suivre
             skip_goto: Si True, ne pas faire de GOTO initial (position actuelle conservée).
                        Utile quand l'utilisateur a ajusté manuellement la coupole.
+            coords: (RA, DEC) J2000 en degrés saisis à la main — court-circuite
+                    la recherche catalogue (cibles faibles absentes des bases).
 
         Returns:
             Tuple (success, message)
         """
         # Rechercher et valider l'objet (Mixin TrackingGotoMixin)
-        success, error_msg = self._rechercher_objet(objet_name)
+        success, error_msg = self._rechercher_objet(objet_name, coords=coords)
         if not success:
             return False, error_msg
 

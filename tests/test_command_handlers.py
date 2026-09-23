@@ -383,6 +383,19 @@ class TestTrackingHandler:
         """La session est None au démarrage."""
         assert handler.session is None
 
+    def test_start_transmet_coords_a_la_session(self, handler):
+        """start(coords=...) transmet les coordonnées à TrackingSession.start."""
+        handler.config = MagicMock()
+        with patch("services.command_handlers.TrackingSession") as session_cls, \
+             patch("services.command_handlers.TrackingLogger"), \
+             patch("services.command_handlers.AstronomicalCalculations"), \
+             patch("services.command_handlers._get_rotate_log_func"):
+            session_cls.return_value.start.return_value = (False, "stop")
+            handler.start("Cible", {"status": "idle"}, coords=(83.82, -5.39))
+        session_cls.return_value.start.assert_called_once_with(
+            "Cible", skip_goto=False, coords=(83.82, -5.39)
+        )
+
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
         from datetime import datetime

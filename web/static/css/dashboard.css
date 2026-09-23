@@ -1215,3 +1215,62 @@ header h1 span {
     border-color: rgba(255, 165, 2, 0.4);
     background: rgba(255, 165, 2, 0.08);
 }
+
+/* =========================================================================
+   Modale coordonnées manuelles (v6.17) — cibles absentes des bases.
+   Réutilise .goto-modal / .goto-modal-content ; seul le formulaire est ici.
+   Aide et erreurs toujours visibles (écran tactile : rien au survol).
+   ========================================================================= */
+.coords-modal-content { min-width: 0; width: 26rem; padding: 1.5rem 1.75rem; }
+
+.coords-form { display: flex; flex-direction: column; gap: 0.4rem; }
+
+.coords-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-accent-amber);
+    margin-top: 0.5rem;
+}
+
+.coords-hint { font-weight: 400; color: var(--color-obs-text-muted); }
+
+.coords-row { display: flex; align-items: center; gap: 0.35rem; }
+
+.coords-field {
+    width: 3.2rem;
+    text-align: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 1.1rem;
+}
+
+.coords-field-sec { width: 4.4rem; }
+
+.coords-unit { color: var(--color-obs-text-secondary); font-size: 1rem; min-width: 0.8rem; }
+
+.coords-sign {
+    flex: none !important;
+    width: 2.6rem;
+    font-size: 1.2rem;
+    font-weight: 700;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.coords-invalid {
+    border-color: var(--color-accent-red) !important;
+    box-shadow: 0 0 0 1px var(--color-accent-red);
+}
+
+.coords-message {
+    min-height: 1.2rem;
+    margin: 0.6rem 0 0.8rem;
+    font-size: 0.78rem;
+    color: var(--color-obs-text-secondary);
+    text-align: center;
+}
+
+.coords-message-error { color: var(--color-accent-red); font-weight: 600; }
+
+@media (max-width: 480px) {
+    .coords-modal-content { width: 100%; padding: 1.25rem 1rem; }
+}

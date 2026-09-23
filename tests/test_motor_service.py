@@ -184,6 +184,21 @@ class TestHandlerDelegation:
             assert call_args[0][0] == 'M31'
             assert call_args[1]['skip_goto'] is True
 
+    def test_tracking_start_with_coords(self, motor_service):
+        """tracking_start transmet les coordonnées manuelles au handler."""
+        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
+            motor_service.process_command({
+                'command': 'tracking_start', 'object': 'Cible',
+                'ra_deg': 83.82, 'dec_deg': -5.39,
+            })
+            assert mock_start.call_args[1]['coords'] == (83.82, -5.39)
+
+    def test_tracking_start_without_coords(self, motor_service):
+        """Sans coordonnées, coords=None (recherche catalogue inchangée)."""
+        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
+            motor_service.process_command({'command': 'tracking_start', 'object': 'M31'})
+            assert mock_start.call_args[1]['coords'] is None
+
     def test_tracking_start_alternative_key(self, motor_service):
         """tracking_start supports 'name' as alternative to 'object'."""
         with patch.object(motor_service.tracking_handler, 'start') as mock_start:

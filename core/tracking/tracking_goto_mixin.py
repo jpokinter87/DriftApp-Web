@@ -13,7 +13,7 @@ Version: 4.5
 """
 
 from datetime import datetime
-from typing import Tuple
+from typing import Optional, Tuple
 
 from core.hardware.daemon_encoder_reader import get_daemon_reader
 from core.observatoire import PlanetaryEphemerides
@@ -100,8 +100,20 @@ class TrackingGotoMixin:
             self.logger.debug(f"Daemon non accessible: {e}")
             return False, 0.0
 
-    def _rechercher_objet(self, objet_name: str) -> Tuple[bool, str]:
-        """Recherche l'objet dans le catalogue."""
+    def _rechercher_objet(
+        self, objet_name: str, coords: Optional[Tuple[float, float]] = None
+    ) -> Tuple[bool, str]:
+        """Recherche l'objet dans le catalogue.
+
+        Si `coords` (RA, DEC J2000 en degrés) est fourni — cible saisie à la main,
+        absente des bases — il est utilisé tel quel sans consulter le catalogue.
+        """
+        if coords is not None:
+            self.objet = objet_name
+            self.ra_deg, self.dec_deg = coords
+            self.is_planet = False
+            return True, ""
+
         catalog = GestionnaireCatalogue()
         result = catalog.rechercher(objet_name)
 

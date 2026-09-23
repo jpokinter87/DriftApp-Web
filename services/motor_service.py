@@ -612,11 +612,17 @@ class MotorService:
         elif cmd_type == "tracking_start":
             object_name = command.get("object", command.get("name"))
             skip_goto = command.get("skip_goto", False)
+            # Coordonnées saisies à la main (cible absente des bases) — validées côté Django.
+            ra_deg, dec_deg = command.get("ra_deg"), command.get("dec_deg")
+            coords = (ra_deg, dec_deg) if ra_deg is not None and dec_deg is not None else None
             logger.info(
-                f"ipc_command | type=tracking_start object={object_name} skip_goto={skip_goto}"
+                f"ipc_command | type=tracking_start object={object_name} "
+                f"skip_goto={skip_goto} coords={coords}"
             )
             if object_name:
-                self.tracking_handler.start(object_name, self.current_status, skip_goto=skip_goto)
+                self.tracking_handler.start(
+                    object_name, self.current_status, skip_goto=skip_goto, coords=coords
+                )
             else:
                 logger.warning("ipc_command | type=tracking_start error=missing_object")
 
