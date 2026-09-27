@@ -6,8 +6,9 @@ Le PIO genere N pas en autonome sans intervention Python par pas,
 eliminant l'overhead de l'interpreteur MicroPython (~10-20us/pas).
 
 Deux modes :
-- Autonome (croisiere) : PIO recoit N + delai, boucle en interne
-- Table (rampe) : PIO recoit 1 pas + delai par pas, delais pre-calcules
+- move_steps() : N pas a delai constant (mouvements sans rampe)
+- move_segments() : suite de paliers (N, delai) enchaines par le PIO
+  (rampe a acceleration constante, v6.19)
 
 Usage:
     sg = StepGenerator(step_pin=2, dir_pin=3)
@@ -72,9 +73,6 @@ PIO_FREQ = 125_000_000
 # Les jmp de decompte sont inclus dans le delai
 PIO_OVERHEAD_CYCLES = 5
 
-# Intervalle de verification STOP pour mode variable (en pas)
-STOP_CHECK_INTERVAL = 100
-
 
 class StepGenerator:
     """
@@ -85,7 +83,7 @@ class StepGenerator:
 
     Deux modes :
     - move_steps() : N pas a delai constant, PIO autonome
-    - move_steps_table() : N pas a delais variables pre-calcules (rampe)
+    - move_segments() : paliers (N, delai) enchaines, PIO autonome
     """
 
     def __init__(self, step_pin=2, dir_pin=3, sm_id=0):
@@ -208,82 +206,6 @@ class StepGenerator:
             self._sm.active(0)
             self._moving = False
 
-    def delays_to_cycles(self, delays):
-        """
-        Convertit une liste de delais (us) en demi-periodes PIO.
-
-        Appele une fois avant une phase de rampe, pour sortir toute
-        l'arithmetique flottante de la boucle d'emission.
-
-        Args:
-            delays: Liste de delais en microsecondes
-
-        Returns:
-            list: Demi-periodes en cycles PIO, une par pas
-        """
-        return [self._delay_us_to_cycles(d) for d in delays]
-
-    def move_steps_table(self, cycles, stop_checker=None):
-        """
-        Execute un pas par entree de `cycles` (delais variables pre-calcules).
-
-        Mode pas-par-pas : chaque pas envoie 2 mots au PIO (count=0 pour
-        1 pas, puis la demi-periode). La boucle ne fait plus que remplir
-        le FIFO — les delais sont deja calcules.
-
-        C'est la correction du bridage : quand le delai etait calcule par pas
-        (trois exp() par appel), le cout MicroPython devenait comparable au
-        delai vise en fin d'acceleration. Le PIO se retrouvait affame, la
-        rampe plafonnait, puis la croisiere basculait d'un coup sur le delai
-        cible — discontinuite de vitesse, donc perte de pas. La rampe peut
-        desormais atteindre la meme cadence que la croisiere.
-
-        Args:
-            cycles: Liste de demi-periodes en cycles PIO, une par pas
-            stop_checker: Fonction retournant True si STOP recu
-
-        Returns:
-            int: Nombre de pas effectivement executes
-        """
-        total = len(cycles)
-        if total <= 0:
-            return 0
-
-        self._moving = True
-        self._stop_flag = False
-        steps_done = 0
-
-        # Reset instruction pointer puis activer la SM
-        self._sm.restart()
-        self._sm.active(1)
-
-        put = self._sm.put
-        try:
-            # Emission par tranches : STOP verifie entre deux tranches, le FIFO
-            # (2 pas d'avance) couvre la pause Python sans affamer le PIO.
-            index = 0
-            while index < total:
-                if stop_checker and stop_checker():
-                    self._stop_flag = True
-                    break
-
-                chunk = cycles[index:index + STOP_CHECK_INTERVAL]
-                for half_period in chunk:
-                    # 1 pas : count=0 (jmp y-- avec Y=0 fait 1 iteration)
-                    put(0)
-                    put(half_period)
-                    # Le prochain put() bloquera si le FIFO est plein,
-                    # ce qui synchronise naturellement avec le PIO
-
-                index += len(chunk)
-                steps_done += len(chunk)
-        finally:
-            self._sm.active(0)
-            self._moving = False
-
-        self._steps_done += steps_done
-        return steps_done
-
     def move_segments(self, paliers, stop_checker=None, on_stop=None):
         """
         Emet une suite de paliers (nombre_de_pas, delai_us) en PIO autonome.
@@ -297,10 +219,13 @@ class StepGenerator:
         produit alors la descente. Rien n'est coupe : tous les paliers
         empiles sont emis et le nombre de pas renvoye est exact.
 
+        Sans `on_stop` (mouvements lents, v6.19.1) : STOP immediat, comme la
+        rampe historique ; pas emis deduits du temps ecoule.
+
         Args:
             paliers: Iterable de (nombre_de_pas, delai_us)
             stop_checker: Fonction retournant True si STOP recu
-            on_stop: Appelee une fois au premier STOP recu
+            on_stop: STOP doux — appelee une fois au premier STOP recu
 
         Returns:
             tuple: (pas emis, stop recu)
@@ -315,17 +240,25 @@ class StepGenerator:
         debut_ms = self._ticks_ms()
 
         put = self._sm.put
+        jalons = []  # (debut_us, fin_us, pas_avant, pas_apres, delai_us) par palier
         try:
             for n, delai_us in paliers:
                 if not self._stop_flag and stop_checker and stop_checker():
                     self._stop_flag = True
-                    if on_stop:
-                        on_stop()
+                    if on_stop is None:
+                        self._sm.active(0)
+                        self._sm.exec("set(pins, 0)")
+                        steps = _pas_emis(jalons, self._ms_depuis(debut_ms) * 1000)
+                        break
+                    on_stop()
                 put(n - 1)  # Y = N-1 : N pas (cf. move_steps)
                 put(self._delay_us_to_cycles(delai_us))
+                debut_palier_us = duree_us
                 steps += n
                 duree_us += n * delai_us
-            self._attendre_fin(debut_ms, duree_us)
+                jalons.append((debut_palier_us, duree_us, steps - n, steps, delai_us))
+            else:
+                self._attendre_fin(debut_ms, duree_us)
         finally:
             self._sm.active(0)
             self._moving = False
@@ -336,10 +269,13 @@ class StepGenerator:
     def _ticks_ms(self):
         return time.ticks_ms()
 
+    def _ms_depuis(self, debut_ms):
+        return time.ticks_diff(time.ticks_ms(), debut_ms)
+
     def _attendre_fin(self, debut_ms, duree_us):
         """Attend que le PIO ait emis tous les paliers empiles."""
         duree_ms = int(duree_us // 1000) + 1
-        while time.ticks_diff(time.ticks_ms(), debut_ms) < duree_ms:
+        while self._ms_depuis(debut_ms) < duree_ms:
             time.sleep_ms(2)
 
     def stop(self):
@@ -368,3 +304,19 @@ class StepGenerator:
     def steps_done(self):
         """Nombre de pas executes dans le mouvement courant/dernier."""
         return self._steps_done
+
+
+def _pas_emis(jalons, ecoule_us):
+    """Pas emis au bout de `ecoule_us`, d'apres les paliers empiles.
+
+    Args:
+        jalons: [(debut_us, fin_us, pas_avant, pas_apres, delai_us)] par palier
+        ecoule_us: Temps ecoule depuis le premier palier
+
+    Returns:
+        int: Nombre de pas emis
+    """
+    for debut_us, fin_us, pas_avant, _, delai_us in jalons:
+        if ecoule_us < fin_us:
+            return pas_avant + int(max(0, ecoule_us - debut_us) // delai_us)
+    return jalons[-1][3] if jalons else 0

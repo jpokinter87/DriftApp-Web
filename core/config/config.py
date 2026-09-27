@@ -193,10 +193,11 @@ FAST_MOTOR_DELAY: float = (
 )
 
 
-# Rampe des mouvements rapides (v6.19) : accélération constante, vitesse
-# rapide atteinte en `motor_driver.ramp_time_s` (défaut 2 s). L'accélération
-# est transmise au Pico en 6e jeton de MOVE ; le firmware ne l'applique que
-# sous 260 µs (au-delà, rampe historique inchangée).
+# Rampe à accélération constante (v6.19) : vitesse rapide atteinte en
+# `motor_driver.ramp_time_s` (défaut 2 s). L'accélération est transmise au
+# Pico en 6e jeton de MOVE et vaut pour tous les mouvements (v6.19.1) : un
+# mouvement à 260 µs atteint sa vitesse en ~0,9 s. STOP doux sous 260 µs
+# seulement.
 DEFAULT_RAMP_TIME_S: float = 2.0
 RAMP_TIME_S_MIN: float = 0.5
 RAMP_TIME_S_MAX: float = 10.0

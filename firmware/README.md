@@ -73,6 +73,21 @@ autrement — voir [Depannage](#permission-denied-avec-mpremote).
 4. **Fichier → Enregistrer sous → Raspberry Pi Pico** pour chaque fichier
 5. Redemarrer le Pico (debrancher/rebrancher USB)
 
+## Mise a jour v6.19.1 : rampe douce aussi pour les mouvements lents
+
+Retour terrain 27/09 apres le flash v6.19 : la fin d'un JOG de 1° (260 us)
+restait brutale — l'ancienne rampe y perdait la moitie de la vitesse en
+48 ms. **Tous les mouvements** utilisent desormais la rampe a acceleration
+constante (meme acceleration que les mouvements rapides : 260 us atteints en
+~0,9 s). Ils sont d'ailleurs un peu plus courts (JOG 1° : 2,8 s → 2,2 s).
+
+Le **STOP reste immediat a 260 us et plus lent** : la calibration envoie un
+STOP au microswitch 45° puis avance de 0,5° au plus (contacts de charge des
+batteries) ; un STOP doux y ajouterait ~0,34°.
+
+L'ancienne rampe est retiree du firmware. Flash : meme procedure que v6.19
+(sauvegarde dans un nouveau dossier, par ex. `~/firmware_backup_v619`).
+
 ## Mise a jour v6.19 : rampe douce des mouvements rapides
 
 ### Ce qui change
@@ -93,7 +108,8 @@ Pour tout mouvement **plus rapide que 260 us** (`fast_delay_us`) :
   travail Python par pas, train d'impulsions continu.
 
 **A 260 us et plus lent, rien ne change** (corrections de suivi, calibration,
-petits mouvements) : rampe historique et arret immediat.
+petits mouvements) : rampe historique et arret immediat. *(Remplace en
+v6.19.1 : rampe douce pour tous, STOP immediat conserve a 260 us.)*
 
 ### Ordre de mise a jour indifferent
 
@@ -297,5 +313,5 @@ Pour reflasher ou repartir de zero :
 - `dir` : 0 = anti-horaire, 1 = horaire
 - `delay_us` : delai entre pas en microsecondes (ex: 150 pour CONTINUOUS)
 - `ramp` : SCURVE, LINEAR, ou NONE
-- `accel` (v6.19, optionnel) : acceleration en pas/s² de la rampe douce,
-  appliquee sous 260 us ; absente → 4545 (110 us atteints en 2 s)
+- `accel` (v6.19, optionnel) : acceleration en pas/s² de la rampe douce
+  (tous les mouvements depuis v6.19.1) ; absente → 4545 (110 us atteints en 2 s)

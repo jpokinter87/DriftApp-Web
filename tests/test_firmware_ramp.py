@@ -1,14 +1,14 @@
 """
-Tests du firmware RP2040 : rampe pre-calculee (v6.16).
+Tests du firmware RP2040 : rampe a acceleration constante (v6.19, v6.19.1).
 
 Le firmware tourne en MicroPython sur le Pico, mais `firmware/ramp.py` est du
 Python pur et `firmware/step_generator.py` ne depend de `rp2`/`machine` que
 pour l'acces materiel : des doublures suffisent a verrouiller la logique
 d'emission, qui ne peut pas etre deboguee une fois flashee sur site.
 
-Enjeu principal : prouver que la rampe pre-calculee emet exactement la meme
-sequence d'impulsions que l'ancienne version calculee par pas. Le flash du
-Pico est alors neutre tant que `motor_driver.delay_us` n'est pas modifie.
+Depuis la v6.19.1, tous les mouvements avec rampe utilisent le profil a
+acceleration constante : la rampe v4.5 (delai interpole sur 500 pas) et ses
+tests d'equivalence ont ete retires avec elle.
 """
 
 import sys
@@ -81,8 +81,7 @@ _install_micropython_doubles()
 if str(FIRMWARE_DIR) not in sys.path:
     sys.path.insert(0, str(FIRMWARE_DIR))
 
-from ramp import RAMP_START_DELAY_US, RAMP_STEPS, Ramp  # noqa: E402
-from step_generator import STOP_CHECK_INTERVAL, StepGenerator  # noqa: E402
+from step_generator import StepGenerator  # noqa: E402
 
 
 @pytest.fixture
@@ -92,137 +91,7 @@ def sg():
 
 
 # =============================================================================
-# EQUIVALENCE AVEC L'ANCIENNE RAMPE (neutralite du flash)
-# =============================================================================
-
-
-class TestEquivalenceAncienneRampe:
-    """La sequence emise doit etre identique a celle calculee par pas."""
-
-    @pytest.mark.parametrize("target_us", [260, 200, 150, 124])
-    def test_phase_acceleration_identique(self, sg, target_us):
-        """Accel : meme sequence que `delay_func(0 + i)` pas a pas."""
-        ramp = Ramp(20_000, target_us, "SCURVE")
-        n = ramp.accel_end
-
-        ancien = [sg._delay_us_to_cycles(ramp.get_delay(0 + i)) for i in range(n)]
-        nouveau = sg.delays_to_cycles(ramp.delays_for(0, n))
-
-        assert nouveau == ancien
-
-    @pytest.mark.parametrize("target_us", [260, 200, 150, 124])
-    def test_phase_deceleration_identique(self, sg, target_us):
-        """Decel : l'index de depart `decel_start` est preserve.
-
-        C'est le point ou un decalage d'un pas passerait inapercu et
-        produirait un a-coup en fin de mouvement.
-        """
-        ramp = Ramp(20_000, target_us, "SCURVE")
-        start = ramp.decel_start
-        n = ramp.total_steps - start
-
-        ancien = [sg._delay_us_to_cycles(ramp.get_delay(start + i)) for i in range(n)]
-        nouveau = sg.delays_to_cycles(ramp.delays_for(start, n))
-
-        assert nouveau == ancien
-
-    def test_mouvement_court_rampe_proportionnelle(self, sg):
-        """Les mouvements courts (< 2x RAMP_STEPS) restent identiques."""
-        ramp = Ramp(800, 260, "SCURVE")
-        n = ramp.accel_end
-
-        assert n < RAMP_STEPS  # rampe proportionnelle, pas la rampe pleine
-        ancien = [sg._delay_us_to_cycles(ramp.get_delay(i)) for i in range(n)]
-        assert sg.delays_to_cycles(ramp.delays_for(0, n)) == ancien
-
-
-# =============================================================================
-# CONTINUITE DE VITESSE A L'ENTREE EN CROISIERE
-# =============================================================================
-
-
-class TestContinuiteVitesse:
-    """La rampe doit relier le demarrage a la croisiere sans marche."""
-
-    @pytest.mark.parametrize("target_us", [260, 200, 150, 124])
-    def test_la_rampe_part_du_demarrage_et_atteint_la_cible(self, target_us):
-        """Premier pas ~= RAMP_START_DELAY_US, dernier pas ~= cible."""
-        ramp = Ramp(20_000, target_us, "SCURVE")
-        delays = ramp.delays_for(0, ramp.accel_end)
-
-        assert delays[0] == pytest.approx(RAMP_START_DELAY_US, rel=0.02)
-        # L'ecart residuel a l'entree en croisiere doit rester marginal :
-        # c'est lui qui provoquait le decrochage quand la rampe plafonnait.
-        assert delays[-1] == pytest.approx(target_us, rel=0.02)
-
-    @pytest.mark.parametrize("target_us", [260, 124])
-    def test_acceleration_monotone(self, target_us):
-        """Aucun pas ne doit etre plus lent que le precedent."""
-        ramp = Ramp(20_000, target_us, "SCURVE")
-        delays = ramp.delays_for(0, ramp.accel_end)
-
-        assert all(b <= a for a, b in zip(delays, delays[1:]))
-
-
-# =============================================================================
-# EMISSION VERS LE PIO
-# =============================================================================
-
-
-class TestMoveStepsTable:
-    """Boucle d'emission : ordre des mots, comptage, STOP."""
-
-    def test_emet_deux_mots_par_pas_dans_l_ordre(self, sg):
-        """Chaque pas pousse (0, demi-periode) — 0 = « un seul pas »."""
-        cycles = [111, 222, 333]
-
-        assert sg.move_steps_table(cycles) == 3
-        assert sg._sm.words == [0, 111, 0, 222, 0, 333]
-
-    def test_liste_vide_ne_fait_rien(self, sg):
-        assert sg.move_steps_table([]) == 0
-        assert sg._sm.words == []
-
-    def test_state_machine_activee_puis_relachee(self, sg):
-        sg.move_steps_table([100, 200])
-
-        assert sg._sm.restarts == 1
-        assert sg._sm.active_calls[0] == 1
-        assert sg._sm.active_calls[-1] == 0
-        assert sg.is_moving is False
-
-    def test_stop_interrompt_entre_deux_tranches(self, sg):
-        """STOP est honore sans attendre la fin de la table."""
-        cycles = [50] * (STOP_CHECK_INTERVAL * 3)
-        appels = {"n": 0}
-
-        def stop_checker():
-            appels["n"] += 1
-            return appels["n"] > 2  # laisse passer deux tranches
-
-        done = sg.move_steps_table(cycles, stop_checker=stop_checker)
-
-        assert done == STOP_CHECK_INTERVAL * 2
-        assert len(sg._sm.words) == 2 * done
-        assert sg._stop_flag is True
-
-    def test_stop_immediat_avant_le_premier_pas(self, sg):
-        """Un STOP deja present n'emet aucune impulsion."""
-        done = sg.move_steps_table([50] * 10, stop_checker=lambda: True)
-
-        assert done == 0
-        assert sg._sm.words == []
-        assert sg._stop_flag is True
-
-    def test_sans_stop_checker_toute_la_table_est_emise(self, sg):
-        cycles = [42] * (STOP_CHECK_INTERVAL * 2 + 7)
-
-        assert sg.move_steps_table(cycles) == len(cycles)
-        assert len(sg._sm.words) == 2 * len(cycles)
-
-
-# =============================================================================
-# CONVERSION DELAI -> CYCLES
+# CONVERSION DELAI -> DEMI-PERIODE PIO
 # =============================================================================
 
 
@@ -231,21 +100,14 @@ class TestDelaysToCycles:
 
     def test_conversion_conforme_a_la_demi_periode(self, sg):
         """260 us -> 16248 demi-cycles (32503 cycles total, soit 260,02 us)."""
-        assert sg.delays_to_cycles([260]) == [16248]
+        assert sg._delay_us_to_cycles(260) == 16248
 
     def test_cible_boitier_constructeur(self, sg):
         """124 us (~90°/min) reste exactement representable."""
-        (half,) = sg.delays_to_cycles([124])
+        half = sg._delay_us_to_cycles(124)
         # periode = 2 demi-periodes + 5 cycles d'overhead du programme PIO
         periode_us = (2 * half + 5) / 125.0
         assert periode_us == pytest.approx(124, rel=0.001)
-
-    def test_liste_preservee_dans_l_ordre(self, sg):
-        assert sg.delays_to_cycles([3000, 1000, 260]) == [
-            sg._delay_us_to_cycles(3000),
-            sg._delay_us_to_cycles(1000),
-            sg._delay_us_to_cycles(260),
-        ]
 
 
 # =============================================================================
@@ -260,10 +122,11 @@ class TestDelaysToCycles:
 
 from ramp import (  # noqa: E402
     DEFAULT_ACCEL,
-    LEGACY_MIN_DELAY_US,
+    RAMP_START_DELAY_US,
+    STOP_IMMEDIAT_DELAY_US,
     ProfilAccelConstante,
+    arret_doux,
     lire_accel,
-    utilise_accel_constante,
 )
 
 ACCEL = 4545  # 110 us atteints en 2 s
@@ -277,19 +140,55 @@ def _tout(profil):
     return list(profil.paliers())
 
 
-class TestChoixDuProfil:
-    def test_rapide_avec_rampe(self):
-        assert utilise_accel_constante(110, "SCURVE")
-        assert utilise_accel_constante(259, "SCURVE")
+class TestArretDoux:
+    """STOP doux au-dessus de 260 us ; immediat a 260 us et plus lent.
 
-    def test_vitesse_historique_inchangee(self):
-        """260 us et plus lent : rampe v4.5, eprouvee (suivi, calibration)."""
-        assert LEGACY_MIN_DELAY_US == 260
-        assert not utilise_accel_constante(260, "SCURVE")
-        assert not utilise_accel_constante(1000, "SCURVE")
+    La calibration envoie un STOP au microswitch 45° puis avance de 0,5°
+    (plafond : contacts de charge des batteries) : un STOP doux a 260 us y
+    ajouterait ~0,34° de glissement (decision JP, 27/09/2026).
+    """
 
-    def test_sans_rampe_reste_sans_rampe(self):
-        assert not utilise_accel_constante(110, "NONE")
+    def test_rapide_stop_doux(self):
+        assert arret_doux(110)
+        assert arret_doux(259)
+
+    def test_lent_stop_immediat(self):
+        assert STOP_IMMEDIAT_DELAY_US == 260
+        assert not arret_doux(260)
+        assert not arret_doux(1000)
+
+
+class TestJogLent:
+    """v6.19.1 : la fin d'un JOG 1° a 260 us etait brutale (terrain Serge).
+
+    La rampe v4.5 y perdait la moitie de la vitesse en 48 ms (pic
+    74 000 pas/s^2) : les mouvements lents passent eux aussi au profil a
+    acceleration constante.
+    """
+
+    ACCEL_124 = 4032  # 124 us atteints en 2 s
+
+    def test_jog_1_degre_trapezoidal(self):
+        profil = ProfilAccelConstante(5394, 260, self.ACCEL_124)
+        paliers = _tout(profil)
+        assert sum(n for n, _ in paliers) == 5394
+        assert min(d for _, d in paliers) == 260  # croisiere atteinte
+        k = len(profil.rampe)
+        assert paliers[-k:] == list(reversed(profil.rampe))  # descente douce
+
+    def test_deceleration_bornee(self):
+        profil = ProfilAccelConstante(5394, 260, self.ACCEL_124)
+        descente = list(reversed(profil.rampe))
+        for (n1, d1), (_, d2) in zip(descente, descente[1:]):
+            decel = (_vitesse(d1) - _vitesse(d2)) / (n1 * d1 / 1e6)
+            assert decel <= self.ACCEL_124 * 1.15
+
+    def test_correction_de_suivi_triangulaire(self):
+        """0,3° (1618 pas) : trop court pour atteindre 260 us, total exact."""
+        profil = ProfilAccelConstante(1618, 260, self.ACCEL_124)
+        paliers = _tout(profil)
+        assert sum(n for n, _ in paliers) == 1618
+        assert paliers[0][1] < RAMP_START_DELAY_US
 
 
 class TestLireAccel:
@@ -440,6 +339,25 @@ class TestMoveSegments:
         assert stopped is True
         assert done == sum(n for n, _ in emis)
         assert emis[-4:] == list(reversed(emis[:4]))  # redescente miroir
+
+    def test_stop_immediat_sans_on_stop(self, sg):
+        """Mouvement lent : STOP coupe net, pas emis deduits du temps ecoule."""
+        sg._ticks_ms = lambda: 0
+        sg._ms_depuis = lambda debut_ms: 15  # STOP recu 15 ms apres le debut
+        sg._attendre_fin = lambda debut_ms, duree_us: None
+        paliers = [(10, 1000), (20, 500), (100, 260), (100, 260)]
+        appels = {"n": 0}
+
+        def stop_checker():
+            appels["n"] += 1
+            return appels["n"] == 4
+
+        done, stopped = sg.move_segments(iter(paliers), stop_checker=stop_checker)
+
+        # 10 pas en 10 ms, puis 5 ms a 500 us = 10 pas
+        assert (done, stopped) == (20, True)
+        assert len(sg._sm.words) == 6  # le 4e palier n'est jamais pousse
+        assert sg._sm.active_calls[-1] == 0
 
     def test_state_machine_relachee(self, sg_rapide):
         sg_rapide.move_segments(iter([(10, 200)]))

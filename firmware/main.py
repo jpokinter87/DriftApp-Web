@@ -4,13 +4,13 @@ Firmware principal RP2040 pour pilotage moteur pas-a-pas.
 Recoit des commandes serie depuis le Raspberry Pi et genere les
 impulsions STEP/DIR via PIO state machines.
 
-Version 2 : PIO autonome en croisiere, pas-a-pas pour rampe uniquement.
+Version 3 (v6.19) : PIO autonome, rampe a acceleration constante en paliers.
 
 Protocole serie :
   Commandes (Pi → Pico) :
     MOVE <steps> <direction> <target_delay_us> <ramp_type> [accel]\n
       accel (v6.19, optionnel) : pas/s^2 de la rampe a acceleration
-      constante, utilisee sous 260 us ; absent -> DEFAULT_ACCEL
+      constante ; absent -> DEFAULT_ACCEL
     STOP\n
     STATUS\n
 
@@ -28,7 +28,7 @@ Fonctionne via USB CDC serie (sys.stdin/sys.stdout).
 import sys
 import select
 from step_generator import StepGenerator
-from ramp import Ramp, ProfilAccelConstante, lire_accel, utilise_accel_constante
+from ramp import ProfilAccelConstante, arret_doux, lire_accel
 
 
 # Configuration
@@ -104,10 +104,10 @@ def execute_move(sg, steps, direction, delay_us, ramp_type, accel):
     """
     Execute un mouvement avec rampe optionnelle.
 
-    Architecture PIO autonome :
-    - Croisiere : PIO recoit N pas + delai, tourne en autonome
-    - Accel/decel : delais pre-calcules, PIO recoit 1 pas + delai par pas
-      (aucun calcul flottant dans la boucle d'emission)
+    Avec rampe (SCURVE/LINEAR) : profil a acceleration constante, en paliers
+    enchaines par le PIO (v6.19 ; tous les mouvements depuis v6.19.1).
+    STOP doux sous 260 us, immediat au-dela (calibration).
+    Sans rampe (NONE) : N pas a delai constant.
 
     Args:
         sg: StepGenerator instance
@@ -115,82 +115,24 @@ def execute_move(sg, steps, direction, delay_us, ramp_type, accel):
         direction: 0=CCW, 1=CW
         delay_us: Delai cible en microsecondes
         ramp_type: "SCURVE", "LINEAR", ou "NONE"
-        accel: Acceleration (pas/s^2) de la rampe a acceleration constante
+        accel: Acceleration (pas/s^2) de la rampe
 
     Returns:
         tuple: (steps_done, stopped)
     """
-    # Positionner la direction
     sg.set_direction(direction)
-
-    # v6.19 : plus rapide que 260 us -> acceleration constante + STOP doux
-    if utilise_accel_constante(delay_us, ramp_type):
-        profil = ProfilAccelConstante(steps, delay_us, accel)
-        sg._steps_done = 0
-        return sg.move_segments(
-            profil.paliers(),
-            stop_checker=check_for_stop,
-            on_stop=profil.demander_arret,
-        )
-
-    # Calculer la rampe
-    ramp = Ramp(steps, delay_us, ramp_type)
-    has_ramp = ramp.compute_delays()
-
-    steps_done = 0
-    stopped = False
-
-    # Reset etat StepGenerator
     sg._steps_done = 0
 
-    if not has_ramp:
-        # Pas de rampe : tout en PIO autonome
+    if ramp_type == "NONE":
         done = sg.move_steps(steps, delay_us, stop_checker=check_for_stop)
-        steps_done = done
-        stopped = sg._stop_flag
-    else:
-        # Mode 3 phases : accel (variable) / cruise (autonome) / decel (variable)
-        accel_end = ramp.accel_end
-        decel_start = ramp.decel_start
+        return done, sg._stop_flag
 
-        # Phase 1 : Acceleration (delais pre-calcules, PIO pas-par-pas)
-        accel_steps = min(accel_end, steps)
-        if accel_steps > 0:
-            accel_cycles = sg.delays_to_cycles(ramp.delays_for(0, accel_steps))
-            done = sg.move_steps_table(
-                accel_cycles, stop_checker=check_for_stop,
-            )
-            steps_done += done
-            stopped = sg._stop_flag
-
-        # Phase 2 : Croisiere (PIO autonome — zero overhead Python)
-        if not stopped:
-            cruise_steps = min(decel_start, steps) - accel_end
-            if cruise_steps > 0:
-                done = sg.move_steps(
-                    cruise_steps, delay_us,
-                    stop_checker=check_for_stop,
-                )
-                steps_done += done
-                stopped = sg._stop_flag
-
-        # Phase 3 : Deceleration (delais pre-calcules, PIO pas-par-pas)
-        if not stopped:
-            decel_steps = steps - decel_start
-            if decel_steps > 0:
-                decel_cycles = sg.delays_to_cycles(
-                    ramp.delays_for(decel_start, decel_steps)
-                )
-                done = sg.move_steps_table(
-                    decel_cycles, stop_checker=check_for_stop,
-                )
-                steps_done += done
-                stopped = sg._stop_flag
-
-    # Mettre a jour le compteur total
-    sg._steps_done = steps_done
-
-    return steps_done, stopped
+    profil = ProfilAccelConstante(steps, delay_us, accel)
+    return sg.move_segments(
+        profil.paliers(),
+        stop_checker=check_for_stop,
+        on_stop=profil.demander_arret if arret_doux(delay_us) else None,
+    )
 
 
 def main():

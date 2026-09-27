@@ -66,9 +66,17 @@ de vitesse par palier) :
 - `MoteurRP2040.rotation` envoie le 6ᵉ jeton et élargit le timeout série de
   la durée des rampes.
 
+## Évolution v6.19.1 (retour terrain, 27/09 soir)
+
+Après flash : tout fonctionne, mais la fin d'un JOG 1° à 260 µs reste
+brutale (rampe v4.5 : moitié de la vitesse perdue en 48 ms). Décision JP :
+**rampe à accélération constante pour tous les mouvements**, même
+accélération ; **STOP immédiat conservé à 260 µs** (calibration). L'ancienne
+rampe est retirée du firmware. JOG 1° : 2,77 s → 2,20 s.
+
 ## Hors périmètre
 
-- Rampe des mouvements à 260 µs et plus lents.
+- STOP doux à 260 µs et plus lent (calibration).
 - Réglage de l'accélération au-delà de la durée de rampe.
 
 ## Validation
