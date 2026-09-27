@@ -257,10 +257,12 @@
                         :disabled="$store.dashboard.calibration?.status === 'running'">CW &gt;</button>
             </div>
 
-            <!-- GOTO (placeholder « Angle » auto-explicite → légende retirée, v6.11). -->
+            <!-- GOTO (placeholder « Angle » auto-explicite → légende retirée, v6.11).
+                 Pré-rempli à 45° (v6.19.2, demande Serge) : position de parking,
+                 la destination la plus fréquente. -->
             <div x-data class="flex gap-2">
                 <input type="text" inputmode="decimal" id="goto-angle" class="input-field flex-1"
-                       placeholder="Angle (0-360)">
+                       value="45" placeholder="Angle (0-360)">
                 <button id="btn-goto" class="btn btn-secondary"
                         :disabled="$store.dashboard.calibrationBlocked()"
                         :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">GOTO</button>
