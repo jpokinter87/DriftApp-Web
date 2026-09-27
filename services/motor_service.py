@@ -40,6 +40,7 @@ except ImportError:
 # Ajouter le répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from core.config import config as core_config
 from core.config.config_loader import ConfigLoader
 from core.hardware.daemon_encoder_reader import get_daemon_reader, set_daemon_reader
 from core.hardware.moteur_rp2040 import MoteurRP2040
@@ -227,6 +228,13 @@ class MotorService:
 
         mode_str = "SIMULATION" if self.simulation_mode else "PRODUCTION"
         logger.info(f"Motor Service initialisé en mode {mode_str}")
+        # v6.18.1 — vitesses réellement retenues depuis config.json (terrain 27/09 :
+        # un fast_delay_us non pris en compte n'était visible nulle part).
+        logger.info(
+            f"vitesses | delay_us={core_config.SINGLE_SPEED_MOTOR_DELAY * 1e6:.0f} "
+            f"fast_delay_us={core_config.FAST_MOTOR_DELAY * 1e6:.0f} "
+            f"seuil_rapide_deg={core_config.FAST_SPEED_MIN_DEG}"
+        )
 
     def _init_hardware(self):
         """Initialise le matériel (moteur RP2040 et encodeur)."""

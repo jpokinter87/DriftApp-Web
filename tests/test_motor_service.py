@@ -493,3 +493,28 @@ class TestLiveRecalibration:
         ):
             motor_service._check_live_recalibration()
         assert motor_service.current_status['calibration']['status'] == 'degraded'
+
+
+class TestLogVitessesAuDemarrage:
+    """v6.18.1 : les vitesses retenues sont lisibles dans le log, sans SSH.
+
+    Terrain 27/09/2026 : fast_delay_us réglé à 110 mais JOG/GOTO restés à
+    260 µs, et rien dans le log ne permettait de savoir ce que le service
+    avait lu dans config.json.
+    """
+
+    def test_vitesses_journalisees(self, mock_hardware_info, tmp_path, caplog):
+        with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
+             patch('core.config.config.FAST_MOTOR_DELAY', 110e-6), \
+             caplog.at_level(logging.INFO):
+            with patch('services.motor_service.HardwareDetector.detect_hardware',
+                       return_value=(False, mock_hardware_info)), \
+                 patch('services.motor_service.HardwareDetector.get_hardware_summary',
+                       return_value='Test Hardware Summary'), \
+                 patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
+                 patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
+                 patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+                from services.motor_service import MotorService
+                MotorService()
+
+        assert "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0" in caplog.text
