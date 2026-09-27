@@ -36,6 +36,7 @@
     "type": "rp2040",
     "delay_us": 260,
     "fast_delay_us": 260,
+    "ramp_time_s": 2.0,
     "serial": {
       "port": "/dev/ttyACM0",
       "baudrate": 115200,

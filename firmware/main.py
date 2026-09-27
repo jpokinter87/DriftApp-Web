@@ -8,7 +8,9 @@ Version 2 : PIO autonome en croisiere, pas-a-pas pour rampe uniquement.
 
 Protocole serie :
   Commandes (Pi → Pico) :
-    MOVE <steps> <direction> <target_delay_us> <ramp_type>\n
+    MOVE <steps> <direction> <target_delay_us> <ramp_type> [accel]\n
+      accel (v6.19, optionnel) : pas/s^2 de la rampe a acceleration
+      constante, utilisee sous 260 us ; absent -> DEFAULT_ACCEL
     STOP\n
     STATUS\n
 
@@ -26,7 +28,7 @@ Fonctionne via USB CDC serie (sys.stdin/sys.stdout).
 import sys
 import select
 from step_generator import StepGenerator
-from ramp import Ramp
+from ramp import Ramp, ProfilAccelConstante, lire_accel, utilise_accel_constante
 
 
 # Configuration
@@ -49,10 +51,10 @@ def parse_move_command(parts):
     Parse les arguments de la commande MOVE.
 
     Args:
-        parts: Liste de tokens ["MOVE", steps, direction, delay_us, ramp_type]
+        parts: Liste de tokens ["MOVE", steps, direction, delay_us, ramp_type, (accel)]
 
     Returns:
-        tuple: (steps, direction, delay_us, ramp_type) ou None si erreur
+        tuple: (steps, direction, delay_us, ramp_type, accel) ou None si erreur
     """
     if len(parts) < 5:
         return None
@@ -75,7 +77,7 @@ def parse_move_command(parts):
     if ramp_type not in ("SCURVE", "LINEAR", "NONE"):
         return None
 
-    return (steps, direction, delay_us, ramp_type)
+    return (steps, direction, delay_us, ramp_type, lire_accel(parts))
 
 
 def check_for_stop():
@@ -98,7 +100,7 @@ def check_for_stop():
     return False
 
 
-def execute_move(sg, steps, direction, delay_us, ramp_type):
+def execute_move(sg, steps, direction, delay_us, ramp_type, accel):
     """
     Execute un mouvement avec rampe optionnelle.
 
@@ -113,12 +115,23 @@ def execute_move(sg, steps, direction, delay_us, ramp_type):
         direction: 0=CCW, 1=CW
         delay_us: Delai cible en microsecondes
         ramp_type: "SCURVE", "LINEAR", ou "NONE"
+        accel: Acceleration (pas/s^2) de la rampe a acceleration constante
 
     Returns:
         tuple: (steps_done, stopped)
     """
     # Positionner la direction
     sg.set_direction(direction)
+
+    # v6.19 : plus rapide que 260 us -> acceleration constante + STOP doux
+    if utilise_accel_constante(delay_us, ramp_type):
+        profil = ProfilAccelConstante(steps, delay_us, accel)
+        sg._steps_done = 0
+        return sg.move_segments(
+            profil.paliers(),
+            stop_checker=check_for_stop,
+            on_stop=profil.demander_arret,
+        )
 
     # Calculer la rampe
     ramp = Ramp(steps, delay_us, ramp_type)
@@ -226,9 +239,9 @@ def main():
                     send_response("ERROR invalid_command")
                     continue
 
-                steps, direction, delay_us, ramp_type = params
+                steps, direction, delay_us, ramp_type, accel = params
                 steps_done, stopped = execute_move(
-                    sg, steps, direction, delay_us, ramp_type
+                    sg, steps, direction, delay_us, ramp_type, accel
                 )
 
                 if stopped:

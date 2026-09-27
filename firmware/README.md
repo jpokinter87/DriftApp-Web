@@ -73,6 +73,40 @@ autrement — voir [Depannage](#permission-denied-avec-mpremote).
 4. **Fichier → Enregistrer sous → Raspberry Pi Pico** pour chaque fichier
 5. Redemarrer le Pico (debrancher/rebrancher USB)
 
+## Mise a jour v6.19 : rampe douce des mouvements rapides
+
+### Ce qui change
+
+Terrain 27/09/2026 : a 110 us, demarrages et arrets brutaux, et un STOP
+coupait le moteur net. La rampe v4.5 interpole le *delai* sur 500 pas : la
+vitesse gagnait la moitie de sa valeur en 14 ms, a pleine vitesse.
+
+Pour tout mouvement **plus rapide que 260 us** (`fast_delay_us`) :
+
+- **acceleration constante** : la vitesse monte regulierement jusqu'a la
+  vitesse rapide en `motor_driver.ramp_time_s` (defaut 2 s, reglable depuis
+  la page Configuration → Avance), et redescend de meme ;
+- **STOP doux** : un STOP (bouton, relache du mode continu, parking)
+  decelere depuis la vitesse du moment au lieu de couper net. Depuis la
+  pleine vitesse, la coupole glisse encore ~1,7° (110 us, 2 s) ;
+- la rampe est emise en paliers de 20 ms que le PIO enchaine seul : aucun
+  travail Python par pas, train d'impulsions continu.
+
+**A 260 us et plus lent, rien ne change** (corrections de suivi, calibration,
+petits mouvements) : rampe historique et arret immediat.
+
+### Ordre de mise a jour indifferent
+
+Le Pi envoie l'acceleration en 6e argument de `MOVE`. L'ancien firmware
+l'ignore (il reste sur l'ancienne rampe), le nouveau l'applique. La mise a
+jour OTA et le flash du Pico peuvent donc se faire dans n'importe quel ordre.
+
+### Flash
+
+Meme procedure qu'a l'etape 2 (`motor_service` arrete, sans sudo), en
+sauvegardant d'abord la version en place (voir « Retour arriere » ci-dessous) :
+seuls `main.py`, `ramp.py` et `step_generator.py` changent.
+
 ## Mise a jour v6.16 : rampe pre-calculee
 
 ### Ce qui change
@@ -256,10 +290,12 @@ Pour reflasher ou repartir de zero :
 
 | Commande | Format | Reponse |
 |----------|--------|---------|
-| Mouvement | `MOVE <steps> <dir> <delay_us> <ramp>\n` | `OK <steps>\n` |
+| Mouvement | `MOVE <steps> <dir> <delay_us> <ramp> [accel]\n` | `OK <steps>\n` |
 | Arret | `STOP\n` | `STOPPED <steps>\n` |
 | Statut | `STATUS\n` | `IDLE\n` ou `MOVING <remaining>\n` |
 
 - `dir` : 0 = anti-horaire, 1 = horaire
 - `delay_us` : delai entre pas en microsecondes (ex: 150 pour CONTINUOUS)
 - `ramp` : SCURVE, LINEAR, ou NONE
+- `accel` (v6.19, optionnel) : acceleration en pas/s² de la rampe douce,
+  appliquee sous 260 us ; absente → 4545 (110 us atteints en 2 s)

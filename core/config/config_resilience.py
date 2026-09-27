@@ -135,6 +135,14 @@ HELP_REGISTRY: dict[str, str] = {
         "(option --depuis 130), qui recommande une valeur avec 15 % de marge. "
         "Borné à [100, 3000]."
     ),
+    "motor_driver.ramp_time_s": (
+        "Durée (secondes) de la rampe des GRANDS déplacements : temps pour passer "
+        "de l'arrêt à la vitesse rapide, et autant pour s'arrêter — y compris sur "
+        "un STOP, qui décélère au lieu de couper net. Plus la valeur est grande, "
+        "plus démarrages et arrêts sont doux, mais plus la coupole glisse après "
+        "un STOP (≈ 1,7° à 110 µs avec 2 s). Défaut 2,0. ⚠️ Nécessite le firmware "
+        "v6.19 du Pi Pico (sans lui, la valeur est ignorée). Borné à [0,5 ; 10]."
+    ),
     "motor_driver.serial.baudrate": (
         "Débit (bauds) de la liaison série USB CDC vers le Pi Pico. Typiquement 115200."
     ),

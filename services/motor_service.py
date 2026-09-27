@@ -233,7 +233,9 @@ class MotorService:
         logger.info(
             f"vitesses | delay_us={core_config.SINGLE_SPEED_MOTOR_DELAY * 1e6:.0f} "
             f"fast_delay_us={core_config.FAST_MOTOR_DELAY * 1e6:.0f} "
-            f"seuil_rapide_deg={core_config.FAST_SPEED_MIN_DEG}"
+            f"seuil_rapide_deg={core_config.FAST_SPEED_MIN_DEG} "
+            f"ramp_time_s={core_config.RAMP_TIME_S} "
+            f"accel={core_config.FAST_ACCEL_STEPS_S2}"
         )
 
     def _init_hardware(self):

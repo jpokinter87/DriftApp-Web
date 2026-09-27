@@ -284,6 +284,64 @@ class StepGenerator:
         self._steps_done += steps_done
         return steps_done
 
+    def move_segments(self, paliers, stop_checker=None, on_stop=None):
+        """
+        Emet une suite de paliers (nombre_de_pas, delai_us) en PIO autonome.
+
+        Le programme PIO revient lire le FIFO apres chaque palier : les
+        paliers empiles s'enchainent sans coupure, sans travail Python par
+        pas. Le put() bloque quand le FIFO est plein, ce qui cale la boucle
+        sur le PIO (2 paliers d'avance).
+
+        STOP doux (v6.19) : a reception, `on_stop()` previent le profil, qui
+        produit alors la descente. Rien n'est coupe : tous les paliers
+        empiles sont emis et le nombre de pas renvoye est exact.
+
+        Args:
+            paliers: Iterable de (nombre_de_pas, delai_us)
+            stop_checker: Fonction retournant True si STOP recu
+            on_stop: Appelee une fois au premier STOP recu
+
+        Returns:
+            tuple: (pas emis, stop recu)
+        """
+        self._moving = True
+        self._stop_flag = False
+        steps = 0
+        duree_us = 0
+
+        self._sm.restart()
+        self._sm.active(1)
+        debut_ms = self._ticks_ms()
+
+        put = self._sm.put
+        try:
+            for n, delai_us in paliers:
+                if not self._stop_flag and stop_checker and stop_checker():
+                    self._stop_flag = True
+                    if on_stop:
+                        on_stop()
+                put(n - 1)  # Y = N-1 : N pas (cf. move_steps)
+                put(self._delay_us_to_cycles(delai_us))
+                steps += n
+                duree_us += n * delai_us
+            self._attendre_fin(debut_ms, duree_us)
+        finally:
+            self._sm.active(0)
+            self._moving = False
+
+        self._steps_done += steps
+        return steps, self._stop_flag
+
+    def _ticks_ms(self):
+        return time.ticks_ms()
+
+    def _attendre_fin(self, debut_ms, duree_us):
+        """Attend que le PIO ait emis tous les paliers empiles."""
+        duree_ms = int(duree_us // 1000) + 1
+        while time.ticks_diff(time.ticks_ms(), debut_ms) < duree_ms:
+            time.sleep_ms(2)
+
     def stop(self):
         """
         Arrete le mouvement en cours.

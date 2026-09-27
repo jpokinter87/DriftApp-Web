@@ -7,7 +7,7 @@ sur Pi Pico, communiquant via USB CDC serie.
 Interface publique standard pour le controleur moteur.
 
 Protocole serie (defini en Phase 1 firmware) :
-  Commandes: MOVE <steps> <direction> <delay_us> <ramp_type>
+  Commandes: MOVE <steps> <direction> <delay_us> <ramp_type> [accel]
              STOP
              STATUS
   Reponses:  OK <steps_executed>
@@ -27,6 +27,7 @@ import threading
 import time
 from typing import Dict, Any, Optional
 
+from core.config import config as core_config
 from core.hardware.daemon_encoder_reader import get_daemon_reader
 from core.hardware.motor_config_parser import parse_motor_config, validate_motor_params
 
@@ -284,10 +285,15 @@ class MoteurRP2040:
         delay_us = max(1, int(vitesse * 1_000_000))
         ramp_type = "SCURVE" if use_ramp else "NONE"
 
+        # v6.19 : acceleration de la rampe des mouvements rapides (< 260 us),
+        # 6e jeton de MOVE — ignore par un firmware anterieur.
+        accel = core_config.FAST_ACCEL_STEPS_S2
+
         # Estimer la duree du mouvement pour le timeout serie
-        # En mode SCURVE, le delai moyen est plus grand que delay_us (rampe)
+        # En mode SCURVE, le delai moyen est plus grand que delay_us (rampe) ;
+        # la rampe a acceleration constante ajoute jusqu'a 2 x RAMP_TIME_S.
         estimated_secs = (steps * max(delay_us, 500)) / 1_000_000
-        move_timeout = estimated_secs + 5.0  # marge de 5s
+        move_timeout = estimated_secs + 2 * core_config.RAMP_TIME_S + 5.0  # marge de 5s
 
         self.logger.debug(
             f"Rotation {angle_deg:+.2f}° ({steps} pas, "
@@ -301,7 +307,7 @@ class MoteurRP2040:
             self._needs_drain = False
 
         response = self._send_command(
-            f"MOVE {steps} {direction} {delay_us} {ramp_type}",
+            f"MOVE {steps} {direction} {delay_us} {ramp_type} {accel}",
             timeout=move_timeout,
         )
         self._parse_response(response, f"rotation {angle_deg:+.2f}°")

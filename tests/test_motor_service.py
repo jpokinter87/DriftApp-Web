@@ -506,6 +506,8 @@ class TestLogVitessesAuDemarrage:
     def test_vitesses_journalisees(self, mock_hardware_info, tmp_path, caplog):
         with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
              patch('core.config.config.FAST_MOTOR_DELAY', 110e-6), \
+             patch('core.config.config.RAMP_TIME_S', 2.0), \
+             patch('core.config.config.FAST_ACCEL_STEPS_S2', 4545), \
              caplog.at_level(logging.INFO):
             with patch('services.motor_service.HardwareDetector.detect_hardware',
                        return_value=(False, mock_hardware_info)), \
@@ -517,4 +519,4 @@ class TestLogVitessesAuDemarrage:
                 from services.motor_service import MotorService
                 MotorService()
 
-        assert "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0" in caplog.text
+        assert "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0 ramp_time_s=2.0 accel=4545" in caplog.text

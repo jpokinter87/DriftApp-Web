@@ -116,16 +116,43 @@ MOTOR_DELAY_US_MIN: float = 100.0
 MOTOR_DELAY_US_MAX: float = 3000.0
 
 
+def _resolve_borne(
+    motor_driver_cfg: dict, key: str, default: float, vmin: float, vmax: float, unite: str
+) -> float:
+    """Valeur numérique de `motor_driver.<key>`, bornée à [vmin, vmax].
+
+    La valeur étant éditable depuis l'interface web, une saisie absente,
+    non numérique ou hors bornes retombe sur une valeur sûre plutôt que
+    d'être transmise telle quelle au moteur.
+    """
+    import logging
+
+    raw = motor_driver_cfg.get(key, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        logging.getLogger(__name__).warning(
+            f"motor_driver.{key} invalide ({raw!r}) — repli sur {default} {unite}"
+        )
+        return default
+
+    if not vmin <= value <= vmax:
+        clamped = min(max(value, vmin), vmax)
+        logging.getLogger(__name__).warning(
+            f"motor_driver.{key}={value} {unite} hors bornes "
+            f"[{vmin}, {vmax}] — borné à {clamped} {unite}"
+        )
+        return clamped
+
+    return value
+
+
 def resolve_motor_delay_us(
     motor_driver_cfg: dict,
     key: str = "delay_us",
     default: float = DEFAULT_MOTOR_DELAY_US,
 ) -> float:
     """Délai moteur en µs/pas issu de `motor_driver.<key>`, borné.
-
-    La valeur étant éditable depuis l'interface web, une saisie absente,
-    non numérique ou hors bornes retombe sur une valeur sûre plutôt que
-    d'être transmise telle quelle au moteur.
 
     Args:
         motor_driver_cfg: Section `motor_driver` de config.json.
@@ -135,26 +162,9 @@ def resolve_motor_delay_us(
     Returns:
         Délai en microsecondes par pas.
     """
-    import logging
-
-    raw = motor_driver_cfg.get(key, default)
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        logging.getLogger(__name__).warning(
-            f"motor_driver.{key} invalide ({raw!r}) — repli sur {default} µs"
-        )
-        return default
-
-    if not MOTOR_DELAY_US_MIN <= value <= MOTOR_DELAY_US_MAX:
-        clamped = min(max(value, MOTOR_DELAY_US_MIN), MOTOR_DELAY_US_MAX)
-        logging.getLogger(__name__).warning(
-            f"motor_driver.{key}={value} µs hors bornes "
-            f"[{MOTOR_DELAY_US_MIN}, {MOTOR_DELAY_US_MAX}] — borné à {clamped} µs"
-        )
-        return clamped
-
-    return value
+    return _resolve_borne(
+        motor_driver_cfg, key, default, MOTOR_DELAY_US_MIN, MOTOR_DELAY_US_MAX, "µs"
+    )
 
 
 SINGLE_SPEED_MOTOR_DELAY: float = (
@@ -181,6 +191,32 @@ FAST_MOTOR_DELAY: float = (
     )
     / 1_000_000
 )
+
+
+# Rampe des mouvements rapides (v6.19) : accélération constante, vitesse
+# rapide atteinte en `motor_driver.ramp_time_s` (défaut 2 s). L'accélération
+# est transmise au Pico en 6e jeton de MOVE ; le firmware ne l'applique que
+# sous 260 µs (au-delà, rampe historique inchangée).
+DEFAULT_RAMP_TIME_S: float = 2.0
+RAMP_TIME_S_MIN: float = 0.5
+RAMP_TIME_S_MAX: float = 10.0
+
+
+def resolve_ramp_time_s(motor_driver_cfg: dict) -> float:
+    """Durée (s) de la rampe jusqu'à la vitesse rapide, bornée."""
+    return _resolve_borne(
+        motor_driver_cfg, "ramp_time_s", DEFAULT_RAMP_TIME_S,
+        RAMP_TIME_S_MIN, RAMP_TIME_S_MAX, "s",
+    )
+
+
+def fast_accel_steps_s2(fast_delay_s: float, ramp_time_s: float) -> int:
+    """Accélération (pas/s²) pour atteindre la vitesse rapide en `ramp_time_s`."""
+    return round((1.0 / fast_delay_s) / ramp_time_s)
+
+
+RAMP_TIME_S: float = resolve_ramp_time_s(_config.get("motor_driver", {}))
+FAST_ACCEL_STEPS_S2: int = fast_accel_steps_s2(FAST_MOTOR_DELAY, RAMP_TIME_S)
 
 
 def motor_delay_for(delta_deg: float, slow: float = None, fast: float = None) -> float:

@@ -513,3 +513,40 @@ class TestConfigFallback:
         assert config.motor_driver.serial.port == "/dev/ttyUSB0"
         assert config.motor_driver.serial.baudrate == 9600
         assert config.motor_driver.serial.timeout == 5.0
+
+
+class TestAccelerationTransmise:
+    """v6.19 : 6e jeton de MOVE = accélération de la rampe (pas/s²).
+
+    Optionnel côté firmware : l'ancien l'ignore, le nouveau l'utilise sous
+    260 µs. Le Pi peut donc être mis à jour avant ou après le flash du Pico.
+    """
+
+    def test_sixieme_jeton_acceleration(self, moteur_rp2040, serial_sim):
+        from unittest.mock import patch
+
+        cmds = TestForceDirection._capture_moves(serial_sim)
+        with patch("core.config.config.FAST_ACCEL_STEPS_S2", 4545):
+            moteur_rp2040.rotation(10.0, 110e-6)
+
+        parts = [c for c in cmds if c.startswith("MOVE")][0].split()
+        assert len(parts) == 6
+        assert parts[5] == "4545"
+
+
+class TestAccelerationDepuisConfig:
+    def test_meme_acceleration_pour_toutes_les_vitesses_rapides(self):
+        """Vitesse rapide atteinte en ramp_time_s : accel = vitesse / durée."""
+        from core.config.config import fast_accel_steps_s2
+
+        assert fast_accel_steps_s2(110e-6, 2.0) == 4545
+        assert fast_accel_steps_s2(124e-6, 1.0) == 8065
+
+    def test_duree_de_rampe_bornee(self):
+        from core.config.config import resolve_ramp_time_s
+
+        assert resolve_ramp_time_s({}) == 2.0
+        assert resolve_ramp_time_s({"ramp_time_s": 3}) == 3.0
+        assert resolve_ramp_time_s({"ramp_time_s": 0}) == 0.5
+        assert resolve_ramp_time_s({"ramp_time_s": 60}) == 10.0
+        assert resolve_ramp_time_s({"ramp_time_s": "lent"}) == 2.0
