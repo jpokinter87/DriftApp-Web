@@ -40,17 +40,30 @@ Genere les impulsions STEP/DIR via PIO state machines avec precision 8 ns.
 ### Option A : avec mpremote (recommande)
 
 ```bash
-# Installer mpremote
-pip install mpremote
+# Installer mpremote (une seule fois). Sur Raspberry Pi OS, "pip install"
+# est refuse (environnement Python gere par le systeme) : passer par pipx.
+sudo apt install pipx
+pipx install mpremote
+
+# OBLIGATOIRE : arreter motor_service, qui garde le port du Pico ouvert.
+# mpremote interrompt le firmware (Ctrl-C) : les deux se disputeraient le port.
+sudo systemctl stop motor_service
 
 # Copier les 3 fichiers depuis le dossier firmware/
-cd /chemin/vers/Dome_web_v4_6/firmware/
+cd ~/DriftApp/firmware/
 mpremote cp main.py :main.py
 mpremote cp step_generator.py :step_generator.py
 mpremote cp ramp.py :ramp.py
 
-# Le Pico redemarre et execute main.py automatiquement
+# Debrancher/rebrancher le Pico (il execute main.py au demarrage),
+# puis relancer le service
+sudo systemctl start motor_service
 ```
+
+**Ne jamais lancer `sudo mpremote`** : sudo ne trouve pas la commande
+(installee par pipx dans `~/.local/bin`, hors du PATH de sudo), et les
+fichiers copies appartiendraient a root. Un « Permission denied » se regle
+autrement — voir [Depannage](#permission-denied-avec-mpremote).
 
 ### Option B : avec Thonny IDE
 
@@ -89,17 +102,21 @@ change explicitement.
 
 ### Retour arriere
 
-Garder une copie des trois fichiers avant le flash :
+Garder une copie des trois fichiers avant le flash (`motor_service` arrete,
+et **sans sudo**, ni pour `mkdir` ni pour `mpremote`) :
 
 ```bash
+sudo systemctl stop motor_service
 mkdir -p ~/firmware_backup
 mpremote cp :main.py ~/firmware_backup/main.py
 mpremote cp :step_generator.py ~/firmware_backup/step_generator.py
 mpremote cp :ramp.py ~/firmware_backup/ramp.py
+ls -l ~/firmware_backup   # les 3 fichiers doivent etre presents, taille non nulle
 ```
 
 Pour revenir en arriere, recopier ces trois fichiers vers le Pico (meme
-commande dans l'autre sens) et redemarrer le Pico.
+commande dans l'autre sens), debrancher/rebrancher le Pico, puis
+`sudo systemctl start motor_service`.
 
 ### Changer la vitesse
 
@@ -190,12 +207,26 @@ echo "STATUS" | mpremote exec "import sys; sys.stdout.write(sys.stdin.readline()
 - Essayer un autre port USB sur le Pi 5
 - Verifier les permissions : `sudo usermod -a -G dialout $USER` puis re-login
 
-### "Permission denied" sur /dev/ttyACM0
+### "Permission denied" avec mpremote
+
+Trois causes possibles, a verifier dans cet ordre :
 
 ```bash
-sudo usermod -a -G dialout $USER
+# 1. motor_service tient le port du Pico -> l'arreter
+sudo systemctl stop motor_service
+
+# 2. Dossier de destination cree avec sudo (proprietaire root)
+ls -ld ~/firmware_backup
+sudo chown slenk:slenk ~/firmware_backup   # si le proprietaire est root
+
+# 3. Utilisateur absent du groupe dialout (acces a /dev/ttyACM0)
+groups                                     # doit contenir "dialout"
+sudo usermod -a -G dialout $USER           # $USER, pas $slenk
 # Se deconnecter et reconnecter pour appliquer
 ```
+
+Si mpremote affiche `cp <source> <destination>` avant l'erreur, il s'est
+bien connecte au Pico : le port n'est pas en cause, regarder la cause 2.
 
 ### Le moteur ne tourne pas
 
