@@ -24,7 +24,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from core.config.config import SINGLE_SPEED_MOTOR_DELAY
+from core.config.config import FAST_MOTOR_DELAY, motor_delay_for
 from core.tracking.meridian_anticipation import (
     MeridianFlipDetector,
     MeridianSlewScheduler,
@@ -96,7 +96,8 @@ class TrackingMeridianAnticipationMixin:
 
         try:
             steps_per_rev = self.moteur.steps_per_dome_revolution
-            dome_speed = 360.0 / (steps_per_rev * SINGLE_SPEED_MOTOR_DELAY)
+            # Les slews d'anticipation sont des grands déplacements : vitesse rapide (v6.18)
+            dome_speed = 360.0 / (steps_per_rev * FAST_MOTOR_DELAY)
 
             anchor = datetime.utcnow()
             trajectory = build_lookahead_trajectory(
@@ -207,7 +208,9 @@ class TrackingMeridianAnticipationMixin:
             self.moteur.rotation_absolue(
                 position_cible_deg=target,
                 position_actuelle_deg=previous_position,
-                vitesse=SINGLE_SPEED_MOTOR_DELAY,
+                vitesse=motor_delay_for(
+                    shortest_angular_distance(previous_position, target)
+                ),
                 use_ramp=True,
                 force_direction=direction,
             )

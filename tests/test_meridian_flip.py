@@ -422,6 +422,25 @@ class TestMeridianTransitDetection:
         assert len(meridian_entries) == 0
 
 
+class TestVitesseDesCorrections:
+    """v6.18 : bascule méridien à haute vitesse, corrections courantes à 260 µs."""
+
+    @pytest.mark.parametrize("cible, attendu", [(112.0, 124e-6), (246.5, 260e-6)])
+    def test_vitesse_selon_amplitude(self, tracking_session, cible, attendu):
+        tracking_session.running = True
+        tracking_session.position_relative = 246.0
+        tracking_session.next_correction_time = None
+        tracking_session._calculate_current_coords = MagicMock(return_value=(180.0, 45.0))
+        tracking_session._calculate_target_position = MagicMock(return_value=(cible, {}))
+        tracking_session._apply_correction = MagicMock()
+
+        with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
+             patch('core.config.config.FAST_MOTOR_DELAY', 124e-6):
+            tracking_session.check_and_correct()
+
+        assert tracking_session._apply_correction.call_args.args[1] == attendu
+
+
 # =============================================================================
 # TESTS FLAG LARGE MOVEMENT
 # =============================================================================

@@ -9,6 +9,10 @@ import time
 from unittest.mock import MagicMock, patch, PropertyMock
 
 from core.hardware.daemon_encoder_reader import StaleDataError
+# Chargé avant la fixture : son patch.dict('sys.modules') retirerait à la
+# sortie un core.config.config importé pendant le bloc, et patch() viserait
+# alors une copie du module que feedback_controller n'utilise pas.
+import core.config.config  # noqa: F401
 
 
 # =============================================================================
@@ -403,6 +407,36 @@ class TestExecuterPas:
         call_args = mock_moteur.rotation.call_args
         angle = call_args[0][0]
         assert angle > 0  # Direction positive
+
+    @pytest.mark.parametrize("degres, attendu", [(0.3, 260e-6), (2.9, 260e-6), (3.01, 124e-6), (45.0, 124e-6)])
+    def test_vitesse_de_l_iteration_selon_son_amplitude(
+        self, feedback_controller, mock_moteur, degres, attendu
+    ):
+        """Appelant autorisé à la vitesse rapide : seules les itérations ≥ 3° l'utilisent.
+
+        Une bascule méridien de 180° s'achève par des résidus de quelques
+        dixièmes de degré : ils doivent repasser à 260 µs, là où le firmware
+        raccourcit la rampe (< 1000 pas).
+        """
+
+        mock_moteur.direction_actuelle = 1
+        steps = round(degres * mock_moteur.steps_per_dome_revolution / 360.0)
+        with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
+             patch('core.config.config.FAST_MOTOR_DELAY', 124e-6):
+            feedback_controller._executer_pas_avec_verification(
+                steps=steps, vitesse=124e-6, angle_cible=0.0, tolerance=0.5
+            )
+
+        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == pytest.approx(attendu)
+
+    def test_vitesse_explicite_plus_lente_respectee(self, feedback_controller, mock_moteur):
+        """Jamais plus rapide que l'appelant : 1 ms/pas demandé reste 1 ms/pas."""
+        mock_moteur.direction_actuelle = 1
+        steps = round(45.0 * mock_moteur.steps_per_dome_revolution / 360.0)
+        feedback_controller._executer_pas_avec_verification(
+            steps=steps, vitesse=0.001, angle_cible=0.0, tolerance=0.5
+        )
+        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == 0.001
 
 
 # =============================================================================

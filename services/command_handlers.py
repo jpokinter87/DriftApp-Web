@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Tuple
 
-from core.config.config import SINGLE_SPEED_MOTOR_DELAY
+from core.config.config import SINGLE_SPEED_MOTOR_DELAY, motor_delay_for
 from core.hardware.moteur_simule import set_simulated_position, get_simulated_position
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
@@ -50,19 +50,22 @@ def _get_rotate_log_func():
 
 def _get_motor_speed(config=None, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
     """
-    Retourne la vitesse moteur (v5.10 : vitesse unique 260 µs).
+    Retourne la vitesse moteur (v6.18 : selon l'amplitude du déplacement).
 
     Args:
         config: Conservé pour compat d'appel ; ignoré.
-        speed: Vitesse explicite (optionnelle, surcharge la vitesse unique).
-        delta: Conservé pour compat d'appel ; ignoré.
+        speed: Vitesse explicite (optionnelle, prioritaire).
+        delta: Amplitude de la rotation (°) : ≥ 3° → vitesse rapide.
+               Absente → vitesse lente (petits mouvements, boucle de retour).
 
     Returns:
         Délai moteur en secondes.
     """
     if speed is not None:
         return speed
-    return SINGLE_SPEED_MOTOR_DELAY
+    if delta is None:
+        return SINGLE_SPEED_MOTOR_DELAY
+    return motor_delay_for(delta)
 
 
 def _sync_simulation_position(simulation_mode: bool, current_status: Dict[str, Any]):
@@ -145,8 +148,7 @@ class GotoHandler:
             self.status_callback(current_status)
             return current_status
 
-        speed = _get_motor_speed(self.config, speed)
-        logger.info(f"GOTO vers {angle:.1f}° (vitesse={speed * 1000:.3f}ms)")
+        logger.info(f"GOTO vers {angle:.1f}°")
 
         current_status["status"] = "moving"
         current_status["target"] = angle
@@ -173,6 +175,7 @@ class GotoHandler:
                 current_status = self._execute_large_goto(angle, delta, speed, current_status)
             else:
                 # PETIT DÉPLACEMENT: Feedback classique
+                speed = _get_motor_speed(self.config, speed)
                 current_status = self._execute_small_goto(angle, delta, speed, current_status)
 
         except Exception as e:
@@ -186,14 +189,22 @@ class GotoHandler:
         return current_status
 
     def _execute_large_goto(
-        self, angle: float, delta: float, speed: float, status: Dict[str, Any]
+        self, angle: float, delta: float, speed: Optional[float], status: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Exécute un grand déplacement (> 3°)."""
-        logger.info(f"GOTO optimisé: rotation directe de {delta:+.1f}°")
+        """Exécute un grand déplacement (> 3°).
+
+        `speed` : vitesse explicite de la commande IPC, ou None (vitesse
+        rapide pour la rotation directe, lente pour la correction finale).
+        """
+        vitesse_directe = _get_motor_speed(self.config, speed, delta=delta)
+        logger.info(
+            f"GOTO optimisé: rotation directe de {delta:+.1f}° "
+            f"(vitesse={vitesse_directe * 1e6:.0f} µs/pas)"
+        )
 
         # 1. Rotation directe (fluide)
         self.moteur.clear_stop_request()
-        self.moteur.rotation(delta, vitesse=speed)
+        self.moteur.rotation(delta, vitesse=vitesse_directe)
 
         # 2. Correction finale avec feedback
         tolerance = self.config.thresholds.default_tolerance_deg
@@ -204,7 +215,10 @@ class GotoHandler:
             if abs(erreur) > tolerance:
                 logger.info(f"Correction finale: erreur={erreur:+.2f}°")
                 result = self.feedback_controller.rotation_avec_feedback(
-                    angle_cible=angle, vitesse=speed, tolerance=tolerance, max_iterations=3
+                    angle_cible=angle,
+                    vitesse=_get_motor_speed(self.config, speed),
+                    tolerance=tolerance,
+                    max_iterations=3,
                 )
                 status["position"] = result["position_finale"]
 
@@ -289,8 +303,8 @@ class JogHandler:
             self.status_callback(current_status)
             return current_status
 
-        logger.info(f"JOG de {delta:+.1f}° (sans feedback)")
         speed = _get_motor_speed(self.config, speed, delta=delta)
+        logger.info(f"JOG de {delta:+.1f}° (sans feedback, vitesse={speed * 1e6:.0f} µs/pas)")
 
         current_status["status"] = "moving"
         self.status_callback(current_status)
@@ -385,7 +399,6 @@ class ContinuousHandler:
     def _movement_loop(self, direction: str, current_status: Dict[str, Any]):
         """Boucle de mouvement continu (daemon thread)."""
         step_interval = 0.1
-        speed = _get_motor_speed(self.config)
 
         # Pour le RP2040, envoyer un seul MOVE de 360° (tour complet).
         # Le firmware gere STOP en cours de mouvement via check_for_stop().
@@ -396,6 +409,9 @@ class ContinuousHandler:
             delta_per_step = 360.0 if is_rp2040 else 1.0
         else:
             delta_per_step = -360.0 if is_rp2040 else -1.0
+
+        # Bouton maintenu : RP2040 → un MOVE de 360°, donc vitesse rapide.
+        speed = _get_motor_speed(self.config, delta=delta_per_step)
 
         logger.debug(f"Thread mouvement continu démarré: {direction} (delta={delta_per_step}°)")
 

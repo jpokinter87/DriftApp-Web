@@ -33,15 +33,19 @@ def _charger_module():
 calib = _charger_module()
 
 
+SPD = 5394.1  # pas/degré : 200 × 4 × 2230 × 1.08849 / 360
+
+
 def _mesure(delay_us, vitesse_mesuree, angle=10.0, parcouru=None):
-    """Fabrique une mesure de palier."""
+    """Fabrique une mesure de palier, rendement calculé sur la géométrie réelle."""
+    theorique = calib.vitesse_theorique(delay_us, SPD)
     return {
         "delay_us": delay_us,
         "angle_commande": angle,
         "angle_parcouru": angle if parcouru is None else parcouru,
         "vitesse_mesuree": vitesse_mesuree,
-        "vitesse_theorique": 0.0,
-        "rendement": 1.0,
+        "vitesse_theorique": theorique,
+        "rendement": vitesse_mesuree / theorique,
         "echantillons": 200,
     }
 
@@ -89,31 +93,46 @@ class TestVitesseCroisiere:
 
 
 class TestDiagnostiquer:
-    """Détection du décrochage."""
+    """Détection du décrochage, relativement au palier de référence."""
 
-    def test_premier_palier_toujours_tenu(self):
-        """Sans référence, on ne peut rien conclure — le palier passe."""
+    def test_palier_de_reference_toujours_tenu(self):
+        """Sans référence, seule la perte de pas peut être constatée."""
         assert calib._diagnostiquer(_mesure(260, 42.8), None) is None
 
     def test_palier_tenu(self):
-        """Délai -10 % → vitesse +11 % : la coupole suit."""
-        precedent = _mesure(260, 42.8)
-        assert calib._diagnostiquer(_mesure(235, 47.3), precedent) is None
+        reference = _mesure(260, 42.8)
+        assert calib._diagnostiquer(_mesure(235, 47.3), reference) is None
 
     def test_pas_perdus_detectes(self):
         """La coupole n'a pas parcouru l'angle demandé : pas perdus."""
         raison = calib._diagnostiquer(
-            _mesure(140, 79.0, angle=10.0, parcouru=6.0), _mesure(155, 71.8)
+            _mesure(140, 79.0, angle=10.0, parcouru=6.0), _mesure(260, 42.8)
         )
         assert raison is not None
         assert "pas perdus" in raison
 
     def test_saturation_detectee(self):
         """Le délai baisse mais la vitesse ne suit plus : saturation."""
-        precedent = _mesure(260, 42.8)
-        raison = calib._diagnostiquer(_mesure(130, 44.0), precedent)
+        raison = calib._diagnostiquer(_mesure(130, 44.0), _mesure(260, 42.8))
         assert raison is not None
         assert "saturation" in raison
+
+    def test_mesures_du_27_09_2026_toutes_tenues(self):
+        """Mesures réelles du site (logs/calibration_vitesse_20260927_155625.json).
+
+        L'ancien critère, comparant chaque palier au précédent, avait signalé
+        un décrochage à 124 µs : la mesure à 130 µs était haute de 2,8 % et
+        le gain 130 → 124 (+4,8 % attendus, +2,6 % mesurés) tombait sous son
+        seuil. Or 124 µs livre 100,6 % de la vitesse visée. Rapporté au
+        palier de référence, aucun palier ne doit être signalé.
+        """
+        mesures = [
+            (260, 43.18), (235, 48.56), (210, 54.02), (190, 60.36), (170, 66.62),
+            (155, 73.98), (140, 80.15), (130, 87.96), (124, 90.22),
+        ]
+        reference = _mesure(*mesures[0])
+        for delay_us, vitesse in mesures:
+            assert calib._diagnostiquer(_mesure(delay_us, vitesse), reference) is None, delay_us
 
     def test_reproduit_la_saturation_de_decembre_2025(self):
         """L'instrument qui aurait évité la conclusion erronée de 2025.
@@ -121,33 +140,64 @@ class TestDiagnostiquer:
         Mesures réelles du site (docs/Vitesses.xlsx, 12/12/2025), où la boucle
         Python ajoutait 121 µs à chaque pas : demander 300 puis 150 µs
         n'a produit que +52 % de vitesse au lieu des +100 % attendus.
-        Faute de cette comparaison, le plafond logiciel a été pris pour
-        une limite du driver pendant neuf mois.
         """
-        precedent = _mesure(300, 25.35)
-        raison = calib._diagnostiquer(_mesure(150, 38.67), precedent)
+        raison = calib._diagnostiquer(_mesure(150, 38.67), _mesure(300, 25.35))
 
         assert raison is not None
         assert "saturation" in raison
 
-    def test_ne_signale_pas_la_saturation_aux_delais_longs(self):
-        """Aux délais longs, le même surcoût reste invisible — c'est normal."""
-        precedent = _mesure(1100, 8.96)
-        assert calib._diagnostiquer(_mesure(550, 16.9), precedent) is None
+    def test_biais_de_geometrie_neutralise(self):
+        """Un pas/degré faux de 5 % décale tous les rendements à l'identique.
+
+        Le rapport au palier de référence l'annule : aucun faux décrochage.
+        """
+        reference = _mesure(260, 42.8 * 0.95)
+        assert calib._diagnostiquer(_mesure(124, 89.7 * 0.95), reference) is None
+
+
+class TestPlanDeMesure:
+    def test_plan_complet_par_defaut(self):
+        assert calib.plan_de_mesure() == calib.PALIERS_US
+
+    def test_mesure_complementaire_garde_la_reference(self):
+        """--depuis 130 : 260 µs d'abord (étalon), puis 130 µs et plus rapide."""
+        assert calib.plan_de_mesure(130) == [260, 130, 124, 116, 110, 104, 100]
+
+    def test_jamais_sous_la_borne_de_config(self):
+        """Un palier sous MOTOR_DELAY_US_MIN serait refusé par la config."""
+        from core.config.config import MOTOR_DELAY_US_MIN
+
+        assert min(calib.PALIERS_US) >= MOTOR_DELAY_US_MIN
+
+
+class TestRecommandation:
+    def test_marge_sur_le_plus_rapide_tenu(self):
+        resultats = [
+            {"delay_us": 130, "tenu": True},
+            {"delay_us": 124, "tenu": True},
+            {"delay_us": 116, "tenu": False},
+        ]
+        assert calib.recommandation(resultats) == 143  # ceil(124 × 1,15)
+
+    def test_sans_decrochage_recommande_quand_meme(self):
+        """Limite non atteinte : la marge réelle est encore plus grande."""
+        resultats = [{"delay_us": 260, "tenu": True}, {"delay_us": 100, "tenu": True}]
+        assert calib.recommandation(resultats) == 115
+
+    def test_aucun_palier_tenu(self):
+        assert calib.recommandation([{"delay_us": 260, "tenu": False}]) is None
 
 
 class TestVitesseTheorique:
     """Conversion délai → vitesse, sur la géométrie réelle de la coupole."""
 
-    SPD = 5394.1  # pas/degré : 200 × 4 × 2230 × 1.08849 / 360
-
     def test_valeur_historique(self):
         """260 µs — la vitesse unique de la v5.10."""
-        assert calib.vitesse_theorique(260, self.SPD) == pytest.approx(42.8, rel=0.01)
+        assert calib.vitesse_theorique(260, SPD) == pytest.approx(42.8, rel=0.01)
 
     def test_cible_boitier_constructeur(self):
         """124 µs — les 90°/min du boîtier constructeur."""
-        assert calib.vitesse_theorique(124, self.SPD) == pytest.approx(89.7, rel=0.01)
+        assert calib.vitesse_theorique(124, SPD) == pytest.approx(89.7, rel=0.01)
 
     def test_paliers_strictement_decroissants(self):
         """Le plan de mesure doit aller du plus lent au plus rapide."""

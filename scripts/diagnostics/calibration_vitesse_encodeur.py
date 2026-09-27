@@ -30,6 +30,8 @@
 ║    python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run     ║
 ║    python3 scripts/diagnostics/calibration_vitesse_encodeur.py               ║
 ║    python3 scripts/diagnostics/calibration_vitesse_encodeur.py --angle 15    ║
+║    python3 scripts/diagnostics/calibration_vitesse_encodeur.py --depuis 130  ║
+║      (mesure complémentaire : 260 µs de référence, puis 130 µs et moins)     ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -51,9 +53,12 @@ ENCODER_FILE = Path("/dev/shm/ems22_position.json")
 
 # Paliers de délai en µs/pas. ~10 % d'écart : assez fin pour situer le
 # décrochage, assez large pour ne pas y passer la nuit.
-#   260 = valeur historique     124 ≈ 90°/min (boîtier constructeur)
-#   116 ≈ 96°/min (UPAN mesuré) — dernier palier, au-delà rien ne le justifie
-PALIERS_US = [260, 235, 210, 190, 170, 155, 140, 130, 124, 116]
+#   260 = valeur historique, palier de référence (en service depuis des mois)
+#   124 ≈ 90°/min (boîtier constructeur)     116 ≈ 96°/min (UPAN mesuré)
+#   110 → 100 : au-delà de l'UPAN, uniquement pour mesurer la marge dont on
+#   dispose à 124 µs. 100 = MOTOR_DELAY_US_MIN, rien en dessous ne serait accepté.
+PALIERS_US = [260, 235, 210, 190, 170, 155, 140, 130, 124, 116, 110, 104, 100]
+PALIER_REFERENCE_US = PALIERS_US[0]
 
 ANGLE_PAR_PALIER_DEG = 10.0
 ECHANTILLONNAGE_S = 0.05  # l'encodeur publie à 50 Hz
@@ -61,9 +66,17 @@ FRAICHEUR_MAX_S = 1.0
 PAUSE_ENTRE_PALIERS_S = 2.0
 
 # Un palier est considéré décroché si la coupole n'a pas parcouru l'angle
-# demandé (perte de pas) ou si la vitesse n'a pas progressé comme attendu.
+# demandé (perte de pas) ou si son rendement (vitesse mesurée / théorique)
+# tombe nettement sous celui du palier de référence.
+#
+# Comparer au palier de référence, et non au palier précédent : le 27/09/2026,
+# la comparaison au palier précédent a signalé un faux décrochage à 124 µs
+# (rendement 100,6 %) parce que la mesure à 130 µs était haute de 2,8 % — le
+# bruit de mesure (±1,5 %) suffit quand deux paliers ne diffèrent que de 5 %.
+# Le rapport au palier de référence absorbe aussi un biais de géométrie
+# (pas/degré légèrement faux) qui touche tous les paliers à l'identique.
 TOLERANCE_ANGLE = 0.90  # 90 % de l'angle commandé
-TOLERANCE_GAIN = 0.70  # 70 % du gain de vitesse attendu
+TOLERANCE_RENDEMENT = 0.90  # 90 % du rendement du palier de référence
 
 
 def print_ok(msg):
@@ -294,6 +307,15 @@ def main() -> int:
         help=f"Angle parcouru à chaque palier (défaut {ANGLE_PAR_PALIER_DEG}°)",
     )
     parser.add_argument(
+        "--depuis",
+        type=int,
+        metavar="US",
+        help=(
+            "Mesure complémentaire : le palier de référence "
+            f"({PALIER_REFERENCE_US} µs), puis seulement les paliers ≤ US"
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Affiche le plan de mesure sans faire bouger la coupole",
@@ -310,8 +332,9 @@ def main() -> int:
     print_info(f"Angle par palier : {args.angle:.1f}°  (sens alterné)")
 
     print("\n── Plan de mesure ──")
+    paliers = plan_de_mesure(args.depuis)
     print(f"  {'délai':>7} {'vitesse visée':>15} {'moteur':>11}")
-    for us in PALIERS_US:
+    for us in paliers:
         v = vitesse_theorique(us, spd)
         rpm = v / 60.0 * spd / pas_tour_moteur * 60.0
         print(f"  {us:>5} µs {v:>12.1f}°/min {rpm:>8.0f} tr/min")
@@ -330,10 +353,10 @@ def main() -> int:
         return 0
 
     resultats = []
-    precedent = None
+    reference = None
     decroche_a = None
 
-    for index, delay_us in enumerate(PALIERS_US):
+    for index, delay_us in enumerate(paliers):
         sens = 1.0 if index % 2 == 0 else -1.0
         print(f"\n── Palier {delay_us} µs ──")
 
@@ -345,14 +368,16 @@ def main() -> int:
         resultats.append(mesure)
         _afficher_mesure(mesure)
 
-        raison = _diagnostiquer(mesure, precedent)
+        raison = _diagnostiquer(mesure, reference)
+        mesure["tenu"] = raison is None
         if raison:
             print_error(f"DÉCROCHAGE : {raison}")
             decroche_a = delay_us
             break
 
         print_ok("Palier tenu")
-        precedent = mesure
+        if reference is None:
+            reference = mesure
         time.sleep(PAUSE_ENTRE_PALIERS_S)
 
     _rapport(resultats, decroche_a, spd)
@@ -371,7 +396,7 @@ def _afficher_mesure(m: dict):
     )
 
 
-def _diagnostiquer(mesure: dict, precedent: dict):
+def _diagnostiquer(mesure: dict, reference: dict):
     """Retourne la raison du décrochage, ou None si le palier est tenu."""
     if mesure["angle_parcouru"] < TOLERANCE_ANGLE * mesure["angle_commande"]:
         return (
@@ -379,22 +404,43 @@ def _diagnostiquer(mesure: dict, precedent: dict):
             f"sur {mesure['angle_commande']:.2f}° — pas perdus"
         )
 
-    if precedent is None:
+    if reference is None or not reference["rendement"]:
         return None
 
-    gain_attendu = precedent["delay_us"] / mesure["delay_us"]
-    gain_reel = (
-        mesure["vitesse_mesuree"] / precedent["vitesse_mesuree"]
-        if precedent["vitesse_mesuree"]
-        else 0.0
-    )
-    if gain_reel < 1.0 + TOLERANCE_GAIN * (gain_attendu - 1.0):
+    relatif = mesure["rendement"] / reference["rendement"]
+    if relatif < TOLERANCE_RENDEMENT:
         return (
-            f"la vitesse n'a gagné que {(gain_reel - 1) * 100:.0f} % "
-            f"au lieu de {(gain_attendu - 1) * 100:.0f} % — saturation"
+            f"la coupole n'atteint que {relatif * 100:.0f} % de la vitesse visée "
+            f"(relativement au palier {reference['delay_us']} µs) — saturation"
         )
 
     return None
+
+
+def plan_de_mesure(depuis_us=None) -> list:
+    """Paliers à mesurer : tous, ou la référence puis ceux à partir de `depuis_us`.
+
+    Le palier de référence est toujours mesuré en premier : c'est lui qui
+    sert d'étalon au diagnostic de chaque palier.
+    """
+    if depuis_us is None:
+        return list(PALIERS_US)
+    return [PALIER_REFERENCE_US] + [
+        us for us in PALIERS_US if us <= depuis_us and us != PALIER_REFERENCE_US
+    ]
+
+
+def recommandation(resultats: list):
+    """Valeur conseillée pour `motor_driver.fast_delay_us`, ou None.
+
+    15 % de marge sur le palier le plus rapide tenu. Valable qu'il y ait eu
+    décrochage ou non : sans décrochage, la vraie limite est plus basse
+    encore, la marge n'en est que plus grande.
+    """
+    tenus = [m for m in resultats if m.get("tenu", True)]
+    if not tenus:
+        return None
+    return math.ceil(min(m["delay_us"] for m in tenus) * 1.15)
 
 
 def _rapport(resultats, decroche_a, spd):
@@ -413,13 +459,13 @@ def _rapport(resultats, decroche_a, spd):
             f" {m['vitesse_theorique']:>9.1f}°/min {m['rendement'] * 100:>8.0f} %"
         )
 
-    tenus = [m for m in resultats if m["rendement"] >= TOLERANCE_ANGLE]
+    tenus = [m for m in resultats if m["tenu"]]
     if not tenus:
         print_error("\nAucun palier tenu — vérifier l'installation avant d'insister.\n")
         return
 
     meilleur = min(tenus, key=lambda m: m["delay_us"])
-    marge = math.ceil(meilleur["delay_us"] * 1.15)
+    marge = recommandation(resultats)
 
     print(
         f"\n  Palier le plus rapide tenu : {meilleur['delay_us']} µs "
@@ -427,9 +473,12 @@ def _rapport(resultats, decroche_a, spd):
     )
     if decroche_a:
         print(f"  Décrochage constaté à     : {decroche_a} µs")
-        print_info(f"Valeur recommandée (marge 15 %) : motor_driver.delay_us = {marge}")
     else:
         print_info("Aucun décrochage jusqu'au dernier palier — la limite n'est pas atteinte.")
+    print_info(
+        f"Valeur recommandée (marge 15 %) : motor_driver.fast_delay_us = {marge}"
+        " (grands déplacements ≥ 3° ; delay_us reste la vitesse des petits)"
+    )
 
     horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
     rapport = PROJECT_ROOT / "logs" / f"calibration_vitesse_{horodatage}.json"
@@ -441,7 +490,7 @@ def _rapport(resultats, decroche_a, spd):
                     "pas_par_degre": spd,
                     "paliers": resultats,
                     "decroche_a_us": decroche_a,
-                    "recommandation_us": marge if decroche_a else None,
+                    "recommandation_us": marge,
                 },
                 indent=2,
             )

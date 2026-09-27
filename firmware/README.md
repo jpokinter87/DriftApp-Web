@@ -120,9 +120,16 @@ commande dans l'autre sens), debrancher/rebrancher le Pico, puis
 
 ### Changer la vitesse
 
-La vitesse n'est plus en dur dans le code : elle vit dans
-`data/config.json` → `motor_driver.delay_us` (microsecondes par pas),
-editable depuis la page **Configuration → Avance** de l'interface web.
+La vitesse n'est plus en dur dans le code. Depuis la v6.18, deux cles de
+`data/config.json` → `motor_driver` (microsecondes par pas), editables depuis
+la page **Configuration → Avance** de l'interface web :
+
+- `fast_delay_us` : grands deplacements (≥ 3°) — GOTO, bascule meridien,
+  parking, JOG ±10°, mode continu. C'est celle qu'on accelere.
+- `delay_us` : petits deplacements (< 3°) — corrections de suivi, fin des
+  GOTO, JOG ±1°. Laisser a 260 : sous 1° la rampe occupe presque toute la
+  duree du mouvement, et c'est la que le firmware la raccourcit.
+
 Un redemarrage des services est necessaire pour qu'elle soit prise en compte
 (bouton « Redemarrer les services » de la meme page).
 
@@ -132,6 +139,8 @@ palier par palier, avec :
 ```bash
 python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run  # plan
 python3 scripts/diagnostics/calibration_vitesse_encodeur.py            # mesure
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py --depuis 130
+# mesure complementaire : 260 µs de reference, puis 130 µs et plus rapide
 ```
 
 Le script lit la position sur l'encodeur EMS22A et compare la vitesse obtenue

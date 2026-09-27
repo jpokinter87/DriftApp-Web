@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
+from core.config.config import motor_delay_for
 from core.utils.angle_utils import shortest_angular_distance
 from core.hardware.daemon_encoder_reader import StaleDataError
 
@@ -159,10 +160,13 @@ class FeedbackController:
     ) -> None:
         """
         Exécute les pas moteur via une seule commande rotation().
+
+        `vitesse` est un plafond : une itération < 3° repasse à la vitesse
+        lente (v6.18), jamais plus rapide que ce que l'appelant a demandé.
         """
         deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
         angle = steps * deg_per_step * (1 if self.moteur.direction_actuelle >= 0 else -1)
-        self.moteur.rotation(angle, vitesse=vitesse)
+        self.moteur.rotation(angle, vitesse=max(vitesse, motor_delay_for(angle)))
 
     def _verifier_arret_anticipe(
         self, angle_cible: float, tolerance: float, step_index: int, total_steps: int

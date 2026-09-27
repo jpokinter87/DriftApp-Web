@@ -205,6 +205,17 @@ class TestAnticipationSlewExecution:
         assert stub.position_relative == 170.0
         assert stub.total_corrections == 1
 
+    def test_slew_a_haute_vitesse(self, sample_schedule):
+        """v6.18 : le slew d'anticipation est un grand déplacement → vitesse rapide."""
+        from unittest.mock import patch
+
+        stub = _SessionStub(enabled=True)
+        self._prime_schedule(stub, sample_schedule, anchor_offset_sec=1200.0)
+        with patch('core.config.config.FAST_MOTOR_DELAY', 124e-6):
+            stub._execute_anticipatory_slew()
+
+        assert stub.moteur.rotation_absolue.call_args.kwargs["vitesse"] == 124e-6
+
     def test_slew_not_triggered_before_t_start(self, sample_schedule):
         stub = _SessionStub(enabled=True)
         # anchor 10s dans le passé → elapsed (10s) < schedule.t_start (1140s)

@@ -533,3 +533,99 @@ class TestSeuilFeedback:
 
         # Rotation directe utilisée
         mock_moteur.rotation.assert_called()
+
+
+# =============================================================================
+# DEUX VITESSES (v6.18)
+# =============================================================================
+
+SLOW, FAST = 260e-6, 124e-6
+
+
+@pytest.fixture
+def deux_vitesses():
+    """Vitesse rapide distincte de la lente (la config du dépôt les confond)."""
+    with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', SLOW), \
+         patch('core.config.config.FAST_MOTOR_DELAY', FAST), \
+         patch('services.command_handlers.SINGLE_SPEED_MOTOR_DELAY', SLOW):
+        yield
+
+
+class TestDeuxVitesses:
+    """Haute vitesse pour les déplacements ≥ 3° et le continu, 260 µs sinon."""
+
+    def test_vitesse_selon_amplitude(self, mock_config, deux_vitesses):
+        from services.command_handlers import _get_motor_speed
+        assert _get_motor_speed(mock_config, delta=1.0) == SLOW
+        assert _get_motor_speed(mock_config, delta=-10.0) == FAST
+        assert _get_motor_speed(mock_config) == SLOW
+
+    def test_vitesse_explicite_prioritaire(self, mock_config, deux_vitesses):
+        """Le script de mesure impose sa vitesse via le champ IPC `speed`."""
+        from services.command_handlers import _get_motor_speed
+        assert _get_motor_speed(mock_config, 0.0002, delta=10.0) == 0.0002
+
+    def _goto(self, mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config):
+        from services.command_handlers import GotoHandler
+        return GotoHandler(
+            moteur=mock_moteur,
+            daemon_reader=mock_daemon_reader,
+            feedback_controller=mock_feedback_controller,
+            config=mock_config,
+            simulation_mode=False,
+            status_callback=MagicMock(),
+        )
+
+    def test_grand_goto_rapide_puis_correction_lente(
+        self, mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config, deux_vitesses
+    ):
+        """Rotation directe à haute vitesse, correction finale (< 3°) à 260 µs."""
+        mock_daemon_reader.read_angle.side_effect = [0.0, 89.0]
+        handler = self._goto(mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config)
+
+        handler.execute(90.0, {'status': 'idle', 'position': 0.0})
+
+        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == FAST
+        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs['vitesse'] == SLOW
+
+    def test_petit_goto_lent(
+        self, mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config, deux_vitesses
+    ):
+        mock_daemon_reader.read_angle.return_value = 44.0
+        handler = self._goto(mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config)
+
+        handler.execute(45.0, {'status': 'idle', 'position': 44.0})
+
+        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs['vitesse'] == SLOW
+
+    @pytest.mark.parametrize("delta, attendu", [(1.0, SLOW), (-1.0, SLOW), (10.0, FAST), (-10.0, FAST)])
+    def test_jog(self, mock_moteur, mock_daemon_reader, mock_config, deux_vitesses, delta, attendu):
+        from services.command_handlers import JogHandler
+        handler = JogHandler(
+            moteur=mock_moteur,
+            daemon_reader=mock_daemon_reader,
+            config=mock_config,
+            simulation_mode=False,
+            status_callback=MagicMock(),
+        )
+
+        handler.execute(delta, {'status': 'idle', 'position': 0.0})
+
+        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == attendu
+
+    def test_continu_rapide(self, mock_moteur, mock_daemon_reader, mock_config, deux_vitesses):
+        """Bouton maintenu : distance inconnue, vitesse maximale (décision 27/09/2026)."""
+        from services.command_handlers import ContinuousHandler
+        handler = ContinuousHandler(
+            moteur=mock_moteur,
+            daemon_reader=mock_daemon_reader,
+            config=mock_config,
+            simulation_mode=False,
+            status_callback=MagicMock(),
+        )
+        mock_moteur.rotation.side_effect = lambda *a, **k: handler.stop_flag.set()
+
+        handler.start('cw', {'status': 'idle', 'position': 0.0})
+        handler.thread.join(timeout=2)
+
+        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == FAST

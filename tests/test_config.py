@@ -323,3 +323,48 @@ class TestResolveMotorDelayUs:
             MOTOR_DELAY_US_MAX,
         )
         assert MOTOR_DELAY_US_MIN / 1e6 <= SINGLE_SPEED_MOTOR_DELAY <= MOTOR_DELAY_US_MAX / 1e6
+
+
+class TestVitesseSelonAmplitude:
+    """Deux vitesses (v6.18) : rapide pour les grands déplacements, 260 µs sinon.
+
+    Sous 1°, la rampe domine la durée du mouvement : la haute vitesse n'y
+    gagne presque rien, et c'est là que le firmware raccourcit ou supprime
+    la rampe. Seule la rampe complète a été validée à 124 µs (27/09/2026).
+    """
+
+    SLOW, FAST = 260e-6, 124e-6
+
+    def _delay(self, delta):
+        from core.config.config import motor_delay_for
+        return motor_delay_for(delta, slow=self.SLOW, fast=self.FAST)
+
+    def test_petit_deplacement_vitesse_lente(self):
+        assert self._delay(0.3) == self.SLOW
+        assert self._delay(2.99) == self.SLOW
+
+    def test_grand_deplacement_vitesse_rapide(self):
+        assert self._delay(3.0) == self.FAST
+        assert self._delay(180.0) == self.FAST
+
+    def test_sens_negatif(self):
+        assert self._delay(-0.5) == self.SLOW
+        assert self._delay(-90.0) == self.FAST
+
+    def test_seuil_de_trois_degres(self):
+        from core.config.config import FAST_SPEED_MIN_DEG
+        assert FAST_SPEED_MIN_DEG == 3.0
+
+    def test_cle_rapide_absente_reprend_la_vitesse_lente(self):
+        """Sans fast_delay_us, rien ne change : une seule vitesse, comme en v6.17."""
+        from core.config.config import resolve_motor_delay_us
+        assert resolve_motor_delay_us({}, key="fast_delay_us", default=200.0) == 200.0
+
+    def test_cle_rapide_bornee_comme_la_lente(self):
+        from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MIN
+        assert resolve_motor_delay_us({"fast_delay_us": 5}, key="fast_delay_us") == MOTOR_DELAY_US_MIN
+        assert resolve_motor_delay_us({"fast_delay_us": 124}, key="fast_delay_us") == 124.0
+
+    def test_constante_rapide_dans_les_bornes(self):
+        from core.config.config import FAST_MOTOR_DELAY, MOTOR_DELAY_US_MIN, MOTOR_DELAY_US_MAX
+        assert MOTOR_DELAY_US_MIN / 1e6 <= FAST_MOTOR_DELAY <= MOTOR_DELAY_US_MAX / 1e6

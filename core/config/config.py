@@ -116,8 +116,12 @@ MOTOR_DELAY_US_MIN: float = 100.0
 MOTOR_DELAY_US_MAX: float = 3000.0
 
 
-def resolve_motor_delay_us(motor_driver_cfg: dict) -> float:
-    """Délai moteur en µs/pas issu de `motor_driver.delay_us`, borné.
+def resolve_motor_delay_us(
+    motor_driver_cfg: dict,
+    key: str = "delay_us",
+    default: float = DEFAULT_MOTOR_DELAY_US,
+) -> float:
+    """Délai moteur en µs/pas issu de `motor_driver.<key>`, borné.
 
     La valeur étant éditable depuis l'interface web, une saisie absente,
     non numérique ou hors bornes retombe sur une valeur sûre plutôt que
@@ -125,25 +129,27 @@ def resolve_motor_delay_us(motor_driver_cfg: dict) -> float:
 
     Args:
         motor_driver_cfg: Section `motor_driver` de config.json.
+        key: Clé lue (`delay_us` ou `fast_delay_us`).
+        default: Valeur si la clé est absente ou invalide.
 
     Returns:
         Délai en microsecondes par pas.
     """
     import logging
 
-    raw = motor_driver_cfg.get("delay_us", DEFAULT_MOTOR_DELAY_US)
+    raw = motor_driver_cfg.get(key, default)
     try:
         value = float(raw)
     except (TypeError, ValueError):
         logging.getLogger(__name__).warning(
-            f"motor_driver.delay_us invalide ({raw!r}) — repli sur {DEFAULT_MOTOR_DELAY_US} µs"
+            f"motor_driver.{key} invalide ({raw!r}) — repli sur {default} µs"
         )
-        return DEFAULT_MOTOR_DELAY_US
+        return default
 
     if not MOTOR_DELAY_US_MIN <= value <= MOTOR_DELAY_US_MAX:
         clamped = min(max(value, MOTOR_DELAY_US_MIN), MOTOR_DELAY_US_MAX)
         logging.getLogger(__name__).warning(
-            f"motor_driver.delay_us={value} µs hors bornes "
+            f"motor_driver.{key}={value} µs hors bornes "
             f"[{MOTOR_DELAY_US_MIN}, {MOTOR_DELAY_US_MAX}] — borné à {clamped} µs"
         )
         return clamped
@@ -154,6 +160,38 @@ def resolve_motor_delay_us(motor_driver_cfg: dict) -> float:
 SINGLE_SPEED_MOTOR_DELAY: float = (
     resolve_motor_delay_us(_config.get("motor_driver", {})) / 1_000_000
 )
+
+# Deux vitesses (v6.18). Depuis le flash du firmware v6.16, la coupole tient
+# 90°/min (mesuré à l'encodeur le 27/09/2026, 124 µs). Mais sous 1° la rampe
+# domine la durée (0,3° : 1,79 s à 260 µs, 1,64 s à 124 µs), et c'est là que
+# le firmware raccourcit la rampe (< 1000 pas) ou la supprime (< 200 pas) —
+# seule la rampe complète a été validée à haute vitesse. D'où :
+#   - SINGLE_SPEED_MOTOR_DELAY (`delay_us`) : déplacements < 3° (corrections
+#     de suivi, itérations finales de la boucle de retour) ;
+#   - FAST_MOTOR_DELAY (`fast_delay_us`) : déplacements ≥ 3° (GOTO, bascule
+#     méridien, parking, JOG ±10°) et mode continu.
+# Clé absente → même valeur que `delay_us` : comportement v6.17 inchangé.
+# 3° reprend la frontière GOTO direct / GOTO avec boucle de retour (v4.4).
+FAST_SPEED_MIN_DEG: float = 3.0
+FAST_MOTOR_DELAY: float = (
+    resolve_motor_delay_us(
+        _config.get("motor_driver", {}),
+        key="fast_delay_us",
+        default=SINGLE_SPEED_MOTOR_DELAY * 1_000_000,
+    )
+    / 1_000_000
+)
+
+
+def motor_delay_for(delta_deg: float, slow: float = None, fast: float = None) -> float:
+    """Délai moteur (s/pas) adapté à l'amplitude d'une rotation.
+
+    `slow`/`fast` par défaut : les constantes du module, lues à l'appel.
+    """
+    if abs(delta_deg) >= FAST_SPEED_MIN_DEG:
+        return FAST_MOTOR_DELAY if fast is None else fast
+    return SINGLE_SPEED_MOTOR_DELAY if slow is None else slow
+
 SINGLE_SPEED_CHECK_INTERVAL_S: int = 30     # secondes entre deux corrections
 SINGLE_SPEED_CORRECTION_THRESHOLD_DEG: float = 0.3  # seuil au-delà duquel on corrige
 

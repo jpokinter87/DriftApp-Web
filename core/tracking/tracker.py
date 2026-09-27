@@ -19,6 +19,7 @@ from core.config.config import (
     SINGLE_SPEED_CHECK_INTERVAL_S,
     SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
     SINGLE_SPEED_MOTOR_DELAY,
+    motor_delay_for,
 )
 from core.hardware.daemon_encoder_reader import get_daemon_reader
 from core.hardware.moteur_rp2040 import MoteurRP2040
@@ -276,14 +277,15 @@ class TrackingSession(
             self._setup_initial_position(azimut, altitude, position_cible_init)
             self._sync_encoder(position_cible_init)
 
-        # Si GOTO nécessaire, utiliser la vitesse unique (260 µs)
+        # Si GOTO nécessaire, vitesse selon l'amplitude (v6.18)
         if goto_needed:
+            goto_delay = motor_delay_for(goto_delta)
             self.logger.info(
                 f"🎯 GOTO initial requis: {goto_delta:+.1f}° "
-                f"(vitesse unique {SINGLE_SPEED_MOTOR_DELAY * 1_000_000:.0f} µs/pas)"
+                f"(vitesse {goto_delay * 1_000_000:.0f} µs/pas)"
             )
             # Exécuter le GOTO initial (Mixin TrackingGotoMixin)
-            self._execute_initial_goto(position_cible_init, SINGLE_SPEED_MOTOR_DELAY)
+            self._execute_initial_goto(position_cible_init, goto_delay)
             self._start_tracking(objet_name, now, initial_interval=SINGLE_SPEED_CHECK_INTERVAL_S)
         else:
             self._start_tracking(objet_name, now)

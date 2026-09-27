@@ -118,16 +118,21 @@ HELP_REGISTRY: dict[str, str] = {
         "DM556T directement via GPIO. « rp2040 » : commandes série vers le Pi Pico."
     ),
     "motor_driver.delay_us": (
-        "Délai entre deux pas moteur, en microsecondes : c'est LA vitesse de la "
-        "coupole (GOTO, JOG, continu, suivi). Plus la valeur est basse, plus la "
-        "coupole est rapide. 260 = ~43°/min (défaut historique, inchangé). "
-        "⚠️ NE PAS MODIFIER avant d'avoir flashé le firmware v6.16 du Pi Pico "
-        "(procédure dans firmware/README.md) : l'ancien firmware ne sait pas "
-        "accélérer jusqu'à une vitesse de croisière élevée, le moteur décrocherait. "
-        "Une fois le Pico flashé, ne pas descendre au jugé : mesurer d'abord avec "
-        "scripts/diagnostics/calibration_vitesse_encodeur.py, qui compare la "
-        "vitesse réellement atteinte à la vitesse demandée et recommande une "
-        "valeur. Le boîtier constructeur atteint 90°/min, soit ~124. "
+        "Vitesse des PETITS déplacements (< 3°) : corrections de suivi, fin des "
+        "GOTO, JOG ±1°. Délai entre deux pas moteur, en microsecondes ; plus la "
+        "valeur est basse, plus la coupole est rapide. 260 = ~43°/min (défaut "
+        "historique, éprouvé) : à laisser tel quel. Sous 1°, la rampe "
+        "d'accélération occupe presque toute la durée du mouvement, une vitesse "
+        "plus élevée n'y gagne rien. Borné à [100, 3000]."
+    ),
+    "motor_driver.fast_delay_us": (
+        "Vitesse des GRANDS déplacements (≥ 3°) : GOTO, bascule méridien, "
+        "parking, JOG ±10° et mode continu. Délai entre deux pas moteur, en "
+        "microsecondes. 260 = même vitesse que les petits déplacements "
+        "(comportement v6.17). Le boîtier constructeur atteint 90°/min, soit "
+        "~124. ⚠️ Nécessite le firmware v6.16 du Pi Pico. Ne pas descendre au "
+        "jugé : mesurer avec scripts/diagnostics/calibration_vitesse_encodeur.py "
+        "(option --depuis 130), qui recommande une valeur avec 15 % de marge. "
         "Borné à [100, 3000]."
     ),
     "motor_driver.serial.baudrate": (

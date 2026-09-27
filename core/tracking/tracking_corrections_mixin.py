@@ -20,6 +20,7 @@ from core.config.config import (
     SINGLE_SPEED_CHECK_INTERVAL_S,
     SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
     SINGLE_SPEED_MOTOR_DELAY,
+    motor_delay_for,
 )
 from core.utils.angle_utils import shortest_angular_distance
 
@@ -111,8 +112,8 @@ class TrackingCorrectionsMixin:
                 f"threshold={SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:.2f}",
             )
 
-        # === APPLIQUER LA CORRECTION (vitesse unique) ===
-        self._apply_correction(delta, SINGLE_SPEED_MOTOR_DELAY)
+        # === APPLIQUER LA CORRECTION (v6.18 : rapide si ≥ 3°, ex. bascule méridien) ===
+        self._apply_correction(delta, motor_delay_for(delta))
 
         mode_str = 'continuous'
         log_message = (
