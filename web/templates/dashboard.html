@@ -74,6 +74,8 @@
                 Le contr&ocirc;le manuel (Pas &agrave; pas / Continu) reste actif :
                 amenez la coupole sur le microswitch 45&deg; pour recalibrer automatiquement,
                 ou cliquez pour lancer un sweep.
+                Si le microswitch ne d&eacute;tecte plus&nbsp;: placez la coupole &agrave; 45&deg;
+                &agrave; vue (cam&eacute;ra) puis &laquo;&nbsp;Forcer &agrave; 45&deg;&nbsp;&raquo;.
             </p>
             <p class="text-[0.7rem] text-obs-text-muted mt-1 italic"
                x-show="$store.dashboard.calibration?.status === 'running'"
@@ -93,6 +95,13 @@
                   class="animate-pulse" x-cloak>
                 Calibration&hellip;
             </span>
+        </button>
+        <button class="btn btn-secondary whitespace-nowrap"
+                x-show="$store.dashboard.calibration?.status !== 'running'"
+                :disabled="$store.dashboard.calibrationRequestInFlight"
+                @click="$store.dashboard.forceCalibConfirmVisible = true"
+                aria-label="Forcer la calibration : coupole placée à 45 degrés à vue">
+            Forcer &agrave; 45&deg;
         </button>
     </div>
 </div>
@@ -735,6 +744,38 @@
                             ? `Confirmer (${$store.dashboard.cimierCloseConfirmCountdown})`
                             : 'Confirmer la fermeture'">
                 Confirmer la fermeture
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Modal Confirmation Calibration Forcée (v6.20) ═══ -->
+<div id="force-calib-confirm-modal" x-data class="goto-modal"
+     x-show="$store.dashboard.forceCalibConfirmVisible" x-cloak
+     role="dialog" aria-modal="true"
+     aria-labelledby="force-calib-confirm-title"
+     aria-describedby="force-calib-confirm-body">
+    <div class="goto-modal-content">
+        <div class="goto-modal-header">
+            <span class="goto-icon">&#x26A0;</span>
+            <h3 id="force-calib-confirm-title">La coupole est-elle &agrave; 45&deg;&nbsp;?</h3>
+        </div>
+        <div id="force-calib-confirm-body"
+             class="text-sm text-obs-text-secondary mb-5 px-2 leading-relaxed text-center">
+            La position actuelle va &ecirc;tre <strong class="text-obs-text">d&eacute;clar&eacute;e
+            &agrave; 45&deg;</strong> sans passer par le microswitch. La coupole ne bouge pas.
+            Ne confirmez que si vous l'avez plac&eacute;e &agrave; 45&deg; &agrave; vue (cam&eacute;ra)&nbsp;:
+            une erreur de position d&eacute;caler&agrave; tous les GOTO et le suivi d'autant.
+        </div>
+        <div class="button-group">
+            <button id="btn-force-calib-cancel" class="btn btn-secondary"
+                    @click="$store.dashboard.forceCalibConfirmVisible = false"
+                    x-init="$watch('$store.dashboard.forceCalibConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
+                Annuler
+            </button>
+            <button id="btn-force-calib-confirm" class="btn btn-danger"
+                    @click="window.requestForcedCalibration && window.requestForcedCalibration()">
+                Confirmer : coupole &agrave; 45&deg;
             </button>
         </div>
     </div>

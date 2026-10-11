@@ -13,5 +13,6 @@ urlpatterns = [
     path('status/', views.MotorStatusView.as_view(), name='motor-status'),
     path('park/', views.ParkView.as_view(), name='motor-park'),
     path('calibrate/', views.CalibrateView.as_view(), name='motor-calibrate'),
+    path('calibrate/force/', views.ForceCalibrateView.as_view(), name='motor-calibrate-force'),
     path('end-session/', views.EndSessionView.as_view(), name='motor-end-session'),
 ]

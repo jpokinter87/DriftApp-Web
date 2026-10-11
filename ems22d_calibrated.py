@@ -125,6 +125,9 @@ class EMS22Daemon:
         self.last_calibration_time = 0  # Anti-rebond : timestamp dernière calibration
         self.calibrated = False  # Flag: true après premier passage sur switch
         self.last_calibration_at: Optional[str] = None  # ISO 8601 UTC, null tant que pas calibré
+        # Calibration forcée (v6.20) : demandée par le thread TCP, appliquée par
+        # la boucle principale (seule à écrire total_counts).
+        self.force_calib_requested = False
         logger.info(f"Switch GPIO {SWITCH_GPIO} configuré (pull-up) - état initial : {self.switch_last_state}")
 
     # ------------------------------------------------
@@ -225,33 +228,48 @@ class EMS22Daemon:
                 logger.info(f"⏭️  Rebond ignoré (délai={time_since_last_calib:.2f}s < {SWITCH_DEBOUNCE_SEC}s)")
             else:
                 logger.info(f"🔄 Microswitch activé → recalage à {SWITCH_CALIB_ANGLE}°")
-
-                # ✅ CORRECTION : Recalculer total_counts pour correspondre à SWITCH_CALIB_ANGLE
-                # Formule inverse :
-                # angle = (total_counts / 1024) * 360 * CALIBRATION_FACTOR * ROTATION_SIGN
-                # → total_counts = angle / (CALIBRATION_FACTOR * ROTATION_SIGN) / 360 * 1024
-
-                target_wheel_deg = SWITCH_CALIB_ANGLE / (CALIBRATION_FACTOR * ROTATION_SIGN)
-                self.total_counts = int((target_wheel_deg / 360.0) * COUNTS_PER_REV)
-
-                logger.info(f"   → total_counts recalé à {self.total_counts}")
-                logger.info(f"   → angle affiché : {SWITCH_CALIB_ANGLE}°")
-
-                # Réinitialiser historique pour éviter artefacts du filtre médian
-                self.angle_history = []
-                self.last_valid_angle = SWITCH_CALIB_ANGLE
-
-                # Mettre à jour timestamp pour anti-rebond
-                self.last_calibration_time = now
-
-                # ✅ Marquer comme calibré
-                self.calibrated = True
-                self.last_calibration_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-                angle = SWITCH_CALIB_ANGLE
+                angle = self._recaler(now)
 
         self.switch_last_state = state
         return angle
+
+    def _recaler(self, now):
+        """Recale angle ET total_counts sur SWITCH_CALIB_ANGLE."""
+        # ✅ CORRECTION : Recalculer total_counts pour correspondre à SWITCH_CALIB_ANGLE
+        # Formule inverse :
+        # angle = (total_counts / 1024) * 360 * CALIBRATION_FACTOR * ROTATION_SIGN
+        # → total_counts = angle / (CALIBRATION_FACTOR * ROTATION_SIGN) / 360 * 1024
+
+        target_wheel_deg = SWITCH_CALIB_ANGLE / (CALIBRATION_FACTOR * ROTATION_SIGN)
+        self.total_counts = int((target_wheel_deg / 360.0) * COUNTS_PER_REV)
+
+        logger.info(f"   → total_counts recalé à {self.total_counts}")
+        logger.info(f"   → angle affiché : {SWITCH_CALIB_ANGLE}°")
+
+        # Réinitialiser historique pour éviter artefacts du filtre médian
+        self.angle_history = []
+        self.last_valid_angle = SWITCH_CALIB_ANGLE
+
+        # Mettre à jour timestamp pour anti-rebond
+        self.last_calibration_time = now
+
+        # ✅ Marquer comme calibré
+        self.calibrated = True
+        self.last_calibration_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+        return SWITCH_CALIB_ANGLE
+
+    def apply_pending_forced_calibration(self, angle):
+        """Applique une calibration forcée demandée via TCP (v6.20).
+
+        L'opérateur a placé la coupole à 45° à vue (caméra) quand le
+        microswitch ne détecte plus : on recale comme si le switch avait basculé.
+        """
+        if not self.force_calib_requested:
+            return angle
+        self.force_calib_requested = False
+        logger.info(f"🔧 Calibration FORCÉE par l'opérateur → recalage à {SWITCH_CALIB_ANGLE}°")
+        return self._recaler(time.time())
 
     # ------------------------------------------------
     # JSON
@@ -293,17 +311,22 @@ class EMS22Daemon:
                 conn, _ = s.accept()
                 with conn:
                     req = conn.recv(32).decode().strip()
-                    if req.upper() == "GET":
-                        try:
-                            data = json.loads(JSON_OUT.read_text())
-                            conn.send(f"{data.get('angle', 0.0):.3f}\n".encode())
-                        except Exception:
-                            conn.send(b"ERR\n")
-                    else:
-                        conn.send(b"OK\n")
+                    conn.send(self.handle_request(req))
             except Exception:
                 time.sleep(0.05)
         s.close()
+
+    def handle_request(self, req):
+        """Réponse à une requête TCP (GET = angle, CALIB = calibration forcée)."""
+        if req.upper() == "GET":
+            try:
+                data = json.loads(JSON_OUT.read_text())
+                return f"{data.get('angle', 0.0):.3f}\n".encode()
+            except Exception:
+                return b"ERR\n"
+        if req.upper() == "CALIB":
+            self.force_calib_requested = True
+        return b"OK\n"
 
     # ------------------------------------------------
     # MAIN LOOP
@@ -369,6 +392,7 @@ class EMS22Daemon:
 
                 # ✅ Gestion microswitch avec recalage total_counts
                 angle = self.process_switch(angle)
+                angle = self.apply_pending_forced_calibration(angle)
 
                 self.spi_errors = 0
                 self.publish(angle, raw)

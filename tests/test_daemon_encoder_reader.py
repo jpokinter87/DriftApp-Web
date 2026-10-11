@@ -271,3 +271,41 @@ class TestExceptions:
         """StaleDataError conserve le message."""
         error = StaleDataError("Données périmées (1000ms > 500ms)")
         assert "1000ms" in str(error)
+
+
+# =============================================================================
+# TESTS CALIBRATION FORCÉE (v6.20)
+# =============================================================================
+
+class TestForceCalibration:
+    """force_calibration() demande au démon de se recaler à 45° via son port TCP."""
+
+    def test_sends_calib_and_returns_true_on_ok(self):
+        """Le démon répond OK → True, et la requête envoyée est CALIB."""
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.recv.return_value = b"OK\n"
+        with patch(
+            "core.hardware.daemon_encoder_reader.socket.create_connection", return_value=conn
+        ) as mock_create:
+            assert DaemonEncoderReader().force_calibration() is True
+        assert mock_create.call_args[0][0] == ("127.0.0.1", 5556)
+        conn.sendall.assert_called_once_with(b"CALIB\n")
+
+    def test_returns_false_when_daemon_unreachable(self):
+        """Démon arrêté (connexion refusée) → False, jamais d'exception."""
+        with patch(
+            "core.hardware.daemon_encoder_reader.socket.create_connection",
+            side_effect=ConnectionRefusedError(),
+        ):
+            assert DaemonEncoderReader().force_calibration() is False
+
+    def test_returns_false_on_unexpected_answer(self):
+        """Ancien démon (répond autre chose que OK) → False."""
+        conn = MagicMock()
+        conn.__enter__.return_value = conn
+        conn.recv.return_value = b"ERR\n"
+        with patch(
+            "core.hardware.daemon_encoder_reader.socket.create_connection", return_value=conn
+        ):
+            assert DaemonEncoderReader().force_calibration() is False

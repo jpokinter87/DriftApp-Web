@@ -338,6 +338,23 @@ class TestCalibrateView:
         assert len(response.data["message"]) > 0
 
 
+class TestForceCalibrateView:
+    """v6.20 — POST /api/hardware/calibrate/force/ : calibration forcée à 45°."""
+
+    def test_force_post_writes_command_and_returns_202(self, api_client, mock_ipc):
+        import hardware.views as routed
+        with patch.object(routed.motor_client, "send_command", return_value=True) as mock_send:
+            response = api_client.post("/api/hardware/calibrate/force/")
+        assert response.status_code == 202
+        mock_send.assert_called_once_with('calibrate_force')
+
+    def test_force_post_returns_503_when_motor_client_fails(self, api_client, mock_ipc):
+        import hardware.views as routed
+        with patch.object(routed.motor_client, "send_command", return_value=False):
+            response = api_client.post("/api/hardware/calibrate/force/")
+        assert response.status_code == 503
+
+
 class TestStubRoutes:
     """Routes park, end-session retournent 501 Not Implemented (calibrate livré v6.4)."""
 

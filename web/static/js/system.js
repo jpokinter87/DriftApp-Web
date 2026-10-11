@@ -286,6 +286,7 @@ async function fetchCalibration() {
                 hint_trip: 'Indice + switch',
                 fallback_sweep: 'Balayage ±15°',
                 simulation: 'Simulation',
+                manual_forced: 'Forcée à 45° (opérateur)',
             })[calib.method] || '—';
             if (calib.last_calibration_at) {
                 const ms = Date.parse(calib.last_calibration_at);

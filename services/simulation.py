@@ -68,6 +68,14 @@ class SimulatedDaemonReader:
         """Retourne le statut complet simulé."""
         return self.read_raw()
 
+    def force_calibration(self) -> bool:
+        """Calibration forcée simulée : la position simulée est recalée à 45°."""
+        from core.hardware.calibration_routine import SWITCH_CALIB_ANGLE
+        from core.hardware.moteur_simule import set_simulated_position
+
+        set_simulated_position(SWITCH_CALIB_ANGLE)
+        return True
+
     def read_fast(self, num_samples: int = 2, delay_ms: int = 10) -> float:
         """
         Lecture rapide simulee sans pause de stabilisation.

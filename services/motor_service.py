@@ -25,7 +25,7 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -473,6 +473,34 @@ class MotorService:
             f"error_msg={result.error_msg}"
         )
 
+    def _force_calibration(self) -> None:
+        """Calibration forcée : la coupole est déclarée à 45° sans sweep (v6.20).
+
+        Pour l'opérateur à distance qui a placé la coupole à 45° à vue (caméra)
+        quand le microswitch ne détecte plus : le démon encodeur est recalé
+        comme si le switch avait basculé, et la bannière se lève.
+        """
+        if self.tracking_handler.is_active:
+            logger.warning("forced_calibration | refusée : suivi actif")
+            return
+
+        accepted = self.daemon_reader.force_calibration()
+        with self.status_lock:
+            calib = self.current_status["calibration"]
+            if accepted:
+                calib["status"] = "ok"
+                calib["method"] = "manual_forced"
+                calib["last_calibration_at"] = datetime.now(timezone.utc).isoformat(
+                    timespec="seconds"
+                )
+                calib["error_msg"] = None
+                calib["duration_sec"] = 0.0
+                logger.info("forced_calibration | coupole déclarée à 45° par l'opérateur")
+            else:
+                calib["error_msg"] = "force_failed: démon encodeur injoignable"
+                logger.error("forced_calibration | échec : démon encodeur injoignable")
+        self._write_status()
+
     def _run_boot_calibration(self):
         """Exécute la routine de calibration au boot avant d'accepter des commandes."""
         self._execute_calibration_routine(trigger_label="boot_calibration")
@@ -643,6 +671,10 @@ class MotorService:
         elif cmd_type == "calibrate":
             logger.info("ipc_command | type=calibrate")
             self._execute_calibration_routine(trigger_label="manual_calibration")
+
+        elif cmd_type == "calibrate_force":
+            logger.info("ipc_command | type=calibrate_force")
+            self._force_calibration()
 
         elif cmd_type == "status":
             pass  # Juste mettre à jour

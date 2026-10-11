@@ -495,6 +495,55 @@ class TestLiveRecalibration:
         assert motor_service.current_status['calibration']['status'] == 'degraded'
 
 
+class TestForcedCalibrationCommand:
+    """v6.20 : calibration forcée — l'opérateur a placé la coupole à 45° à vue
+    (caméra) quand le microswitch ne détecte plus. Pas de sweep, pas de
+    mouvement : le démon encodeur est recalé à 45° et la bannière se lève.
+    """
+
+    def _set_calib_status(self, motor_service, status):
+        motor_service.current_status['calibration'] = {
+            'status': status,
+            'method': 'sweep',
+            'last_calibration_at': None,
+            'error_msg': 'switch_not_found',
+            'duration_sec': 180.0,
+        }
+
+    def test_success_marks_calibration_ok_forced(self, motor_service):
+        self._set_calib_status(motor_service, 'degraded')
+        with patch.object(
+            motor_service.daemon_reader, 'force_calibration', return_value=True
+        ) as mock_force, patch.object(motor_service.moteur, 'rotation') as mock_rot:
+            motor_service.process_command({'command': 'calibrate_force'})
+        mock_force.assert_called_once()
+        mock_rot.assert_not_called()
+        cal = motor_service.current_status['calibration']
+        assert cal['status'] == 'ok'
+        assert cal['method'] == 'manual_forced'
+        assert cal['error_msg'] is None
+        assert cal['last_calibration_at'] is not None
+
+    def test_daemon_failure_keeps_status_and_reports(self, motor_service):
+        self._set_calib_status(motor_service, 'degraded')
+        with patch.object(motor_service.daemon_reader, 'force_calibration', return_value=False):
+            motor_service.process_command({'command': 'calibrate_force'})
+        cal = motor_service.current_status['calibration']
+        assert cal['status'] == 'degraded'
+        assert 'force' in cal['error_msg']
+
+    def test_refused_while_tracking_active(self, motor_service):
+        """Pendant un suivi, la coupole n'est pas au parking : refus."""
+        self._set_calib_status(motor_service, 'degraded')
+        with patch.object(
+            type(motor_service.tracking_handler), 'is_active',
+            new_callable=lambda: property(lambda self: True),
+        ), patch.object(motor_service.daemon_reader, 'force_calibration') as mock_force:
+            motor_service.process_command({'command': 'calibrate_force'})
+        mock_force.assert_not_called()
+        assert motor_service.current_status['calibration']['status'] == 'degraded'
+
+
 class TestLogVitessesAuDemarrage:
     """v6.18.1 : les vitesses retenues sont lisibles dans le log, sans SSH.
 

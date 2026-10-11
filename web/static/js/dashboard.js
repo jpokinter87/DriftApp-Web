@@ -135,6 +135,7 @@ document.addEventListener('alpine:init', () => {
             duration_sec: null,
         },
         calibrationRequestInFlight: false,         // anti-double-clic POST /calibrate/
+        forceCalibConfirmVisible: false,           // modale « Forcer la calibration à 45° » (v6.20)
         // Logs (reactive array)
         logs: [],
 
@@ -262,7 +263,8 @@ let state = {
     trackingInfo: {},  // Pour position_cible, etc.
     gotoInfo: null,    // Pour la modal GOTO
     encoderFrozenLogged: false,  // Pour éviter de logger l'alerte plusieurs fois
-    lastSeenCalibrationAt: undefined  // Baseline ts recalage switch 45° (v6.7.1)
+    lastSeenCalibrationAt: undefined,  // Baseline ts recalage switch 45° (v6.7.1)
+    forcedCalibrationPending: false    // Recalage attendu = calibration forcée (v6.20)
 };
 
 // Countdown timer (Correction 1)
@@ -636,6 +638,35 @@ async function requestCalibration() {
     }
 }
 window.requestCalibration = requestCalibration;
+
+// v6.20 — calibration forcée : l'opérateur certifie que la coupole est à 45°
+// (placée à vue, caméra) quand le microswitch ne détecte plus. Aucun mouvement.
+async function requestForcedCalibration() {
+    const store = Alpine.store('dashboard');
+    store.forceCalibConfirmVisible = false;
+    if (store.calibrationRequestInFlight) return;
+    store.calibrationRequestInFlight = true;
+    state.forcedCalibrationPending = true;
+    log('Calibration forcée à 45° demandée…', 'info');
+    try {
+        const response = await fetch('/api/hardware/calibrate/force/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        if (!response.ok) {
+            const txt = await response.text();
+            log(`Erreur calibration forcée : ${response.status} ${txt}`, 'error');
+            state.forcedCalibrationPending = false;
+        }
+    } catch (err) {
+        log(`Erreur réseau calibration forcée : ${err.message}`, 'error');
+        state.forcedCalibrationPending = false;
+    } finally {
+        store.calibrationRequestInFlight = false;
+    }
+}
+window.requestForcedCalibration = requestForcedCalibration;
 
 // =========================================================================
 // Actions
@@ -1704,7 +1735,12 @@ async function updateStatus() {
             state.lastSeenCalibrationAt = recalTs;  // baseline silencieuse
         } else if (recalTs !== state.lastSeenCalibrationAt) {
             state.lastSeenCalibrationAt = recalTs;
-            log('✓ Microswitch 45° atteint — coupole recalée à 45,00°', 'success');
+            if (state.forcedCalibrationPending) {
+                state.forcedCalibrationPending = false;
+                log('✓ Calibration forcée — coupole déclarée à 45,00°', 'success');
+            } else {
+                log('✓ Microswitch 45° atteint — coupole recalée à 45,00°', 'success');
+            }
             flashEncoderCartouche();
         }
     }

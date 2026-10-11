@@ -11,12 +11,15 @@ import fcntl
 import json
 import logging
 import math
+import socket
 import threading
 import time
 from pathlib import Path
 from typing import Optional
 
 DAEMON_JSON = Path("/dev/shm/ems22_position.json")
+# Port TCP local du démon (cf. ems22d_calibrated.TCP_PORT)
+DAEMON_TCP = ("127.0.0.1", 5556)
 
 
 class StaleDataError(RuntimeError):
@@ -230,6 +233,24 @@ class DaemonEncoderReader:
         sin_sum = sum(math.sin(math.radians(p)) for p in positions)
         cos_sum = sum(math.cos(math.radians(p)) for p in positions)
         return math.degrees(math.atan2(sin_sum, cos_sum)) % 360
+
+    def force_calibration(self) -> bool:
+        """Demande au démon de se recaler à 45° sans passer par le microswitch.
+
+        Pour l'opérateur qui a placé la coupole à 45° à vue quand le rupteur ne
+        détecte plus (v6.20). Retourne True si le démon a acquitté la demande.
+        """
+        try:
+            with socket.create_connection(DAEMON_TCP, timeout=2.0) as conn:
+                conn.sendall(b"CALIB\n")
+                answer = conn.recv(16)
+        except OSError as e:
+            self.logger.error(f"force_calibration | démon injoignable: {e}")
+            return False
+        if answer.strip() != b"OK":
+            self.logger.error(f"force_calibration | réponse inattendue du démon: {answer!r}")
+            return False
+        return True
 
 
 # =============================================================================

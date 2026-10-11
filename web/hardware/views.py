@@ -285,6 +285,28 @@ class CalibrateView(APIView):
         )
 
 
+class ForceCalibrateView(APIView):
+    """POST /api/hardware/calibrate/force/
+
+    Calibration forcée (v6.20) : l'opérateur certifie que la coupole est à 45°
+    (placée à vue, caméra) quand le microswitch ne détecte plus. Aucun
+    mouvement : le démon encodeur est recalé à 45° par le motor_service.
+    """
+
+    def post(self, request):
+        success = motor_client.send_command('calibrate_force')
+
+        if success:
+            return Response(
+                {'message': 'Calibration forcée à 45° demandée'},
+                status=status.HTTP_202_ACCEPTED
+            )
+        return Response(
+            {'error': 'Impossible de communiquer avec Motor Service'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+
 class EndSessionView(APIView):
     """POST /api/hardware/end-session/ — À implémenter."""
 
