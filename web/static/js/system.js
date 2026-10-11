@@ -282,11 +282,13 @@ async function fetchCalibration() {
                 running: 'text-accent-amber-light animate-pulse',
                 simulated: 'text-obs-text-muted',
             })[status] || 'text-accent-red';
+            // Noms émis par calibration_routine.py et motor_service.py.
             store.calibration.methodLabel = ({
-                hint_trip: 'Indice + switch',
-                fallback_sweep: 'Balayage ±15°',
-                simulation: 'Simulation',
+                sweep: 'Balayage (microswitch 45°)',
+                live_switch: 'Passage manuel sur le microswitch',
                 manual_forced: 'Forcée à 45° (opérateur)',
+                skipped_simulation: 'Simulation',
+                exception: 'Erreur',
             })[calib.method] || '—';
             if (calib.last_calibration_at) {
                 const ms = Date.parse(calib.last_calibration_at);

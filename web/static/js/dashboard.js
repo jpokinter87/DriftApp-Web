@@ -129,7 +129,7 @@ document.addEventListener('alpine:init', () => {
         // Calibration coupole (v6.4 Phase 3 Plan 02) — surface IPC motor_status.calibration
         calibration: {
             status: 'unknown',          // 'unknown' | 'running' | 'ok' | 'degraded' | 'simulated' | 'exception'
-            method: null,               // 'hint_trip' | 'fallback_sweep' | 'simulation' | null
+            method: null,               // 'sweep' | 'live_switch' | 'manual_forced' | 'skipped_simulation' | 'exception' | null
             last_calibration_at: null,  // ISO 8601 UTC ou null
             error_msg: null,
             duration_sec: null,
