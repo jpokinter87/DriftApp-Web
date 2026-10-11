@@ -3125,3 +3125,90 @@ class TestServiceLogHandlers:
         handlers = cimier_service._build_log_handlers()
 
         assert len(handlers) == 1
+
+
+class TestAutomationCloseRetryEndToEnd:
+    """Terrain 11/10/2026 : Shelly injoignable au moment de la fermeture de fin
+    de nuit → cimier resté ouvert jusqu'au matin. Le scheduler renvoie l'ordre
+    tant que le cimier n'est pas confirmé fermé ; dès que le Shelly revient, le
+    cimier se ferme.
+    """
+
+    def test_close_retried_until_shelly_back_then_stops(
+        self, ipc_manager: RecordingIpcManager, tmp_path: Path
+    ) -> None:
+        from datetime import datetime, timedelta, timezone
+
+        from core.config.config_loader import CimierAutomationConfig, SiteConfig
+        from services.cimier_scheduler import CimierScheduler
+
+        service, _ps, mech, _motor = _build_e2e_service(
+            initial_state="open", ipc_manager=ipc_manager
+        )
+
+        class FlakyReader(MechanismFakeSwitchReader):
+            offline = False
+
+            def read(self) -> SwitchState:
+                if self.offline:
+                    raise SwitchReaderError("Shelly Uni+ injoignable")
+                return super().read()
+
+        reader = FlakyReader(mech)
+        service._switch_reader = reader
+
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps({"cimier": {"automation": {"mode": "semi"}}}))
+        service._config_path = config_path
+
+        now = [datetime(2026, 10, 11, 5, 0, tzinfo=timezone.utc)]
+
+        class Motor:
+            def send_tracking_stop(self):
+                return True
+
+            def wait_tracking_stopped(self, timeout_s=None):
+                return True
+
+            def send_goto(self, angle):
+                return True
+
+        service._scheduler = CimierScheduler(
+            automation_config=CimierAutomationConfig(mode="semi"),
+            site_config=SiteConfig(
+                latitude=44.15, longitude=5.23, altitude=800.0, nom="T", fuseau="Europe/Paris"
+            ),
+            weather_provider=None,
+            cimier_ipc=ipc_manager,
+            motor_ipc=Motor(),
+            clock=lambda: now[0],
+            sun_altitude_fn=lambda *a, **kw: -5.0,  # fenêtre de fermeture atteinte
+            sun_direction_fn=lambda *a, **kw: "rising",
+        )
+
+        # Le service connaît le cimier ouvert (butées lues lors d'un précédent cycle).
+        service.execute_command({"id": "init", "action": "open"})
+        assert service._derive_current_cimier_state() == "open"
+
+        def tick_after(minutes: float) -> None:
+            now[0] += timedelta(minutes=minutes)
+            service._clock.advance(minutes * 60)
+            service.tick()
+
+        # Fin de nuit : le Shelly ne répond plus → la fermeture échoue.
+        reader.offline = True
+        service.tick()
+        assert mech.open_switch is True
+        tick_after(5)  # 1er renvoi, toujours injoignable
+        assert mech.open_switch is True
+
+        # Le Shelly revient : le renvoi suivant ferme le cimier.
+        reader.offline = False
+        tick_after(5)
+        assert mech.closed_switch is True
+
+        # Confirmé fermé : plus aucun renvoi.
+        reads_before = reader.read_count
+        tick_after(5)
+        tick_after(5)
+        assert reader.read_count == reads_before

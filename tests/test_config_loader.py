@@ -594,6 +594,17 @@ class TestCimierConfig:
         config = ConfigLoader(config_file).load()
         assert config.cimier.cycle_poll_interval_s == 0.1
 
+    def test_cimier_parse_close_retry_interval(self, tmp_path, sample_config_dict):
+        """close_retry_interval_minutes est lu (défaut 5 si absent)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"automation": {"close_retry_interval_minutes": 3}}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        assert ConfigLoader(config_file).load().cimier.automation.close_retry_interval_minutes == 3
+        cfg["cimier"] = {"automation": {}}
+        config_file.write_text(json.dumps(cfg))
+        assert ConfigLoader(config_file).load().cimier.automation.close_retry_interval_minutes == 5
+
 
 @pytest.mark.parametrize("invalid", [-1.0, 0.0, 0])
 def test_cimier_config_rejects_cycle_timeout_zero_or_negative(invalid):

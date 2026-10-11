@@ -755,3 +755,90 @@ class TestRefreshModeFromConfig:
         changed = sched.refresh_mode_from_config(config_file)
         assert changed is True
         assert sched._cfg.mode == "manual"
+
+
+# ----------------------------------------------------------------------
+# Retry de la fermeture automatique (v6.21 — terrain 11/10/2026 : cimier
+# resté ouvert au matin, Shelly injoignable au moment de la fermeture)
+# ----------------------------------------------------------------------
+
+
+class TestCloseRetry:
+    """La fermeture auto est renvoyée tant que le cimier n'est pas confirmé fermé."""
+
+    def _sched_after_close(self, **overrides):
+        """Scheduler dont la fermeture de fin de nuit vient d'être déclenchée."""
+        now = [datetime(2026, 10, 11, 5, 0, tzinfo=timezone.utc)]
+        alt_values = iter([-10.0, -5.0])
+        sched = CimierScheduler(
+            automation_config=_automation(close_retry_interval_minutes=5, **overrides),
+            site_config=_site(),
+            weather_provider=FakeWeatherProvider(),
+            cimier_ipc=FakeCimierIpc(),
+            motor_ipc=FakeMotorIpc(),
+            clock=lambda: now[0],
+            sun_altitude_fn=lambda *a, **kw: next(alt_values, -5.0),
+            sun_direction_fn=lambda *a, **kw: "rising",
+        )
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+        return sched, now
+
+    def test_close_resent_after_interval_when_still_open(self):
+        sched, now = self._sched_after_close()
+        now[0] += timedelta(minutes=5)
+        decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert decision.trigger == "close_retry"
+        commands = sched._cimier_ipc.commands
+        assert [c["action"] for c in commands] == ["close", "close"]
+        assert commands[0]["id"] != commands[1]["id"]
+        # Seul le cimier est relancé : la coupole est déjà au parking.
+        assert sched._motor_ipc.calls == [("tracking_stop",), ("goto", 45.0)]
+
+    def test_retry_also_when_state_unknown(self):
+        """Cycle interrompu (cimier entrouvert, aucune butée) → on réessaie aussi."""
+        sched, now = self._sched_after_close()
+        now[0] += timedelta(minutes=5)
+        assert sched.maybe_trigger("unknown").trigger == "close_retry"
+
+    def test_no_retry_before_interval(self):
+        sched, now = self._sched_after_close()
+        now[0] += timedelta(minutes=4)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_retry"
+        assert len(sched._cimier_ipc.commands) == 1
+
+    def test_no_retry_during_cimier_cooldown(self):
+        """Pendant le repos post-cycle, une commande serait jetée (mode Drop)."""
+        sched, now = self._sched_after_close()
+        now[0] += timedelta(minutes=5)
+        assert sched.maybe_trigger("cooldown").trigger != "close_retry"
+        assert len(sched._cimier_ipc.commands) == 1
+
+    def test_confirmed_closed_stops_retries(self):
+        sched, now = self._sched_after_close()
+        now[0] += timedelta(minutes=5)
+        sched.maybe_trigger(CIMIER_STATE_CLOSED)
+        now[0] += timedelta(minutes=10)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_retry"
+        assert len(sched._cimier_ipc.commands) == 1
+
+    def test_retries_repeat_every_interval(self):
+        sched, now = self._sched_after_close()
+        for _ in range(3):
+            now[0] += timedelta(minutes=5)
+            assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_retry"
+        assert len(sched._cimier_ipc.commands) == 4
+
+    def test_gives_up_after_retrigger_window(self):
+        sched, now = self._sched_after_close(retrigger_cooldown_hours=1)
+        now[0] += timedelta(minutes=61)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_retry"
+
+    def test_switch_to_manual_cancels_retries(self):
+        sched, now = self._sched_after_close()
+        sched._cfg.mode = "manual"
+        now[0] += timedelta(minutes=5)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "skip:disabled"
+        sched._cfg.mode = "semi"
+        now[0] += timedelta(minutes=5)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_retry"
+        assert len(sched._cimier_ipc.commands) == 1

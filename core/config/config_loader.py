@@ -290,6 +290,11 @@ class CimierAutomationConfig:
     la fermeture cimier). Aussi consommé par l'endpoint manuel
     `POST /api/cimier/parking-session/`.
 
+    `close_retry_interval_minutes` : tant que le cimier n'est pas confirmé
+    fermé après la fermeture de fin de nuit, l'ordre est renvoyé à cette
+    cadence (Shelly injoignable au moment de fermer — terrain 11/10/2026),
+    au plus pendant `retrigger_cooldown_hours`.
+
     `retrigger_cooldown_hours` : idempotence intra-jour. Au reboot, l'état est
     perdu (mémoire seulement) → re-trigger si les conditions sont toujours
     remplies (état désiré, pas event-driven).
@@ -308,6 +313,7 @@ class CimierAutomationConfig:
     deparking_nudge_deg: float = 1.0
     scheduler_interval_seconds: int = 60
     retrigger_cooldown_hours: int = 12
+    close_retry_interval_minutes: int = 5
 
 
 @dataclass
@@ -734,6 +740,11 @@ class ConfigLoader:
                 ),
                 retrigger_cooldown_hours=int(
                     au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)
+                ),
+                close_retry_interval_minutes=int(
+                    au.get(
+                        "close_retry_interval_minutes", au_defaults.close_retry_interval_minutes
+                    )
                 ),
             ),
             motor_shelly=self._build_motor_shelly_config(ms, ms_defaults),

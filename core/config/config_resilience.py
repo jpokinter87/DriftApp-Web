@@ -341,6 +341,11 @@ HELP_REGISTRY: dict[str, str] = {
         "Délai minimal (heures) avant de pouvoir redéclencher la même action "
         "automatique (anti-rebond jour/nuit)."
     ),
+    "cimier.automation.close_retry_interval_minutes": (
+        "Si le cimier n'est pas confirmé fermé après la fermeture automatique de fin "
+        "de nuit (Shelly injoignable…), l'ordre de fermeture est renvoyé toutes les N "
+        "minutes, au plus pendant retrigger_cooldown_hours."
+    ),
     # cimier.motor_shelly (moteur ON/OFF + sens via DPDT)
     "cimier.motor_shelly.host_motor": (
         "Hôte/IP du Shelly MOT (ON/OFF du moteur cimier). Vide → moteur factice (non déployé)."

@@ -18,6 +18,12 @@ Polling 60 s : compute sun_alt(now) + sun_alt(now-60s) → détecte rising/desce
                   du parking coupole, sans attendre)
 
 Idempotence intra-jour : after a trigger, ignore re-triggers for retrigger_cooldown_hours.
+
+Retry fermeture (terrain 11/10/2026) : si un Shelly est injoignable au moment
+de fermer, le cycle échoue et rien ne le relançait avant le lendemain. Tant que
+le cimier n'est pas confirmé fermé, l'ordre ``close`` (cimier seul, la coupole
+est déjà au parking) est renvoyé toutes les ``close_retry_interval_minutes``,
+au plus pendant ``retrigger_cooldown_hours``. Le passage en mode manuel annule.
 État désiré (pas event-driven) : au reboot, mémoire perdue → re-trigger si
 conditions toujours remplies (volontaire — protection coupole).
 
@@ -95,6 +101,10 @@ class CimierScheduler:
         self._sun_direction_fn = sun_direction_fn
         self._last_open_trigger_ts: Optional[datetime] = None
         self._last_close_trigger_ts: Optional[datetime] = None
+        # Fermeture auto en attente de confirmation (retry, cf. docstring module).
+        self._close_pending_since: Optional[datetime] = None
+        self._last_close_attempt_ts: Optional[datetime] = None
+        self._close_retry_count = 0
 
     def refresh_mode_from_config(self, config_path: Path) -> bool:
         """Hot-reload du mode auto depuis data/config.json.
@@ -158,7 +168,11 @@ class CimierScheduler:
         """
         now = self._clock()
         if self._cfg.mode == "manual":
+            self._close_pending_since = None
             return SchedulerDecision("skip:disabled", float("nan"), "flat", now)
+
+        if self._maybe_retry_close(current_cimier_state, now):
+            return SchedulerDecision("close_retry", float("nan"), "flat", now)
 
         before = now - timedelta(seconds=60)
         try:
@@ -395,6 +409,50 @@ class CimierScheduler:
             "cimier_event=automation_close_triggered cimier_cmd_id=%s",
             cimier_cmd_id,
         )
+        now = self._clock()
+        self._close_pending_since = now
+        self._last_close_attempt_ts = now
+        self._close_retry_count = 0
+
+    def _maybe_retry_close(self, current_cimier_state: str, now: datetime) -> bool:
+        """Renvoie l'ordre ``close`` si la fermeture auto n'est pas confirmée.
+
+        Retourne True si un ordre a été renvoyé.
+        """
+        if self._close_pending_since is None:
+            return False
+        if current_cimier_state == CIMIER_STATE_CLOSED:
+            logger.info(
+                "cimier_event=automation_close_confirmed retries=%d", self._close_retry_count
+            )
+            self._close_pending_since = None
+            return False
+        if not self._is_in_cooldown(self._close_pending_since, now):
+            logger.error(
+                "cimier_event=automation_close_gave_up retries=%d cimier_state=%s",
+                self._close_retry_count,
+                current_cimier_state,
+            )
+            self._close_pending_since = None
+            return False
+        # Repos post-cycle de cimier_service : la commande y serait jetée (mode Drop).
+        if current_cimier_state == CIMIER_STATE_COOLDOWN:
+            return False
+        elapsed = (now - self._last_close_attempt_ts).total_seconds()
+        if elapsed < self._cfg.close_retry_interval_minutes * 60:
+            return False
+
+        cimier_cmd_id = str(uuid.uuid4())
+        self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"})
+        self._last_close_attempt_ts = now
+        self._close_retry_count += 1
+        logger.warning(
+            "cimier_event=automation_close_retry attempt=%d cimier_state=%s cimier_cmd_id=%s",
+            self._close_retry_count,
+            current_cimier_state,
+            cimier_cmd_id,
+        )
+        return True
 
     # ------------------------------------------------------------------
     # Helpers
