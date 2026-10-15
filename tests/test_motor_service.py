@@ -10,7 +10,10 @@ Note: Ces tests necessitent astropy (via core.tracking.tracker).
 Ils sont automatiquement ignores si astropy n'est pas installe.
 """
 
+import json
 import logging
+import threading
+import time
 from unittest.mock import patch
 
 import pytest
@@ -569,3 +572,63 @@ class TestLogVitessesAuDemarrage:
                 MotorService()
 
         assert "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0 ramp_time_s=2.0 accel=4545" in caplog.text
+
+
+# =============================================================================
+# STOP PENDANT UN MOUVEMENT BLOQUANT
+# =============================================================================
+
+class TestStopPendantMouvementBloquant:
+    """GOTO et JOG s'exécutent dans la boucle principale : sans veilleur, le
+    STOP envoyé pendant le mouvement n'était lu qu'à la fin, puis effacé par
+    clear_command() (revue du 15/10/2026)."""
+
+    DUREE_ROTATION_S = 5.0
+
+    @pytest.fixture
+    def service(self, mock_hardware_info, tmp_path):
+        with patch('services.motor_service.HardwareDetector.detect_hardware',
+                   return_value=(False, mock_hardware_info)), \
+             patch('services.motor_service.HardwareDetector.get_hardware_summary',
+                   return_value='Test'), \
+             patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
+             patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
+             patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+            from services.motor_service import MotorService
+            service = MotorService()
+            moteur = service.moteur
+
+            def rotation_lente(*_args, **_kwargs):
+                # Comme les vrais moteurs : le drapeau est effacé au départ
+                moteur.clear_stop_request()
+                fin = time.monotonic() + self.DUREE_ROTATION_S
+                while time.monotonic() < fin and not moteur.stop_requested:
+                    time.sleep(0.01)
+
+            moteur.rotation = rotation_lente
+            service.running = True
+            service._start_stop_watcher_thread()
+            yield service, tmp_path / 'command.json'
+            service.running = False
+
+    @staticmethod
+    def _ecrire(cmd_file, commande):
+        cmd_file.write_text(json.dumps(commande))
+
+    @pytest.mark.parametrize("commande", [
+        {"id": "goto-1", "command": "goto", "angle": 180.0},
+        {"id": "jog-1", "command": "jog", "delta": 90.0},
+    ])
+    def test_stop_interrompt_le_mouvement_et_reste_a_traiter(self, service, commande):
+        service, cmd_file = service
+        self._ecrire(cmd_file, commande)
+        cmd = service.ipc.read_command()
+        threading.Timer(
+            0.3, self._ecrire, (cmd_file, {"id": "stop-1", "command": "stop"})
+        ).start()
+
+        debut = time.monotonic()
+        service.process_command(cmd)
+
+        assert time.monotonic() - debut < 2.0
+        assert service.ipc.read_command()["id"] == "stop-1"

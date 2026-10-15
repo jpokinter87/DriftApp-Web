@@ -395,6 +395,33 @@ class MotorService:
         self._watchdog_thread.start()
         logger.info("Thread watchdog démarré (heartbeat indépendant)")
 
+    def _start_stop_watcher_thread(self):
+        """
+        Démarre le veilleur STOP.
+
+        GOTO, JOG, calibration et corrections de suivi bloquent la boucle
+        principale : sans ce thread, un STOP envoyé pendant le mouvement n'était
+        lu qu'à la fin. Le veilleur lit la commande sans la consommer et arrête
+        le moteur ; la boucle principale traite ensuite le STOP (handle_stop).
+        Il réarme l'arrêt si un mouvement suivant a effacé le drapeau avant
+        que la boucle ait pu traiter le STOP.
+        """
+
+        def _stop_watcher_loop():
+            while self.running:
+                command = self.ipc.peek_command()
+                if (
+                    command is not None
+                    and command.get("command", command.get("type")) == "stop"
+                    and not self.moteur.stop_requested
+                ):
+                    logger.info(f"stop_watcher | id={command.get('id')} → arrêt moteur")
+                    self.feedback_controller.request_stop()
+                    self.moteur.request_stop()
+                time.sleep(0.05)
+
+        threading.Thread(target=_stop_watcher_loop, daemon=True, name="stop-watcher").start()
+
     def _create_initial_status(self) -> Dict[str, Any]:
         """Crée l'état initial."""
         return {
@@ -709,6 +736,7 @@ class MotorService:
         # AVANT la routine de calibration : la routine peut durer 60-180s et
         # bloquerait le heartbeat sinon (kill systemd).
         self._start_watchdog_thread()
+        self._start_stop_watcher_thread()
 
         # === Routine de calibration au boot (v6.4 Phase 2) ===
         self._run_boot_calibration()

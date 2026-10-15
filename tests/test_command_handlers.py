@@ -34,6 +34,7 @@ def mock_moteur():
     moteur.rotation = MagicMock()
     moteur.clear_stop_request = MagicMock()
     moteur.request_stop = MagicMock()
+    moteur.stop_requested = False
     return moteur
 
 
@@ -128,6 +129,21 @@ class TestGotoHandler:
             simulation_mode=True,
             status_callback=status_callback
         )
+
+    def test_stop_pendant_rotation_directe_annule_la_correction_finale(
+        self, handler, mock_moteur, mock_feedback_controller
+    ):
+        """Un STOP reçu pendant la rotation directe ne relance pas le moteur."""
+
+        def rotation_interrompue(*_args, **_kwargs):
+            mock_moteur.stop_requested = True
+
+        mock_moteur.rotation.side_effect = rotation_interrompue
+
+        status = handler.execute(180.0, {"position": 45.0})
+
+        mock_feedback_controller.rotation_avec_feedback.assert_not_called()
+        assert status["status"] == "idle"
 
     def test_get_motor_speed_default(self, handler, mock_config):
         """Utilise la vitesse unique v5.10 (260 µs) par défaut."""

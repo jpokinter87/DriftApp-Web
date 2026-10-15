@@ -66,15 +66,15 @@ class IpcManager:
         except (IOError, OSError) as e:
             logger.error(f"Erreur fichier commande IPC: {e}")
 
-    def read_command(self) -> Optional[Dict[str, Any]]:
+    def _load_command(self) -> Optional[Dict[str, Any]]:
         """
-        Lit une commande depuis le fichier IPC.
+        Lit le contenu du fichier de commande, sans rien consommer.
 
         Utilise un verrou partagé (LOCK_SH) pour éviter de lire
         pendant une écriture en cours par Django.
 
         Returns:
-            dict: Commande à exécuter ou None si aucune nouvelle commande
+            dict: Commande présente dans le fichier, ou None (vide, verrouillé, illisible)
         """
         if not COMMAND_FILE.exists():
             return None
@@ -91,18 +91,7 @@ class IpcManager:
             if not text.strip():
                 return None
 
-            command = json.loads(text)
-
-            # Vérifier si c'est une nouvelle commande
-            cmd_id = command.get("id")
-            if cmd_id is None:
-                logger.warning(f"Commande reçue sans ID, ignorée: {command.get('type', 'unknown')}")
-                return None
-            if cmd_id == self.last_command_id:
-                return None
-
-            self.last_command_id = cmd_id
-            return command
+            return json.loads(text)
 
         except BlockingIOError:
             # Fichier verrouillé en écriture, réessayer plus tard
@@ -110,6 +99,38 @@ class IpcManager:
         except (json.JSONDecodeError, IOError, OSError) as e:
             logger.warning(f"Erreur lecture commande: {e}")
             return None
+
+    def read_command(self) -> Optional[Dict[str, Any]]:
+        """
+        Lit une commande depuis le fichier IPC.
+
+        Returns:
+            dict: Commande à exécuter ou None si aucune nouvelle commande
+        """
+        command = self.peek_command()
+        if command is not None:
+            self.last_command_id = command["id"]
+        return command
+
+    def peek_command(self) -> Optional[Dict[str, Any]]:
+        """
+        Retourne la commande en attente sans la consommer (veilleur STOP).
+
+        Returns:
+            dict: Commande pas encore lue par read_command(), ou None
+        """
+        command = self._load_command()
+        if command is None:
+            return None
+
+        # Vérifier si c'est une nouvelle commande
+        cmd_id = command.get("id")
+        if cmd_id is None:
+            logger.warning(f"Commande reçue sans ID, ignorée: {command.get('type', 'unknown')}")
+            return None
+        if cmd_id == self.last_command_id:
+            return None
+        return command
 
     def write_status(self, status: Dict[str, Any]):
         """
@@ -147,8 +168,14 @@ class IpcManager:
         """
         Efface le fichier de commande après traitement.
 
+        Une commande arrivée pendant le traitement (STOP pendant un GOTO)
+        n'est pas effacée : elle sera lue au tour suivant.
+
         Utilise un verrou exclusif pour éviter les conflits.
         """
+        pending = self._load_command()
+        if pending is not None and pending.get("id") not in (None, self.last_command_id):
+            return
         try:
             if COMMAND_FILE.exists():
                 with open(COMMAND_FILE, "w") as f:

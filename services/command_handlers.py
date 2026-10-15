@@ -208,7 +208,12 @@ class GotoHandler:
 
         # 2. Correction finale avec feedback
         tolerance = self.config.thresholds.default_tolerance_deg
-        if self.daemon_reader.is_available():
+        if self.moteur.stop_requested:
+            # STOP reçu pendant la rotation : ne pas relancer le moteur
+            logger.info("GOTO interrompu par STOP, pas de correction finale")
+            if self.daemon_reader.is_available():
+                status["position"] = self.daemon_reader.read_angle(timeout_ms=200)
+        elif self.daemon_reader.is_available():
             pos_apres_rotation = self.daemon_reader.read_angle(timeout_ms=200)
             erreur = shortest_angular_distance(pos_apres_rotation, angle)
 

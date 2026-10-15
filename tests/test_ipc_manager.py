@@ -186,6 +186,30 @@ class TestClearCommand:
 
             assert cmd_file.read_text() == ''
 
+    def test_clear_command_preserve_une_commande_arrivee_entre_temps(
+        self, ipc_manager, tmp_path
+    ):
+        """Un STOP écrit pendant l'exécution d'un GOTO n'est pas effacé."""
+        cmd_file = tmp_path / 'command.json'
+
+        with patch('services.ipc_manager.COMMAND_FILE', cmd_file):
+            cmd_file.write_text('{"id": "goto-1", "command": "goto", "angle": 180}')
+            assert ipc_manager.read_command()["id"] == "goto-1"
+            cmd_file.write_text('{"id": "stop-1", "command": "stop"}')
+
+            ipc_manager.clear_command()
+
+            assert ipc_manager.read_command()["id"] == "stop-1"
+
+    def test_peek_command_ne_consomme_pas(self, ipc_manager, tmp_path):
+        cmd_file = tmp_path / 'command.json'
+
+        with patch('services.ipc_manager.COMMAND_FILE', cmd_file):
+            cmd_file.write_text('{"id": "stop-1", "command": "stop"}')
+
+            assert ipc_manager.peek_command()["id"] == "stop-1"
+            assert ipc_manager.read_command()["id"] == "stop-1"
+
     def test_clear_command_no_file(self, ipc_manager, tmp_path):
         """Pas d'erreur si le fichier n'existe pas."""
         with patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'nonexistent.json'):
