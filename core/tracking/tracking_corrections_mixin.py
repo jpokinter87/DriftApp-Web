@@ -39,6 +39,11 @@ class TrackingCorrectionsMixin:
     # au lieu d'être bloqués par la protection anti-mouvement anormal
     LARGE_MOVEMENT_THRESHOLD = 15.0
 
+    # Écart maximal entre la position atteinte et la cible absorbé dans
+    # encoder_offset. Au-delà, le mouvement n'est pas allé au bout (firmware,
+    # timeout, blocage) : l'absorber dépointerait toute la suite du suivi.
+    MAX_OFFSET_ABSORBE_DEG = 5.0
+
     # Seuil d'erreur acceptable même avec timeout (en degrés)
     # Si erreur < ce seuil, ne pas compter comme échec même si timeout atteint
     # Évite l'arrêt automatique lors de grands déplacements post-méridien
@@ -368,7 +373,19 @@ class TrackingCorrectionsMixin:
             from core.hardware.daemon_encoder_reader import get_daemon_reader
             real_position = get_daemon_reader().read_angle()
             old_offset = self.encoder_offset
-            self.encoder_offset = position_cible_logique - real_position
+            new_offset = position_cible_logique - real_position
+            ecart = shortest_angular_distance(old_offset, new_offset)
+            if abs(ecart) > self.MAX_OFFSET_ABSORBE_DEG:
+                self.logger.error(
+                    f"resync_refused | mouvement inachevé : encodeur={real_position:.1f}° "
+                    f"logique={position_cible_logique:.1f}° ecart={ecart:+.1f}° "
+                    f"→ offset conservé {old_offset:.1f}°"
+                )
+                # Position réellement atteinte : la correction suivante rattrape
+                # l'écart restant (grand mouvement autorisé) au lieu de le croire fait.
+                self.position_relative = (real_position + old_offset) % 360
+                return
+            self.encoder_offset = new_offset
             self.logger.info(
                 f"Re-sync encodeur post-méridien: "
                 f"offset {old_offset:.1f}° → {self.encoder_offset:.1f}° "

@@ -223,10 +223,22 @@ class TrackingGotoMixin:
                 # Mettre à jour l'offset encodeur après le GOTO
                 try:
                     position_finale = get_daemon_reader().read_angle()
-                    self.encoder_offset = position_cible - position_finale
-                    self.logger.info(
-                        f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
-                    )
+                    ecart = shortest_angular_distance(position_finale, position_cible)
+                    if abs(ecart) > self.MAX_OFFSET_ABSORBE_DEG:
+                        # Repère du GOTO (cible encodeur = position_cible) : les
+                        # corrections suivantes ramèneront la coupole sur la cible.
+                        self.encoder_offset = 0.0
+                        self.position_relative = position_finale
+                        self.logger.error(
+                            f"goto_initial_incomplete | encodeur={position_finale:.1f}° "
+                            f"cible={position_cible:.1f}° ecart={ecart:+.1f}° "
+                            f"→ écart non absorbé, offset 0"
+                        )
+                    else:
+                        self.encoder_offset = position_cible - position_finale
+                        self.logger.info(
+                            f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
+                        )
                 except Exception as e:
                     self.logger.debug(f"Erreur recalcul offset encodeur (non critique): {e}")
 

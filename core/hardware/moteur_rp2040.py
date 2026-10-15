@@ -214,7 +214,7 @@ class MoteurRP2040:
 
         elif status == "ERROR":
             msg = " ".join(parts[1:]) if len(parts) > 1 else "inconnu"
-            self.logger.warning(f"Erreur firmware: {msg} ({context})")
+            self.logger.error(f"Erreur firmware: {msg} ({context})")
             return None
 
         elif status == "BUSY":
