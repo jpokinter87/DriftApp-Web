@@ -359,6 +359,45 @@ class TestMoveSegments:
         assert len(sg._sm.words) == 6  # le 4e palier n'est jamais pousse
         assert sg._sm.active_calls[-1] == 0
 
+    def test_memoire_bornee_sur_mouvement_long(self, sg_rapide):
+        """Terrain 13-15/10 : tout GOTO de plus de 41 s (2048 paliers de 20 ms)
+        echouait en `memory allocation failed, allocating 16384 bytes` — la
+        liste des jalons grandissait sans fin sur le tas du Pico (~190 Ko).
+        La memoire d'un mouvement ne doit pas dependre de sa duree."""
+        import tracemalloc
+
+        sg_rapide._sm.put = lambda value: None  # la doublure garderait tout
+
+        def pic(nb_paliers):
+            tracemalloc.start()
+            sg_rapide.move_segments((100, 120.5) for _ in range(nb_paliers))
+            _, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+            return peak
+
+        # GOTO 90° a 120 us : ~3000 paliers ; 20000 = 6 min de mouvement continu
+        assert pic(20_000) < 20_000
+
+    def test_stop_immediat_juste_apres_long_mouvement(self, sg):
+        """Le compte des pas au STOP immediat reste exact au-dela des paliers
+        les plus anciens (seuls les derniers sont conserves)."""
+        sg._ticks_ms = lambda: 0
+        sg._ms_depuis = lambda debut_ms: 29_995  # 5 ms avant la fin du 1000e palier
+        sg._attendre_fin = lambda debut_ms, duree_us: None
+        # 1000 paliers de 100 pas a 300 us = 30 ms chacun → 30 s
+        nb = 1000
+        appels = {"n": 0}
+
+        def stop_checker():
+            appels["n"] += 1
+            return appels["n"] == nb + 1
+
+        paliers = [(100, 300)] * (nb + 5)
+        done, stopped = sg.move_segments(iter(paliers), stop_checker=stop_checker)
+
+        # 999 paliers complets, puis 25 ms du 1000e a 300 us = 83 pas
+        assert (done, stopped) == (999 * 100 + 83, True)
+
     def test_state_machine_relachee(self, sg_rapide):
         sg_rapide.move_segments(iter([(10, 200)]))
         assert sg_rapide._sm.active_calls[-1] == 0

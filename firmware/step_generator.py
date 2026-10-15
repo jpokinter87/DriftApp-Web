@@ -73,6 +73,11 @@ PIO_FREQ = 125_000_000
 # Les jmp de decompte sont inclus dans le delai
 PIO_OVERHEAD_CYCLES = 5
 
+# Jalons conserves pour le STOP immediat (v6.21.2) : le put() bloquant cale la
+# boucle a 2 paliers d'avance sur le PIO, seuls les derniers peuvent etre en
+# cours. Sans borne, la liste saturait le tas du Pico apres ~41 s de mouvement.
+JALONS_MAX = 8
+
 
 class StepGenerator:
     """
@@ -240,7 +245,7 @@ class StepGenerator:
         debut_ms = self._ticks_ms()
 
         put = self._sm.put
-        jalons = []  # (debut_us, fin_us, pas_avant, pas_apres, delai_us) par palier
+        jalons = []  # (debut_us, fin_us, pas_avant, pas_apres, delai_us), derniers paliers
         try:
             for n, delai_us in paliers:
                 if not self._stop_flag and stop_checker and stop_checker():
@@ -257,6 +262,8 @@ class StepGenerator:
                 steps += n
                 duree_us += n * delai_us
                 jalons.append((debut_palier_us, duree_us, steps - n, steps, delai_us))
+                if len(jalons) > JALONS_MAX:
+                    jalons.pop(0)
             else:
                 self._attendre_fin(debut_ms, duree_us)
         finally:

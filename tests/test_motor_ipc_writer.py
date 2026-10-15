@@ -130,3 +130,29 @@ def test_motor_ipc_writer_has_no_django_import():
     # Pas de "from django" ni "import django" dans le module
     assert "from django" not in src_text
     assert "import django" not in src_text
+
+
+class TestIsParked:
+    """Coupole immobile au parking d'après motor_status.json (v6.21.2)."""
+
+    def _writer(self, tmp_path, status):
+        status_file = tmp_path / "motor_status.json"
+        if status is not None:
+            status_file.write_text(json.dumps(status))
+        return MotorIpcWriter(command_file=tmp_path / "motor_command.json", status_file=status_file)
+
+    def test_idle_at_target(self, tmp_path):
+        assert self._writer(tmp_path, {"status": "idle", "position": 44.6}).is_parked(45.0)
+
+    def test_idle_across_zero(self, tmp_path):
+        assert self._writer(tmp_path, {"status": "idle", "position": 359.5}).is_parked(0.2)
+
+    def test_idle_elsewhere(self, tmp_path):
+        """GOTO raté à 18° (terrain 14/10) : pas au parking."""
+        assert not self._writer(tmp_path, {"status": "idle", "position": 18.2}).is_parked(45.0)
+
+    def test_moving_through_target(self, tmp_path):
+        assert not self._writer(tmp_path, {"status": "moving", "position": 45.0}).is_parked(45.0)
+
+    def test_status_unreadable(self, tmp_path):
+        assert not self._writer(tmp_path, None).is_parked(45.0)

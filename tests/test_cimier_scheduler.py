@@ -17,6 +17,7 @@ from services.cimier_scheduler import (
     CIMIER_STATE_CLOSED,
     CIMIER_STATE_OPEN,
     CIMIER_STATE_CYCLE,
+    PARKING_WAIT_TIMEOUT_S,
 )
 
 
@@ -65,6 +66,11 @@ class FakeCimierIpc:
 @dataclass
 class FakeMotorIpc:
     calls: List[tuple] = field(default_factory=list)
+    # Coupole immobile au parking (motor_status.json) ?
+    parked: bool = True
+
+    def is_parked(self, target_deg: float, tolerance_deg: float = 1.0) -> bool:
+        return self.parked
 
     def send_goto(self, angle: float) -> bool:
         self.calls.append(("goto", angle))
@@ -191,10 +197,10 @@ def test_rising_with_open_cimier_triggers_close_three_ipc_in_order():
     )
     decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
     assert decision.trigger == "close"
-    # Ordre IPC : tracking_stop → goto 45° → close cimier
+    # Ordre IPC : tracking_stop → goto 45° ; la fermeture cimier attend que la
+    # coupole soit au parking (cf. TestCloseAfterParking).
     assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
-    assert len(cimier.commands) == 1
-    assert cimier.commands[0]["action"] == "close"
+    assert cimier.commands == []
 
 
 def test_rising_with_closed_cimier_skips_state():
@@ -315,7 +321,8 @@ def test_close_idempotent_within_cooldown_window():
     assert d1.trigger == "close"
     d2 = sched.maybe_trigger(CIMIER_STATE_OPEN)
     assert d2.trigger == "skip:cooldown"
-    assert len(cimier.commands) == 1
+    # Une seule séquence de parking (la fermeture cimier est différée).
+    assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
 
 
 def test_flat_direction_returns_skip_state():
@@ -363,7 +370,7 @@ def test_close_trigger_in_cycle_state_works():
     decision = sched.maybe_trigger(CIMIER_STATE_CYCLE)
     # Pour cycle state, on accepte quand même un close (rebascule pending command)
     assert decision.trigger == "close"
-    assert len(cimier.commands) == 1
+    assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
 
 
 def test_descending_above_threshold_no_trigger():
@@ -477,8 +484,7 @@ class TestSchedulerModes:
         decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
         assert decision.trigger == "close"
         assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
-        assert len(cimier.commands) == 1
-        assert cimier.commands[0]["action"] == "close"
+        assert cimier.commands == []  # fermeture différée jusqu'au parking
 
     def test_mode_full_open_conditions_triggers_open(self):
         """full : OPEN cond remplies → trigger open (cimier IPC + motor jog)."""
@@ -503,7 +509,7 @@ class TestSchedulerModes:
         decision = sched.maybe_trigger(CIMIER_STATE_OPEN)
         assert decision.trigger == "close"
         assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
-        assert len(cimier.commands) == 1
+        assert cimier.commands == []  # fermeture différée jusqu'au parking
 
 
 # ----------------------------------------------------------------------
@@ -781,6 +787,11 @@ class TestCloseRetry:
             sun_direction_fn=lambda *a, **kw: "rising",
         )
         assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+        # Fermeture différée : coupole vue au parking, puis envoyée au tick suivant.
+        for _ in range(2):
+            now[0] += timedelta(minutes=1)
+            sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert len(sched._cimier_ipc.commands) == 1
         return sched, now
 
     def test_close_resent_after_interval_when_still_open(self):
@@ -842,3 +853,104 @@ class TestCloseRetry:
         now[0] += timedelta(minutes=5)
         assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_retry"
         assert len(sched._cimier_ipc.commands) == 1
+
+
+# ----------------------------------------------------------------------
+# Fermeture après arrivée au parking (v6.21.2 — terrain 13/10/2026 : batterie
+# vide, les Shelly du cimier ne se réveillent qu'au contact des patins de
+# recharge à 45° ; l'ordre de fermeture partait pendant que la coupole tournait)
+# ----------------------------------------------------------------------
+
+
+class TestCloseAfterParking:
+    """En fin de nuit, la fermeture attend la coupole au parking + un délai."""
+
+    def _sched_triggered(self, parked=False, **overrides):
+        now = [datetime(2026, 10, 13, 5, 0, tzinfo=timezone.utc)]
+        alt_values = iter([-10.0, -5.0])
+        motor = FakeMotorIpc(parked=parked)
+        sched = CimierScheduler(
+            automation_config=_automation(**overrides),
+            site_config=_site(),
+            weather_provider=FakeWeatherProvider(),
+            cimier_ipc=FakeCimierIpc(),
+            motor_ipc=motor,
+            clock=lambda: now[0],
+            sun_altitude_fn=lambda *a, **kw: next(alt_values, -5.0),
+            sun_direction_fn=lambda *a, **kw: "rising",
+        )
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+        return sched, motor, now
+
+    def test_no_close_while_dome_not_parked(self):
+        sched, _, now = self._sched_triggered(parked=False)
+        now[0] += timedelta(minutes=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger != "close_after_parking"
+        assert sched._cimier_ipc.commands == []
+
+    def test_close_sent_once_parked_for_delay(self):
+        """Coupole vue au parking : on attend `close_delay_after_parking_s`
+        (20 s) avant de fermer — le temps que les Shelly se réveillent."""
+        sched, motor, now = self._sched_triggered(parked=False)
+        now[0] += timedelta(minutes=1)
+        motor.parked = True
+        sched.maybe_trigger(CIMIER_STATE_OPEN)  # arrivée constatée
+        assert sched._cimier_ipc.commands == []
+        now[0] += timedelta(seconds=19)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert sched._cimier_ipc.commands == []
+        now[0] += timedelta(seconds=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"
+        assert [c["action"] for c in sched._cimier_ipc.commands] == ["close"]
+        # La coupole n'est pas relancée.
+        assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
+
+    def test_delay_configurable(self):
+        sched, motor, now = self._sched_triggered(parked=True, close_delay_after_parking_s=60)
+        now[0] += timedelta(seconds=10)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)  # arrivée constatée
+        now[0] += timedelta(seconds=59)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert sched._cimier_ipc.commands == []
+        now[0] += timedelta(seconds=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"
+
+    def test_close_anyway_if_dome_never_parks(self):
+        """GOTO raté (coupole arrêtée en route) : on ferme quand même, le renvoi
+        périodique prendra le relais si les Shelly ne répondent pas."""
+        sched, _, now = self._sched_triggered(parked=False)
+        now[0] += timedelta(seconds=PARKING_WAIT_TIMEOUT_S - 1)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert sched._cimier_ipc.commands == []
+        now[0] += timedelta(seconds=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"
+        assert [c["action"] for c in sched._cimier_ipc.commands] == ["close"]
+
+    def test_retry_after_deferred_close(self):
+        """Une fois l'ordre parti, le renvoi périodique de la 6.21.0 s'applique."""
+        sched, _, now = self._sched_triggered(parked=False, close_retry_interval_minutes=5)
+        now[0] += timedelta(seconds=PARKING_WAIT_TIMEOUT_S)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)  # fermeture au timeout
+        now[0] += timedelta(minutes=5)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_retry"
+        assert len(sched._cimier_ipc.commands) == 2
+
+    def test_already_closed_cancels_pending_close(self):
+        """Cimier fermé à la main entre-temps : plus rien à envoyer."""
+        sched, _, now = self._sched_triggered(parked=True)
+        now[0] += timedelta(minutes=1)
+        sched.maybe_trigger(CIMIER_STATE_CLOSED)
+        now[0] += timedelta(minutes=5)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert sched._cimier_ipc.commands == []
+
+    def test_no_close_during_cimier_cooldown(self):
+        """Repos post-cycle : la commande serait jetée (mode Drop)."""
+        sched, _, now = self._sched_triggered(parked=True)
+        now[0] += timedelta(minutes=1)
+        sched.maybe_trigger("cooldown")
+        now[0] += timedelta(minutes=1)
+        sched.maybe_trigger("cooldown")
+        assert sched._cimier_ipc.commands == []
+        now[0] += timedelta(minutes=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"

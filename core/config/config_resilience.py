@@ -346,6 +346,12 @@ HELP_REGISTRY: dict[str, str] = {
         "de nuit (Shelly injoignable…), l'ordre de fermeture est renvoyé toutes les N "
         "minutes, au plus pendant retrigger_cooldown_hours."
     ),
+    "cimier.automation.close_delay_after_parking_s": (
+        "Fin de nuit : délai (secondes) entre l'arrivée de la coupole au parking et "
+        "l'ordre de fermeture du cimier, le temps que les Shelly alimentés par les "
+        "patins de recharge se réveillent (batterie vide). Si la coupole n'atteint "
+        "pas le parking, le cimier est fermé quand même au bout de 4 min."
+    ),
     # cimier.motor_shelly (moteur ON/OFF + sens via DPDT)
     "cimier.motor_shelly.host_motor": (
         "Hôte/IP du Shelly MOT (ON/OFF du moteur cimier). Vide → moteur factice (non déployé)."

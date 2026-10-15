@@ -78,3 +78,16 @@ def test_logs_reason(caplog):
     with caplog.at_level(logging.INFO, logger="services.session_close_sequence"):
         close_session(RecordingMotorIpc(), lambda: True, 45.0, reason="rain")
     assert "reason=rain" in caplog.text
+
+
+def test_close_deferred_when_no_callable(caplog):
+    """Fin de nuit (v6.21.2) : le scheduler ferme le cimier plus tard, une fois
+    la coupole au parking ; la séquence s'arrête au goto."""
+    import logging
+
+    motor = RecordingMotorIpc()
+    with caplog.at_level(logging.INFO, logger="services.session_close_sequence"):
+        result = close_session(motor, None, 45.0, reason="auto")
+    assert motor.calls == ["tracking_stop", "wait", "goto:45.0"]
+    assert result["cimier_close_sent"] is None
+    assert "cimier_close_sent=deferred" in caplog.text

@@ -13,9 +13,14 @@ Polling 60 s : compute sun_alt(now) + sun_alt(now-60s) → détecte rising/desce
                   + cimier open|cycle
                   → emit "tracking_stop" motor IPC, attente de sa consommation
                   (slot IPC unique lu à 20 Hz), puis "goto 45°" motor IPC
-                  + emit "close" cimier IPC
-                  (le cimier a son propre fichier IPC : il se ferme en parallèle
-                  du parking coupole, sans attendre)
+                  ; "close" cimier IPC émis aux ticks suivants, une fois la
+                  coupole immobile au parking depuis ``close_delay_after_parking_s``
+                  (ou au bout de ``PARKING_WAIT_TIMEOUT_S`` si elle n'y arrive pas)
+
+Fermeture après parking (terrain 13/10/2026) : batterie vide, les Shelly du
+cimier ne sont alimentés qu'au contact des patins de recharge, à 45°. L'ordre
+de fermeture, émis jusque-là en parallèle du GOTO, partait pendant que la
+coupole tournait encore et trouvait des Shelly éteints.
 
 Idempotence intra-jour : after a trigger, ignore re-triggers for retrigger_cooldown_hours.
 
@@ -66,6 +71,10 @@ CIMIER_STATE_CYCLE = "cycle"
 CIMIER_STATE_COOLDOWN = "cooldown"
 CIMIER_STATE_ERROR = "error"
 
+# Fin de nuit : délai max d'attente de la coupole au parking avant de fermer
+# le cimier quand même (GOTO 180° à 90°/min = 2 min, plus la correction finale).
+PARKING_WAIT_TIMEOUT_S = 240
+
 
 @dataclass
 class SchedulerDecision:
@@ -105,6 +114,8 @@ class CimierScheduler:
         self._close_pending_since: Optional[datetime] = None
         self._last_close_attempt_ts: Optional[datetime] = None
         self._close_retry_count = 0
+        # Première vue de la coupole au parking depuis la fermeture différée.
+        self._parked_seen_at: Optional[datetime] = None
 
     def refresh_mode_from_config(self, config_path: Path) -> bool:
         """Hot-reload du mode auto depuis data/config.json.
@@ -171,8 +182,9 @@ class CimierScheduler:
             self._close_pending_since = None
             return SchedulerDecision("skip:disabled", float("nan"), "flat", now)
 
-        if self._maybe_retry_close(current_cimier_state, now):
-            return SchedulerDecision("close_retry", float("nan"), "flat", now)
+        pending_close = self._maybe_retry_close(current_cimier_state, now)
+        if pending_close:
+            return SchedulerDecision(pending_close, float("nan"), "flat", now)
 
         before = now - timedelta(seconds=60)
         try:
@@ -388,45 +400,54 @@ class CimierScheduler:
         )
 
     def _trigger_close(self) -> None:
-        """Fin de nuit : arrêt du suivi, parking coupole, fermeture cimier.
+        """Fin de nuit : arrêt du suivi et parking coupole ; fermeture différée.
 
         Délègue à ``services.session_close_sequence`` — séquence partagée avec
         le parking manuel et la fermeture pluie (cf. sa docstring pour le bug
-        de parking 6.11.3 qui a motivé la factorisation).
+        de parking 6.11.3 qui a motivé la factorisation). Le cimier n'est
+        fermé qu'une fois la coupole au parking (``_close_ready_reason``).
         """
-        cimier_cmd_id = str(uuid.uuid4())
-
-        def _send_close() -> bool:
-            return bool(self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"}))
-
         close_session(
             self._motor_ipc,
-            _send_close,
+            None,
             self._cfg.parking_target_azimuth_deg,
             reason="auto",
         )
         logger.info(
-            "cimier_event=automation_close_triggered cimier_cmd_id=%s",
-            cimier_cmd_id,
+            "cimier_event=automation_close_triggered close=after_parking delay_s=%d",
+            self._cfg.close_delay_after_parking_s,
         )
-        now = self._clock()
-        self._close_pending_since = now
-        self._last_close_attempt_ts = now
+        self._close_pending_since = self._clock()
+        self._last_close_attempt_ts = None
         self._close_retry_count = 0
+        self._parked_seen_at = None
 
-    def _maybe_retry_close(self, current_cimier_state: str, now: datetime) -> bool:
-        """Renvoie l'ordre ``close`` si la fermeture auto n'est pas confirmée.
+    def _close_ready_reason(self, now: datetime) -> Optional[str]:
+        """Motif d'émission de la fermeture différée, ou None s'il faut attendre."""
+        if self._motor_ipc.is_parked(self._cfg.parking_target_azimuth_deg):
+            if self._parked_seen_at is None:
+                self._parked_seen_at = now
+            parked_s = (now - self._parked_seen_at).total_seconds()
+            return "parked" if parked_s >= self._cfg.close_delay_after_parking_s else None
+        self._parked_seen_at = None
+        waited_s = (now - self._close_pending_since).total_seconds()
+        return "parking_timeout" if waited_s >= PARKING_WAIT_TIMEOUT_S else None
 
-        Retourne True si un ordre a été renvoyé.
+    def _maybe_retry_close(self, current_cimier_state: str, now: datetime) -> Optional[str]:
+        """Émet l'ordre ``close`` de fin de nuit, puis le renvoie tant que la
+        fermeture n'est pas confirmée.
+
+        Retourne le trigger émis (``close_after_parking`` ou ``close_retry``),
+        None sinon.
         """
         if self._close_pending_since is None:
-            return False
+            return None
         if current_cimier_state == CIMIER_STATE_CLOSED:
             logger.info(
                 "cimier_event=automation_close_confirmed retries=%d", self._close_retry_count
             )
             self._close_pending_since = None
-            return False
+            return None
         if not self._is_in_cooldown(self._close_pending_since, now):
             logger.error(
                 "cimier_event=automation_close_gave_up retries=%d cimier_state=%s",
@@ -434,13 +455,28 @@ class CimierScheduler:
                 current_cimier_state,
             )
             self._close_pending_since = None
-            return False
-        # Repos post-cycle de cimier_service : la commande y serait jetée (mode Drop).
+            return None
+        if self._last_close_attempt_ts is None:
+            reason = self._close_ready_reason(now)
+            # Repos post-cycle de cimier_service : la commande y serait jetée (mode Drop).
+            if reason is None or current_cimier_state == CIMIER_STATE_COOLDOWN:
+                return None
+            cimier_cmd_id = str(uuid.uuid4())
+            self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"})
+            self._last_close_attempt_ts = now
+            log = logger.warning if reason == "parking_timeout" else logger.info
+            log(
+                "cimier_event=automation_close_sent reason=%s waited_s=%d cimier_cmd_id=%s",
+                reason,
+                (now - self._close_pending_since).total_seconds(),
+                cimier_cmd_id,
+            )
+            return "close_after_parking"
         if current_cimier_state == CIMIER_STATE_COOLDOWN:
-            return False
+            return None
         elapsed = (now - self._last_close_attempt_ts).total_seconds()
         if elapsed < self._cfg.close_retry_interval_minutes * 60:
-            return False
+            return None
 
         cimier_cmd_id = str(uuid.uuid4())
         self._cimier_ipc.write_command({"id": cimier_cmd_id, "action": "close"})
@@ -452,7 +488,7 @@ class CimierScheduler:
             current_cimier_state,
             cimier_cmd_id,
         )
-        return True
+        return "close_retry"
 
     # ------------------------------------------------------------------
     # Helpers

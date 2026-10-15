@@ -17,7 +17,9 @@ corrigé en 6.11.3. Une troisième copie rejouerait la même histoire.
 
 La fermeture du cimier est passée en **callable** : le scheduler écrit dans
 ``cimier_command.json`` via ``CimierIpcManager``, Django passe par son propre
-client. Le module n'a pas à connaître les deux.
+client. Le module n'a pas à connaître les deux. En fin de nuit, le scheduler
+passe ``None`` : il fermera le cimier lui-même une fois la coupole au parking
+(batterie vide, les Shelly ne se réveillent qu'à 45° — terrain 13/10/2026).
 
 Tout est **best-effort** : aucune étape n'interrompt les suivantes. Un parking
 imparfait vaut mieux qu'un cimier resté ouvert.
@@ -26,14 +28,14 @@ imparfait vaut mieux qu'un cimier resté ouvert.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
 def close_session(
     motor_ipc: Any,
-    send_close: Callable[[], bool],
+    send_close: Optional[Callable[[], bool]],
     parking_target_deg: float,
     reason: str,
 ) -> Dict[str, Any]:
@@ -43,18 +45,21 @@ def close_session(
         motor_ipc: writer exposant ``send_tracking_stop``, ``wait_tracking_stopped``
             et ``send_goto``.
         send_close: callable sans argument déclenchant la fermeture du cimier,
-            retournant une valeur vraie en cas de succès.
+            retournant une valeur vraie en cas de succès ; ``None`` = fermeture
+            différée, laissée à l'appelant (``cimier_close_sent`` vaut alors None).
         parking_target_deg: azimut de parking de la coupole.
         reason: motif journalisé (``auto``, ``manual``, ``rain``).
     """
     tracking_stop_sent = bool(motor_ipc.send_tracking_stop())
     tracking_stop_confirmed = bool(motor_ipc.wait_tracking_stopped())
     goto_sent = bool(motor_ipc.send_goto(float(parking_target_deg)))
-    try:
-        cimier_close_sent = bool(send_close())
-    except Exception as exc:  # noqa: BLE001 — best-effort, jamais de propagation
-        logger.error("cimier_event=session_close_cimier_failed reason=%s exc=%s", reason, exc)
-        cimier_close_sent = False
+    cimier_close_sent: Optional[bool] = None
+    if send_close is not None:
+        try:
+            cimier_close_sent = bool(send_close())
+        except Exception as exc:  # noqa: BLE001 — best-effort, jamais de propagation
+            logger.error("cimier_event=session_close_cimier_failed reason=%s exc=%s", reason, exc)
+            cimier_close_sent = False
 
     logger.info(
         "cimier_event=session_close reason=%s parking_target_deg=%.2f "
@@ -64,7 +69,7 @@ def close_session(
         tracking_stop_sent,
         tracking_stop_confirmed,
         goto_sent,
-        cimier_close_sent,
+        "deferred" if cimier_close_sent is None else cimier_close_sent,
     )
     return {
         "tracking_stop_sent": tracking_stop_sent,

@@ -146,7 +146,8 @@
       "deparking_nudge_deg": 1.0,
       "scheduler_interval_seconds": 60,
       "retrigger_cooldown_hours": 12,
-      "close_retry_interval_minutes": 5
+      "close_retry_interval_minutes": 5,
+      "close_delay_after_parking_s": 20
     },
     "motor_shelly": {
       "_comment": "SHELLY-1-MOT (.85) + SHELLY-1-UPDN (.86), API legacy. Conventions validées terrain 17-18/06 : moteur tourne quand relais MOT turn=off (motor_on_relay_state=false), UP=turn=on (open_dir_state=true). host_motor/host_dir vides → NoopMotorShelly tant que non déployé.",

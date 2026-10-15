@@ -605,6 +605,17 @@ class TestCimierConfig:
         config_file.write_text(json.dumps(cfg))
         assert ConfigLoader(config_file).load().cimier.automation.close_retry_interval_minutes == 5
 
+    def test_close_delay_after_parking_s(self, tmp_path, sample_config_dict):
+        """close_delay_after_parking_s est lu (défaut 20 si absent)."""
+        cfg = dict(sample_config_dict)
+        cfg["cimier"] = {"automation": {"close_delay_after_parking_s": 45}}
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        assert ConfigLoader(config_file).load().cimier.automation.close_delay_after_parking_s == 45
+        cfg["cimier"] = {"automation": {}}
+        config_file.write_text(json.dumps(cfg))
+        assert ConfigLoader(config_file).load().cimier.automation.close_delay_after_parking_s == 20
+
 
 @pytest.mark.parametrize("invalid", [-1.0, 0.0, 0])
 def test_cimier_config_rejects_cycle_timeout_zero_or_negative(invalid):

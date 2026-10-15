@@ -295,6 +295,11 @@ class CimierAutomationConfig:
     cadence (Shelly injoignable au moment de fermer — terrain 11/10/2026),
     au plus pendant `retrigger_cooldown_hours`.
 
+    `close_delay_after_parking_s` : en fin de nuit, la fermeture du cimier
+    attend que la coupole soit immobile au parking depuis ce délai — batterie
+    vide, les Shelly du cimier ne se réveillent qu'au contact des patins de
+    recharge à 45° (terrain 13/10/2026).
+
     `retrigger_cooldown_hours` : idempotence intra-jour. Au reboot, l'état est
     perdu (mémoire seulement) → re-trigger si les conditions sont toujours
     remplies (état désiré, pas event-driven).
@@ -314,6 +319,7 @@ class CimierAutomationConfig:
     scheduler_interval_seconds: int = 60
     retrigger_cooldown_hours: int = 12
     close_retry_interval_minutes: int = 5
+    close_delay_after_parking_s: int = 20
 
 
 @dataclass
@@ -745,6 +751,9 @@ class ConfigLoader:
                     au.get(
                         "close_retry_interval_minutes", au_defaults.close_retry_interval_minutes
                     )
+                ),
+                close_delay_after_parking_s=int(
+                    au.get("close_delay_after_parking_s", au_defaults.close_delay_after_parking_s)
                 ),
             ),
             motor_shelly=self._build_motor_shelly_config(ms, ms_defaults),

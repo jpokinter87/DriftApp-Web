@@ -738,6 +738,21 @@ class TestIpcManager:
         ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
         assert ipc.write_command({"id": "ok-1", "action": "close"}) is True
 
+    def test_write_command_leaves_file_world_writable(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        """Terrain 14/10 : la fermeture auto (cimier_service, root) remplaçait
+        le fichier par un 644 → Django (slenk) ne pouvait plus y écrire, chaque
+        clic « Fermer » renvoyait 503 jusqu'au redémarrage du service."""
+        import os
+
+        cmd_file, status_file = tmp_ipc
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        old_umask = os.umask(0o022)  # umask d'un service root
+        try:
+            assert ipc.write_command({"id": "auto-1", "action": "close"}) is True
+        finally:
+            os.umask(old_umask)
+        assert (cmd_file.stat().st_mode & 0o777) == 0o666
+
     def test_write_command_returns_false_on_ioerror(self, tmp_ipc: Tuple[Path, Path]) -> None:
         """Patch open pour lever OSError → False, pas d'exception remontée."""
         cmd_file, status_file = tmp_ipc
@@ -3173,6 +3188,9 @@ class TestAutomationCloseRetryEndToEnd:
             def send_goto(self, angle):
                 return True
 
+            def is_parked(self, target_deg, tolerance_deg=1.0):
+                return True
+
         service._scheduler = CimierScheduler(
             automation_config=CimierAutomationConfig(mode="semi"),
             site_config=SiteConfig(
@@ -3195,9 +3213,12 @@ class TestAutomationCloseRetryEndToEnd:
             service._clock.advance(minutes * 60)
             service.tick()
 
-        # Fin de nuit : le Shelly ne répond plus → la fermeture échoue.
+        # Fin de nuit : parking, puis fermeture une fois la coupole au parking
+        # (v6.21.2) — le Shelly ne répond plus → la fermeture échoue.
         reader.offline = True
-        service.tick()
+        service.tick()  # tracking_stop + goto, fermeture différée
+        tick_after(1)  # coupole vue au parking
+        tick_after(1)  # fermeture envoyée, Shelly injoignable
         assert mech.open_switch is True
         tick_after(5)  # 1er renvoi, toujours injoignable
         assert mech.open_switch is True

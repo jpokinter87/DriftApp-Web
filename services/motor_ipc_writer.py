@@ -22,6 +22,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict
 
+from core.utils.angle_utils import shortest_angular_distance
+
 DEFAULT_MOTOR_COMMAND_FILE = Path("/dev/shm/motor_command.json")
 DEFAULT_MOTOR_STATUS_FILE = Path("/dev/shm/motor_status.json")
 
@@ -31,6 +33,9 @@ DEFAULT_MOTOR_STATUS_FILE = Path("/dev/shm/motor_status.json")
 # pratique, 5 s couvre largement sans jamais bloquer un cycle cimier.
 TRACKING_STOP_CONFIRM_TIMEOUT_S = 5.0
 _TRACKING_STOP_POLL_INTERVAL_S = 0.05
+
+# Écart toléré pour considérer la coupole au parking (GOTO précis à ~0,2°).
+PARKED_TOLERANCE_DEG = 1.0
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +125,21 @@ class MotorIpcWriter:
                 )
                 return False
             time.sleep(_TRACKING_STOP_POLL_INTERVAL_S)
+
+    def is_parked(self, target_deg: float, tolerance_deg: float = PARKED_TOLERANCE_DEG) -> bool:
+        """True si `motor_status.json` montre la coupole immobile au parking.
+
+        Au repos, `motor_service` publie la position lue à l'encodeur : une
+        coupole arrêtée en route (GOTO raté, terrain 14/10/2026) n'y est pas.
+        """
+        try:
+            status = json.loads(self.status_file.read_text())
+            position = float(status["position"])
+        except (IOError, OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return False
+        if status.get("status") != "idle":
+            return False
+        return abs(shortest_angular_distance(position, target_deg)) <= tolerance_deg
 
     def _tracking_is_stopped(self) -> bool:
         """True si `motor_status.json` ne rapporte plus de suivi en cours."""

@@ -150,6 +150,9 @@ class CimierIpcManager:
             with open(tmp_file, "w") as f:
                 f.write(content)
                 f.flush()
+            # 666 : ce service tourne en root mais Django (non-root) écrit aussi
+            # ce fichier — le rename ne doit pas le remplacer par un 644.
+            os.chmod(tmp_file, 0o666)
             tmp_file.rename(self.command_file)
             return True
         except (IOError, OSError) as exc:
