@@ -474,16 +474,25 @@ class FeedbackController:
             time.sleep(0.01)  # Pause stabilisation courte
 
         # Mesure finale
+        lecture_finale_ok = True
         try:
             position_finale = self._lire_position_stable()
         except (RuntimeError, StaleDataError):
+            # Position inconnue : la cible sert de valeur d'affichage, mais ce
+            # n'est pas un succès (on ne sait pas où est la coupole).
             position_finale = angle_cible
+            lecture_finale_ok = False
             self.logger.warning("Impossible de lire position finale")
 
         erreur_finale = self._calculer_delta_angulaire(position_finale, angle_cible)
         temps_total = time.time() - start_time
         # Success si erreur < tolerance ET pas de timeout ET encodeur non figé
-        success = abs(erreur_finale) < tolerance and not timeout_reached and not encoder_frozen
+        success = (
+            lecture_finale_ok
+            and abs(erreur_finale) < tolerance
+            and not timeout_reached
+            and not encoder_frozen
+        )
 
         self._log_resultat_final(
             success,

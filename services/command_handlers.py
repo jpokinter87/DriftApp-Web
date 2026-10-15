@@ -219,11 +219,14 @@ class GotoHandler:
 
             if abs(erreur) > tolerance:
                 logger.info(f"Correction finale: erreur={erreur:+.2f}°")
+                # allow_large_movement : si la rotation directe s'est arrêtée loin
+                # de la cible (> 20°), la correction finit le trajet au lieu d'abandonner.
                 result = self.feedback_controller.rotation_avec_feedback(
                     angle_cible=angle,
                     vitesse=_get_motor_speed(self.config, speed),
                     tolerance=tolerance,
                     max_iterations=3,
+                    allow_large_movement=True,
                 )
                 status["position"] = result["position_finale"]
 
@@ -233,6 +236,11 @@ class GotoHandler:
                     logger.warning(
                         f"GOTO: correction imparfaite, erreur={result['erreur_finale']:.2f}°"
                     )
+                    status["status"] = "error"
+                    status["error"] = f"GOTO inachevé: erreur finale {result['erreur_finale']:.2f}°"
+                    status["error_timestamp"] = time.time()
+                    status["progress"] = 100
+                    return status
             else:
                 logger.info(f"GOTO précis du premier coup: erreur={erreur:+.2f}°")
                 status["position"] = pos_apres_rotation

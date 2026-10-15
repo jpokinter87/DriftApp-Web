@@ -214,6 +214,22 @@ class TestRotationAvecFeedback:
         assert result['mode'] == 'feedback_daemon'
         assert 'corrections' in result
 
+    def test_lecture_finale_impossible_n_est_pas_un_succes(
+        self, feedback_controller, mock_daemon_reader, mock_moteur
+    ):
+        """Position finale illisible : on ne sait pas où est la coupole."""
+        mock_daemon_reader.read_fast.side_effect = [
+            90.0, 90.0, RuntimeError("Daemon not found")
+        ]
+
+        result = feedback_controller.rotation_avec_feedback(
+            angle_cible=90.0,
+            vitesse=0.001,
+            tolerance=0.5
+        )
+
+        assert result['success'] is False
+
     def test_rotation_daemon_indisponible_leve_erreur(
         self, feedback_controller, mock_daemon_reader, mock_moteur
     ):

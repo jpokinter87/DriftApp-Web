@@ -145,6 +145,29 @@ class TestGotoHandler:
         mock_feedback_controller.rotation_avec_feedback.assert_not_called()
         assert status["status"] == "idle"
 
+    def test_correction_finale_autorise_un_grand_reste(
+        self, handler, mock_feedback_controller
+    ):
+        """Rotation directe arrêtée loin de la cible (> 20°) : la correction
+        finale doit finir le trajet, pas abandonner."""
+        handler.execute(180.0, {"position": 45.0})
+
+        kwargs = mock_feedback_controller.rotation_avec_feedback.call_args.kwargs
+        assert kwargs["allow_large_movement"] is True
+
+    def test_correction_finale_en_echec_signale_une_erreur(
+        self, handler, mock_feedback_controller
+    ):
+        mock_feedback_controller.rotation_avec_feedback.return_value = {
+            'success': False, 'position_initiale': 45.0, 'position_finale': 150.0,
+            'erreur_finale': 30.0, 'iterations': 3,
+        }
+
+        status = handler.execute(180.0, {"position": 45.0})
+
+        assert status["status"] == "error"
+        assert "error" in status
+
     def test_get_motor_speed_default(self, handler, mock_config):
         """Utilise la vitesse unique v5.10 (260 µs) par défaut."""
         from services.command_handlers import _get_motor_speed

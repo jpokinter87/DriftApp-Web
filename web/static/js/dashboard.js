@@ -1773,9 +1773,14 @@ function updateServiceStatus(motor, encoder) {
     } else if (status === 'error') {
         elements.statusDot.classList.add('disconnected');
         elements.statusText.textContent = 'Erreur';
+        // L'état error retombe à idle au bout de 10 s : garder le motif au journal.
+        if (state.lastMotorStatus !== 'error' && motor.error) {
+            log(`Moteur : ${motor.error}`, 'error');
+        }
     } else {
         elements.statusText.textContent = 'Déconnecté';
     }
+    state.lastMotorStatus = status;
 }
 
 // v6.7.1 — flash vert bref du cartouche ENC au franchissement du switch 45°.
