@@ -204,6 +204,24 @@ class TestLireAccel:
     def test_invalide_donne_le_defaut(self, jeton):
         assert lire_accel(["MOVE", "100", "1", "110", "SCURVE", jeton]) == DEFAULT_ACCEL
 
+    def test_trop_faible_est_relevee(self):
+        """Une acceleration minuscule (faute de frappe dans config.json)
+        ferait une rampe de milliers de paliers gardes en liste sur le tas
+        du Pico — meme famille que l'OOM du 12/10."""
+        accel = lire_accel(["MOVE", "100", "1", "100", "SCURVE", "1"])
+
+        profil = ProfilAccelConstante(10_000_000, 100, accel)
+
+        assert len(profil.rampe) < 600
+
+    def test_trop_forte_est_plafonnee(self):
+        """Sans plafond, la rampe tient en un palier : depart sans rampe, calage."""
+        accel = lire_accel(["MOVE", "100", "1", "100", "SCURVE", "100000000"])
+
+        profil = ProfilAccelConstante(10_000_000, 100, accel)
+
+        assert len(profil.rampe) >= 20
+
 
 class TestProfilAccelConstante:
     @pytest.mark.parametrize("total", [200_000, 20_000, 16_182, 5_000, 300, 5, 1])

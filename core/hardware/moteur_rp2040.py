@@ -144,6 +144,34 @@ class MoteurRP2040:
         finally:
             self.serial_port.timeout = old_timeout
 
+    def _resynchroniser(self):
+        """
+        Remet requetes et reponses en phase apres un MOVE reste sans reponse.
+
+        Envoie STOP et lit jusqu'a STOPPED (mouvement interrompu) ou IDLE
+        (deja fini — sa reponse OK, en retard, est ecartee au passage).
+        Delai : le temps d'un STOP doux depuis la pleine vitesse, plus une marge.
+        """
+        self.logger.error("MOVE sans reponse du firmware : envoi STOP et resynchronisation")
+        with self._serial_lock:
+            old_timeout = self.serial_port.timeout
+            self.serial_port.timeout = 2 * core_config.RAMP_TIME_S + 5.0
+            try:
+                self.serial_port.write(b"STOP\n")
+                while True:
+                    data = self.serial_port.readline()
+                    if not data:
+                        self.logger.error("Firmware muet apres STOP de resynchronisation")
+                        break
+                    text = data.decode("utf-8", errors="replace").strip()
+                    if text.split()[:1] in (["STOPPED"], ["IDLE"]):
+                        self.logger.info(f"Resynchronisation serie : {text}")
+                        break
+                    self.logger.info(f"Resynchronisation serie, reponse ecartee : {text}")
+            finally:
+                self.serial_port.timeout = old_timeout
+        self._needs_drain = False
+
     def _wait_ready(self):
         """
         Verifie que le firmware RP2040 est pret.
@@ -310,6 +338,10 @@ class MoteurRP2040:
             f"MOVE {steps} {direction} {delay_us} {ramp_type} {accel}",
             timeout=move_timeout,
         )
+        if not response:
+            # Pico peut-etre encore en mouvement : sans resynchronisation, le
+            # MOVE suivant serait jete par le firmware et lirait cette reponse-ci.
+            self._resynchroniser()
         self._parse_response(response, f"rotation {angle_deg:+.2f}°")
 
         # En simulation, synchroniser la position globale

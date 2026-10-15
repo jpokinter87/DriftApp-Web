@@ -211,9 +211,16 @@ def resolve_ramp_time_s(motor_driver_cfg: dict) -> float:
     )
 
 
+# Bornes appliquées par le firmware (firmware/ramp.py, ACCEL_MIN/ACCEL_MAX) :
+# reprises ici pour que le log `vitesses` affiche l'accélération réelle.
+ACCEL_STEPS_S2_MIN: int = 1000
+ACCEL_STEPS_S2_MAX: int = 20000
+
+
 def fast_accel_steps_s2(fast_delay_s: float, ramp_time_s: float) -> int:
     """Accélération (pas/s²) pour atteindre la vitesse rapide en `ramp_time_s`."""
-    return round((1.0 / fast_delay_s) / ramp_time_s)
+    accel = round((1.0 / fast_delay_s) / ramp_time_s)
+    return max(ACCEL_STEPS_S2_MIN, min(ACCEL_STEPS_S2_MAX, accel))
 
 
 RAMP_TIME_S: float = resolve_ramp_time_s(_config.get("motor_driver", {}))

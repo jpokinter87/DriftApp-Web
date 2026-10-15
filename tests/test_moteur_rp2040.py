@@ -441,6 +441,49 @@ class TestMoteurRP2040ErrorHandling:
         assert any("test_error_msg" in record.message for record in caplog.records)
 
 
+class _PicoScripte:
+    """Port serie dont les reponses sont jouees dans l'ordre ; b"" = timeout."""
+
+    def __init__(self, reponses):
+        self.is_open = True
+        self.timeout = 2.0
+        self.ecrits = []
+        self.non_lues = [b"READY\n"] + list(reponses)
+
+    def write(self, data):
+        self.ecrits.append(data.decode().strip())
+        return len(data)
+
+    def readline(self):
+        return self.non_lues.pop(0) if self.non_lues else b""
+
+    def reset_input_buffer(self):
+        pass
+
+    def close(self):
+        self.is_open = False
+
+
+class TestResynchronisationApresTimeout:
+    """Un MOVE sans reponse dans le delai laisse le Pico en mouvement : le MOVE
+    suivant serait jete par le firmware (check_for_stop) et le Pi lirait la
+    reponse de l'ancien mouvement a la place de la sienne."""
+
+    def test_le_mouvement_suivant_lit_sa_propre_reponse(self, motor_config):
+        pico = _PicoScripte([
+            b"",               # MOVE 1 : timeout cote Pi, le Pico bouge encore
+            b"STOPPED 500\n",  # fin du MOVE 1 interrompu
+            b"OK 100\n",       # reponse du MOVE 2
+        ])
+        moteur = MoteurRP2040(motor_config, pico)
+
+        moteur.rotation(10.0, vitesse=0.00026)
+        moteur.rotation(1.0, vitesse=0.00026)
+
+        assert [c.split()[0] for c in pico.ecrits if c] == ["MOVE", "STOP", "MOVE"]
+        assert pico.non_lues == []
+
+
 class TestMoteurRP2040Cleanup:
     """Tests de nettoyage."""
 
@@ -541,6 +584,12 @@ class TestAccelerationDepuisConfig:
 
         assert fast_accel_steps_s2(110e-6, 2.0) == 4545
         assert fast_accel_steps_s2(124e-6, 1.0) == 8065
+
+    def test_acceleration_bornee_comme_le_firmware(self):
+        """Le Pico borne l'acceleration : le Pi doit journaliser celle appliquee."""
+        from core.config.config import fast_accel_steps_s2
+
+        assert fast_accel_steps_s2(3000e-6, 10.0) == 1000
 
     def test_duree_de_rampe_bornee(self):
         from core.config.config import resolve_ramp_time_s

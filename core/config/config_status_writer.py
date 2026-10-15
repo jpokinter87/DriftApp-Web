@@ -25,6 +25,10 @@ def write_config_status(report: ConfigReport, path: Path = DEFAULT_STATUS_PATH) 
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(asdict(report), f, ensure_ascii=False)
         os.replace(tmp, path)
+    except PermissionError:
+        # Sticky bit de /dev/shm : le rapport d'un autre service (root) ne peut
+        # pas être remplacé par Django. Il a déjà été publié, rien d'anormal.
+        logger.info("config_status déjà publié par un autre service, écriture ignorée")
     except Exception as exc:
         logger.warning(f"Écriture config_status échouée (ignorée) : {exc}")
     finally:
