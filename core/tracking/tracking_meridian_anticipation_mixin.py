@@ -21,7 +21,7 @@ Flag OFF ou exception → fallback silencieux vers le comportement v5.10.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from core.config.config import FAST_MOTOR_DELAY, motor_delay_for
@@ -92,14 +92,14 @@ class TrackingMeridianAnticipationMixin:
         self._anticipation_consumed = False
         # Tracker le timestamp pour throttler les re-scans : aussi mis à jour
         # quand start() appelle directement (évite double-scan immédiat).
-        self._anticipation_last_scan_at = datetime.utcnow()
+        self._anticipation_last_scan_at = datetime.now(timezone.utc)
 
         try:
             steps_per_rev = self.moteur.steps_per_dome_revolution
             # Les slews d'anticipation sont des grands déplacements : vitesse rapide (v6.18)
             dome_speed = 360.0 / (steps_per_rev * FAST_MOTOR_DELAY)
 
-            anchor = datetime.utcnow()
+            anchor = datetime.now(timezone.utc)
             trajectory = build_lookahead_trajectory(
                 self.calc,
                 self.abaque_manager,

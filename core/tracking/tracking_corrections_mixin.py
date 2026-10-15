@@ -13,7 +13,7 @@ meridian_catchup.
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
 from core.config.config import (
@@ -59,14 +59,14 @@ class TrackingCorrectionsMixin:
 
         # Anticipation méridien (v5.9) — exécutée AVANT la logique abaque standard.
         # Court-circuit silencieux si flag désactivé (schedule=None) ou déjà consommé.
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(timezone.utc)
         # Re-scan glissant : ré-évalue la fenêtre 1h périodiquement (throttle 5 min)
         # tant qu'aucun schedule n'est armé. No-op si schedule en attente.
         self._maybe_rescan_anticipation(now_utc)
         if self._should_execute_anticipatory_slew(now_utc):
             self._execute_anticipatory_slew()
             # Après un slew massif, consommer l'intervalle avant la prochaine correction.
-            self.next_correction_time = datetime.now() + timedelta(
+            self.next_correction_time = now_utc + timedelta(
                 seconds=SINGLE_SPEED_CHECK_INTERVAL_S
             )
             return True, "meridian_anticipation_slew_executed"
@@ -74,7 +74,7 @@ class TrackingCorrectionsMixin:
         # Session milestone (toutes les 5 min)
         self._check_session_milestone()
 
-        now = datetime.now()
+        now = now_utc
 
         # Vérifier si c'est le moment de faire une correction
         # (respecte l'intervalle configuré, même si appelé plus fréquemment)
@@ -127,7 +127,7 @@ class TrackingCorrectionsMixin:
 
         # === Ajouter à l'historique de dérive ===
         self.drift_tracking['corrections_log'].append({
-            'timestamp': now.isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'azimut': round(azimut, 2),
             'altitude': round(altitude, 2),
             'dome_position': round(position_cible, 2),

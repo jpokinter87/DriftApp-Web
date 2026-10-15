@@ -15,7 +15,7 @@ build_lookahead_trajectory pour isoler l'orchestration de astropy/abaque
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -107,12 +107,12 @@ class TestAnticipationDisabled:
     def test_should_execute_returns_false_when_disabled(self):
         stub = _SessionStub(enabled=False)
         stub._compute_anticipation_schedule()
-        assert stub._should_execute_anticipatory_slew(datetime.utcnow()) is False
+        assert stub._should_execute_anticipatory_slew(datetime.now(timezone.utc)) is False
 
     def test_no_rotation_absolue_call_when_disabled(self):
         stub = _SessionStub(enabled=False)
         stub._compute_anticipation_schedule()
-        stub._should_execute_anticipatory_slew(datetime.utcnow())
+        stub._should_execute_anticipatory_slew(datetime.now(timezone.utc))
         stub.moteur.rotation_absolue.assert_not_called()
 
 
@@ -187,13 +187,13 @@ class TestAnticipationSlewExecution:
         anchor_offset_sec positif = anchor dans le passé (donc t_start déjà atteint).
         """
         stub._anticipation_schedule = schedule
-        stub._anticipation_anchor_utc = datetime.utcnow() - timedelta(seconds=anchor_offset_sec)
+        stub._anticipation_anchor_utc = datetime.now(timezone.utc) - timedelta(seconds=anchor_offset_sec)
 
     def test_slew_triggers_at_t_start(self, sample_schedule):
         stub = _SessionStub(enabled=True)
         # anchor 1200s dans le passé → elapsed >= schedule.t_start (1140s)
         self._prime_schedule(stub, sample_schedule, anchor_offset_sec=1200.0)
-        assert stub._should_execute_anticipatory_slew(datetime.utcnow()) is True
+        assert stub._should_execute_anticipatory_slew(datetime.now(timezone.utc)) is True
 
         stub._execute_anticipatory_slew()
 
@@ -220,7 +220,7 @@ class TestAnticipationSlewExecution:
         stub = _SessionStub(enabled=True)
         # anchor 10s dans le passé → elapsed (10s) < schedule.t_start (1140s)
         self._prime_schedule(stub, sample_schedule, anchor_offset_sec=10.0)
-        assert stub._should_execute_anticipatory_slew(datetime.utcnow()) is False
+        assert stub._should_execute_anticipatory_slew(datetime.now(timezone.utc)) is False
         stub.moteur.rotation_absolue.assert_not_called()
 
     def test_slew_consumed_once(self, sample_schedule):
@@ -231,7 +231,7 @@ class TestAnticipationSlewExecution:
         assert stub._anticipation_consumed is True
 
         # Deuxième appel : _should_execute renvoie False, rotation_absolue pas rappelée
-        assert stub._should_execute_anticipatory_slew(datetime.utcnow()) is False
+        assert stub._should_execute_anticipatory_slew(datetime.now(timezone.utc)) is False
         stub._execute_anticipatory_slew()  # idempotent, ne ré-exécute pas
         stub.moteur.rotation_absolue.assert_called_once()
 
@@ -344,7 +344,7 @@ class TestCheckAndCorrectHook:
         session = self._build_session(enabled=True)
         # Injecter un schedule déjà dû
         session._anticipation_schedule = sample_schedule
-        session._anticipation_anchor_utc = datetime.utcnow() - timedelta(seconds=1200)
+        session._anticipation_anchor_utc = datetime.now(timezone.utc) - timedelta(seconds=1200)
 
         # Mock _calculate_current_coords pour prouver qu'il n'est PAS appelé
         with patch.object(session, "_calculate_current_coords") as mock_calc:
@@ -363,7 +363,7 @@ class TestCheckAndCorrectHook:
         # Le hook doit laisser passer vers la logique abaque normale.
         # On vérifie qu'avant d'atteindre la logique abaque, le hook retourne False
         # (ici on s'arrête avant : _calculate_current_coords serait appelé ensuite).
-        assert session._should_execute_anticipatory_slew(datetime.utcnow()) is False
+        assert session._should_execute_anticipatory_slew(datetime.now(timezone.utc)) is False
 
 
 # ============================================================================
@@ -377,7 +377,7 @@ class TestAnticipationRescan:
     def test_rescan_noop_when_disabled(self):
         stub = _SessionStub(enabled=False)
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
-            stub._maybe_rescan_anticipation(datetime.utcnow())
+            stub._maybe_rescan_anticipation(datetime.now(timezone.utc))
         mock_compute.assert_not_called()
 
     def test_rescan_first_call_runs_compute(self):
@@ -387,7 +387,7 @@ class TestAnticipationRescan:
         # de `_anticipation_last_scan_at`, donc le test contractuel ne vérifie
         # que l'appel à compute.
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
-            stub._maybe_rescan_anticipation(datetime.utcnow())
+            stub._maybe_rescan_anticipation(datetime.now(timezone.utc))
         mock_compute.assert_called_once_with(log_no_flip=False)
 
     def test_compute_sets_last_scan_at(self):
@@ -406,7 +406,7 @@ class TestAnticipationRescan:
 
     def test_rescan_throttled_within_5_min(self):
         stub = _SessionStub(enabled=True)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         stub._anticipation_last_scan_at = now
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
             stub._maybe_rescan_anticipation(now + timedelta(seconds=120))  # < 300s
@@ -414,7 +414,7 @@ class TestAnticipationRescan:
 
     def test_rescan_runs_after_5_min(self):
         stub = _SessionStub(enabled=True)
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         stub._anticipation_last_scan_at = now
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
             stub._maybe_rescan_anticipation(now + timedelta(seconds=301))  # > 300s
@@ -424,10 +424,10 @@ class TestAnticipationRescan:
         """Schedule armé non consommé → on ne re-scan pas (timing protégé)."""
         stub = _SessionStub(enabled=True)
         stub._anticipation_schedule = sample_schedule
-        stub._anticipation_anchor_utc = datetime.utcnow()
+        stub._anticipation_anchor_utc = datetime.now(timezone.utc)
         stub._anticipation_consumed = False
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
-            stub._maybe_rescan_anticipation(datetime.utcnow() + timedelta(seconds=600))
+            stub._maybe_rescan_anticipation(datetime.now(timezone.utc) + timedelta(seconds=600))
         mock_compute.assert_not_called()
 
     def test_rescan_runs_after_consumption(self, sample_schedule):
@@ -436,7 +436,7 @@ class TestAnticipationRescan:
         stub._anticipation_schedule = sample_schedule
         stub._anticipation_consumed = True
         with patch.object(stub, "_compute_anticipation_schedule") as mock_compute:
-            stub._maybe_rescan_anticipation(datetime.utcnow())
+            stub._maybe_rescan_anticipation(datetime.now(timezone.utc))
         mock_compute.assert_called_once_with(log_no_flip=False)
 
     def test_compute_resets_consumed_flag(self, sample_flip, sample_schedule):

@@ -12,7 +12,7 @@ Architecture Mixin (v4.5):
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Tuple, Optional
 
 from core.config.config import (
@@ -236,7 +236,9 @@ class TrackingSession(
         if not success:
             return False, error_msg
 
-        now = datetime.now()
+        # UTC « aware » : l'heure locale naïve recule d'1 h au passage à l'heure
+        # d'hiver alors que `calc.tz_offset` reste figé au démarrage du suivi.
+        now = datetime.now(timezone.utc)
 
         # Pour les planètes, mettre à jour RA/DEC (Mixin TrackingGotoMixin)
         if self.is_planet:
@@ -298,8 +300,8 @@ class TrackingSession(
     def _start_tracking(self, objet_name: str, now: datetime, initial_interval: int = None):
         """Active le suivi."""
         self.running = True
-        self.drift_tracking["start_time"] = now
-        self._last_milestone_time = now
+        self.drift_tracking["start_time"] = datetime.now()
+        self._last_milestone_time = datetime.now()
         # Utiliser l'intervalle adaptatif si fourni, sinon l'intervalle par défaut
         interval = initial_interval if initial_interval is not None else self.intervalle
         self.next_correction_time = now + timedelta(seconds=interval)
@@ -361,7 +363,7 @@ class TrackingSession(
         if not self.running:
             return {"running": False}
 
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         azimut, altitude = self._calculate_current_coords(now)
         position_cible, infos = self._calculate_target_position(azimut, altitude)
 

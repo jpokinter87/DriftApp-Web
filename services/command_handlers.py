@@ -656,7 +656,9 @@ class TrackingHandler:
                 }
 
                 if ra_deg is not None and self._calc is not None:
-                    now = datetime.now()
+                    # Aware (heure locale du jour) : tz_offset de _calc est figé
+                    # au démarrage et faux après un changement d'heure.
+                    now = datetime.now().astimezone()
                     dec_deg = getattr(self.session, "dec_deg", None) or 0.0
                     ha = self._calc.calculer_angle_horaire(
                         ra_deg, now, deja_jnow=False, declinaison=dec_deg
