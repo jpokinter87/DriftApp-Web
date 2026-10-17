@@ -15,7 +15,7 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 OUT = os.path.join(
     os.path.dirname(__file__), "..", "..", "docs", "protocole_inclinometre_terrain.pdf"
 )
-SCRIPT = "uv run --with bleak python scripts/diagnostics/inclinometre_monture.py"
+CMD = "./scripts/inclinometre.sh"
 
 
 class Protocole(Report):
@@ -46,8 +46,8 @@ class Protocole(Report):
 
 pdf = Protocole(
     title="Inclinomètre de la monture",
-    subtitle="Mise en place et initialisation — DriftApp 6.21.11",
-    header_text="Protocole inclinomètre — v6.21.11",
+    subtitle="Mise en place et initialisation — DriftApp 6.21.12",
+    header_text="Protocole inclinomètre — v6.21.12",
 )
 
 pdf.title_page(
@@ -58,13 +58,14 @@ pdf.title_page(
         "WitMotion WT9011DCL-BT50 sur la monture et le faire lire par le Raspberry Pi en "
         "Bluetooth. Un retournement est une rotation d'un demi-tour : il doit se voir sans "
         "ambiguïté. Ce protocole installe le capteur, le teste de jour, puis enregistre une "
-        "vraie nuit. Rien ne change encore dans le suivi : DriftApp se contente d'écouter."
+        "vraie nuit. Tout se fait directement sur le Pi, au clavier. Rien ne change encore "
+        "dans le suivi : DriftApp se contente d'écouter."
     ),
     extra_lines=[
         "Observatoire Ubik — DriftApp Web",
         "Destinataire : Serge, sur site",
         "Étapes 1 à 6 de jour (environ 1 h), étape 7 pendant une nuit d'observation",
-        "Prérequis : mise à jour 6.21.11 installée (bouton « Mettre à jour »)",
+        "Prérequis : mise à jour 6.21.12 installée (bouton « Mettre à jour »)",
         "Octobre 2026",
     ],
 )
@@ -74,25 +75,45 @@ pdf.add_page()
 pdf.h1("Avant de commencer")
 pdf.bold_bullet(
     "Une seule connexion à la fois :",
-    "le capteur n'accepte qu'un appareil connecté. "
-    "Si le téléphone y est connecté (application WitMotion), le Pi ne le voit plus. "
-    "Toujours fermer l'application avant les étapes sur le Pi.",
+    "le capteur n'accepte qu'un appareil connecté. Si le téléphone y est connecté "
+    "(application WitMotion), le Pi ne le voit plus. Toujours fermer l'application "
+    "avant les étapes sur le Pi.",
 )
 pdf.bold_bullet(
     "Le capteur est un lecteur :",
-    "le script n'envoie aucun ordre, ni au capteur, ni à "
-    "la coupole, ni à la monture. On peut l'arrêter à tout moment (Ctrl+C).",
+    "les commandes n'envoient aucun ordre, ni au capteur, ni à la coupole, ni à la "
+    "monture. On peut les arrêter à tout moment.",
 )
 pdf.bold_bullet(
     "Wi-Fi et Bluetooth :",
-    "sur le Pi, ils partagent la même puce. Si un Shelly du "
-    "cimier devenait injoignable pendant les essais, le noter avec l'heure.",
+    "sur le Pi, ils partagent la même puce. Si un Shelly du cimier devenait injoignable "
+    "pendant les essais, le noter avec l'heure.",
 )
 pdf.warning_box(
     "Points que je ne connais pas et que ce protocole fait vérifier : l'autonomie réelle de la "
     "batterie (les fiches du commerce annoncent de 8 à 40 h), la portée du Bluetooth à travers "
     "la coupole, et le format exact des données de ce modèle (repris d'un modèle de la même "
     "famille)."
+)
+
+pdf.h1("Ouvrir un terminal sur le Pi")
+pdf.body("Toutes les commandes de ce protocole se tapent dans un terminal, sur le Pi lui-même.")
+pdf.bold_bullet(
+    "Ouvrir :", "appuyer sur Ctrl + Alt + T. Une fenêtre noire s'ouvre par-dessus le dashboard."
+)
+pdf.bold_bullet(
+    "Si rien ne s'ouvre :",
+    "Alt + Tab pour passer au bureau, puis menu framboise (en haut à gauche) → Accessoires → Terminal.",
+)
+pdf.bold_bullet(
+    "Revenir au dashboard :", "Alt + Tab. Le dashboard n'est pas fermé, il est juste derrière."
+)
+pdf.body("Dans chaque nouveau terminal, taper d'abord cette commande, puis Entrée :")
+pdf.code_block(["cd ~/DriftApp"])
+pdf.info_box(
+    "Les commandes se tapent exactement comme écrites, espaces et points compris, puis Entrée. "
+    "La flèche Haut du clavier rappelle la commande précédente : pratique pour la relancer sans "
+    "tout retaper. Toutes les commandes du capteur commencent par ./scripts/inclinometre.sh"
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -107,7 +128,6 @@ pdf.attendu(
     "des couleurs et clignotements)."
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
 pdf.h1("Étape 2 — Vérifier le capteur avec le téléphone (facultatif)")
 pdf.body(
     "Avec l'application WitMotion indiquée dans le guide : se connecter au capteur, le tourner à "
@@ -119,11 +139,15 @@ pdf.bullet("Pas besoin d'étalonnage : on cherche un demi-tour, pas une précisi
 pdf.bullet("Fermer l'application et déconnecter le capteur à la fin.")
 
 # ─────────────────────────────────────────────────────────────────────────────
+pdf.add_page()
 pdf.h1("Étape 3 — Vérifier le Bluetooth du Pi")
-pdf.body("En SSH sur le Pi :")
-pdf.code_block(["bluetoothctl show | grep -E 'Powered|Name'"])
-pdf.attendu("une ligne « Powered: yes ».")
-pdf.body("Si « Powered: no », ou si la commande ne renvoie rien :")
+pdf.code_block(["bluetoothctl show"])
+pdf.attendu("parmi les lignes affichées, « Powered: yes ».")
+pdf.body(
+    "Si « Powered: no », ou si la commande répond « No default controller available », taper "
+    "ces trois commandes l'une après l'autre (le mot de passe demandé est celui de la session du Pi), "
+    "puis refaire « bluetoothctl show » :"
+)
 pdf.code_block(
     [
         "sudo rfkill unblock bluetooth",
@@ -131,25 +155,22 @@ pdf.code_block(
         "bluetoothctl power on",
     ]
 )
-pdf.body("Puis relancer la première commande.")
 
-# ─────────────────────────────────────────────────────────────────────────────
-pdf.add_page()
 pdf.h1("Étape 4 — Trouver le capteur depuis le Pi")
 pdf.body("Capteur allumé, posé à côté du Pi, application du téléphone fermée :")
-pdf.code_block(["cd ~/DriftApp", SCRIPT + " --scan"])
+pdf.code_block([CMD + " scan"])
 pdf.body(
-    "La première fois, la commande télécharge la bibliothèque Bluetooth (bleak) : le Pi doit avoir "
-    "accès à internet. Le scan dure 10 s."
+    "La première fois, la commande télécharge la bibliothèque Bluetooth : le Pi doit avoir accès "
+    "à internet, et cela peut prendre une minute. Le scan lui-même dure 10 s."
 )
 pdf.attendu(
-    "une ligne du type « AA:BB:CC:DD:EE:FF  RSSI -55 dBm  WT901BLE68  <-- capteur "
-    "WitMotion probable ». Noter l'adresse (les 6 paires) : on s'en sert ensuite."
+    "une ligne du type « AA:BB:CC:DD:EE:FF  RSSI -55 dBm  WT901BLE68  <-- capteur WitMotion "
+    "probable ». Il n'y a rien à recopier : les commandes suivantes retrouvent le capteur seules."
 )
 pdf.body(
-    "Refaire le scan avec le capteur posé à l'endroit prévu sur la monture, et noter le RSSI. "
-    "Plus il est proche de 0, meilleure est la liaison : jusqu'à -85 dBm, ça devrait aller ; "
-    "en dessous, il faudra rapprocher le Pi ou un adaptateur Bluetooth USB."
+    "Refaire le scan avec le capteur posé à l'endroit prévu sur la monture, et noter le RSSI "
+    "(le nombre en dBm). Plus il est proche de 0, meilleure est la liaison : jusqu'à -85 dBm, ça "
+    "devrait aller ; en dessous, il faudra rapprocher le Pi ou ajouter un adaptateur Bluetooth USB."
 )
 pdf.table(
     ["Position du capteur", "RSSI relevé"],
@@ -161,24 +182,22 @@ pdf.table(
     col_widths=[110, 60],
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
+pdf.add_page()
 pdf.h1("Étape 5 — Essai à la main")
-pdf.body("Toujours capteur en main (remplacer l'adresse par celle notée à l'étape 4) :")
-pdf.code_block([SCRIPT + " --adresse AA:BB:CC:DD:EE:FF"])
+pdf.body("Capteur en main :")
+pdf.code_block([CMD + " essai"])
 pdf.attendu(
-    "« Connecté à … », puis toutes les 10 s une ligne avec roulis, tangage, lacet et le "
-    "nombre de mesures (environ 100 de plus à chaque ligne)."
+    "« Capteur trouvé », « Connecté à … », puis toutes les 10 s une ligne avec roulis, tangage, "
+    "lacet et le nombre de mesures (environ 100 de plus à chaque ligne)."
 )
 pdf.body("Tourner alors lentement le capteur d'un quart de tour, puis le reposer et attendre 5 s :")
 pdf.attendu(
-    "« >>> MOUVEMENT de la monture », puis « <<< fin du mouvement : … s, roulis 90°, "
-    "tangage … » (ou tangage 90°, selon l'axe autour duquel on a tourné)."
+    "« >>> MOUVEMENT de la monture », puis « <<< fin du mouvement : … s, roulis 90°, tangage … » "
+    "(ou tangage 90°, selon l'axe autour duquel on a tourné)."
 )
-pdf.body("Arrêter avec Ctrl+C, puis vérifier le fichier enregistré :")
-pdf.code_block(["ls -l logs/inclinometre_*.csv", "head -3 logs/inclinometre_*.csv"])
-pdf.attendu(
-    "un fichier par lancement, qui commence par la ligne d'en-tête « heure_locale,t_unix,ax_g,… »."
-)
+pdf.body("Arrêter avec Ctrl + C, puis vérifier que le fichier de mesures existe :")
+pdf.code_block(["ls -l logs/inclinometre_*"])
+pdf.attendu("au moins un fichier logs/inclinometre_<date>_<heure>.csv, de taille supérieure à 0.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 pdf.add_page()
@@ -186,9 +205,9 @@ pdf.h1("Étape 6 — Fixer le capteur et simuler un retournement")
 pdf.h2("6.1 Où le fixer")
 pdf.bold_bullet(
     "Sur l'axe d'ascension droite :",
-    "une pièce qui tourne avec lui, boîtier de "
-    "déclinaison ou barre de contrepoids. C'est là que le retournement donne le "
-    "signal le plus net. Sur le tube, ça marche aussi, mais le signal mélange les deux axes.",
+    "une pièce qui tourne avec lui, boîtier de déclinaison ou barre de contrepoids. C'est là que "
+    "le retournement donne le signal le plus net. Sur le tube, ça marche aussi, mais le signal "
+    "mélange les deux axes.",
 )
 pdf.bullet(
     "Fixation ferme (collier, adhésif double face épais, velcro), qui ne puisse pas glisser."
@@ -200,10 +219,12 @@ pdf.bullet("Le bouton doit rester accessible ; prévoir l'accès à la prise USB
 pdf.bullet("Photographier le montage (on aura besoin de savoir dans quel sens il est posé).")
 
 pdf.h2("6.2 Simuler un retournement de jour")
-pdf.body("Lancer l'acquisition (même commande qu'à l'étape 5), puis avec l'ASIAIR :")
+pdf.body(f"Lancer « {CMD} essai » comme à l'étape 5, puis avec l'ASIAIR :")
 pdf.bullet("GOTO sur un objet à l'Est du méridien, attendre la fin du mouvement ;")
 pdf.bullet("GOTO sur un objet à l'Ouest du méridien : la monture change de côté du pied ;")
-pdf.bullet("noter l'heure de chaque GOTO.")
+pdf.bullet(
+    "noter l'heure de chaque GOTO, et ce qu'affiche le terminal à la fin de chaque mouvement."
+)
 pdf.attendu(
     "deux mouvements détectés. Le second doit montrer une grande variation de roulis ou de "
     "tangage (de l'ordre de 90° à 180°) : c'est la signature d'un retournement."
@@ -213,25 +234,23 @@ pdf.table(
     [["Objet à l'Est", "", "", "", ""], ["Objet à l'Ouest (retournement)", "", "", "", ""]],
     col_widths=[56, 26, 30, 29, 29],
 )
+pdf.body("Arrêter avec Ctrl + C.")
 
 pdf.h2("6.3 Mesurer l'autonomie")
 pdf.body(
-    "Capteur rechargé à fond, lancer l'acquisition et la laisser tourner sans y toucher (de jour "
-    "par exemple), en tâche de fond pour pouvoir fermer la session SSH :"
+    "Capteur rechargé à fond, lancer l'acquisition en tâche de fond : elle continue même si on "
+    "ferme le terminal, et on peut revenir au dashboard."
 )
-pdf.code_block(
-    [
-        "cd ~/DriftApp",
-        "nohup " + SCRIPT + " --adresse AA:BB:CC:DD:EE:FF \\",
-        "    > logs/inclinometre_console.txt 2>&1 &",
-    ]
+pdf.code_block([CMD + " demarrer"])
+pdf.body("Pour voir où on en est, à tout moment (dans un terminal, après « cd ~/DriftApp ») :")
+pdf.code_block([CMD + " etat"])
+pdf.attendu(
+    "« Acquisition EN COURS » et, dans les dernières lignes, des relevés récents. Quand le "
+    "capteur s'est éteint, on y voit « Aucun capteur WitMotion visible » ou des reconnexions en "
+    "échec : noter l'heure de la dernière mesure."
 )
-pdf.body(
-    "Quand le capteur s'éteint, la console affiche des reconnexions en échec. Pour voir où on en est :"
-)
-pdf.code_block(["tail -5 logs/inclinometre_console.txt"])
-pdf.body("Arrêter l'acquisition :")
-pdf.code_block(["pkill -f inclinometre_monture"])
+pdf.body("Pour arrêter :")
+pdf.code_block([CMD + " arreter"])
 pdf.attendu(
     "une autonomie supérieure à une nuit d'observation (au moins 14 h en hiver). Sinon : "
     "alimenter le capteur par une petite batterie USB fixée sur la monture."
@@ -243,8 +262,9 @@ pdf.add_page()
 pdf.h1("Étape 7 — Une nuit d'enregistrement")
 pdf.body(
     "Choisir une session dont l'objet passe au méridien haut dans le ciel, comme MWP 1 le 16/10. "
-    "Avant la session, capteur chargé et fixé, lancer l'acquisition en tâche de fond (commande "
-    "de l'étape 6.3). Elle tourne indépendamment de DriftApp."
+    f"Avant la session, capteur chargé et fixé, lancer « {CMD} demarrer » (étape 6.3), vérifier "
+    "avec « etat », puis revenir au dashboard (Alt + Tab). L'acquisition tourne indépendamment "
+    "de DriftApp."
 )
 pdf.body(
     "Pendant le passage au méridien, procéder comme le 16/10 si nécessaire : arrêter le suivi "
@@ -264,11 +284,12 @@ pdf.table(
     ],
     col_widths=[110, 60],
 )
-pdf.body("Le lendemain matin, arrêter l'acquisition (pkill, étape 6.3).")
+pdf.body(f"Le lendemain matin : « {CMD} arreter ».")
 
 pdf.h1("Étape 8 — Ce qu'il faut m'envoyer")
-pdf.bullet("logs/inclinometre_*.csv (le fichier de la nuit) et logs/inclinometre_console.txt ;")
-pdf.bullet("les logs motor_service de la nuit (logs/motor_service_*.log) ;")
+pdf.body("Dans le dossier DriftApp/logs du Pi (comme pour les autres logs) :")
+pdf.bullet("les fichiers inclinometre_*.csv de la nuit et inclinometre_console.txt ;")
+pdf.bullet("les logs motor_service de la nuit (motor_service_*.log).")
 pdf.bullet("le tableau de l'étape 7, les relevés des étapes 4 et 6, et la photo du montage.")
 pdf.info_box(
     "Avec ces données, je vérifie que le retournement se distingue de tout autre mouvement (GOTO, "
@@ -284,6 +305,11 @@ pdf.table(
     ["Symptôme", "Cause probable", "Que faire"],
     [
         [
+            "« Aucun fichier ou dossier de ce nom » en tapant ./scripts/inclinometre.sh",
+            "Terminal pas dans le bon dossier, ou mise à jour 6.21.12 pas installée",
+            "Taper « cd ~/DriftApp » puis recommencer ; sinon installer la mise à jour",
+        ],
+        [
             "Le scan ne montre aucun « WT… »",
             "Capteur éteint ou batterie vide ; téléphone encore connecté ; trop loin",
             "Recharger, fermer l'application WitMotion, rapprocher le capteur du Pi",
@@ -291,7 +317,7 @@ pdf.table(
         [
             "« Aucun capteur WitMotion visible ; nouvel essai dans 10 s »",
             "Idem",
-            "Idem ; le script réessaie seul, inutile de le relancer",
+            "Idem ; le programme réessaie seul, inutile de le relancer",
         ],
         [
             "« Connexion perdue » ou « Erreur Bluetooth » à répétition",
@@ -300,21 +326,26 @@ pdf.table(
         ],
         [
             "« Not authorized » ou « Permission denied »",
-            "Utilisateur pas autorisé à utiliser le Bluetooth",
-            "sudo usermod -aG bluetooth $USER, puis se déconnecter et se reconnecter",
+            "Session pas autorisée à utiliser le Bluetooth",
+            "sudo usermod -aG bluetooth $USER, puis redémarrer le Pi",
         ],
         [
-            "Erreur au téléchargement de bleak",
-            "Pas d'accès internet",
+            "Erreur au premier lancement, avant le scan",
+            "Pas d'accès internet (téléchargement de la bibliothèque)",
             "Vérifier la connexion du Pi, relancer",
+        ],
+        [
+            "Plusieurs « WT… » au scan",
+            "Un autre capteur WitMotion à portée",
+            "Ajouter son adresse : ./scripts/inclinometre.sh essai --adresse AA:BB:CC:DD:EE:FF",
         ],
         [
             "Connecté, mais le nombre de mesures n'augmente pas",
             "Format de données différent sur ce modèle",
-            "M'envoyer la sortie de la console : le décodage sera à adapter",
+            "Prendre une photo de l'écran et me l'envoyer : le décodage sera à adapter",
         ],
     ],
-    col_widths=[50, 55, 65],
+    col_widths=[52, 53, 65],
 )
 
 pdf.output(OUT)
