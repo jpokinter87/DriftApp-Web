@@ -256,6 +256,8 @@ def main() -> int:
         "--adresse", help="adresse Bluetooth du capteur (sinon : premier « WT… » trouvé)"
     )
     args = parser.parse_args()
+    # Sortie redirigée (nohup … > fichier) : écrire chaque ligne tout de suite
+    sys.stdout.reconfigure(line_buffering=True)
     try:
         asyncio.run(_scanner() if args.scan else _acquerir(args.adresse))
     except KeyboardInterrupt:
