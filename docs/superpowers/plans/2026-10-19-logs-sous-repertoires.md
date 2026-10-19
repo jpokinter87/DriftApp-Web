@@ -48,13 +48,13 @@ def ranger_anciens_logs(motifs: Iterable[str], nom: str) -> int:
     ne jamais empêcher un service de démarrer."""
 ```
 
-- [ ] Tests d'abord (doivent échouer) : sous-dossier créé sous
+- [x] Tests d'abord (doivent échouer) : sous-dossier créé sous
   `DRIFTAPP_LOGS_DIR` ; fichiers d'un motif déplacés, ceux d'un autre motif
   laissés ; second appel → 0 ; destination existante non écrasée ; dossier
   racine sans droit d'écriture (`chmod 0o500`) → pas d'exception, renvoie 0 ;
   fichiers de mise à jour (`update.log`, `update_status.json`,
   `restart*.json`) jamais concernés par les motifs des services.
-- [ ] Implémenter, `ruff`, tests verts.
+- [x] Implémenter, `ruff`, tests verts.
 
 ## Tâche 2 — motor_service → `logs/moteur/`
 
