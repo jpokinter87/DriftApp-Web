@@ -10,6 +10,8 @@ Couvre :
 - Contrôle d'arrêt (stop_requested)
 """
 
+from unittest.mock import patch
+
 import pytest
 
 from core.hardware.moteur_simule import (
@@ -135,6 +137,20 @@ class TestMoteurSimuleRotation:
         m = MoteurSimule()
         m.rotation_absolue(10.0, 350.0)
         assert get_simulated_position() == pytest.approx(10.0)
+
+    @pytest.mark.parametrize(
+        "actuelle, cible, sens, attendu",
+        [(100.0, 260.0, -1, -200.0), (260.0, 100.0, +1, 200.0), (10.0, 45.0, +1, 35.0)],
+    )
+    def test_rotation_absolue_sens_impose(self, actuelle, cible, sens, attendu):
+        """Même contrat que MoteurRP2040 : le slew d'anticipation méridien passe
+        force_direction, et parcourt le chemin long si le sens l'impose."""
+        set_simulated_position(actuelle)
+        m = MoteurSimule()
+        with patch.object(m, "rotation", wraps=m.rotation) as spy:
+            m.rotation_absolue(cible, actuelle, force_direction=sens)
+        assert spy.call_args.args[0] == pytest.approx(attendu)
+        assert get_simulated_position() == pytest.approx(cible)
 
 
 # =============================================================================

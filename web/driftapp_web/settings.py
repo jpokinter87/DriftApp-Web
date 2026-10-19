@@ -129,7 +129,8 @@ CIMIER_SERVICE_IPC = {
 DRIFTAPP_CONFIG = PROJECT_ROOT / "data" / "config.json"
 
 # Logging - fichier horodaté par session
-LOGS_DIR = PROJECT_ROOT / "logs"
+# DRIFTAPP_LOGS_DIR : redirigé par les tests (tests/conftest.py).
+LOGS_DIR = Path(os.environ.get("DRIFTAPP_LOGS_DIR") or PROJECT_ROOT / "logs")
 LOGS_DIR.mkdir(exist_ok=True)
 
 # Rétention des fichiers de log Django par âge (en jours)

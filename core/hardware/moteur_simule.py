@@ -190,6 +190,7 @@ class MoteurSimule:
         position_actuelle_deg: float,
         vitesse: float = 0.0015,
         use_ramp: bool = True,
+        force_direction: int = 0,
     ):
         """
         Rotation vers une position absolue.
@@ -199,6 +200,8 @@ class MoteurSimule:
             position_actuelle_deg: Position actuelle en degrés
             vitesse: Délai nominal (ignoré en simulation)
             use_ramp: Rampe d'accélération (ignoré en simulation, pour compatibilité)
+            force_direction: 0 = chemin le plus court ; +1/-1 = sens imposé,
+                chemin parcouru dans ce sens jusqu'à la cible (cf. MoteurRP2040).
         """
         position_cible = position_cible_deg % 360
         position_actuelle = position_actuelle_deg % 360
@@ -208,6 +211,11 @@ class MoteurSimule:
             diff -= 360
         elif diff < -180:
             diff += 360
+
+        if force_direction > 0:
+            diff = (position_cible - position_actuelle) % 360
+        elif force_direction < 0:
+            diff = -((position_actuelle - position_cible) % 360)
 
         self.rotation(diff, vitesse, use_ramp=use_ramp)
 

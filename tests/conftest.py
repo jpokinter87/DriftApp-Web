@@ -5,6 +5,8 @@ Ce fichier contient les fixtures pytest utilisées par plusieurs fichiers de tes
 """
 
 import json
+import os
+import tempfile
 import time as _real_time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +14,10 @@ from typing import Dict, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Avant tout import des services : motor_service, ems22d_calibrated et les
+# settings Django ouvrent leur log (et purgent les anciens) dès l'import.
+os.environ["DRIFTAPP_LOGS_DIR"] = tempfile.mkdtemp(prefix="driftapp_test_logs_")
 
 
 # =============================================================================
