@@ -61,17 +61,17 @@ def ranger_anciens_logs(motifs: Iterable[str], nom: str) -> int:
 **Fichier :** `services/motor_service.py` (bloc de configuration des logs en
 tête de module, `rotate_log_for_tracking`, `main()`).
 
-- [ ] Test : avec `DRIFTAPP_LOGS_DIR` pointé vers un dossier contenant
+- [x] Test : avec `DRIFTAPP_LOGS_DIR` pointé vers un dossier contenant
   `motor_service_20261001_120000.log`, un rechargement du module range ce
   fichier dans `moteur/` et y crée le log de démarrage ; `LOGS_DIR` vaut
   `…/moteur`. (Rechargement via `importlib` dans un sous-processus
   `python -c` pour ne pas recharger le module partagé du processus de test —
   cf. note mémoire CI/xdist : pas de `importlib.reload` en fixture.)
-- [ ] `LOGS_DIR = logs_subdir("moteur")`, appel
+- [x] `LOGS_DIR = logs_subdir("moteur")`, appel
   `ranger_anciens_logs(["motor_service_*.log"], "moteur")` **avant**
   `cleanup_old_logs()`. Retirer le `LOGS_DIR.mkdir` devenu redondant dans
   `main()`.
-- [ ] Adapter `tests/test_logs_isolation.py` (attend désormais `…/moteur`).
+- [x] Adapter `tests/test_logs_isolation.py` (attend désormais `…/moteur`).
 
 ## Tâche 3 — ems22d → `logs/encodeur/`
 

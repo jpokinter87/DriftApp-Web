@@ -48,15 +48,17 @@ from core.hardware.serial_simulator import SerialSimulator
 from core.hardware.hardware_detector import HardwareDetector
 from core.hardware.feedback_controller import FeedbackController
 from core.hardware.calibration_routine import CalibrationRoutine, CalibrationResult
+from core.utils.log_paths import logs_subdir, ranger_anciens_logs
 
 from services.ipc_manager import IpcManager
 from services.simulation import SimulatedDaemonReader
 from services.command_handlers import GotoHandler, JogHandler, ContinuousHandler, TrackingHandler
 
 # Configuration logging - fichier horodaté par session (cycle démarrage du service)
-# DRIFTAPP_LOGS_DIR : redirigé par les tests (tests/conftest.py).
-LOGS_DIR = Path(os.environ.get("DRIFTAPP_LOGS_DIR") or Path(__file__).parent.parent / "logs")
-LOGS_DIR.mkdir(exist_ok=True)
+# Sous-dossier logs/moteur/ ; les logs d'avant la 6.22, restés à la racine,
+# y sont rangés pour que la purge les retrouve.
+LOGS_DIR = logs_subdir("moteur")
+ranger_anciens_logs(["motor_service_*.log"], "moteur")
 
 # Rétention des fichiers de log par âge (en jours)
 MAX_LOG_AGE_DAYS = 7
@@ -867,9 +869,6 @@ def main():
     from core.config.config_status_writer import write_config_status
 
     write_config_status(ensure_config_ready(force=True))
-
-    # Créer le répertoire de logs si nécessaire
-    LOGS_DIR.mkdir(exist_ok=True)
 
     # Détection automatique du matériel
     is_production, _ = HardwareDetector.detect_hardware()

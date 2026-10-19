@@ -20,7 +20,32 @@ def test_conftest_redirige_les_logs():
 def test_motor_service_ecrit_dans_le_dossier_de_test():
     import services.motor_service as motor_service
 
-    assert motor_service.LOGS_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"])
+    assert motor_service.LOGS_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"]) / "moteur"
+
+
+def test_motor_service_range_ses_anciens_logs(tmp_path):
+    """Au démarrage, motor_service range dans moteur/ ses logs restés à la
+    racine (sinon plus jamais purgés) et y ouvre son log de démarrage.
+    Sous-processus : ne pas recharger le module partagé par les autres tests."""
+    import subprocess
+
+    (tmp_path / "motor_service_20261001_120000.log").write_text("ancien")
+    (tmp_path / "update_status.json").write_text("{}")
+    projet = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, DRIFTAPP_LOGS_DIR=str(tmp_path))
+    subprocess.run(
+        [sys.executable, "-c", "import services.motor_service"],
+        cwd=projet,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+    moteur = tmp_path / "moteur"
+    assert (moteur / "motor_service_20261001_120000.log").read_text() == "ancien"
+    assert len(list(moteur.glob("motor_service_*.log"))) == 2  # + log de démarrage
+    assert not list(tmp_path.glob("motor_service_*.log"))
+    assert (tmp_path / "update_status.json").exists()
 
 
 def test_ems22d_ecrit_dans_le_dossier_de_test():
