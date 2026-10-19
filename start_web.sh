@@ -37,9 +37,9 @@ REAL_USER="${SUDO_USER:-$USER}"
 # Créer les dossiers et ajuster les permissions pour l'utilisateur
 setup_permissions() {
     # Dossier logs
-    if [[ ! -d "$PROJECT_DIR/logs" ]]; then
-        mkdir -p "$PROJECT_DIR/logs"
-    fi
+    # Sous-dossiers (6.22) : créés ici pour que le chown ci-dessous les couvre
+    mkdir -p "$PROJECT_DIR/logs/moteur" "$PROJECT_DIR/logs/encodeur" \
+        "$PROJECT_DIR/logs/cimier" "$PROJECT_DIR/logs/web"
     chown -R "$REAL_USER:$REAL_USER" "$PROJECT_DIR/logs" 2>/dev/null || true
 
     # Dossier data et sessions (pour que l'utilisateur puisse modifier config.json)
@@ -153,7 +153,8 @@ start_cimier_service() {
         else
             log_info "Démarrage du Cimier Service (mode manuel)..."
             log_warn "Unit systemd cimier_service.service non installée"
-            nohup "$PYTHON" -m services.cimier_service >> "$PROJECT_DIR/logs/cimier_service.log" 2>&1 &
+            # Sortie console à part : le service écrit lui-même logs/cimier/cimier_service.log
+            nohup "$PYTHON" -m services.cimier_service >> "$PROJECT_DIR/logs/cimier/cimier_service_console.log" 2>&1 &
             disown
             sleep 2
             if pgrep -f "services.cimier_service" > /dev/null; then
@@ -189,7 +190,7 @@ start_django() {
             log_info "Démarrage de Django (en tant que $REAL_USER)..."
             log_warn "Service systemd non installé, utilisation du mode manuel"
             # Lancer en tant qu'utilisateur normal pour que les fichiers créés lui appartiennent
-            sudo -u "$REAL_USER" nohup "$PYTHON" web/manage.py runserver 0.0.0.0:8000 >> "$PROJECT_DIR/logs/django.log" 2>&1 &
+            sudo -u "$REAL_USER" nohup "$PYTHON" web/manage.py runserver 0.0.0.0:8000 >> "$PROJECT_DIR/logs/web/django.log" 2>&1 &
             disown
             sleep 2
             if pgrep -f "manage.py runserver" > /dev/null; then

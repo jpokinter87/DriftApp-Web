@@ -91,13 +91,13 @@ start_cimier_simulator() {
     else
         log_info "Démarrage du Cimier Simulator (Pico W simulé, port 8001)..."
         "$PYTHON" -m core.hardware.cimier_simulator --port 8001 --boot-delay 0.0 \
-            > "$PROJECT_DIR/logs/cimier_simulator.log" 2>&1 &
+            > "$PROJECT_DIR/logs/cimier/cimier_simulator.log" 2>&1 &
         sleep 2
         if pgrep -f "cimier_simulator" > /dev/null; then
             log_info "Cimier Simulator démarré (PID: $(pgrep -f cimier_simulator))"
         else
             log_error "Échec du démarrage du Cimier Simulator"
-            log_info "Vérifiez les logs: tail -f logs/cimier_simulator.log"
+            log_info "Vérifiez les logs: tail -f logs/cimier/cimier_simulator.log"
         fi
     fi
 }
@@ -113,7 +113,7 @@ start_motor_service() {
             log_info "Motor Service démarré (PID: $(pgrep -f motor_service.py))"
         else
             log_error "Échec du démarrage du Motor Service"
-            log_info "Vérifiez les logs: tail -f logs/motor_service.log"
+            log_info "Vérifiez les logs: ls -t logs/moteur/ (le plus récent en tête)"
         fi
     fi
 }
@@ -130,13 +130,13 @@ start_cimier_service() {
     # (cartouche état/phase, timeline) d'être vivante en dev.
     log_info "Démarrage du Cimier Service (CIMIER_DEV_MODE=1 → simulateur localhost:8001)..."
     CIMIER_DEV_MODE=1 "$PYTHON" -m services.cimier_service \
-        > "$PROJECT_DIR/logs/cimier_service.log" 2>&1 &
+        > "$PROJECT_DIR/logs/cimier/cimier_service.log" 2>&1 &
     sleep 2
     if pgrep -f "services\.cimier_service|services/cimier_service\.py" > /dev/null; then
         log_info "Cimier Service démarré (PID: $(pgrep -f 'services\.cimier_service|services/cimier_service\.py'))"
     else
         log_error "Échec du démarrage du Cimier Service"
-        log_info "Vérifiez les logs: tail -f logs/cimier_service.log"
+        log_info "Vérifiez les logs: tail -f logs/cimier/cimier_service.log"
     fi
 }
 
@@ -163,14 +163,14 @@ start_django() {
     log_info "Démarrage de Django (port ${django_port})..."
     cd web
     nohup "$PYTHON" manage.py runserver "0.0.0.0:${django_port}" \
-        > "$PROJECT_DIR/logs/django_runserver.log" 2>&1 &
+        > "$PROJECT_DIR/logs/web/django_runserver.log" 2>&1 &
     cd ..
     sleep 3
     if pgrep -f "manage.py runserver" > /dev/null; then
         log_info "Django démarré (PID: $(pgrep -f 'manage.py runserver') — http://localhost:${django_port})"
     else
         log_error "Échec du démarrage de Django"
-        log_info "Voir : tail -f $PROJECT_DIR/logs/django_runserver.log"
+        log_info "Voir : tail -f $PROJECT_DIR/logs/web/django_runserver.log"
     fi
 }
 
@@ -243,7 +243,7 @@ status() {
     else
         # v6.3.2 : start_dev.sh lance toujours cimier_service en mode dev
         # (CIMIER_DEV_MODE=1 → simulateur). Si absent, c'est un crash.
-        echo -e "Cimier Service:   ${RED}ARRÊTÉ${NC} (crash ? voir logs/cimier_service.log)"
+        echo -e "Cimier Service:   ${RED}ARRÊTÉ${NC} (crash ? voir logs/cimier/cimier_service.log)"
     fi
 
     # Django
@@ -289,6 +289,9 @@ case "$ACTION" in
         check_dependencies
 
         echo ""
+        # Sous-dossiers de logs/ (6.22) : les redirections ci-dessous y écrivent
+        # avant que les services n'aient pu les créer.
+        mkdir -p "$PROJECT_DIR/logs/moteur" "$PROJECT_DIR/logs/cimier" "$PROJECT_DIR/logs/web"
         cleanup_ipc_stale
         start_cimier_simulator
         start_motor_service
@@ -304,10 +307,10 @@ case "$ACTION" in
         echo "  ./start_dev.sh status              - Voir l'état des services"
         echo "  ./start_dev.sh stop                - Arrêter les services"
         echo "  ./start_dev.sh start 8080          - Lancer avec un port Django alternatif"
-        echo "  tail -f logs/motor_service.log     - Logs Motor Service"
-        echo "  tail -f logs/cimier_service.log    - Logs Cimier Service"
-        echo "  tail -f logs/cimier_simulator.log  - Logs Cimier Simulator (Pico W simulé)"
-        echo "  tail -f logs/django_runserver.log  - Logs Django (runserver)"
+        echo "  ls -t logs/moteur/                        - Logs Motor Service (un par démarrage et par suivi)"
+        echo "  tail -f logs/cimier/cimier_service.log    - Logs Cimier Service"
+        echo "  tail -f logs/cimier/cimier_simulator.log  - Logs Cimier Simulator (Shelly simulés)"
+        echo "  tail -f logs/web/django_runserver.log     - Logs Django (runserver)"
         echo ""
         status
         ;;

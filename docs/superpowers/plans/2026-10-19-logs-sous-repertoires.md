@@ -139,12 +139,16 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 ## Tâche 7 — `start_dev.sh` et `start_web.sh`
 
-- [ ] `start_dev.sh` : redirections vers `logs/cimier/cimier_simulator.log`,
+- [x] `start_dev.sh` : redirections vers `logs/cimier/cimier_simulator.log`,
   `logs/cimier/cimier_service.log`, `logs/moteur/motor_service.log`,
   `logs/web/django_runserver.log` ; `mkdir -p` des sous-dossiers en tête ;
   messages `tail -f …` et aide de `status` mis à jour.
-- [ ] `start_web.sh` (chemin hors systemd) : `logs/cimier/cimier_service.log`,
+- [x] `start_web.sh` (chemin hors systemd) : `logs/cimier/cimier_service.log`,
   `logs/web/django.log`, `mkdir -p` correspondants.
+- [x] *Ajouté en cours de route :* le secours manuel de `start_web.sh` redirigeait
+  la sortie de cimier_service vers le fichier où le service écrit déjà lui-même
+  (chaque ligne en double depuis la 6.15) : sortie console à part,
+  `logs/cimier/cimier_service_console.log`.
 
 ## Tâche 8 — Documentation et PDF terrain
 
