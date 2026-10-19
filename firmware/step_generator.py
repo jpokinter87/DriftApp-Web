@@ -38,30 +38,31 @@ import time
 #
 # 10 instructions (max 32).
 
+
 @rp2.asm_pio(set_init=rp2.PIO.OUT_LOW)
 def step_pulse_auto():
     """Programme PIO autonome pour generation de N impulsions STEP."""
     # Lire nombre de pas (N-1) depuis FIFO
-    pull(block)                         # [0] Attend step count
-    mov(y, osr)                         # [1] Y = compteur de pas
+    pull(block)  # [0] Attend step count
+    mov(y, osr)  # [1] Y = compteur de pas
 
     # Lire demi-periode en cycles depuis FIFO
-    pull(block)                         # [2] Attend half_period
+    pull(block)  # [2] Attend half_period
     # OSR conserve la valeur — reutilisable via mov(x, osr)
 
     # Boucle principale : generer un pas par iteration
     label("loop_step")
-    set(pins, 1)                        # [3] STEP HIGH
-    mov(x, osr)                         # [4] X = demi-periode
+    set(pins, 1)  # [3] STEP HIGH
+    mov(x, osr)  # [4] X = demi-periode
     label("high_wait")
-    jmp(x_dec, "high_wait")             # [5] Attendre X cycles
+    jmp(x_dec, "high_wait")  # [5] Attendre X cycles
 
-    set(pins, 0)                        # [6] STEP LOW
-    mov(x, osr)                         # [7] X = demi-periode
+    set(pins, 0)  # [6] STEP LOW
+    mov(x, osr)  # [7] X = demi-periode
     label("low_wait")
-    jmp(x_dec, "low_wait")              # [8] Attendre X cycles
+    jmp(x_dec, "low_wait")  # [8] Attendre X cycles
 
-    jmp(y_dec, "loop_step")             # [9] Pas suivant (Y--)
+    jmp(y_dec, "loop_step")  # [9] Pas suivant (Y--)
     # Y=0 : tombe ici, wrap auto vers [0] pull(block) → attend prochain MOVE
 
 
@@ -180,8 +181,8 @@ class StepGenerator:
         # Reset instruction pointer puis activer la SM
         self._sm.restart()
         self._sm.active(1)
-        self._sm.put(steps - 1)   # N-1 car jmp y-- compte N+1 iterations
-        self._sm.put(cycles)      # Demi-periode en cycles
+        self._sm.put(steps - 1)  # N-1 car jmp y-- compte N+1 iterations
+        self._sm.put(cycles)  # Demi-periode en cycles
 
         # Le PIO tourne en autonome — Python surveille STOP et completion
         try:

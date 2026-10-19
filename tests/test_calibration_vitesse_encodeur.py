@@ -127,8 +127,15 @@ class TestDiagnostiquer:
         palier de référence, aucun palier ne doit être signalé.
         """
         mesures = [
-            (260, 43.18), (235, 48.56), (210, 54.02), (190, 60.36), (170, 66.62),
-            (155, 73.98), (140, 80.15), (130, 87.96), (124, 90.22),
+            (260, 43.18),
+            (235, 48.56),
+            (210, 54.02),
+            (190, 60.36),
+            (170, 66.62),
+            (155, 73.98),
+            (140, 80.15),
+            (130, 87.96),
+            (124, 90.22),
         ]
         reference = _mesure(*mesures[0])
         for delay_us, vitesse in mesures:

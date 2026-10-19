@@ -11,7 +11,7 @@ from core.utils.angle_utils import (
     shortest_angular_distance,
     angles_are_close,
     calculate_rotation_direction,
-    calculate_steps_for_rotation
+    calculate_steps_for_rotation,
 )
 
 

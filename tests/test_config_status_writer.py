@@ -28,9 +28,13 @@ def test_fichier_d_un_autre_service_n_est_pas_une_erreur(tmp_path, caplog):
     from unittest.mock import patch
 
     out = tmp_path / "config_status.json"
-    with patch("core.config.config_status_writer.os.replace",
-               side_effect=PermissionError(1, "Operation not permitted")), \
-         caplog.at_level(logging.INFO, logger="core.config.config_status_writer"):
+    with (
+        patch(
+            "core.config.config_status_writer.os.replace",
+            side_effect=PermissionError(1, "Operation not permitted"),
+        ),
+        caplog.at_level(logging.INFO, logger="core.config.config_status_writer"),
+    ):
         write_config_status(ConfigReport(status="unchanged"), path=out)
 
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING]

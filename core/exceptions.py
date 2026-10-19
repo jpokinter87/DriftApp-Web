@@ -26,6 +26,7 @@ class DriftAppError(Exception):
         except DriftAppError as e:
             logger.error(f"Erreur DriftApp: {e}")
     """
+
     pass
 
 
@@ -51,7 +52,7 @@ class MotorError(DriftAppError):
         *,
         pin: Optional[int] = None,
         delay: Optional[float] = None,
-        operation: Optional[str] = None
+        operation: Optional[str] = None,
     ):
         super().__init__(message)
         self.pin = pin
@@ -79,11 +80,7 @@ class EncoderError(DriftAppError):
     """
 
     def __init__(
-        self,
-        message: str,
-        *,
-        daemon_path: Optional[str] = None,
-        timeout_ms: Optional[int] = None
+        self, message: str, *, daemon_path: Optional[str] = None, timeout_ms: Optional[int] = None
     ):
         super().__init__(message)
         self.daemon_path = daemon_path
@@ -117,7 +114,7 @@ class AbaqueError(DriftAppError):
         *,
         file_path: Optional[str] = None,
         altitude: Optional[float] = None,
-        azimut: Optional[float] = None
+        azimut: Optional[float] = None,
     ):
         super().__init__(message)
         self.file_path = file_path
@@ -145,11 +142,7 @@ class IPCError(DriftAppError):
     """
 
     def __init__(
-        self,
-        message: str,
-        *,
-        file_path: Optional[str] = None,
-        operation: Optional[str] = None
+        self, message: str, *, file_path: Optional[str] = None, operation: Optional[str] = None
     ):
         super().__init__(message)
         self.file_path = file_path
@@ -176,11 +169,7 @@ class ConfigError(DriftAppError):
     """
 
     def __init__(
-        self,
-        message: str,
-        *,
-        config_path: Optional[str] = None,
-        key: Optional[str] = None
+        self, message: str, *, config_path: Optional[str] = None, key: Optional[str] = None
     ):
         super().__init__(message)
         self.config_path = config_path

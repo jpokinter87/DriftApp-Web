@@ -48,7 +48,9 @@ def _get_rotate_log_func():
 # =============================================================================
 
 
-def _get_motor_speed(config=None, speed: Optional[float] = None, delta: Optional[float] = None) -> float:
+def _get_motor_speed(
+    config=None, speed: Optional[float] = None, delta: Optional[float] = None
+) -> float:
     """
     Retourne la vitesse moteur (v6.18 : selon l'amplitude du déplacement).
 
@@ -416,7 +418,7 @@ class ContinuousHandler:
         # Pour le RP2040, envoyer un seul MOVE de 360° (tour complet).
         # Le firmware gere STOP en cours de mouvement via check_for_stop().
         # Cela elimine le claquement entre rotations successives.
-        is_rp2040 = hasattr(self.moteur, '_serial_lock')
+        is_rp2040 = hasattr(self.moteur, "_serial_lock")
 
         if direction == "cw":
             delta_per_step = 360.0 if is_rp2040 else 1.0
@@ -680,7 +682,7 @@ class TrackingHandler:
                     passage = self._calc.calculer_heure_passage_meridien(
                         ra_deg, now, declinaison=dec_deg
                     )
-                    tracking_info["meridian_time"] = passage.strftime('%Hh%M')
+                    tracking_info["meridian_time"] = passage.strftime("%Hh%M")
 
                 current_status["tracking_info"] = tracking_info
 

@@ -22,6 +22,7 @@ from core.hardware.moteur_rp2040 import MoteurRP2040
 
 class _ModeEntry:
     """Stub léger pour compat historique de self.modes_config."""
+
     def __init__(self, motor_delay: float):
         self.motor_delay = motor_delay
 
@@ -31,6 +32,7 @@ class MotorCalibrator:
         self.config = load_config()
         serial_cfg = self.config.motor_driver.serial
         import serial
+
         serial_port = serial.Serial(
             port=serial_cfg.port,
             baudrate=serial_cfg.baudrate,
@@ -41,7 +43,7 @@ class MotorCalibrator:
         # v5.10 : mode unique 260 µs — on garde la structure pour ne pas casser
         # l'affichage du menu, mais le motor_delay unique est la seule valeur utile.
         self.modes_config = {
-            'continuous': _ModeEntry(SINGLE_SPEED_MOTOR_DELAY),
+            "continuous": _ModeEntry(SINGLE_SPEED_MOTOR_DELAY),
         }
 
         # Historique des mesures
@@ -74,13 +76,15 @@ class MotorCalibrator:
         print(f"   ✅ Vitesse réelle: {vitesse_reelle:.1f}°/min")
         print(f"   ✅ Écart: {ecart:.1f}%")
 
-        self.mesures.append({
-            'angle': angle_deg,
-            'delay': motor_delay,
-            'vitesse_theo': vitesse_theo,
-            'vitesse_reelle': vitesse_reelle,
-            'ecart': ecart
-        })
+        self.mesures.append(
+            {
+                "angle": angle_deg,
+                "delay": motor_delay,
+                "vitesse_theo": vitesse_theo,
+                "vitesse_reelle": vitesse_reelle,
+                "ecart": ecart,
+            }
+        )
 
         return vitesse_reelle
 
@@ -103,23 +107,25 @@ class MotorCalibrator:
         print("\n" + "=" * 70)
         print("📊 PARAMÈTRES SYSTÈME (lecture seule)")
         print("=" * 70)
-        
+
         print(f"\n🔧 Moteur NEMA:")
         print(f"  Steps/revolution    : {self.config.motor.steps_per_revolution}")
         print(f"  Microsteps          : {self.config.motor.microsteps}")
-        print(f"  → Steps moteur/tour : {self.config.motor.steps_per_revolution * self.config.motor.microsteps}")
-        
+        print(
+            f"  → Steps moteur/tour : {self.config.motor.steps_per_revolution * self.config.motor.microsteps}"
+        )
+
         print(f"\n⚙️  Mécanique:")
         print(f"  Gear ratio          : {self.config.motor.gear_ratio:.1f}:1")
         print(f"  Correction factor   : {self.config.motor.steps_correction_factor:.5f}")
-        
+
         print(f"\n📐 Résultat final:")
         print(f"  Steps/tour coupole  : {self.moteur.steps_per_dome_revolution:,}")
         precision = 360 / self.moteur.steps_per_dome_revolution
         print(f"  Précision           : {precision:.6f}°/step")
         print(f"                      = {precision * 60:.4f}'/step")
         print(f"                      = {precision * 3600:.2f}''/step")
-        
+
         print(f"\n⚠️  Ces paramètres sont FIXES (calibrés sur site)")
         print(f"   → Modifier gear_ratio ou correction_factor casserait le positionnement")
         print(f"   → Seul motor_delay est ajustable pour changer la vitesse")
@@ -140,19 +146,19 @@ class MotorCalibrator:
 
             choix = input("\n▶️  Votre choix: ").strip()
 
-            if choix == '0':
+            if choix == "0":
                 break
-            elif choix == '1':
+            elif choix == "1":
                 self.afficher_config_actuelle()
-            elif choix == '2':
+            elif choix == "2":
                 self.test_rapide()
-            elif choix == '3':
+            elif choix == "3":
                 self.test_personnalise()
-            elif choix == '4':
+            elif choix == "4":
                 self.proposer_valeurs()
-            elif choix == '5':
+            elif choix == "5":
                 self.afficher_historique()
-            elif choix == '6':
+            elif choix == "6":
                 self.afficher_parametres_systeme()
 
     def test_rapide(self):
@@ -162,7 +168,7 @@ class MotorCalibrator:
             (0.002, "NORMAL"),
             (0.001, "CRITICAL (actuel)"),
             (0.0005, "Vitesse moyenne"),
-            (0.00015, "CONTINUOUS (actuel)")
+            (0.00015, "CONTINUOUS (actuel)"),
         ]
 
         for delay, desc in tests:
@@ -186,7 +192,7 @@ class MotorCalibrator:
             print(f"\n📊 Vitesse théorique: {vitesse_theo:.1f}°/min")
 
             confirm = input("Lancer le test? (o/N): ").lower()
-            if confirm == 'o':
+            if confirm == "o":
                 self.executer_rotation(angle, delay)
 
         except ValueError:
@@ -204,9 +210,9 @@ class MotorCalibrator:
 
         # Objectifs de vitesse
         objectifs = {
-            'normal': 5.0,  # 5°/min
-            'critical': 18.0,  # ~18°/min
-            'continuous': 41.0  # ~41°/min
+            "normal": 5.0,  # 5°/min
+            "critical": 18.0,  # ~18°/min
+            "continuous": 41.0,  # ~41°/min
         }
 
         print("\n🎯 Objectifs de vitesse:")
@@ -258,6 +264,7 @@ def main():
     except Exception as e:
         print(f"\n❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()
     finally:
         try:

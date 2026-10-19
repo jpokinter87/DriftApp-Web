@@ -30,6 +30,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
 os.environ.setdefault("DRIFTAPP_DEBUG", "1")
 
 import django
+
 django.setup()
 
 from rest_framework.test import APIClient
@@ -58,29 +59,41 @@ def health_ipc(tmp_path, monkeypatch):
     status_file = tmp_path / "motor_status.json"
     encoder_file = tmp_path / "ems22_position.json"
 
-    status_file.write_text(json.dumps({
-        "status": "idle",
-        "position": 45.0,
-        "mode": "idle",
-        "simulation": True,
-        "tracking_object": None,
-        "last_update": "2025-01-01T00:00:00",
-    }))
-    encoder_file.write_text(json.dumps({
-        "angle": 45.0,
-        "calibrated": True,
-        "status": "OK",
-        "raw_value": 512,
-    }))
+    status_file.write_text(
+        json.dumps(
+            {
+                "status": "idle",
+                "position": 45.0,
+                "mode": "idle",
+                "simulation": True,
+                "tracking_object": None,
+                "last_update": "2025-01-01T00:00:00",
+            }
+        )
+    )
+    encoder_file.write_text(
+        json.dumps(
+            {
+                "angle": 45.0,
+                "calibrated": True,
+                "status": "OK",
+                "raw_value": 512,
+            }
+        )
+    )
 
     config_file = tmp_path / "config.json"
-    config_file.write_text(json.dumps({
-        "site": {"nom": "Test", "latitude": 44.15},
-        "moteur": {"steps_per_revolution": 200, "microsteps": 4, "gear_ratio": 2230},
-        "suivi": {"seuil_correction_deg": 0.5},
-        "encodeur": {"enabled": True, "calibration_factor": 0.01},
-        "simulation": False,
-    }))
+    config_file.write_text(
+        json.dumps(
+            {
+                "site": {"nom": "Test", "latitude": 44.15},
+                "moteur": {"steps_per_revolution": 200, "microsteps": 4, "gear_ratio": 2230},
+                "suivi": {"seuil_correction_deg": 0.5},
+                "encodeur": {"enabled": True, "calibration_factor": 0.01},
+                "simulation": False,
+            }
+        )
+    )
 
     ipc_settings = {
         "COMMAND_FILE": str(cmd_file),
@@ -112,6 +125,7 @@ def lenient_freshness(monkeypatch):
     rendre un faux 503.
     """
     import web.health.views as health_views
+
     monkeypatch.setattr(health_views, "STALE_THRESHOLD_SEC", 3600.0)
 
 
@@ -119,9 +133,11 @@ def lenient_freshness(monkeypatch):
 # _check_file_freshness
 # =============================================================================
 
+
 class TestCheckFileFreshness:
     def test_fresh_file(self, health_ipc):
         from web.health.views import _check_file_freshness
+
         result = _check_file_freshness(Path(health_ipc["status_file"]))
         assert result["exists"] is True
         assert result["fresh"] is True
@@ -129,6 +145,7 @@ class TestCheckFileFreshness:
 
     def test_missing_file(self, health_ipc):
         from web.health.views import _check_file_freshness
+
         result = _check_file_freshness(Path("/nonexistent/file.json"))
         assert result["exists"] is False
         assert result["fresh"] is False
@@ -136,6 +153,7 @@ class TestCheckFileFreshness:
 
     def test_stale_file(self, health_ipc, tmp_path):
         from web.health.views import _check_file_freshness
+
         stale_file = tmp_path / "stale.json"
         stale_file.write_text("{}")
         # Set mtime to 60 seconds ago
@@ -150,9 +168,11 @@ class TestCheckFileFreshness:
 # _read_ipc_file_content
 # =============================================================================
 
+
 class TestReadIpcFileContent:
     def test_valid_json(self, health_ipc):
         from web.health.views import _read_ipc_file_content
+
         result = _read_ipc_file_content(Path(health_ipc["status_file"]))
         assert result["exists"] is True
         assert result["content"]["status"] == "idle"
@@ -161,6 +181,7 @@ class TestReadIpcFileContent:
 
     def test_empty_file(self, health_ipc, tmp_path):
         from web.health.views import _read_ipc_file_content
+
         empty = tmp_path / "empty.json"
         empty.write_text("")
         result = _read_ipc_file_content(empty)
@@ -170,6 +191,7 @@ class TestReadIpcFileContent:
 
     def test_corrupt_json(self, health_ipc, tmp_path):
         from web.health.views import _read_ipc_file_content
+
         bad = tmp_path / "bad.json"
         bad.write_text("{invalid json")
         result = _read_ipc_file_content(bad)
@@ -178,6 +200,7 @@ class TestReadIpcFileContent:
 
     def test_missing_file(self, health_ipc):
         from web.health.views import _read_ipc_file_content
+
         result = _read_ipc_file_content(Path("/nonexistent.json"))
         assert result["exists"] is False
 
@@ -185,6 +208,7 @@ class TestReadIpcFileContent:
 # =============================================================================
 # Health check endpoints
 # =============================================================================
+
 
 class TestHealthCheck:
     def test_healthy(self, api_client, health_ipc, lenient_freshness):
@@ -253,30 +277,37 @@ class TestVersionTuple:
 
     def test_version_normale(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("5.4.0") == (5, 4, 0)
 
     def test_version_deux_segments(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("5.4") == (5, 4)
 
     def test_version_unknown(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("unknown") == (0,)
 
     def test_version_vide(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("") == (0,)
 
     def test_version_none(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple(None) == (0,)
 
     def test_comparaison_superieure(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("5.5.0") > _version_tuple("5.4.0")
 
     def test_comparaison_egale(self):
         from web.health.update_checker import _version_tuple
+
         assert _version_tuple("5.4.0") == _version_tuple("5.4.0")
 
 
@@ -286,25 +317,31 @@ class TestCheckForUpdatesLogic:
     def test_meme_version_pas_de_mise_a_jour(self):
         """Même version locale/distante → update_available=False."""
         from web.health.update_checker import check_for_updates
-        with patch("web.health.update_checker.fetch_remote", return_value=True), \
-             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
-             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
-             patch("web.health.update_checker.count_commits_behind", return_value=3), \
-             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
-             patch("web.health.update_checker.get_remote_version", return_value="5.4.0"):
+
+        with (
+            patch("web.health.update_checker.fetch_remote", return_value=True),
+            patch("web.health.update_checker.get_local_commit", return_value="abc1234"),
+            patch("web.health.update_checker.get_remote_commit", return_value="def5678"),
+            patch("web.health.update_checker.count_commits_behind", return_value=3),
+            patch("web.health.update_checker.get_local_version", return_value="5.4.0"),
+            patch("web.health.update_checker.get_remote_version", return_value="5.4.0"),
+        ):
             result = check_for_updates()
             assert result["update_available"] is False
 
     def test_version_distante_superieure_mise_a_jour(self):
         """Version distante > locale → update_available=True."""
         from web.health.update_checker import check_for_updates
-        with patch("web.health.update_checker.fetch_remote", return_value=True), \
-             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
-             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
-             patch("web.health.update_checker.count_commits_behind", return_value=5), \
-             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
-             patch("web.health.update_checker.get_remote_version", return_value="5.5.0"), \
-             patch("web.health.update_checker.get_commit_messages", return_value=["abc feat"]):
+
+        with (
+            patch("web.health.update_checker.fetch_remote", return_value=True),
+            patch("web.health.update_checker.get_local_commit", return_value="abc1234"),
+            patch("web.health.update_checker.get_remote_commit", return_value="def5678"),
+            patch("web.health.update_checker.count_commits_behind", return_value=5),
+            patch("web.health.update_checker.get_local_version", return_value="5.4.0"),
+            patch("web.health.update_checker.get_remote_version", return_value="5.5.0"),
+            patch("web.health.update_checker.get_commit_messages", return_value=["abc feat"]),
+        ):
             result = check_for_updates()
             assert result["update_available"] is True
             assert result["commits_behind"] == 5
@@ -312,12 +349,15 @@ class TestCheckForUpdatesLogic:
     def test_fetch_echoue_pas_de_mise_a_jour(self):
         """Fetch échoue → update_available=False."""
         from web.health.update_checker import check_for_updates
-        with patch("web.health.update_checker.fetch_remote", return_value=False), \
-             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
-             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
-             patch("web.health.update_checker.count_commits_behind", return_value=3), \
-             patch("web.health.update_checker.get_local_version", return_value="5.4.0"), \
-             patch("web.health.update_checker.get_remote_version", return_value="5.5.0"):
+
+        with (
+            patch("web.health.update_checker.fetch_remote", return_value=False),
+            patch("web.health.update_checker.get_local_commit", return_value="abc1234"),
+            patch("web.health.update_checker.get_remote_commit", return_value="def5678"),
+            patch("web.health.update_checker.count_commits_behind", return_value=3),
+            patch("web.health.update_checker.get_local_version", return_value="5.4.0"),
+            patch("web.health.update_checker.get_remote_version", return_value="5.5.0"),
+        ):
             result = check_for_updates()
             assert result["update_available"] is False
             assert result["fetch_success"] is False
@@ -325,12 +365,15 @@ class TestCheckForUpdatesLogic:
     def test_version_locale_superieure_pas_de_mise_a_jour(self):
         """Version locale > distante (hotfix terrain) → update_available=False."""
         from web.health.update_checker import check_for_updates
-        with patch("web.health.update_checker.fetch_remote", return_value=True), \
-             patch("web.health.update_checker.get_local_commit", return_value="abc1234"), \
-             patch("web.health.update_checker.get_remote_commit", return_value="def5678"), \
-             patch("web.health.update_checker.count_commits_behind", return_value=1), \
-             patch("web.health.update_checker.get_local_version", return_value="5.5.0"), \
-             patch("web.health.update_checker.get_remote_version", return_value="5.4.0"):
+
+        with (
+            patch("web.health.update_checker.fetch_remote", return_value=True),
+            patch("web.health.update_checker.get_local_commit", return_value="abc1234"),
+            patch("web.health.update_checker.get_remote_commit", return_value="def5678"),
+            patch("web.health.update_checker.count_commits_behind", return_value=1),
+            patch("web.health.update_checker.get_local_version", return_value="5.5.0"),
+            patch("web.health.update_checker.get_remote_version", return_value="5.4.0"),
+        ):
             result = check_for_updates()
             assert result["update_available"] is False
 
@@ -347,6 +390,7 @@ class TestCheckUpdate:
         """check_update retourne 500 si check_for_updates lève une exception."""
         from rest_framework.test import APIRequestFactory
         from web.health.views import check_update
+
         factory = APIRequestFactory()
         request = factory.get("/api/health/update/check/")
         with patch("web.health.update_checker.check_for_updates", side_effect=OSError("git error")):
@@ -410,8 +454,12 @@ class TestRestartServices:
                 {"name": "cimier_service.service", "state": "active"},
             ],
         }
-        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
-            "health.views.subprocess.run", side_effect=self._script_writing(status_file, payload)
+        with (
+            patch("health.views.RESTART_STATUS_FILE", status_file),
+            patch(
+                "health.views.subprocess.run",
+                side_effect=self._script_writing(status_file, payload),
+            ),
         ):
             response = api_client.post("/api/health/restart/")
         assert response.status_code == 200
@@ -425,9 +473,12 @@ class TestRestartServices:
             "message": "1 service(s) non redémarré(s)",
             "services": [{"name": "cimier_service.service", "state": "failed"}],
         }
-        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
-            "health.views.subprocess.run",
-            side_effect=self._script_writing(status_file, payload, returncode=1),
+        with (
+            patch("health.views.RESTART_STATUS_FILE", status_file),
+            patch(
+                "health.views.subprocess.run",
+                side_effect=self._script_writing(status_file, payload, returncode=1),
+            ),
         ):
             response = api_client.post("/api/health/restart/")
         assert response.status_code == 500
@@ -436,9 +487,12 @@ class TestRestartServices:
 
     def test_sudo_refusal_is_explained(self, api_client, tmp_path):
         # Sudoers pas encore redéployé sur le Pi : le message doit le dire.
-        with patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"), patch(
-            "health.views.subprocess.run",
-            return_value=self._fake_run(returncode=1, stderr="sudo: a password is required"),
+        with (
+            patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"),
+            patch(
+                "health.views.subprocess.run",
+                return_value=self._fake_run(returncode=1, stderr="sudo: a password is required"),
+            ),
         ):
             response = api_client.post("/api/health/restart/")
         assert response.status_code == 500
@@ -447,8 +501,9 @@ class TestRestartServices:
     def test_timeout_is_reported(self, api_client, tmp_path):
         import subprocess as _sp
 
-        with patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"), patch(
-            "health.views.subprocess.run", side_effect=_sp.TimeoutExpired("cmd", 60)
+        with (
+            patch("health.views.RESTART_STATUS_FILE", tmp_path / "absent.json"),
+            patch("health.views.subprocess.run", side_effect=_sp.TimeoutExpired("cmd", 60)),
         ):
             response = api_client.post("/api/health/restart/")
         assert response.status_code == 500
@@ -466,9 +521,12 @@ class TestRestartServices:
             json.dumps({"services": [{"name": "ems22d.service", "state": "active"}]}),
             encoding="utf-8",
         )
-        with patch("health.views.RESTART_STATUS_FILE", status_file), patch(
-            "health.views.subprocess.run",
-            return_value=self._fake_run(returncode=1, stderr="sudo: authentication required"),
+        with (
+            patch("health.views.RESTART_STATUS_FILE", status_file),
+            patch(
+                "health.views.subprocess.run",
+                return_value=self._fake_run(returncode=1, stderr="sudo: authentication required"),
+            ),
         ):
             response = api_client.post("/api/health/restart/")
         assert response.status_code == 500

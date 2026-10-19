@@ -1,4 +1,3 @@
-
 """
 Module de calcul des éphémérides des planètes du système solaire.
 Utilise les algorithmes VSOP87 simplifiés pour calculer les positions planétaires.
@@ -13,6 +12,7 @@ try:
     from astropy.time import Time
     from astropy.coordinates import get_body, EarthLocation
     import astropy.units as u
+
     ASTROPY_AVAILABLE = True
 except ImportError:
     ASTROPY_AVAILABLE = False
@@ -21,20 +21,26 @@ except ImportError:
     EarthLocation = None
     u = None
 
+
 class PlanetaryEphemerides:
     """Calcul des positions des planètes."""
 
     # Liste des planètes supportées (nom français/anglais -> nom Astropy)
     PLANETS = {
-        "mercure": "mercury", "mercury": "mercury",
-        "venus": "venus", "vénus": "venus",
+        "mercure": "mercury",
+        "mercury": "mercury",
+        "venus": "venus",
+        "vénus": "venus",
         "mars": "mars",
         "jupiter": "jupiter",
-        "saturne": "saturn", "saturn": "saturn",
+        "saturne": "saturn",
+        "saturn": "saturn",
         "uranus": "uranus",
         "neptune": "neptune",
-        "lune": "moon", "moon": "moon",
-        "soleil": "sun", "sun": "sun",
+        "lune": "moon",
+        "moon": "moon",
+        "soleil": "sun",
+        "sun": "sun",
     }
 
     # Éléments orbitaux moyens simplifiés (J2000)
@@ -43,12 +49,12 @@ class PlanetaryEphemerides:
     # i = inclinaison, Omega = longitude nœud ascendant, omega = argument périhélie
     ORBITAL_ELEMENTS = {
         "mercury": [252.25, 149472.67, 0.387, 0.206, 7.00, 48.33, 77.46],
-        "venus":   [181.98, 58517.82,  0.723, 0.007, 3.39, 76.68, 131.53],
-        "mars":    [355.43, 19140.30,  1.524, 0.093, 1.85, 49.56, 336.04],
-        "jupiter": [34.40,  3034.90,   5.203, 0.048, 1.31, 100.46, 14.75],
-        "saturn":  [49.94,  1222.11,   9.537, 0.054, 2.49, 113.72, 92.43],
-        "uranus":  [313.23, 428.48,    19.191, 0.047, 0.77, 74.23, 170.96],
-        "neptune": [304.88, 218.46,    30.069, 0.009, 1.77, 131.72, 44.97],
+        "venus": [181.98, 58517.82, 0.723, 0.007, 3.39, 76.68, 131.53],
+        "mars": [355.43, 19140.30, 1.524, 0.093, 1.85, 49.56, 336.04],
+        "jupiter": [34.40, 3034.90, 5.203, 0.048, 1.31, 100.46, 14.75],
+        "saturn": [49.94, 1222.11, 9.537, 0.054, 2.49, 113.72, 92.43],
+        "uranus": [313.23, 428.48, 19.191, 0.047, 0.77, 74.23, 170.96],
+        "neptune": [304.88, 218.46, 30.069, 0.009, 1.77, 131.72, 44.97],
     }
 
     @staticmethod
@@ -57,8 +63,9 @@ class PlanetaryEphemerides:
         return name.lower() in PlanetaryEphemerides.PLANETS
 
     @staticmethod
-    def get_planet_position(name: str, date_heure: datetime,
-                            latitude: float, longitude: float) -> Optional[Tuple[float, float]]:
+    def get_planet_position(
+        name: str, date_heure: datetime, latitude: float, longitude: float
+    ) -> Optional[Tuple[float, float]]:
         """
         Calcule la position d'une planète (AD, DEC).
 
@@ -81,11 +88,7 @@ class PlanetaryEphemerides:
                 return None
 
             # Créer la localisation de l'observateur
-            location = EarthLocation(
-                lat=latitude * u.deg,
-                lon=longitude * u.deg,
-                height=0 * u.m
-            )
+            location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
 
             # Convertir la date en format Astropy
             time = Time(date_heure)
@@ -101,9 +104,8 @@ class PlanetaryEphemerides:
 
         except Exception as e:
             import logging
-            logging.getLogger(__name__).warning(
-                f"Erreur calcul position planète {name}: {e}"
-            )
+
+            logging.getLogger(__name__).warning(f"Erreur calcul position planète {name}: {e}")
             return None
 
     @staticmethod
@@ -156,7 +158,13 @@ class PlanetaryEphemerides:
         century = year // 100
         leap_correction = 2 - century + century // 4
 
-        jd = int(365.25 * (year + 4716)) + int(30.6001 * (month + 1)) + day + leap_correction - 1524.5
+        jd = (
+            int(365.25 * (year + 4716))
+            + int(30.6001 * (month + 1))
+            + day
+            + leap_correction
+            - 1524.5
+        )
         return jd
 
 

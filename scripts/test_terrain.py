@@ -32,24 +32,24 @@ from core.utils.angle_utils import shortest_angular_distance
 OBJECTS = [
     {
         "name": "NGC 5033",
-        "ra_deg": 198.36,   # 13h13m27s
-        "dec_deg": 36.59,   # +36°35'38"
+        "ra_deg": 198.36,  # 13h13m27s
+        "dec_deg": 36.59,  # +36°35'38"
         "description": "Incident 16/03 à 2h20 — flip méridien, delta ~134°",
         "expect_large_delta": True,
         "transit_hour_utc_approx": 1.2,  # ~01h12 UTC (02h12 UTC+1)
     },
     {
         "name": "LBN 166.16+04.52",
-        "ra_deg": 81.89,    # depuis les logs terrain
-        "dec_deg": 42.97,   # depuis les logs terrain
+        "ra_deg": 81.89,  # depuis les logs terrain
+        "dec_deg": 42.97,  # depuis les logs terrain
         "description": "Incident 16/03 à 18h26 — zénith + flip, alt ~86.7°",
         "expect_large_delta": True,
         "transit_hour_utc_approx": 17.4,  # ~17h24 UTC (18h24 UTC+1)
     },
     {
         "name": "M42",
-        "ra_deg": 83.82,    # 05h35m17s
-        "dec_deg": -5.39,   # -05°23'28"
+        "ra_deg": 83.82,  # 05h35m17s
+        "dec_deg": -5.39,  # -05°23'28"
         "description": "Objet standard bas horizon depuis lat 44°N",
         "expect_large_delta": False,
         "transit_hour_utc_approx": 17.5,
@@ -102,8 +102,10 @@ def simulate_object(obj, calc, abaque, sim_date):
     end = transit_time + timedelta(hours=3)
     step = timedelta(minutes=10)
 
-    print(f"  {'Heure':<10}| {'HA':>8} | {'Az':>7} | {'Alt':>6} | {'Coupole':>8} | {'Delta':>8} | {'Mode':<12}")
-    print(f"  {'-'*10}+{'-'*10}+{'-'*9}+{'-'*8}+{'-'*10}+{'-'*10}+{'-'*12}")
+    print(
+        f"  {'Heure':<10}| {'HA':>8} | {'Az':>7} | {'Alt':>6} | {'Coupole':>8} | {'Delta':>8} | {'Mode':<12}"
+    )
+    print(f"  {'-' * 10}+{'-' * 10}+{'-' * 9}+{'-' * 8}+{'-' * 10}+{'-' * 10}+{'-' * 12}")
 
     prev_dome_pos = None
     transit_detected = False
@@ -181,7 +183,9 @@ def simulate_object(obj, calc, abaque, sim_date):
             print(f"  Delta au transit : {transit_delta:+.1f}° — attendu > 30° ✗")
             # Le delta max sur la trajectoire peut être plus grand
             if abs(max_delta) > 30:
-                print(f"  (Delta max trajectoire : {max_delta:+.1f}° > 30° — OK sur la trajectoire)")
+                print(
+                    f"  (Delta max trajectoire : {max_delta:+.1f}° > 30° — OK sur la trajectoire)"
+                )
             else:
                 checks_passed = False
         else:

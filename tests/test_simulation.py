@@ -16,6 +16,7 @@ class TestSimulatedDaemonReader:
     def reader(self):
         """Crée un SimulatedDaemonReader."""
         from services.simulation import SimulatedDaemonReader
+
         return SimulatedDaemonReader()
 
     def test_is_available_always_true(self, reader):
@@ -25,33 +26,37 @@ class TestSimulatedDaemonReader:
     def test_read_raw_returns_dict(self, reader):
         """read_raw retourne un dictionnaire avec les bonnes clés."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(45.0)
 
         result = reader.read_raw()
 
         assert isinstance(result, dict)
-        assert 'angle' in result
-        assert 'calibrated' in result
-        assert 'status' in result
-        assert 'raw' in result
+        assert "angle" in result
+        assert "calibrated" in result
+        assert "status" in result
+        assert "raw" in result
 
     def test_read_raw_calibrated_true(self, reader):
         """read_raw indique toujours calibré en simulation."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(0.0)
         result = reader.read_raw()
-        assert result['calibrated'] is True
+        assert result["calibrated"] is True
 
     def test_read_raw_status_simulation(self, reader):
         """read_raw indique le mode simulation dans le status."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(0.0)
         result = reader.read_raw()
-        assert 'simulation' in result['status'].lower()
+        assert "simulation" in result["status"].lower()
 
     def test_read_angle_returns_position(self, reader):
         """read_angle retourne la position simulée."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(123.5)
         result = reader.read_angle(timeout_ms=200)
         assert result == 123.5
@@ -59,6 +64,7 @@ class TestSimulatedDaemonReader:
     def test_read_angle_ignores_timeout(self, reader):
         """read_angle ignore le paramètre timeout (pas de blocage en simulation)."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(90.0)
         # Même avec un timeout court, pas de problème
         result = reader.read_angle(timeout_ms=1)
@@ -67,6 +73,7 @@ class TestSimulatedDaemonReader:
     def test_read_status_same_as_read_raw(self, reader):
         """read_status retourne les mêmes données que read_raw."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(180.0)
         raw = reader.read_raw()
         status = reader.read_status()
@@ -75,17 +82,15 @@ class TestSimulatedDaemonReader:
     def test_read_stable_returns_angle(self, reader):
         """read_stable retourne la position simulée sans moyennage."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(270.0)
-        result = reader.read_stable(
-            num_samples=5,
-            delay_ms=10,
-            stabilization_ms=50
-        )
+        result = reader.read_stable(num_samples=5, delay_ms=10, stabilization_ms=50)
         assert result == 270.0
 
     def test_read_stable_ignores_parameters(self, reader):
         """read_stable ignore les paramètres de stabilisation."""
         from core.hardware.moteur_simule import set_simulated_position
+
         set_simulated_position(45.0)
         # Tous les paramètres sont ignorés en simulation
         result1 = reader.read_stable(num_samples=1)
@@ -99,6 +104,7 @@ class TestSimulatedPosition:
     def test_position_default(self):
         """La position simulée par défaut est 0 (grâce au reset automatique)."""
         from core.hardware.moteur_simule import get_simulated_position
+
         # Le fixture reset_simulation_state remet à 0 avant chaque test
         assert get_simulated_position() == 0.0
 

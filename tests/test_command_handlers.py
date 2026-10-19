@@ -27,6 +27,7 @@ pytestmark = pytest.mark.slow
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def mock_moteur():
     """Mock du moteur."""
@@ -51,13 +52,15 @@ def mock_daemon_reader():
 def mock_feedback_controller():
     """Mock du contrôleur de feedback."""
     controller = MagicMock()
-    controller.rotation_avec_feedback = MagicMock(return_value={
-        'success': True,
-        'position_initiale': 0.0,
-        'position_finale': 90.0,
-        'erreur_finale': 0.1,
-        'iterations': 2
-    })
+    controller.rotation_avec_feedback = MagicMock(
+        return_value={
+            "success": True,
+            "position_initiale": 0.0,
+            "position_finale": 90.0,
+            "erreur_finale": 0.1,
+            "iterations": 2,
+        }
+    )
     controller.request_stop = MagicMock()
     return controller
 
@@ -65,10 +68,11 @@ def mock_feedback_controller():
 @pytest.fixture
 def mock_config():
     """Mock de la configuration (v5.10 : vitesse unique, plus de adaptive)."""
+
     class MockTracking:
         seuil_correction_deg = 0.5
         intervalle_verification_sec = 60
-        abaque_file = 'data/Loi_coupole.xlsx'
+        abaque_file = "data/Loi_coupole.xlsx"
 
     class MockThresholds:
         feedback_min_deg = 3.0
@@ -113,21 +117,29 @@ def log_callback():
 # TESTS GOTO HANDLER
 # =============================================================================
 
+
 class TestGotoHandler:
     """Tests pour le handler GOTO."""
 
     @pytest.fixture
-    def handler(self, mock_moteur, mock_daemon_reader, mock_feedback_controller,
-                mock_config, status_callback):
+    def handler(
+        self,
+        mock_moteur,
+        mock_daemon_reader,
+        mock_feedback_controller,
+        mock_config,
+        status_callback,
+    ):
         """Crée un GotoHandler."""
         from services.command_handlers import GotoHandler
+
         return GotoHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
             feedback_controller=mock_feedback_controller,
             config=mock_config,
             simulation_mode=True,
-            status_callback=status_callback
+            status_callback=status_callback,
         )
 
     def test_stop_pendant_rotation_directe_annule_la_correction_finale(
@@ -145,9 +157,7 @@ class TestGotoHandler:
         mock_feedback_controller.rotation_avec_feedback.assert_not_called()
         assert status["status"] == "idle"
 
-    def test_correction_finale_autorise_un_grand_reste(
-        self, handler, mock_feedback_controller
-    ):
+    def test_correction_finale_autorise_un_grand_reste(self, handler, mock_feedback_controller):
         """Rotation directe arrêtée loin de la cible (> 20°) : la correction
         finale doit finir le trajet, pas abandonner."""
         handler.execute(180.0, {"position": 45.0})
@@ -155,12 +165,13 @@ class TestGotoHandler:
         kwargs = mock_feedback_controller.rotation_avec_feedback.call_args.kwargs
         assert kwargs["allow_large_movement"] is True
 
-    def test_correction_finale_en_echec_signale_une_erreur(
-        self, handler, mock_feedback_controller
-    ):
+    def test_correction_finale_en_echec_signale_une_erreur(self, handler, mock_feedback_controller):
         mock_feedback_controller.rotation_avec_feedback.return_value = {
-            'success': False, 'position_initiale': 45.0, 'position_finale': 150.0,
-            'erreur_finale': 30.0, 'iterations': 3,
+            "success": False,
+            "position_initiale": 45.0,
+            "position_finale": 150.0,
+            "erreur_finale": 30.0,
+            "iterations": 3,
         }
 
         status = handler.execute(180.0, {"position": 45.0})
@@ -172,38 +183,40 @@ class TestGotoHandler:
         """Utilise la vitesse unique v5.10 (260 µs) par défaut."""
         from services.command_handlers import _get_motor_speed
         from core.config.config import SINGLE_SPEED_MOTOR_DELAY
+
         speed = _get_motor_speed(mock_config)
         assert speed == SINGLE_SPEED_MOTOR_DELAY
 
     def test_get_motor_speed_explicit(self, mock_config):
         """Utilise la vitesse explicite si fournie."""
         from services.command_handlers import _get_motor_speed
+
         speed = _get_motor_speed(mock_config, 0.002)
         assert speed == 0.002
 
     def test_execute_small_goto_uses_feedback(self, handler, mock_feedback_controller):
         """Les petits déplacements utilisent le feedback."""
         mock_feedback_controller.rotation_avec_feedback.return_value = {
-            'success': True,
-            'position_initiale': 0.0,
-            'position_finale': 2.0,
-            'erreur_finale': 0.1,
-            'iterations': 1
+            "success": True,
+            "position_initiale": 0.0,
+            "position_finale": 2.0,
+            "erreur_finale": 0.1,
+            "iterations": 1,
         }
 
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
         # Petit déplacement (< 3°)
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(2.0, status)
 
         mock_feedback_controller.rotation_avec_feedback.assert_called()
 
     def test_execute_large_goto_direct_rotation(self, handler, mock_moteur):
         """Les grands déplacements utilisent la rotation directe."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(90.0, status)
 
         # Rotation directe appelée
@@ -211,7 +224,7 @@ class TestGotoHandler:
 
     def test_execute_updates_status_moving(self, handler, mock_moteur):
         """Le status est mis à jour en 'moving' pendant l'exécution."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
         status_history = []
 
         def record_status(s):
@@ -220,25 +233,26 @@ class TestGotoHandler:
 
         handler.status_callback = record_status
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             handler.execute(45.0, status)
 
         # Le callback a été appelé avec status='moving' à un moment
-        assert any(s.get('status') == 'moving' for s in status_history)
+        assert any(s.get("status") == "moving" for s in status_history)
 
     def test_execute_clears_target_after(self, handler):
         """La cible est effacée après exécution."""
-        status = {'status': 'idle', 'position': 0.0, 'target': None}
+        status = {"status": "idle", "position": 0.0, "target": None}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(90.0, status)
 
-        assert result['target'] is None
+        assert result["target"] is None
 
 
 # =============================================================================
 # TESTS JOG HANDLER
 # =============================================================================
+
 
 class TestJogHandler:
     """Tests pour le handler JOG."""
@@ -247,19 +261,20 @@ class TestJogHandler:
     def handler(self, mock_moteur, mock_daemon_reader, mock_config, status_callback):
         """Crée un JogHandler."""
         from services.command_handlers import JogHandler
+
         return JogHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
             config=mock_config,
             simulation_mode=True,
-            status_callback=status_callback
+            status_callback=status_callback,
         )
 
     def test_jog_positive(self, handler, mock_moteur):
         """JOG positif (sens horaire)."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(10.0, status)
 
         mock_moteur.rotation.assert_called()
@@ -269,9 +284,9 @@ class TestJogHandler:
 
     def test_jog_negative(self, handler, mock_moteur):
         """JOG négatif (sens anti-horaire)."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(-10.0, status)
 
         call_args = mock_moteur.rotation.call_args
@@ -279,9 +294,9 @@ class TestJogHandler:
 
     def test_jog_no_feedback(self, handler, mock_moteur):
         """JOG n'utilise pas le feedback (fluidité)."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             handler.execute(45.0, status)
 
         # Rotation directe, pas de feedback
@@ -289,9 +304,9 @@ class TestJogHandler:
 
     def test_jog_clears_stop_before(self, handler, mock_moteur):
         """JOG efface la requête de stop avant rotation."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             handler.execute(5.0, status)
 
         mock_moteur.clear_stop_request.assert_called()
@@ -299,17 +314,18 @@ class TestJogHandler:
     def test_jog_updates_position(self, handler, mock_daemon_reader):
         """JOG met à jour la position depuis l'encodeur."""
         mock_daemon_reader.read_angle.return_value = 55.0
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             result = handler.execute(10.0, status)
 
-        assert result['position'] == 55.0
+        assert result["position"] == 55.0
 
 
 # =============================================================================
 # TESTS CONTINUOUS HANDLER
 # =============================================================================
+
 
 class TestContinuousHandler:
     """Tests pour le handler de mouvement continu."""
@@ -318,20 +334,21 @@ class TestContinuousHandler:
     def handler(self, mock_moteur, mock_daemon_reader, mock_config, status_callback):
         """Crée un ContinuousHandler."""
         from services.command_handlers import ContinuousHandler
+
         return ContinuousHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
             config=mock_config,
             simulation_mode=True,
-            status_callback=status_callback
+            status_callback=status_callback,
         )
 
     def test_start_creates_thread(self, handler):
         """start() crée un thread de mouvement."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
-            handler.start('cw', status)
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
+            handler.start("cw", status)
             time.sleep(0.1)
 
         assert handler.thread is not None
@@ -341,21 +358,21 @@ class TestContinuousHandler:
 
     def test_start_sets_status_moving(self, handler, status_callback):
         """start() met le status en 'moving'."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
-            handler.start('cw', status)
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
+            handler.start("cw", status)
             time.sleep(0.1)
 
-        assert status['status'] == 'moving'
+        assert status["status"] == "moving"
         handler.stop()
 
     def test_stop_terminates_thread(self, handler):
         """stop() termine le thread."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
-            handler.start('cw', status)
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
+            handler.start("cw", status)
             time.sleep(0.1)
 
         handler.stop()
@@ -365,11 +382,13 @@ class TestContinuousHandler:
 
     def test_cw_direction(self, handler):
         """Direction 'cw' incrémente la position."""
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position') as mock_set, \
-             patch('core.hardware.moteur_simule.get_simulated_position', return_value=0.0):
-            handler.start('cw', status)
+        with (
+            patch("core.hardware.moteur_simule.set_simulated_position") as mock_set,
+            patch("core.hardware.moteur_simule.get_simulated_position", return_value=0.0),
+        ):
+            handler.start("cw", status)
             time.sleep(0.15)  # Attendre au moins une itération
 
         handler.stop()
@@ -377,11 +396,13 @@ class TestContinuousHandler:
 
     def test_ccw_direction(self, handler):
         """Direction 'ccw' décrémente la position."""
-        status = {'status': 'idle', 'position': 180.0}
+        status = {"status": "idle", "position": 180.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position') as mock_set, \
-             patch('core.hardware.moteur_simule.get_simulated_position', return_value=180.0):
-            handler.start('ccw', status)
+        with (
+            patch("core.hardware.moteur_simule.set_simulated_position") as mock_set,
+            patch("core.hardware.moteur_simule.get_simulated_position", return_value=180.0),
+        ):
+            handler.start("ccw", status)
             time.sleep(0.15)
 
         handler.stop()
@@ -391,20 +412,24 @@ class TestContinuousHandler:
 # TESTS TRACKING HANDLER
 # =============================================================================
 
+
 class TestTrackingHandler:
     """Tests pour le handler de suivi."""
 
     @pytest.fixture
-    def handler(self, mock_moteur, mock_feedback_controller, mock_config, status_callback, log_callback):
+    def handler(
+        self, mock_moteur, mock_feedback_controller, mock_config, status_callback, log_callback
+    ):
         """Crée un TrackingHandler."""
         from services.command_handlers import TrackingHandler
+
         return TrackingHandler(
             moteur=mock_moteur,
             feedback_controller=mock_feedback_controller,
             config=mock_config,
             simulation_mode=True,
             status_callback=status_callback,
-            log_callback=log_callback
+            log_callback=log_callback,
         )
 
     def test_is_active_initially_false(self, handler):
@@ -413,7 +438,7 @@ class TestTrackingHandler:
 
     def test_stop_when_inactive(self, handler, status_callback):
         """stop() ne plante pas si le suivi est inactif."""
-        status = {'status': 'idle'}
+        status = {"status": "idle"}
         handler.stop(status)
 
         assert handler.is_active is False
@@ -425,10 +450,12 @@ class TestTrackingHandler:
     def test_start_transmet_coords_a_la_session(self, handler):
         """start(coords=...) transmet les coordonnées à TrackingSession.start."""
         handler.config = MagicMock()
-        with patch("services.command_handlers.TrackingSession") as session_cls, \
-             patch("services.command_handlers.TrackingLogger"), \
-             patch("services.command_handlers.AstronomicalCalculations"), \
-             patch("services.command_handlers._get_rotate_log_func"):
+        with (
+            patch("services.command_handlers.TrackingSession") as session_cls,
+            patch("services.command_handlers.TrackingLogger"),
+            patch("services.command_handlers.AstronomicalCalculations"),
+            patch("services.command_handlers._get_rotate_log_func"),
+        ):
             session_cls.return_value.start.return_value = (False, "stop")
             handler.start("Cible", {"status": "idle"}, coords=(83.82, -5.39))
         session_cls.return_value.start.assert_called_once_with(
@@ -460,9 +487,7 @@ class TestTrackingHandler:
         }
         handler.session.get_session_data.return_value = {}
 
-        handler._calc = AstronomicalCalculations(
-            latitude=44.15, longitude=5.23, tz_offset=1
-        )
+        handler._calc = AstronomicalCalculations(latitude=44.15, longitude=5.23, tz_offset=1)
 
         current_status = {"status": "tracking"}
         handler.update(current_status)
@@ -509,6 +534,7 @@ class TestTrackingHandler:
 # TESTS SEUIL FEEDBACK (via config.thresholds.feedback_min_deg)
 # =============================================================================
 
+
 class TestSeuilFeedback:
     """Tests pour le seuil de feedback configuré dans config.thresholds.feedback_min_deg."""
 
@@ -516,8 +542,14 @@ class TestSeuilFeedback:
         """Le seuil de feedback vient de config.thresholds.feedback_min_deg."""
         assert mock_config.thresholds.feedback_min_deg == 3.0
 
-    def test_small_goto_uses_feedback(self, mock_moteur, mock_daemon_reader,
-                                       mock_feedback_controller, mock_config, status_callback):
+    def test_small_goto_uses_feedback(
+        self,
+        mock_moteur,
+        mock_daemon_reader,
+        mock_feedback_controller,
+        mock_config,
+        status_callback,
+    ):
         """Les déplacements ≤ seuil utilisent le feedback."""
         from services.command_handlers import GotoHandler
 
@@ -527,29 +559,35 @@ class TestSeuilFeedback:
             feedback_controller=mock_feedback_controller,
             config=mock_config,
             simulation_mode=True,
-            status_callback=status_callback
+            status_callback=status_callback,
         )
 
         # Simuler position actuelle = 0
         mock_daemon_reader.read_angle.return_value = 0.0
         mock_feedback_controller.rotation_avec_feedback.return_value = {
-            'success': True,
-            'position_initiale': 0.0,
-            'position_finale': 3.0,
-            'erreur_finale': 0.1,
-            'iterations': 1
+            "success": True,
+            "position_initiale": 0.0,
+            "position_finale": 3.0,
+            "erreur_finale": 0.1,
+            "iterations": 1,
         }
 
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             handler.execute(3.0, status)  # Exactement au seuil (3°)
 
         # Feedback utilisé car delta <= feedback_min_deg
         mock_feedback_controller.rotation_avec_feedback.assert_called()
 
-    def test_large_goto_uses_direct_rotation(self, mock_moteur, mock_daemon_reader,
-                                              mock_feedback_controller, mock_config, status_callback):
+    def test_large_goto_uses_direct_rotation(
+        self,
+        mock_moteur,
+        mock_daemon_reader,
+        mock_feedback_controller,
+        mock_config,
+        status_callback,
+    ):
         """Les déplacements > seuil utilisent la rotation directe."""
         from services.command_handlers import GotoHandler
 
@@ -559,15 +597,15 @@ class TestSeuilFeedback:
             feedback_controller=mock_feedback_controller,
             config=mock_config,
             simulation_mode=True,
-            status_callback=status_callback
+            status_callback=status_callback,
         )
 
         # Simuler position actuelle = 0
         mock_daemon_reader.read_angle.return_value = 0.0
 
-        status = {'status': 'idle', 'position': 0.0}
+        status = {"status": "idle", "position": 0.0}
 
-        with patch('core.hardware.moteur_simule.set_simulated_position'):
+        with patch("core.hardware.moteur_simule.set_simulated_position"):
             handler.execute(3.1, status)  # Juste au-dessus du seuil
 
         # Rotation directe utilisée
@@ -584,9 +622,11 @@ SLOW, FAST = 260e-6, 124e-6
 @pytest.fixture
 def deux_vitesses():
     """Vitesse rapide distincte de la lente (la config du dépôt les confond)."""
-    with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', SLOW), \
-         patch('core.config.config.FAST_MOTOR_DELAY', FAST), \
-         patch('services.command_handlers.SINGLE_SPEED_MOTOR_DELAY', SLOW):
+    with (
+        patch("core.config.config.SINGLE_SPEED_MOTOR_DELAY", SLOW),
+        patch("core.config.config.FAST_MOTOR_DELAY", FAST),
+        patch("services.command_handlers.SINGLE_SPEED_MOTOR_DELAY", SLOW),
+    ):
         yield
 
 
@@ -595,6 +635,7 @@ class TestDeuxVitesses:
 
     def test_vitesse_selon_amplitude(self, mock_config, deux_vitesses):
         from services.command_handlers import _get_motor_speed
+
         assert _get_motor_speed(mock_config, delta=1.0) == SLOW
         assert _get_motor_speed(mock_config, delta=-10.0) == FAST
         assert _get_motor_speed(mock_config) == SLOW
@@ -602,10 +643,12 @@ class TestDeuxVitesses:
     def test_vitesse_explicite_prioritaire(self, mock_config, deux_vitesses):
         """Le script de mesure impose sa vitesse via le champ IPC `speed`."""
         from services.command_handlers import _get_motor_speed
+
         assert _get_motor_speed(mock_config, 0.0002, delta=10.0) == 0.0002
 
     def _goto(self, mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config):
         from services.command_handlers import GotoHandler
+
         return GotoHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
@@ -622,10 +665,10 @@ class TestDeuxVitesses:
         mock_daemon_reader.read_angle.side_effect = [0.0, 89.0]
         handler = self._goto(mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config)
 
-        handler.execute(90.0, {'status': 'idle', 'position': 0.0})
+        handler.execute(90.0, {"status": "idle", "position": 0.0})
 
-        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == FAST
-        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs['vitesse'] == SLOW
+        assert mock_moteur.rotation.call_args.kwargs["vitesse"] == FAST
+        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs["vitesse"] == SLOW
 
     def test_petit_goto_lent(
         self, mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config, deux_vitesses
@@ -633,13 +676,16 @@ class TestDeuxVitesses:
         mock_daemon_reader.read_angle.return_value = 44.0
         handler = self._goto(mock_moteur, mock_daemon_reader, mock_feedback_controller, mock_config)
 
-        handler.execute(45.0, {'status': 'idle', 'position': 44.0})
+        handler.execute(45.0, {"status": "idle", "position": 44.0})
 
-        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs['vitesse'] == SLOW
+        assert mock_feedback_controller.rotation_avec_feedback.call_args.kwargs["vitesse"] == SLOW
 
-    @pytest.mark.parametrize("delta, attendu", [(1.0, SLOW), (-1.0, SLOW), (10.0, FAST), (-10.0, FAST)])
+    @pytest.mark.parametrize(
+        "delta, attendu", [(1.0, SLOW), (-1.0, SLOW), (10.0, FAST), (-10.0, FAST)]
+    )
     def test_jog(self, mock_moteur, mock_daemon_reader, mock_config, deux_vitesses, delta, attendu):
         from services.command_handlers import JogHandler
+
         handler = JogHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
@@ -648,13 +694,14 @@ class TestDeuxVitesses:
             status_callback=MagicMock(),
         )
 
-        handler.execute(delta, {'status': 'idle', 'position': 0.0})
+        handler.execute(delta, {"status": "idle", "position": 0.0})
 
-        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == attendu
+        assert mock_moteur.rotation.call_args.kwargs["vitesse"] == attendu
 
     def test_continu_rapide(self, mock_moteur, mock_daemon_reader, mock_config, deux_vitesses):
         """Bouton maintenu : distance inconnue, vitesse maximale (décision 27/09/2026)."""
         from services.command_handlers import ContinuousHandler
+
         handler = ContinuousHandler(
             moteur=mock_moteur,
             daemon_reader=mock_daemon_reader,
@@ -664,7 +711,7 @@ class TestDeuxVitesses:
         )
         mock_moteur.rotation.side_effect = lambda *a, **k: handler.stop_flag.set()
 
-        handler.start('cw', {'status': 'idle', 'position': 0.0})
+        handler.start("cw", {"status": "idle", "position": 0.0})
         handler.thread.join(timeout=2)
 
-        assert mock_moteur.rotation.call_args.kwargs['vitesse'] == FAST
+        assert mock_moteur.rotation.call_args.kwargs["vitesse"] == FAST

@@ -26,6 +26,7 @@ from core.utils.angle_utils import shortest_angular_distance
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def config():
     return load_config()
@@ -76,8 +77,8 @@ def find_transit_time(calc, ra_deg, sim_date):
 # TESTS TRANSIT MÉRIDIEN NGC 5033
 # =============================================================================
 
-class TestNGC5033MeridianTransit:
 
+class TestNGC5033MeridianTransit:
     def test_transit_detected(self, calc):
         """L'angle horaire change de signe au transit de NGC 5033."""
         transit = find_transit_time(calc, NGC5033_RA, SIM_DATE)
@@ -123,8 +124,8 @@ class TestNGC5033MeridianTransit:
 # TESTS LBN 166 ZÉNITH
 # =============================================================================
 
-class TestLBN166Zenith:
 
+class TestLBN166Zenith:
     def test_zenith_altitude_at_transit(self, calc):
         """LBN 166 est proche du zénith (>85°) au transit."""
         transit = find_transit_time(calc, LBN166_RA, SIM_DATE)
@@ -152,8 +153,8 @@ class TestLBN166Zenith:
 # TESTS M42 OBJET STANDARD
 # =============================================================================
 
-class TestM42Standard:
 
+class TestM42Standard:
     def test_low_altitude(self, calc):
         """M42 reste à altitude modérée (<50°) depuis lat 44°N."""
         transit = find_transit_time(calc, M42_RA, SIM_DATE)
@@ -165,8 +166,8 @@ class TestM42Standard:
 # TESTS COHÉRENCE ABAQUE
 # =============================================================================
 
-class TestAbaqueCoherence:
 
+class TestAbaqueCoherence:
     def test_all_positions_valid_ngc5033(self, calc, abaque):
         """Toutes les positions abaque sont dans [0, 360] pour NGC 5033."""
         transit = find_transit_time(calc, NGC5033_RA, SIM_DATE)
@@ -176,8 +177,9 @@ class TestAbaqueCoherence:
             t = start + timedelta(minutes=i * 10)
             az, alt = calc.calculer_coords_horizontales(NGC5033_RA, NGC5033_DEC, t)
             dome_pos, _ = abaque.get_dome_position(alt, az)
-            assert 0 <= dome_pos <= 360, \
+            assert 0 <= dome_pos <= 360, (
                 f"Position abaque hors bornes à {t}: {dome_pos}° (az={az:.1f}° alt={alt:.1f}°)"
+            )
 
     def test_shortest_path_at_meridian(self, calc, abaque):
         """shortest_angular_distance choisit le bon sens au méridien."""

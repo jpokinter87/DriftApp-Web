@@ -748,9 +748,7 @@ class ConfigLoader:
                     au.get("retrigger_cooldown_hours", au_defaults.retrigger_cooldown_hours)
                 ),
                 close_retry_interval_minutes=int(
-                    au.get(
-                        "close_retry_interval_minutes", au_defaults.close_retry_interval_minutes
-                    )
+                    au.get("close_retry_interval_minutes", au_defaults.close_retry_interval_minutes)
                 ),
                 close_delay_after_parking_s=int(
                     au.get("close_delay_after_parking_s", au_defaults.close_delay_after_parking_s)

@@ -126,14 +126,18 @@ class TestAnticipationScheduleComputation:
 
     def test_schedule_computed_when_flip_detected(self, sample_flip, sample_schedule, caplog):
         stub = _SessionStub(enabled=True)
-        with patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
-            return_value=[MagicMock()],
-        ), patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
-        ) as DetCls, patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianSlewScheduler"
-        ) as SchCls:
+        with (
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+                return_value=[MagicMock()],
+            ),
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+            ) as DetCls,
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianSlewScheduler"
+            ) as SchCls,
+        ):
             DetCls.return_value.detect.return_value = sample_flip
             SchCls.return_value.schedule.return_value = sample_schedule
 
@@ -146,12 +150,15 @@ class TestAnticipationScheduleComputation:
 
     def test_no_schedule_when_no_flip_in_window(self, caplog):
         stub = _SessionStub(enabled=True)
-        with patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
-            return_value=[MagicMock()],
-        ), patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
-        ) as DetCls:
+        with (
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+                return_value=[MagicMock()],
+            ),
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+            ) as DetCls,
+        ):
             DetCls.return_value.detect.return_value = None
 
             with caplog.at_level(logging.DEBUG, logger="_SessionStub"):
@@ -187,7 +194,9 @@ class TestAnticipationSlewExecution:
         anchor_offset_sec positif = anchor dans le passé (donc t_start déjà atteint).
         """
         stub._anticipation_schedule = schedule
-        stub._anticipation_anchor_utc = datetime.now(timezone.utc) - timedelta(seconds=anchor_offset_sec)
+        stub._anticipation_anchor_utc = datetime.now(timezone.utc) - timedelta(
+            seconds=anchor_offset_sec
+        )
 
     def test_slew_triggers_at_t_start(self, sample_schedule):
         stub = _SessionStub(enabled=True)
@@ -211,7 +220,7 @@ class TestAnticipationSlewExecution:
 
         stub = _SessionStub(enabled=True)
         self._prime_schedule(stub, sample_schedule, anchor_offset_sec=1200.0)
-        with patch('core.config.config.FAST_MOTOR_DELAY', 124e-6):
+        with patch("core.config.config.FAST_MOTOR_DELAY", 124e-6):
             stub._execute_anticipatory_slew()
 
         assert stub.moteur.rotation_absolue.call_args.kwargs["vitesse"] == 124e-6
@@ -252,8 +261,7 @@ class TestAnticipationSlewExecution:
         call_kwargs = stub.moteur.rotation_absolue.call_args.kwargs
         assert call_kwargs["force_direction"] == 0
         assert any(
-            "meridian_anticipation_direction_indeterminate" in r.message
-            for r in caplog.records
+            "meridian_anticipation_direction_indeterminate" in r.message for r in caplog.records
         )
         assert stub._anticipation_consumed is True
 
@@ -266,9 +274,7 @@ class TestAnticipationSlewExecution:
             stub._execute_anticipatory_slew()
 
         assert stub._anticipation_consumed is True
-        assert any(
-            "meridian_anticipation_slew_failed" in r.message for r in caplog.records
-        )
+        assert any("meridian_anticipation_slew_failed" in r.message for r in caplog.records)
 
     def test_slew_resyncs_encoder_when_available(self, sample_schedule):
         stub = _SessionStub(enabled=True, encoder_available=True)
@@ -292,9 +298,7 @@ class TestAnticipationSkipPlanet:
         with caplog.at_level(logging.INFO, logger="_SessionStub"):
             stub._compute_anticipation_schedule()
         assert stub._anticipation_schedule is None
-        assert any(
-            "meridian_anticipation_skipped_planet" in r.message for r in caplog.records
-        )
+        assert any("meridian_anticipation_skipped_planet" in r.message for r in caplog.records)
 
 
 # ============================================================================
@@ -313,8 +317,9 @@ class TestCheckAndCorrectHook:
         # Import différé pour éviter les imports lourds en haut de fichier
         from unittest.mock import patch as _patch
 
-        with _patch("core.tracking.tracker.get_daemon_reader"), _patch(
-            "core.tracking.abaque_manager.AbaqueManager.load_abaque", return_value=True
+        with (
+            _patch("core.tracking.tracker.get_daemon_reader"),
+            _patch("core.tracking.abaque_manager.AbaqueManager.load_abaque", return_value=True),
         ):
             from core.tracking.tracker import TrackingSession
             from core.tracking.tracking_logger import TrackingLogger
@@ -394,12 +399,15 @@ class TestAnticipationRescan:
         """Le compute (start ou rescan) initialise le timer pour le throttle."""
         stub = _SessionStub(enabled=True)
         assert stub._anticipation_last_scan_at is None
-        with patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
-            return_value=[MagicMock()],
-        ), patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
-        ) as DetCls:
+        with (
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+                return_value=[MagicMock()],
+            ),
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+            ) as DetCls,
+        ):
             DetCls.return_value.detect.return_value = None
             stub._compute_anticipation_schedule()
         assert stub._anticipation_last_scan_at is not None
@@ -445,14 +453,18 @@ class TestAnticipationRescan:
         # État post-consommation
         stub._anticipation_schedule = sample_schedule
         stub._anticipation_consumed = True
-        with patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
-            return_value=[MagicMock()],
-        ), patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
-        ) as DetCls, patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianSlewScheduler"
-        ) as SchCls:
+        with (
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+                return_value=[MagicMock()],
+            ),
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+            ) as DetCls,
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianSlewScheduler"
+            ) as SchCls,
+        ):
             DetCls.return_value.detect.return_value = sample_flip
             SchCls.return_value.schedule.return_value = sample_schedule
             stub._compute_anticipation_schedule(log_no_flip=False)
@@ -463,12 +475,15 @@ class TestAnticipationRescan:
     def test_rescan_no_flip_logs_debug(self, caplog):
         """Re-scan sans flip → DEBUG, pas INFO (évite spam log toutes les 5 min)."""
         stub = _SessionStub(enabled=True)
-        with patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
-            return_value=[MagicMock()],
-        ), patch(
-            "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
-        ) as DetCls:
+        with (
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.build_lookahead_trajectory",
+                return_value=[MagicMock()],
+            ),
+            patch(
+                "core.tracking.tracking_meridian_anticipation_mixin.MeridianFlipDetector"
+            ) as DetCls,
+        ):
             DetCls.return_value.detect.return_value = None
             with caplog.at_level(logging.DEBUG, logger="_SessionStub"):
                 stub._compute_anticipation_schedule(log_no_flip=False)

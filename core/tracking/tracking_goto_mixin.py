@@ -56,7 +56,7 @@ class TrackingGotoMixin:
                 self.logger.debug("Daemon encodeur non disponible")
                 return False, 0.0
 
-            is_calibrated = encoder_status.get('calibrated', False)
+            is_calibrated = encoder_status.get("calibrated", False)
             if not is_calibrated:
                 self.logger.info(
                     "Encodeur non calibré - Pas de GOTO initial "
@@ -79,14 +79,14 @@ class TrackingGotoMixin:
                 # Notifier le callback avec les infos du GOTO avant exécution
                 if self.goto_callback:
                     goto_info = {
-                        'current_position': real_position,
-                        'target_position': position_cible,
-                        'delta': delta
+                        "current_position": real_position,
+                        "target_position": position_cible,
+                        "delta": delta,
                     }
                     self.goto_callback(goto_info)
 
                 # Logger le GOTO pour le rapport de session
-                self._log_goto(real_position, position_cible, delta, 'initial')
+                self._log_goto(real_position, position_cible, delta, "initial")
 
                 return True, delta
 
@@ -117,13 +117,13 @@ class TrackingGotoMixin:
         catalog = GestionnaireCatalogue()
         result = catalog.rechercher(objet_name)
 
-        if not result or 'ra_deg' not in result or 'dec_deg' not in result:
+        if not result or "ra_deg" not in result or "dec_deg" not in result:
             return False, f"Objet '{objet_name}' introuvable"
 
         self.objet = objet_name
-        self.ra_deg = result['ra_deg']
-        self.dec_deg = result['dec_deg']
-        self.is_planet = result.get('is_planet', False)
+        self.ra_deg = result["ra_deg"]
+        self.dec_deg = result["dec_deg"]
+        self.is_planet = result.get("is_planet", False)
 
         return True, ""
 
@@ -131,16 +131,14 @@ class TrackingGotoMixin:
         """Met à jour les coordonnées d'une planète."""
         ephemerides = PlanetaryEphemerides()
         planet_pos = ephemerides.get_planet_position(
-            objet_name.capitalize(), now,
-            self.calc.latitude, self.calc.longitude
+            objet_name.capitalize(), now, self.calc.latitude, self.calc.longitude
         )
         if planet_pos:
             self.ra_deg, self.dec_deg = planet_pos
             return True, ""
         return False, f"Impossible de calculer la position de {objet_name}"
 
-    def _setup_initial_position(self, azimut: float, altitude: float,
-                                 position_cible: float):
+    def _setup_initial_position(self, azimut: float, altitude: float, position_cible: float):
         """Configure la position initiale."""
         self.azimut_initial = azimut
         self.altitude_initiale = altitude
@@ -154,7 +152,7 @@ class TrackingGotoMixin:
         try:
             encoder_status = get_daemon_reader().read_status()
             if encoder_status:
-                is_calibrated = encoder_status.get('calibrated', False)
+                is_calibrated = encoder_status.get("calibrated", False)
                 if is_calibrated:
                     self.logger.info("Encodeur calibré - Mode absolu disponible")
                 else:
@@ -206,10 +204,10 @@ class TrackingGotoMixin:
                     vitesse=motor_delay,
                     tolerance=0.5,
                     max_iterations=10,
-                    allow_large_movement=True  # IMPORTANT: Autorise grands déplacements
+                    allow_large_movement=True,  # IMPORTANT: Autorise grands déplacements
                 )
 
-                if result['success']:
+                if result["success"]:
                     self.logger.info(
                         f"GOTO initial réussi: {result['position_initiale']:.1f}° → "
                         f"{result['position_finale']:.1f}° "
@@ -236,9 +234,7 @@ class TrackingGotoMixin:
                         )
                     else:
                         self.encoder_offset = position_cible - position_finale
-                        self.logger.info(
-                            f"Offset encodeur recalculé: {self.encoder_offset:.1f}°"
-                        )
+                        self.logger.info(f"Offset encodeur recalculé: {self.encoder_offset:.1f}°")
                 except Exception as e:
                     self.logger.debug(f"Erreur recalcul offset encodeur (non critique): {e}")
 

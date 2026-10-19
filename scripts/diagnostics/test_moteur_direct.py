@@ -72,7 +72,7 @@ def test_gpio():
         time.sleep(0.05)
         lgpio.gpio_write(h, STEP_PIN, 0)
         time.sleep(0.05)
-        print(f"  Pulse {i+1}/10")
+        print(f"  Pulse {i + 1}/10")
 
     print("  Terminé")
 

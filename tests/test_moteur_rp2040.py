@@ -19,6 +19,7 @@ from core.config.config_loader import ConfigLoader
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture
 def motor_config():
     """Config moteur standard du projet (dict format)."""
@@ -47,6 +48,7 @@ def moteur_rp2040(motor_config, serial_sim):
 # ============================================================================
 # TESTS SerialSimulator
 # ============================================================================
+
 
 class TestSerialSimulator:
     """Tests pour le simulateur serie."""
@@ -115,6 +117,7 @@ class TestSerialSimulator:
 # TESTS MoteurRP2040
 # ============================================================================
 
+
 class TestMoteurRP2040Init:
     """Tests d'initialisation de MoteurRP2040."""
 
@@ -145,7 +148,7 @@ class TestMoteurRP2040Init:
         """TimeoutError si le firmware ne repond pas du tout."""
         sim = SerialSimulator()
         sim.readline()  # Vider READY
-        sim.close()     # Fermer pour empecher toute reponse
+        sim.close()  # Fermer pour empecher toute reponse
 
         with pytest.raises((TimeoutError, IOError)):
             MoteurRP2040(motor_config, sim)
@@ -273,9 +276,7 @@ class TestForceDirection:
         serial_sim.write = capture_write
         return commands_sent
 
-    def test_rotation_default_force_direction_preserves_behavior(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_default_force_direction_preserves_behavior(self, moteur_rp2040, serial_sim):
         """force_direction non passé (=0) → direction dérivée du signe de angle_deg."""
         cmds = self._capture_moves(serial_sim)
         moteur_rp2040.rotation(30.0, 0.002)
@@ -284,9 +285,7 @@ class TestForceDirection:
         direction = int(move_cmds[0].split()[2])
         assert direction == 1  # angle positif → direction firmware=1 (comportement actuel)
 
-    def test_rotation_force_direction_cw_overrides_sign(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_force_direction_cw_overrides_sign(self, moteur_rp2040, serial_sim):
         """force_direction=-1 avec angle positif → direction firmware=0 (CW imposé)."""
         cmds = self._capture_moves(serial_sim)
         moteur_rp2040.rotation(30.0, 0.002, force_direction=-1)
@@ -295,9 +294,7 @@ class TestForceDirection:
         direction = int(move_cmds[0].split()[2])
         assert direction == 0
 
-    def test_rotation_force_direction_ccw_overrides_sign(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_force_direction_ccw_overrides_sign(self, moteur_rp2040, serial_sim):
         """force_direction=+1 avec angle négatif → direction firmware=1 (CCW imposé)."""
         cmds = self._capture_moves(serial_sim)
         moteur_rp2040.rotation(-30.0, 0.002, force_direction=1)
@@ -306,9 +303,7 @@ class TestForceDirection:
         direction = int(move_cmds[0].split()[2])
         assert direction == 1
 
-    def test_rotation_force_direction_zero_uses_angle_sign(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_force_direction_zero_uses_angle_sign(self, moteur_rp2040, serial_sim):
         """force_direction=0 avec angle négatif → direction firmware=0 (comportement actuel)."""
         cmds = self._capture_moves(serial_sim)
         moteur_rp2040.rotation(-30.0, 0.002, force_direction=0)
@@ -327,9 +322,7 @@ class TestForceDirection:
         with pytest.raises(ValueError, match=r"force_direction"):
             moteur_rp2040.rotation(30.0, 0.002, force_direction=-2)
 
-    def test_rotation_force_direction_preserves_steps_magnitude(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_force_direction_preserves_steps_magnitude(self, moteur_rp2040, serial_sim):
         """Même force_direction, même |angle_deg| → même nombre de steps."""
         cmds = self._capture_moves(serial_sim)
         moteur_rp2040.rotation(30.0, 0.002, force_direction=-1)
@@ -343,18 +336,14 @@ class TestForceDirection:
         assert int(move_cmds[0].split()[2]) == 0
         assert int(move_cmds[1].split()[2]) == 0
 
-    def test_rotation_force_direction_updates_direction_actuelle(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_force_direction_updates_direction_actuelle(self, moteur_rp2040, serial_sim):
         """Quand force_direction != 0, direction_actuelle est mise à la valeur forcée."""
         moteur_rp2040.rotation(10.0, 0.002, force_direction=-1)
         assert moteur_rp2040.direction_actuelle == -1
         moteur_rp2040.rotation(10.0, 0.002, force_direction=+1)
         assert moteur_rp2040.direction_actuelle == 1
 
-    def test_rotation_absolue_accepts_force_direction(
-        self, moteur_rp2040, serial_sim
-    ):
+    def test_rotation_absolue_accepts_force_direction(self, moteur_rp2040, serial_sim):
         """rotation_absolue(force_direction=-1) → direction firmware=0 imposée
         même si shortest path serait +1."""
         cmds = self._capture_moves(serial_sim)
@@ -470,11 +459,13 @@ class TestResynchronisationApresTimeout:
     reponse de l'ancien mouvement a la place de la sienne."""
 
     def test_le_mouvement_suivant_lit_sa_propre_reponse(self, motor_config):
-        pico = _PicoScripte([
-            b"",               # MOVE 1 : timeout cote Pi, le Pico bouge encore
-            b"STOPPED 500\n",  # fin du MOVE 1 interrompu
-            b"OK 100\n",       # reponse du MOVE 2
-        ])
+        pico = _PicoScripte(
+            [
+                b"",  # MOVE 1 : timeout cote Pi, le Pico bouge encore
+                b"STOPPED 500\n",  # fin du MOVE 1 interrompu
+                b"OK 100\n",  # reponse du MOVE 2
+            ]
+        )
         moteur = MoteurRP2040(motor_config, pico)
 
         moteur.rotation(10.0, vitesse=0.00026)
@@ -498,26 +489,43 @@ class TestMoteurRP2040Cleanup:
 # TESTS CONFIG FALLBACK
 # ============================================================================
 
+
 class TestConfigFallback:
     """Tests du fallback config GPIO/RP2040."""
 
     def test_config_fallback_rp2040_default(self, tmp_path):
         """Config sans motor_driver → type='rp2040' par defaut."""
         config_data = {
-            "site": {"latitude": 44.0, "longitude": 5.0, "altitude": 800,
-                     "nom": "Test", "fuseau": "Europe/Paris"},
-            "moteur": {"gpio_pins": {"dir": 17, "step": 18},
-                       "steps_per_revolution": 200, "microsteps": 4,
-                       "gear_ratio": 2230, "steps_correction_factor": 1.0,
-                       "motor_delay_base": 0.002},
-            "suivi": {"seuil_correction_deg": 0.5,
-                      "intervalle_verification_sec": 60,
-                      "abaque_file": "data/Loi_coupole.xlsx"},
-            "encodeur": {"enabled": False, "spi": {"bus": 0, "device": 0,
-                         "speed_hz": 1000000, "mode": 0},
-                         "mecanique": {"wheel_diameter_mm": 50,
-                         "ring_diameter_mm": 2303, "counts_per_rev": 1024},
-                         "calibration_factor": 0.01},
+            "site": {
+                "latitude": 44.0,
+                "longitude": 5.0,
+                "altitude": 800,
+                "nom": "Test",
+                "fuseau": "Europe/Paris",
+            },
+            "moteur": {
+                "gpio_pins": {"dir": 17, "step": 18},
+                "steps_per_revolution": 200,
+                "microsteps": 4,
+                "gear_ratio": 2230,
+                "steps_correction_factor": 1.0,
+                "motor_delay_base": 0.002,
+            },
+            "suivi": {
+                "seuil_correction_deg": 0.5,
+                "intervalle_verification_sec": 60,
+                "abaque_file": "data/Loi_coupole.xlsx",
+            },
+            "encodeur": {
+                "enabled": False,
+                "spi": {"bus": 0, "device": 0, "speed_hz": 1000000, "mode": 0},
+                "mecanique": {
+                    "wheel_diameter_mm": 50,
+                    "ring_diameter_mm": 2303,
+                    "counts_per_rev": 1024,
+                },
+                "calibration_factor": 0.01,
+            },
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config_data))
@@ -529,24 +537,40 @@ class TestConfigFallback:
     def test_config_rp2040_parsing(self, tmp_path):
         """Config avec motor_driver rp2040 → type='rp2040', port correct."""
         config_data = {
-            "site": {"latitude": 44.0, "longitude": 5.0, "altitude": 800,
-                     "nom": "Test", "fuseau": "Europe/Paris"},
+            "site": {
+                "latitude": 44.0,
+                "longitude": 5.0,
+                "altitude": 800,
+                "nom": "Test",
+                "fuseau": "Europe/Paris",
+            },
             "motor_driver": {
                 "type": "rp2040",
                 "serial": {"port": "/dev/ttyUSB0", "baudrate": 9600, "timeout": 5.0},
             },
-            "moteur": {"gpio_pins": {"dir": 17, "step": 18},
-                       "steps_per_revolution": 200, "microsteps": 4,
-                       "gear_ratio": 2230, "steps_correction_factor": 1.0,
-                       "motor_delay_base": 0.002},
-            "suivi": {"seuil_correction_deg": 0.5,
-                      "intervalle_verification_sec": 60,
-                      "abaque_file": "data/Loi_coupole.xlsx"},
-            "encodeur": {"enabled": False, "spi": {"bus": 0, "device": 0,
-                         "speed_hz": 1000000, "mode": 0},
-                         "mecanique": {"wheel_diameter_mm": 50,
-                         "ring_diameter_mm": 2303, "counts_per_rev": 1024},
-                         "calibration_factor": 0.01},
+            "moteur": {
+                "gpio_pins": {"dir": 17, "step": 18},
+                "steps_per_revolution": 200,
+                "microsteps": 4,
+                "gear_ratio": 2230,
+                "steps_correction_factor": 1.0,
+                "motor_delay_base": 0.002,
+            },
+            "suivi": {
+                "seuil_correction_deg": 0.5,
+                "intervalle_verification_sec": 60,
+                "abaque_file": "data/Loi_coupole.xlsx",
+            },
+            "encodeur": {
+                "enabled": False,
+                "spi": {"bus": 0, "device": 0, "speed_hz": 1000000, "mode": 0},
+                "mecanique": {
+                    "wheel_diameter_mm": 50,
+                    "ring_diameter_mm": 2303,
+                    "counts_per_rev": 1024,
+                },
+                "calibration_factor": 0.01,
+            },
         }
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(config_data))

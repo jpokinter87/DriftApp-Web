@@ -50,7 +50,6 @@ dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     "pytest-xdist>=3.0.0",
-    "black>=23.0.0",
     "ruff>=0.1.0",
 ]
 
@@ -68,9 +67,9 @@ packages = ["core", "services", "web"]
 line-length = 100
 target-version = "py311"
 
-[tool.black]
-line-length = 100
-target-version = ["py311"]
+[tool.ruff.lint.per-file-ignores]
+# Assembleur PIO : pull/mov/jmp… sont injectés par le décorateur @rp2.asm_pio.
+"firmware/step_generator.py" = ["F821"]
 
 [dependency-groups]
 dev = [

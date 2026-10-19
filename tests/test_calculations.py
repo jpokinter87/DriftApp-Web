@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 # Vérifier si astropy est disponible (requis pour AstronomicalCalculations)
 try:
     import astropy
+
     HAS_ASTROPY = True
 except ImportError:
     HAS_ASTROPY = False
@@ -29,11 +30,7 @@ class TestAstronomicalCalculationsInit:
         """Initialisation avec paramètres requis."""
         from core.observatoire.calculations import AstronomicalCalculations
 
-        calc = AstronomicalCalculations(
-            latitude=44.15,
-            longitude=5.23,
-            tz_offset=1
-        )
+        calc = AstronomicalCalculations(latitude=44.15, longitude=5.23, tz_offset=1)
         assert calc.latitude == 44.15
         assert calc.longitude == 5.23
         assert calc.tz_offset == 1
@@ -42,11 +39,7 @@ class TestAstronomicalCalculationsInit:
         """Initialisation avec d'autres coordonnées."""
         from core.observatoire.calculations import AstronomicalCalculations
 
-        calc = AstronomicalCalculations(
-            latitude=48.85,
-            longitude=2.35,
-            tz_offset=2
-        )
+        calc = AstronomicalCalculations(latitude=48.85, longitude=2.35, tz_offset=2)
         assert calc.latitude == 48.85
         assert calc.longitude == 2.35
         assert calc.tz_offset == 2
@@ -58,6 +51,7 @@ class TestNormalisationAngles:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_normaliser_angle_180_positif(self, calc):
@@ -90,6 +84,7 @@ class TestConversionJ2000JNOW:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_conversion_basique(self, calc):
@@ -135,6 +130,7 @@ class TestTempsSideral:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_temps_sideral_type(self, calc):
@@ -172,6 +168,7 @@ class TestAngleHoraire:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_angle_horaire_type(self, calc):
@@ -197,6 +194,7 @@ class TestCoordonneesHorizontales:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_coords_horizontales_type(self, calc):
@@ -228,9 +226,7 @@ class TestCoordonneesHorizontales:
         """calculer_coords_horizontales_coupole inclut la correction."""
         date = datetime(2025, 6, 21, 22, 0, 0)
 
-        az_coupole, alt, correction = calc.calculer_coords_horizontales_coupole(
-            250.0, 36.0, date
-        )
+        az_coupole, alt, correction = calc.calculer_coords_horizontales_coupole(250.0, 36.0, date)
 
         assert isinstance(correction, float)
         assert 0 <= az_coupole < 360
@@ -242,6 +238,7 @@ class TestRefractionAtmospherique:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_refraction_augmente_altitude(self, calc):
@@ -279,6 +276,7 @@ class TestPassageMeridien:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_est_proche_meridien(self, calc):
@@ -307,6 +305,7 @@ class TestVitesseRotationCoupole:
     @pytest.fixture
     def calc(self):
         from core.observatoire.calculations import AstronomicalCalculations
+
         return AstronomicalCalculations(44.15, 5.23, 1)
 
     def test_vitesse_rotation_type(self, calc):
@@ -322,9 +321,7 @@ class TestVitesseRotationCoupole:
         """Vérifie les types des valeurs retournées."""
         date = datetime(2025, 6, 21, 22, 0, 0)
 
-        vitesse_rel, sens, az, alt = calc.calculer_vitesse_rotation_coupole(
-            250.0, 36.0, date
-        )
+        vitesse_rel, sens, az, alt = calc.calculer_vitesse_rotation_coupole(250.0, 36.0, date)
 
         assert isinstance(vitesse_rel, float)
         assert sens in [-1, 1]
@@ -335,9 +332,7 @@ class TestVitesseRotationCoupole:
         """La vitesse relative est une fraction de tour/heure."""
         date = datetime(2025, 6, 21, 22, 0, 0)
 
-        vitesse_rel, _, _, _ = calc.calculer_vitesse_rotation_coupole(
-            250.0, 36.0, date
-        )
+        vitesse_rel, _, _, _ = calc.calculer_vitesse_rotation_coupole(250.0, 36.0, date)
 
         # Vitesse typique: quelques pour cent de tour par heure
         assert vitesse_rel < 0.1

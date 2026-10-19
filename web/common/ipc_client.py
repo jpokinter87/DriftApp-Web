@@ -33,9 +33,9 @@ class MotorServiceClient:
 
     def __init__(self):
         """Initialise les chemins des fichiers IPC depuis les settings Django."""
-        self.command_file = Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
-        self.status_file = Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
-        self.encoder_file = Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
+        self.command_file = Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"])
+        self.status_file = Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"])
+        self.encoder_file = Path(settings.MOTOR_SERVICE_IPC["ENCODER_FILE"])
 
     def _read_json_file_safe(self, file_path: Path) -> Optional[dict]:
         """
@@ -51,7 +51,7 @@ class MotorServiceClient:
             dict si succès, None si erreur ou fichier verrouillé
         """
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
                 try:
                     return json.load(f)
@@ -74,11 +74,7 @@ class MotorServiceClient:
         Returns:
             bool: True si la commande a été écrite avec succès
         """
-        command = {
-            'id': str(uuid.uuid4()),
-            'command': command_type,
-            **params
-        }
+        command = {"id": str(uuid.uuid4()), "command": command_type, **params}
 
         try:
             # Créer le fichier s'il n'existe pas (mode 666 pour accès Motor Service)
@@ -86,7 +82,7 @@ class MotorServiceClient:
                 self.command_file.touch(mode=0o666)
 
             # Écriture avec verrou exclusif pour éviter race condition
-            with open(self.command_file, 'w') as f:
+            with open(self.command_file, "w") as f:
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                 try:
                     f.write(json.dumps(command))
@@ -105,10 +101,7 @@ class MotorServiceClient:
             dict: État actuel du service (status, position, mode, etc.)
         """
         result = self._read_json_file_safe(self.status_file)
-        return result if result else {
-            'status': 'unknown',
-            'error': 'Motor Service non disponible'
-        }
+        return result if result else {"status": "unknown", "error": "Motor Service non disponible"}
 
     def get_encoder_status(self) -> dict:
         """
@@ -118,10 +111,11 @@ class MotorServiceClient:
             dict: État de l'encodeur (angle, calibrated, status, etc.)
         """
         result = self._read_json_file_safe(self.encoder_file)
-        return result if result else {
-            'status': 'unavailable',
-            'error': 'Daemon encodeur non disponible'
-        }
+        return (
+            result
+            if result
+            else {"status": "unavailable", "error": "Daemon encodeur non disponible"}
+        )
 
     # Alias pour compatibilité avec tracking/views.py
     def get_status(self) -> dict:

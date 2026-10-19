@@ -9,21 +9,22 @@ from . import views
 
 urlpatterns = [
     # API endpoints
-    path('', views.health_check, name='health_check'),
-    path('motor/', views.motor_health, name='motor_health'),
-    path('encoder/', views.encoder_health, name='encoder_health'),
-    path('ipc/', views.ipc_status, name='ipc_status'),
-    path('diagnostic/', views.diagnostic, name='diagnostic_api'),
-    path('config_status/', views.config_status_view, name='config_status'),
-
+    path("", views.health_check, name="health_check"),
+    path("motor/", views.motor_health, name="motor_health"),
+    path("encoder/", views.encoder_health, name="encoder_health"),
+    path("ipc/", views.ipc_status, name="ipc_status"),
+    path("diagnostic/", views.diagnostic, name="diagnostic_api"),
+    path("config_status/", views.config_status_view, name="config_status"),
     # Endpoints de mise à jour
-    path('update/check/', views.check_update, name='update_check'),
-    path('update/apply/', views.apply_update, name='update_apply'),
-    path('update/status/', views.update_status, name='update_status'),
-
+    path("update/check/", views.check_update, name="update_check"),
+    path("update/apply/", views.apply_update, name="update_apply"),
+    path("update/status/", views.update_status, name="update_status"),
     # Redémarrage des services backend (applique un changement de config)
-    path('restart/', views.restart_services, name='restart_services'),
-
+    path("restart/", views.restart_services, name="restart_services"),
     # Page HTML de diagnostic système
-    path('system/', TemplateView.as_view(template_name='system.html', extra_context={'active_tab': 'system'}), name='system_page'),
+    path(
+        "system/",
+        TemplateView.as_view(template_name="system.html", extra_context={"active_tab": "system"}),
+        name="system_page",
+    ),
 ]

@@ -29,6 +29,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
 os.environ.setdefault("DRIFTAPP_DEBUG", "1")  # Tests en mode debug pour ALLOWED_HOSTS
 
 import django
+
 django.setup()
 
 from rest_framework.test import APIClient
@@ -80,6 +81,7 @@ def mock_ipc(tmp_path):
 
         # Patcher les instances globales depuis le module partagé
         import web.common.ipc_client as ipc_module
+
         importlib.reload(ipc_module)
         hw_views.motor_client = ipc_module.motor_client
         tr_views.motor_client = ipc_module.motor_client
@@ -95,9 +97,11 @@ def mock_ipc(tmp_path):
 # MotorServiceClient (hardware)
 # =============================================================================
 
+
 class TestMotorServiceClientHardware:
     def test_send_command(self, mock_ipc):
         from web.common.ipc_client import motor_client
+
         result = motor_client.send_command("stop")
         assert result is True
         # Vérifier que le fichier a été écrit
@@ -107,6 +111,7 @@ class TestMotorServiceClientHardware:
 
     def test_send_command_with_params(self, mock_ipc):
         from web.common.ipc_client import motor_client
+
         result = motor_client.send_command("goto", angle=90.0)
         assert result is True
         data = json.loads(mock_ipc["cmd_file"].read_text())
@@ -114,23 +119,29 @@ class TestMotorServiceClientHardware:
 
     def test_get_motor_status(self, mock_ipc):
         from web.common.ipc_client import motor_client
+
         status = motor_client.get_motor_status()
         assert status["status"] == "idle"
         assert status["position"] == 45.0
 
     def test_get_motor_status_missing_file(self, tmp_path):
         from web.common.ipc_client import MotorServiceClient
-        with patch("django.conf.settings.MOTOR_SERVICE_IPC", {
-            "COMMAND_FILE": str(tmp_path / "cmd.json"),
-            "STATUS_FILE": str(tmp_path / "nonexistent.json"),
-            "ENCODER_FILE": str(tmp_path / "enc.json"),
-        }):
+
+        with patch(
+            "django.conf.settings.MOTOR_SERVICE_IPC",
+            {
+                "COMMAND_FILE": str(tmp_path / "cmd.json"),
+                "STATUS_FILE": str(tmp_path / "nonexistent.json"),
+                "ENCODER_FILE": str(tmp_path / "enc.json"),
+            },
+        ):
             client = MotorServiceClient()
             status = client.get_motor_status()
             assert "error" in status
 
     def test_get_encoder_status(self, mock_ipc):
         from web.common.ipc_client import motor_client
+
         status = motor_client.get_encoder_status()
         assert status["angle"] == 45.0
         assert status["calibrated"] is True
@@ -139,6 +150,7 @@ class TestMotorServiceClientHardware:
 # =============================================================================
 # Hardware API Views
 # =============================================================================
+
 
 class TestGotoView:
     def test_goto_success(self, api_client, mock_ipc):
@@ -214,15 +226,11 @@ class TestStopView:
 
 class TestContinuousView:
     def test_continuous_cw(self, api_client, mock_ipc):
-        response = api_client.post(
-            "/api/hardware/continuous/", {"direction": "cw"}, format="json"
-        )
+        response = api_client.post("/api/hardware/continuous/", {"direction": "cw"}, format="json")
         assert response.status_code == 200
 
     def test_continuous_ccw(self, api_client, mock_ipc):
-        response = api_client.post(
-            "/api/hardware/continuous/", {"direction": "ccw"}, format="json"
-        )
+        response = api_client.post("/api/hardware/continuous/", {"direction": "ccw"}, format="json")
         assert response.status_code == 200
 
     def test_continuous_invalid_direction(self, api_client, mock_ipc):
@@ -257,6 +265,7 @@ class TestEncoderView:
         `hardware.views` vs `web.hardware.views`, cf. tests calibration ci-dessous).
         """
         import hardware.views as routed
+
         encoder_payload = {
             "angle": 45.0,
             "calibrated": True,
@@ -282,6 +291,7 @@ class TestMotorStatusView:
         # routé par Django (cf. doublon sys.modules `hardware.views` vs
         # `web.hardware.views` documenté dans Plan 01 SUMMARY).
         import hardware.views as routed
+
         status_payload = {
             "status": "idle",
             "position": 45.0,
@@ -313,14 +323,16 @@ class TestCalibrateView:
         # observer l'argument sans dépendre du chemin physique du command_file
         # (cf. doublon sys.modules `hardware.views` vs `web.hardware.views`).
         import hardware.views as routed
+
         with patch.object(routed.motor_client, "send_command", return_value=True) as mock_send:
             response = api_client.post("/api/hardware/calibrate/")
         assert response.status_code == 202
-        mock_send.assert_called_once_with('calibrate')
+        mock_send.assert_called_once_with("calibrate")
 
     def test_calibrate_post_returns_503_when_motor_client_fails(self, api_client, mock_ipc):
         """Si motor_client.send_command échoue, retourne 503."""
         import sys as _sys
+
         # Patch sur le module effectivement routé par Django (hardware.views) — voir
         # SUMMARY Plan 01 : doublon sys.modules `hardware.views` vs `web.hardware.views`.
         routed = _sys.modules["hardware.views"]
@@ -343,13 +355,15 @@ class TestForceCalibrateView:
 
     def test_force_post_writes_command_and_returns_202(self, api_client, mock_ipc):
         import hardware.views as routed
+
         with patch.object(routed.motor_client, "send_command", return_value=True) as mock_send:
             response = api_client.post("/api/hardware/calibrate/force/")
         assert response.status_code == 202
-        mock_send.assert_called_once_with('calibrate_force')
+        mock_send.assert_called_once_with("calibrate_force")
 
     def test_force_post_returns_503_when_motor_client_fails(self, api_client, mock_ipc):
         import hardware.views as routed
+
         with patch.object(routed.motor_client, "send_command", return_value=False):
             response = api_client.post("/api/hardware/calibrate/force/")
         assert response.status_code == 503
@@ -370,6 +384,7 @@ class TestStubRoutes:
 # =============================================================================
 # Tracking API Views
 # =============================================================================
+
 
 class TestTrackingStartView:
     def test_start_missing_object(self, api_client, mock_ipc):
@@ -393,8 +408,10 @@ class TestTrackingStartManualCoords:
     """
 
     def test_start_with_coords_skips_catalogue(self, api_client):
-        with patch("tracking.views.GestionnaireCatalogue") as cat, \
-             patch("tracking.views.motor_client") as client:
+        with (
+            patch("tracking.views.GestionnaireCatalogue") as cat,
+            patch("tracking.views.motor_client") as client,
+        ):
             client.send_command.return_value = True
             response = api_client.post(
                 "/api/tracking/start/",
@@ -404,19 +421,25 @@ class TestTrackingStartManualCoords:
         cat.assert_not_called()
         assert response.status_code == 200
         client.send_command.assert_called_once_with(
-            "tracking_start", object="Cible faible", skip_goto=False,
-            ra_deg=83.8221, dec_deg=-5.3911,
+            "tracking_start",
+            object="Cible faible",
+            skip_goto=False,
+            ra_deg=83.8221,
+            dec_deg=-5.3911,
         )
 
-    @pytest.mark.parametrize("payload", [
-        {"ra_deg": 360.0, "dec_deg": 10.0},
-        {"ra_deg": -1.0, "dec_deg": 10.0},
-        {"ra_deg": 10.0, "dec_deg": 90.5},
-        {"ra_deg": 10.0, "dec_deg": -91.0},
-        {"ra_deg": "abc", "dec_deg": 10.0},
-        {"ra_deg": 10.0},
-        {"dec_deg": 10.0},
-    ])
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"ra_deg": 360.0, "dec_deg": 10.0},
+            {"ra_deg": -1.0, "dec_deg": 10.0},
+            {"ra_deg": 10.0, "dec_deg": 90.5},
+            {"ra_deg": 10.0, "dec_deg": -91.0},
+            {"ra_deg": "abc", "dec_deg": 10.0},
+            {"ra_deg": 10.0},
+            {"dec_deg": 10.0},
+        ],
+    )
     def test_start_invalid_coords(self, api_client, payload):
         with patch("tracking.views.motor_client") as client:
             response = api_client.post(
@@ -435,9 +458,16 @@ class TestManualCoordsView:
         assert isinstance(response.data["meridian_seconds"], int)
         assert "h" in response.data["meridian_time"]
 
-    @pytest.mark.parametrize("query", [
-        "", "ra_deg=10", "ra_deg=400&dec_deg=0", "ra_deg=10&dec_deg=95", "ra_deg=x&dec_deg=0",
-    ])
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "",
+            "ra_deg=10",
+            "ra_deg=400&dec_deg=0",
+            "ra_deg=10&dec_deg=95",
+            "ra_deg=x&dec_deg=0",
+        ],
+    )
     def test_coords_invalid(self, api_client, mock_ipc, query):
         response = api_client.get(f"/api/tracking/coords/?{query}")
         assert response.status_code == 400
@@ -460,9 +490,9 @@ class TestObjectListView:
         """ObjectListView retourne la liste des objets du cache."""
         response = api_client.get("/api/tracking/objects/")
         assert response.status_code == 200
-        assert 'count' in response.data
-        assert 'objects' in response.data
-        assert isinstance(response.data['objects'], list)
+        assert "count" in response.data
+        assert "objects" in response.data
+        assert isinstance(response.data["objects"], list)
 
 
 class TestObjectSearchView:

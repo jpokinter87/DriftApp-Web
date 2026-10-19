@@ -71,9 +71,7 @@ class TrackingCorrectionsMixin:
         if self._should_execute_anticipatory_slew(now_utc):
             self._execute_anticipatory_slew()
             # Après un slew massif, consommer l'intervalle avant la prochaine correction.
-            self.next_correction_time = now_utc + timedelta(
-                seconds=SINGLE_SPEED_CHECK_INTERVAL_S
-            )
+            self.next_correction_time = now_utc + timedelta(seconds=SINGLE_SPEED_CHECK_INTERVAL_S)
             return True, "meridian_anticipation_slew_executed"
 
         # Session milestone (toutes les 5 min)
@@ -101,7 +99,7 @@ class TrackingCorrectionsMixin:
                 f"meridian_transit | delta={delta:+.1f} az={azimut:.1f} alt={altitude:.1f} "
                 f"from={self.position_relative:.1f} to={position_cible:.1f}"
             )
-            self._log_goto(self.position_relative, position_cible, delta, 'meridian_transit')
+            self._log_goto(self.position_relative, position_cible, delta, "meridian_transit")
 
         # Vérifier si la correction dépasse le seuil (vitesse unique)
         if abs(delta) < SINGLE_SPEED_CORRECTION_THRESHOLD_DEG:
@@ -120,7 +118,7 @@ class TrackingCorrectionsMixin:
         # === APPLIQUER LA CORRECTION (v6.18 : rapide si ≥ 3°, ex. bascule méridien) ===
         self._apply_correction(delta, motor_delay_for(delta))
 
-        mode_str = 'continuous'
+        mode_str = "continuous"
         log_message = (
             f"correction | delta={delta:+.2f} az={azimut:.1f} alt={altitude:.1f} "
             f"dome={position_cible:.1f} mode={mode_str} "
@@ -131,14 +129,16 @@ class TrackingCorrectionsMixin:
         self.logger.info(log_message)
 
         # === Ajouter à l'historique de dérive ===
-        self.drift_tracking['corrections_log'].append({
-            'timestamp': datetime.now().isoformat(),
-            'azimut': round(azimut, 2),
-            'altitude': round(altitude, 2),
-            'dome_position': round(position_cible, 2),
-            'correction': round(delta, 2),
-            'mode': mode_str,
-        })
+        self.drift_tracking["corrections_log"].append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "azimut": round(azimut, 2),
+                "altitude": round(altitude, 2),
+                "dome_position": round(position_cible, 2),
+                "correction": round(delta, 2),
+                "mode": mode_str,
+            }
+        )
 
         # === Tracking direction des corrections (CW/CCW) ===
         self._track_correction_direction(delta)
@@ -202,9 +202,7 @@ class TrackingCorrectionsMixin:
 
         except (RuntimeError, IOError, OSError) as e:
             # Erreurs de communication avec l'encodeur - fallback légitime
-            self.logger.warning(
-                f"Encodeur indisponible, fallback sans feedback: {e}"
-            )
+            self.logger.warning(f"Encodeur indisponible, fallback sans feedback: {e}")
             self._notify_degraded_mode()
             self._apply_correction_sans_feedback(delta_deg, motor_delay)
 
@@ -214,21 +212,16 @@ class TrackingCorrectionsMixin:
 
         except Exception as e:
             # Erreur inattendue - logger ET remonter (ne pas masquer)
-            self.logger.error(
-                f"Erreur critique dans correction feedback: {e}",
-                exc_info=True
-            )
+            self.logger.error(f"Erreur critique dans correction feedback: {e}", exc_info=True)
             raise
 
     def _notify_degraded_mode(self):
         """Notifie l'utilisateur que le système fonctionne en mode dégradé."""
-        if not hasattr(self, '_degraded_mode_notified'):
+        if not hasattr(self, "_degraded_mode_notified"):
             self._degraded_mode_notified = False
 
         if not self._degraded_mode_notified:
-            self.logger.warning(
-                "Mode dégradé: correction sans feedback encodeur"
-            )
+            self.logger.warning("Mode dégradé: correction sans feedback encodeur")
             self._degraded_mode_notified = True
 
     def _calculer_cibles(self, delta_deg: float) -> tuple:
@@ -237,9 +230,9 @@ class TrackingCorrectionsMixin:
         angle_cible_encodeur = (position_cible_logique - self.encoder_offset) % 360
         return position_cible_logique, angle_cible_encodeur
 
-    def _executer_rotation_feedback(self, angle_cible: float,
-                                     motor_delay: float,
-                                     allow_large_movement: bool = False) -> tuple:
+    def _executer_rotation_feedback(
+        self, angle_cible: float, motor_delay: float, allow_large_movement: bool = False
+    ) -> tuple:
         """
         Exécute la rotation avec feedback et mesure la durée.
 
@@ -255,7 +248,7 @@ class TrackingCorrectionsMixin:
             vitesse=motor_delay,
             tolerance=0.5,
             max_iterations=10,
-            allow_large_movement=allow_large_movement
+            allow_large_movement=allow_large_movement,
         )
         duration = time.time() - start_time
         return result, duration
@@ -276,11 +269,11 @@ class TrackingCorrectionsMixin:
           (évite l'arrêt automatique lors de grands déplacements post-méridien)
         - Échec réel (erreur > seuil) → incrémente le compteur
         """
-        if result['success']:
+        if result["success"]:
             self._log_feedback_succes(result, duration)
         else:
-            erreur_finale = abs(result.get('erreur_finale', 999))
-            timeout_occurred = result.get('timeout', False)
+            erreur_finale = abs(result.get("erreur_finale", 999))
+            timeout_occurred = result.get("timeout", False)
 
             # Cas spécial: timeout mais erreur acceptable
             # La coupole a bien bougé, juste plus lentement que prévu
@@ -336,8 +329,7 @@ class TrackingCorrectionsMixin:
         """Vérifie si trop d'échecs consécutifs, arrête le suivi si nécessaire."""
         if self.failed_feedback_count >= self.max_failed_feedback:
             self.logger.error(
-                f"SUIVI ARRÊTÉ : {self.max_failed_feedback} corrections "
-                f"consécutives ont échoué."
+                f"SUIVI ARRÊTÉ : {self.max_failed_feedback} corrections consécutives ont échoué."
             )
             self.logger.error(
                 "Vérifiez l'encodeur et la calibration. "
@@ -349,14 +341,14 @@ class TrackingCorrectionsMixin:
 
     def _log_detail_iterations(self, result: dict):
         """Log le détail des itérations en mode debug."""
-        if result['iterations'] <= 1:
+        if result["iterations"] <= 1:
             return
 
         self.logger.debug("  Détail corrections:")
-        for corr in result['corrections']:
-            correction = corr.get('correction_demandee', corr.get('correction_commandee', 0))
-            erreur_avant = corr.get('erreur_avant', corr.get('erreur', 0))
-            erreur_apres = corr.get('erreur_apres', 0)
+        for corr in result["corrections"]:
+            correction = corr.get("correction_demandee", corr.get("correction_commandee", 0))
+            erreur_avant = corr.get("erreur_avant", corr.get("erreur", 0))
+            erreur_apres = corr.get("erreur_apres", 0)
             self.logger.debug(
                 f"    Iter {corr['iteration']}: {correction:+.2f}° "
                 f"(erreur avant: {erreur_avant:+.2f}°, après: {erreur_apres:+.2f}°)"
@@ -371,6 +363,7 @@ class TrackingCorrectionsMixin:
         """
         try:
             from core.hardware.daemon_encoder_reader import get_daemon_reader
+
             real_position = get_daemon_reader().read_angle()
             old_offset = self.encoder_offset
             new_offset = position_cible_logique - real_position
@@ -394,7 +387,9 @@ class TrackingCorrectionsMixin:
         except Exception as e:
             self.logger.debug(f"Re-sync encodeur non critique: {e}")
 
-    def _apply_correction_sans_feedback(self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY):
+    def _apply_correction_sans_feedback(
+        self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY
+    ):
         """
         Applique une correction SANS feedback (ancienne méthode).
 
@@ -405,9 +400,7 @@ class TrackingCorrectionsMixin:
             motor_delay: Délai entre les pas (secondes)
         """
         # === CALCULER LE NOMBRE DE PAS AVEC FACTEUR DE CORRECTION ===
-        steps = int(
-            (abs(delta_deg) / 360.0) *
-            self.moteur.steps_per_dome_revolution)
+        steps = int((abs(delta_deg) / 360.0) * self.moteur.steps_per_dome_revolution)
 
         if steps == 0:
             return

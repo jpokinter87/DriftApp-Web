@@ -32,8 +32,8 @@ from ramp import ProfilAccelConstante, arret_doux, lire_accel
 
 
 # Configuration
-STEP_PIN = 2   # GP2 → PUL+ du DM860T
-DIR_PIN = 3    # GP3 → DIR+ du DM860T
+STEP_PIN = 2  # GP2 → PUL+ du DM860T
+DIR_PIN = 3  # GP3 → DIR+ du DM860T
 
 # Pre-allouer le poller pour check_for_stop()
 # Evite creation/destruction d'objet a chaque appel (cause GC)
@@ -182,9 +182,7 @@ def main():
                     continue
 
                 steps, direction, delay_us, ramp_type, accel = params
-                steps_done, stopped = execute_move(
-                    sg, steps, direction, delay_us, ramp_type, accel
-                )
+                steps_done, stopped = execute_move(sg, steps, direction, delay_us, ramp_type, accel)
 
                 if stopped:
                     send_response("STOPPED {}".format(steps_done))

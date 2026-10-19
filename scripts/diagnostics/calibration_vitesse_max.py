@@ -52,21 +52,27 @@ ANGLE_TEST = 5.0  # degrés
 
 # Fichier de rapport
 DRIFTAPP_DIR = Path(__file__).parent
-RAPPORT_FILE = DRIFTAPP_DIR / "logs" / f"calibration_vitesse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+RAPPORT_FILE = (
+    DRIFTAPP_DIR / "logs" / f"calibration_vitesse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+)
 
 
 # =============================================================================
 # UTILITAIRES
 # =============================================================================
 
+
 def print_ok(msg):
     print(f"  ✅ {msg}")
+
 
 def print_error(msg):
     print(f"  ❌ {msg}")
 
+
 def print_warning(msg):
     print(f"  ⚠️  {msg}")
+
 
 def print_info(msg):
     print(f"  ℹ️  {msg}")
@@ -75,11 +81,7 @@ def print_info(msg):
 def verifier_motor_service() -> bool:
     """Vérifie si le Motor Service est actif via pgrep."""
     try:
-        result = subprocess.run(
-            ['pgrep', '-f', 'motor_service.py'],
-            capture_output=True,
-            text=True
-        )
+        result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True, text=True)
         return result.returncode == 0
     except:
         pass
@@ -96,12 +98,12 @@ def lire_status() -> dict:
 
 def lire_position() -> float:
     """Lit la position actuelle."""
-    return lire_status().get('position', 0)
+    return lire_status().get("position", 0)
 
 
 def lire_etat() -> str:
     """Lit l'état actuel."""
-    return lire_status().get('status', 'unknown')
+    return lire_status().get("status", "unknown")
 
 
 def verifier_commande_test_speed() -> bool:
@@ -112,80 +114,80 @@ def verifier_commande_test_speed() -> bool:
     # On vérifie simplement si last_test_result existe dans le status
     # après avoir envoyé une commande minimale
     status = lire_status()
-    
+
     # Envoyer une commande test_speed minimale
     command = {
-        'id': f'verify_{int(time.time() * 1000)}',
-        'command': 'test_speed',
-        'angle': 0.1,  # Très petit angle
-        'motor_delay': 0.001
+        "id": f"verify_{int(time.time() * 1000)}",
+        "command": "test_speed",
+        "angle": 0.1,  # Très petit angle
+        "motor_delay": 0.001,
     }
-    
+
     try:
         COMMAND_FILE.write_text(json.dumps(command))
         time.sleep(2)  # Attendre le traitement
-        
+
         new_status = lire_status()
-        if 'last_test_result' in new_status:
+        if "last_test_result" in new_status:
             return True
-        
+
         # Si pas de last_test_result, vérifier si l'état a changé
-        if new_status.get('status') == 'idle':
+        if new_status.get("status") == "idle":
             # La commande a peut-être été ignorée silencieusement
             return False
-            
+
     except Exception as e:
         print_error(f"Erreur vérification: {e}")
-    
+
     return False
 
 
 def envoyer_commande_test_speed(angle: float, motor_delay: float) -> dict:
     """
     Envoie une commande test_speed au Motor Service.
-    
+
     Returns:
         dict avec le résultat du test ou {'error': ...}
     """
     command = {
-        'id': f'calib_{int(time.time() * 1000)}',
-        'command': 'test_speed',
-        'angle': angle,
-        'motor_delay': motor_delay
+        "id": f"calib_{int(time.time() * 1000)}",
+        "command": "test_speed",
+        "angle": angle,
+        "motor_delay": motor_delay,
     }
-    
+
     try:
         # Nettoyer l'ancien résultat
         status = lire_status()
-        if 'last_test_result' in status:
-            del status['last_test_result']
-        
+        if "last_test_result" in status:
+            del status["last_test_result"]
+
         # Envoyer la commande
         COMMAND_FILE.write_text(json.dumps(command))
-        
+
         # Attendre le début du mouvement
         timeout_start = time.time()
         while time.time() - timeout_start < 5:
-            if lire_etat() == 'moving':
+            if lire_etat() == "moving":
                 break
             time.sleep(0.05)
-        
+
         # Attendre la fin du mouvement
         timeout_move = time.time()
         while time.time() - timeout_move < 30:
             status = lire_status()
-            if status.get('status') == 'idle':
+            if status.get("status") == "idle":
                 # Récupérer le résultat
-                result = status.get('last_test_result', {})
+                result = status.get("last_test_result", {})
                 if result:
                     return result
                 break
             time.sleep(0.05)
-        
-        return {'error': 'Timeout ou pas de résultat'}
-        
+
+        return {"error": "Timeout ou pas de résultat"}
+
     except Exception as e:
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
 def demander_observation() -> int:
@@ -200,7 +202,7 @@ def demander_observation() -> int:
     print("    │ 4 = Saccades marquées ❌                       │")
     print("    │ 5 = Très saccadé / claquements ❌❌            │")
     print("    ╰────────────────────────────────────────────────╯")
-    
+
     while True:
         try:
             obs = int(input("    Votre observation (1-5): "))
@@ -215,67 +217,69 @@ def demander_observation() -> int:
 # TESTS DE VITESSE
 # =============================================================================
 
+
 def tester_vitesse(delay: float, description: str, direction: int) -> dict:
     """
     Teste une vitesse spécifique.
-    
+
     Args:
         delay: Délai entre les pas en secondes
         description: Description de la vitesse
         direction: 1 pour +, -1 pour -
-    
+
     Returns:
         dict avec les résultats du test
     """
     angle = ANGLE_TEST * direction
-    
+
     print()
     print(f"  ▶ Test: {description}")
-    print(f"    Délai: {delay*1000:.2f} ms | Rotation: {angle:+.1f}°")
+    print(f"    Délai: {delay * 1000:.2f} ms | Rotation: {angle:+.1f}°")
     print()
-    
+
     input("    ⏎ Appuyez sur ENTRÉE pour lancer...")
-    
+
     print()
     print("  ╔════════════════════════════════════════════════════════════╗")
     print("  ║  👀 OBSERVEZ ET ÉCOUTEZ LE MOTEUR !                        ║")
     print("  ╚════════════════════════════════════════════════════════════╝")
     print()
-    
+
     # Envoyer la commande
     result = envoyer_commande_test_speed(angle, delay)
-    
-    if 'error' in result:
+
+    if "error" in result:
         print_error(f"Erreur: {result['error']}")
         return {
-            'delay_ms': delay * 1000,
-            'description': description,
-            'error': result['error'],
-            'observation': 5  # Considéré comme échec
+            "delay_ms": delay * 1000,
+            "description": description,
+            "error": result["error"],
+            "observation": 5,  # Considéré comme échec
         }
-    
-    duration = result.get('duration_sec', 0)
-    vitesse = result.get('vitesse_deg_min', 0)
-    
+
+    duration = result.get("duration_sec", 0)
+    vitesse = result.get("vitesse_deg_min", 0)
+
     print(f"    ✓ Terminé en {duration:.2f}s")
     print(f"    ✓ Vitesse mesurée: {vitesse:.1f} °/min")
-    
+
     # Demander l'observation
     observation = demander_observation()
-    
+
     return {
-        'delay_ms': delay * 1000,
-        'description': description,
-        'duration_sec': duration,
-        'vitesse_deg_min': vitesse,
-        'observation': observation,
-        'success': True
+        "delay_ms": delay * 1000,
+        "description": description,
+        "duration_sec": duration,
+        "vitesse_deg_min": vitesse,
+        "observation": observation,
+        "success": True,
     }
 
 
 # =============================================================================
 # RAPPORT
 # =============================================================================
+
 
 def generer_rapport(resultats: list):
     """Génère le rapport de calibration."""
@@ -284,21 +288,21 @@ def generer_rapport(resultats: list):
     print("                    RAPPORT DE CALIBRATION")
     print("=" * 70)
     print()
-    
+
     rapport = []
     rapport.append("=" * 70)
     rapport.append("RAPPORT DE CALIBRATION VITESSE MAXIMALE MOTEUR")
     rapport.append(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     rapport.append("=" * 70)
     rapport.append("")
-    
+
     # Tableau des résultats
     header = f"{'Délai (ms)':<12} {'Vitesse (°/min)':<16} {'Observation':<20} {'Verdict'}"
     rapport.append(header)
     rapport.append("-" * 70)
     print(f"  {header}")
     print("  " + "-" * 68)
-    
+
     observations_labels = {
         1: ("Parfait ✅", "OPTIMAL"),
         2: ("Fluide", "OK"),
@@ -306,51 +310,51 @@ def generer_rapport(resultats: list):
         4: ("Saccades ❌", "TROP RAPIDE"),
         5: ("Très saccadé ❌❌", "TROP RAPIDE"),
     }
-    
+
     vitesse_max_fluide = None
     delay_optimal = None
-    
+
     for r in resultats:
-        if 'error' in r and r.get('observation', 5) == 5:
+        if "error" in r and r.get("observation", 5) == 5:
             ligne = f"{r['delay_ms']:<12.2f} {'ERREUR':<16} {r.get('error', '?'):<20}"
             rapport.append(ligne)
             print(f"  {ligne}")
             continue
-            
-        obs = r.get('observation', 5)
+
+        obs = r.get("observation", 5)
         label, verdict = observations_labels.get(obs, ("?", "?"))
-        vitesse = r.get('vitesse_deg_min', 0)
-        
+        vitesse = r.get("vitesse_deg_min", 0)
+
         ligne = f"{r['delay_ms']:<12.2f} {vitesse:<16.1f} {label:<20} {verdict}"
         rapport.append(ligne)
         print(f"  {ligne}")
-        
+
         # Trouver la vitesse max fluide (observation <= 2)
         if obs <= 2 and (vitesse_max_fluide is None or vitesse > vitesse_max_fluide):
             vitesse_max_fluide = vitesse
-            delay_optimal = r['delay_ms']
-    
+            delay_optimal = r["delay_ms"]
+
     rapport.append("")
     rapport.append("=" * 70)
     rapport.append("RECOMMANDATION")
     rapport.append("=" * 70)
-    
+
     print()
     print("  " + "=" * 68)
     print("                         RECOMMANDATION")
     print("  " + "=" * 68)
-    
+
     if delay_optimal:
         recommandation = f"""
   ✅ VITESSE MAXIMALE FLUIDE TROUVÉE
   
-     Délai optimal     : {delay_optimal:.2f} ms ({delay_optimal/1000:.5f} s)
+     Délai optimal     : {delay_optimal:.2f} ms ({delay_optimal / 1000:.5f} s)
      Vitesse atteinte  : {vitesse_max_fluide:.1f} °/min
      
   📋 MODIFICATION À FAIRE DANS config.json:
   
      "continuous": {{
-         "motor_delay": {delay_optimal/1000:.5f},
+         "motor_delay": {delay_optimal / 1000:.5f},
          ...
      }}
      
@@ -364,7 +368,7 @@ def generer_rapport(resultats: list):
         print(msg)
         print()
         print_info("Essayez avec des délais plus élevés (plus lents).")
-    
+
     # Sauvegarder le rapport
     try:
         RAPPORT_FILE.parent.mkdir(exist_ok=True)
@@ -378,6 +382,7 @@ def generer_rapport(resultats: list):
 # =============================================================================
 # PROGRAMME PRINCIPAL
 # =============================================================================
+
 
 def afficher_intro():
     print()
@@ -400,7 +405,7 @@ def afficher_status_services():
     print("  ┌─────────────────────────────────────────┐")
     print("  │         ÉTAT DES SERVICES               │")
     print("  ├─────────────────────────────────────────┤")
-    
+
     if verifier_motor_service():
         etat = lire_etat()
         pos = lire_position()
@@ -408,41 +413,41 @@ def afficher_status_services():
         print(f"  │   État: {etat:<10} Position: {pos:>6.1f}°  │")
     else:
         print(f"  │ Motor Service: ❌ ARRÊTÉ               │")
-    
+
     if ENCODER_FILE.exists():
         try:
             data = json.loads(ENCODER_FILE.read_text())
-            angle = data.get('angle', 0)
+            angle = data.get("angle", 0)
             print(f"  │ Daemon encodeur: ✅ Position: {angle:>5.1f}°  │")
         except:
             print(f"  │ Daemon encodeur: ⚠️  ERREUR            │")
     else:
         print(f"  │ Daemon encodeur: ❌ ARRÊTÉ             │")
-    
+
     print("  └─────────────────────────────────────────┘")
 
 
 def main():
     afficher_intro()
     afficher_status_services()
-    
+
     # Vérifier que le Motor Service tourne
     print()
     print("  Vérification du Motor Service...")
-    
+
     if not verifier_motor_service():
         print_error("Le Motor Service n'est pas actif!")
         print()
         print_info("Lancez: sudo ./start_web.sh start")
         sys.exit(1)
-    
+
     print_ok("Motor Service actif")
-    
+
     # Vérifier que la commande test_speed est supportée
     print()
     print("  Vérification de la commande test_speed...")
     print_info("Envoi d'une commande de test (0.1°)...")
-    
+
     if not verifier_commande_test_speed():
         print()
         print_error("La commande 'test_speed' n'est pas supportée!")
@@ -459,48 +464,48 @@ def main():
         print("  ║  Et relancez ce script.                                    ║")
         print("  ╚════════════════════════════════════════════════════════════╝")
         sys.exit(1)
-    
+
     print_ok("Commande test_speed supportée!")
-    
+
     # Confirmation avant de commencer
     print()
     print("  ════════════════════════════════════════════════════════════")
     print(f"  {len(VITESSES_A_TESTER)} vitesses vont être testées")
     print(f"  Rotation de {ANGLE_TEST}° pour chaque test")
     print("  ════════════════════════════════════════════════════════════")
-    
+
     input("\n  ⏎ Appuyez sur ENTRÉE pour commencer la calibration...")
-    
+
     # Exécuter les tests
     resultats = []
     direction = 1  # Alterne +/-
-    
+
     for i, (delay, description) in enumerate(VITESSES_A_TESTER):
         print()
         print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        print(f"                    TEST {i+1}/{len(VITESSES_A_TESTER)}")
+        print(f"                    TEST {i + 1}/{len(VITESSES_A_TESTER)}")
         print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        
+
         result = tester_vitesse(delay, description, direction)
         resultats.append(result)
-        
+
         # Alterner la direction
         direction *= -1
-        
+
         # Pause entre les tests
         time.sleep(0.5)
-        
+
         # Permettre d'arrêter
         if i < len(VITESSES_A_TESTER) - 1:
             print()
             reponse = input("  Continuer avec la vitesse suivante? (o/n): ").strip().lower()
-            if reponse in ['n', 'non', 'no']:
+            if reponse in ["n", "non", "no"]:
                 print_info("Calibration interrompue par l'utilisateur")
                 break
-    
+
     # Générer le rapport
     generer_rapport(resultats)
-    
+
     print()
     print("  ════════════════════════════════════════════════════════════")
     print("  👋 Calibration terminée")
@@ -516,4 +521,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n  ❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()

@@ -24,6 +24,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
 os.environ.setdefault("DRIFTAPP_DEBUG", "1")
 
 import django
+
 django.setup()
 
 from rest_framework.test import APIClient, APIRequestFactory
@@ -76,6 +77,7 @@ TRACKING_STATUS = {
 # current_session
 # =============================================================================
 
+
 class TestCurrentSession:
     def test_tracking_active(self, factory):
         request = factory.get("/api/session/current/")
@@ -97,6 +99,7 @@ class TestCurrentSession:
 # =============================================================================
 # session_history
 # =============================================================================
+
 
 class TestSessionHistory:
     def test_empty(self, api_client, mock_sessions):
@@ -128,6 +131,7 @@ class TestSessionHistory:
 # session_detail
 # =============================================================================
 
+
 class TestSessionDetail:
     def test_existing(self, api_client, mock_sessions):
         data = {"session_id": "test123", "object": {"name": "M31"}}
@@ -144,6 +148,7 @@ class TestSessionDetail:
 # =============================================================================
 # save_session
 # =============================================================================
+
 
 class TestSaveSession:
     def test_save_while_tracking(self, factory, mock_sessions):
@@ -165,6 +170,7 @@ class TestSaveSession:
 # =============================================================================
 # delete_session
 # =============================================================================
+
 
 class TestDeleteSession:
     def test_delete_existing(self, api_client, mock_sessions):

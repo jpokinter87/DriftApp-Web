@@ -6,11 +6,7 @@ Teste le parsing centralisé de configuration moteur (dict et dataclass).
 
 import pytest
 
-from core.hardware.motor_config_parser import (
-    MotorParams,
-    parse_motor_config,
-    validate_motor_params
-)
+from core.hardware.motor_config_parser import MotorParams, parse_motor_config, validate_motor_params
 
 
 class TestMotorParams:
@@ -22,7 +18,7 @@ class TestMotorParams:
             steps_per_revolution=200,
             microsteps=4,
             gear_ratio=2230.0,
-            steps_correction_factor=1.08849
+            steps_correction_factor=1.08849,
         )
 
         assert params.steps_per_revolution == 200
@@ -33,10 +29,7 @@ class TestMotorParams:
     def test_valeurs_par_defaut_gpio(self):
         """Les pins GPIO ont des valeurs par défaut."""
         params = MotorParams(
-            steps_per_revolution=200,
-            microsteps=4,
-            gear_ratio=2230.0,
-            steps_correction_factor=1.0
+            steps_per_revolution=200, microsteps=4, gear_ratio=2230.0, steps_correction_factor=1.0
         )
 
         assert params.dir_pin == 17
@@ -48,7 +41,7 @@ class TestMotorParams:
             steps_per_revolution=200,
             microsteps=4,
             gear_ratio=2230.0,
-            steps_correction_factor=1.08849
+            steps_correction_factor=1.08849,
         )
 
         expected = int(200 * 4 * 2230.0 * 1.08849)
@@ -61,11 +54,11 @@ class TestParseMotorConfig:
     def test_parse_dict_legacy(self):
         """Parse un dict au format legacy."""
         config = {
-            'steps_per_revolution': 200,
-            'microsteps': 8,
-            'gear_ratio': 1000.0,
-            'steps_correction_factor': 1.05,
-            'gpio_pins': {'dir': 27, 'step': 22}
+            "steps_per_revolution": 200,
+            "microsteps": 8,
+            "gear_ratio": 1000.0,
+            "steps_correction_factor": 1.05,
+            "gpio_pins": {"dir": 27, "step": 22},
         }
 
         params = parse_motor_config(config)
@@ -80,10 +73,10 @@ class TestParseMotorConfig:
     def test_parse_dict_sans_gpio(self):
         """Parse un dict sans gpio_pins (utilise valeurs par défaut)."""
         config = {
-            'steps_per_revolution': 200,
-            'microsteps': 4,
-            'gear_ratio': 2230.0,
-            'steps_correction_factor': 1.0
+            "steps_per_revolution": 200,
+            "microsteps": 4,
+            "gear_ratio": 2230.0,
+            "steps_correction_factor": 1.0,
         }
 
         params = parse_motor_config(config)
@@ -93,6 +86,7 @@ class TestParseMotorConfig:
 
     def test_parse_dataclass(self):
         """Parse une dataclass MotorConfig."""
+
         # Simuler une dataclass MotorConfig
         class MockGPIOPins:
             dir = 5
@@ -122,10 +116,10 @@ class TestParseMotorConfig:
     def test_parse_dict_cle_manquante(self):
         """Lève une erreur si une clé requise manque."""
         config = {
-            'steps_per_revolution': 200,
+            "steps_per_revolution": 200,
             # microsteps manquant
-            'gear_ratio': 2230.0,
-            'steps_correction_factor': 1.0
+            "gear_ratio": 2230.0,
+            "steps_correction_factor": 1.0,
         }
 
         with pytest.raises(KeyError):
@@ -141,7 +135,7 @@ class TestValidateMotorParams:
             steps_per_revolution=200,
             microsteps=4,
             gear_ratio=2230.0,
-            steps_correction_factor=1.08849
+            steps_correction_factor=1.08849,
         )
 
         # Ne doit pas lever d'exception
@@ -150,10 +144,7 @@ class TestValidateMotorParams:
     def test_steps_negatif(self):
         """Erreur si steps_per_revolution <= 0."""
         params = MotorParams(
-            steps_per_revolution=-1,
-            microsteps=4,
-            gear_ratio=2230.0,
-            steps_correction_factor=1.0
+            steps_per_revolution=-1, microsteps=4, gear_ratio=2230.0, steps_correction_factor=1.0
         )
 
         with pytest.raises(ValueError, match="steps_per_revolution"):
@@ -162,10 +153,7 @@ class TestValidateMotorParams:
     def test_steps_zero(self):
         """Erreur si steps_per_revolution == 0."""
         params = MotorParams(
-            steps_per_revolution=0,
-            microsteps=4,
-            gear_ratio=2230.0,
-            steps_correction_factor=1.0
+            steps_per_revolution=0, microsteps=4, gear_ratio=2230.0, steps_correction_factor=1.0
         )
 
         with pytest.raises(ValueError, match="steps_per_revolution"):
@@ -178,7 +166,7 @@ class TestValidateMotorParams:
             steps_per_revolution=200,
             microsteps=invalid_microsteps,
             gear_ratio=2230.0,
-            steps_correction_factor=1.0
+            steps_correction_factor=1.0,
         )
 
         with pytest.raises(ValueError, match="microsteps"):
@@ -191,7 +179,7 @@ class TestValidateMotorParams:
             steps_per_revolution=200,
             microsteps=valid_microsteps,
             gear_ratio=2230.0,
-            steps_correction_factor=1.0
+            steps_correction_factor=1.0,
         )
 
         validate_motor_params(params)  # Ne doit pas lever d'exception
@@ -199,10 +187,7 @@ class TestValidateMotorParams:
     def test_gear_ratio_negatif(self):
         """Erreur si gear_ratio <= 0."""
         params = MotorParams(
-            steps_per_revolution=200,
-            microsteps=4,
-            gear_ratio=-1.0,
-            steps_correction_factor=1.0
+            steps_per_revolution=200, microsteps=4, gear_ratio=-1.0, steps_correction_factor=1.0
         )
 
         with pytest.raises(ValueError, match="gear_ratio"):
@@ -211,10 +196,7 @@ class TestValidateMotorParams:
     def test_correction_factor_zero(self):
         """Erreur si steps_correction_factor <= 0."""
         params = MotorParams(
-            steps_per_revolution=200,
-            microsteps=4,
-            gear_ratio=2230.0,
-            steps_correction_factor=0
+            steps_per_revolution=200, microsteps=4, gear_ratio=2230.0, steps_correction_factor=0
         )
 
         with pytest.raises(ValueError, match="steps_correction_factor"):

@@ -51,12 +51,15 @@ STATUS_FILE = Path("/dev/shm/motor_status.json")
 ENCODER_FILE = Path("/dev/shm/ems22_position.json")
 
 # Fichier de rapport
-RAPPORT_FILE = DRIFTAPP_DIR / "logs" / f"diagnostic_moteur_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+RAPPORT_FILE = (
+    DRIFTAPP_DIR / "logs" / f"diagnostic_moteur_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+)
 
 
 # =============================================================================
 # UTILITAIRES D'AFFICHAGE
 # =============================================================================
+
 
 def print_header(titre: str):
     print()
@@ -95,9 +98,9 @@ def attendre_utilisateur(message: str = "Appuyez sur ENTRÉE pour continuer...")
 def demander_oui_non(question: str) -> bool:
     while True:
         reponse = input(f"  ❓ {question} (o/n): ").strip().lower()
-        if reponse in ['o', 'oui', 'y', 'yes']:
+        if reponse in ["o", "oui", "y", "yes"]:
             return True
-        elif reponse in ['n', 'non', 'no']:
+        elif reponse in ["n", "non", "no"]:
             return False
         print("     Répondez par 'o' (oui) ou 'n' (non)")
 
@@ -106,33 +109,38 @@ def demander_oui_non(question: str) -> bool:
 # GESTION DES SERVICES
 # =============================================================================
 
+
 def verifier_services_actifs() -> dict:
     services = {
-        'motor_service': False,
-        'django': False,
-        'daemon': False,
+        "motor_service": False,
+        "django": False,
+        "daemon": False,
     }
-    
+
     try:
-        result = subprocess.run(['pgrep', '-f', 'motor_service.py'], capture_output=True, text=True)
-        services['motor_service'] = result.returncode == 0
-        
-        result = subprocess.run(['pgrep', '-f', 'manage.py runserver'], capture_output=True, text=True)
-        services['django'] = result.returncode == 0
-        
-        result = subprocess.run(['pgrep', '-f', 'ems22d_calibrated'], capture_output=True, text=True)
-        services['daemon'] = result.returncode == 0
+        result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True, text=True)
+        services["motor_service"] = result.returncode == 0
+
+        result = subprocess.run(
+            ["pgrep", "-f", "manage.py runserver"], capture_output=True, text=True
+        )
+        services["django"] = result.returncode == 0
+
+        result = subprocess.run(
+            ["pgrep", "-f", "ems22d_calibrated"], capture_output=True, text=True
+        )
+        services["daemon"] = result.returncode == 0
     except:
         pass
-    
+
     return services
 
 
 def arreter_motor_service() -> bool:
     try:
-        subprocess.run(['pkill', '-f', 'motor_service.py'], capture_output=True)
+        subprocess.run(["pkill", "-f", "motor_service.py"], capture_output=True)
         time.sleep(1)
-        check = subprocess.run(['pgrep', '-f', 'motor_service.py'], capture_output=True)
+        check = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True)
         return check.returncode != 0
     except Exception as e:
         print_error(f"Erreur lors de l'arrêt: {e}")
@@ -143,21 +151,21 @@ def demarrer_motor_service() -> bool:
     try:
         motor_service_path = DRIFTAPP_DIR / "services" / "motor_service.py"
         python_path = DRIFTAPP_DIR / ".venv" / "bin" / "python"
-        
+
         if not python_path.exists():
             python_path = "python3"
         else:
             python_path = str(python_path)
-        
+
         subprocess.Popen(
             [python_path, str(motor_service_path)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True
+            start_new_session=True,
         )
         time.sleep(3)
-        
-        check = subprocess.run(['pgrep', '-f', 'motor_service.py'], capture_output=True)
+
+        check = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True)
         return check.returncode == 0
     except Exception as e:
         print_error(f"Erreur lors du démarrage: {e}")
@@ -168,8 +176,8 @@ def demarrer_motor_service() -> bool:
 # CLASSE DE DIAGNOSTIC
 # =============================================================================
 
-class DiagnosticMoteur:
 
+class DiagnosticMoteur:
     def __init__(self):
         self.rapport = []
         self.resultats = {}
@@ -190,6 +198,7 @@ class DiagnosticMoteur:
         # Charger la configuration
         try:
             from core.config.config_loader import ConfigLoader
+
             self.config = ConfigLoader().load()
             print_ok(f"Configuration chargée")
         except Exception as e:
@@ -203,8 +212,8 @@ class DiagnosticMoteur:
         if ENCODER_FILE.exists():
             try:
                 data = json.loads(ENCODER_FILE.read_text())
-                angle = data.get('angle', 0)
-                calibrated = data.get('calibrated', False)
+                angle = data.get("angle", 0)
+                calibrated = data.get("calibrated", False)
                 status = "calibré" if calibrated else "non calibré"
                 print_ok(f"Daemon encodeur actif (position: {angle:.1f}°, {status})")
             except:
@@ -214,8 +223,8 @@ class DiagnosticMoteur:
 
         # Vérifier les services actifs
         services = verifier_services_actifs()
-        
-        if services['motor_service']:
+
+        if services["motor_service"]:
             print()
             print("  ╔════════════════════════════════════════════════════════════╗")
             print("  ║  ⚠️  MOTOR SERVICE DÉTECTÉ EN COURS D'EXÉCUTION            ║")
@@ -224,7 +233,7 @@ class DiagnosticMoteur:
             print("  ║  Il sera arrêté pour le TEST A puis redémarré.             ║")
             print("  ╚════════════════════════════════════════════════════════════╝")
             print()
-            
+
             if demander_oui_non("Arrêter temporairement le Motor Service?"):
                 print_info("Arrêt du Motor Service...")
                 if arreter_motor_service():
@@ -246,15 +255,16 @@ class DiagnosticMoteur:
 
         try:
             from core.config.config import SINGLE_SPEED_MOTOR_DELAY
+
             delay = SINGLE_SPEED_MOTOR_DELAY
-            self.vitesses_config['SINGLE'] = delay
-            print(f"     SINGLE:     {delay*1000:.4f} ms ({delay:.5f} s)")
+            self.vitesses_config["SINGLE"] = delay
+            print(f"     SINGLE:     {delay * 1000:.4f} ms ({delay:.5f} s)")
         except Exception as e:
             print_warning(f"Impossible de lire la vitesse unique : {e}")
 
         # Valeur par défaut si non trouvée
-        if 'SINGLE' not in self.vitesses_config:
-            self.vitesses_config['SINGLE'] = 0.00026
+        if "SINGLE" not in self.vitesses_config:
+            self.vitesses_config["SINGLE"] = 0.00026
             print(f"     SINGLE:     0.2600 ms (défaut)")
 
         print()
@@ -262,8 +272,10 @@ class DiagnosticMoteur:
     def initialiser_moteur(self) -> bool:
         try:
             from core.hardware.moteur_rp2040 import MoteurRP2040
+
             serial_cfg = self.config.motor_driver.serial
             import serial
+
             serial_port = serial.Serial(
                 port=serial_cfg.port,
                 baudrate=serial_cfg.baudrate,
@@ -302,7 +314,7 @@ class DiagnosticMoteur:
         deg_per_step = 360.0 / self.moteur.steps_per_dome_revolution
         steps = int(abs(angle) / deg_per_step)
 
-        print(f"     Rotation de {angle}° ({steps:,} pas, délai={vitesse*1000:.4f}ms)...")
+        print(f"     Rotation de {angle}° ({steps:,} pas, délai={vitesse * 1000:.4f}ms)...")
 
         self.moteur.clear_stop_request()
         self.moteur.definir_direction(1 if angle >= 0 else -1)
@@ -317,7 +329,9 @@ class DiagnosticMoteur:
 
         return self._analyser_timings(timings, vitesse, description, t_total)
 
-    def _analyser_timings(self, timings: list, vitesse: float, description: str, t_total: float) -> dict:
+    def _analyser_timings(
+        self, timings: list, vitesse: float, description: str, t_total: float
+    ) -> dict:
         if not timings:
             return {}
 
@@ -334,22 +348,24 @@ class DiagnosticMoteur:
         outlier_indices = [i for i, t in enumerate(timings_ms) if t > outlier_threshold]
 
         stats = {
-            'description': description,
-            'vitesse_ms': vitesse_ms,
-            'total_steps': len(timings),
-            'avg_ms': avg,
-            'min_ms': min_t,
-            'max_ms': max_t,
-            'std_ms': std,
-            'outlier_count': len(outliers),
-            'outlier_percent': (len(outliers) / len(timings)) * 100 if timings else 0,
-            'total_time_sec': t_total,
-            'expected_time_sec': len(timings) * vitesse,
-            'vitesse_reelle_deg_min': (3.0 / t_total) * 60 if t_total > 0 else 0,
+            "description": description,
+            "vitesse_ms": vitesse_ms,
+            "total_steps": len(timings),
+            "avg_ms": avg,
+            "min_ms": min_t,
+            "max_ms": max_t,
+            "std_ms": std,
+            "outlier_count": len(outliers),
+            "outlier_percent": (len(outliers) / len(timings)) * 100 if timings else 0,
+            "total_time_sec": t_total,
+            "expected_time_sec": len(timings) * vitesse,
+            "vitesse_reelle_deg_min": (3.0 / t_total) * 60 if t_total > 0 else 0,
         }
 
-        overhead = stats['total_time_sec'] - stats['expected_time_sec']
-        stats['overhead_percent'] = (overhead / stats['expected_time_sec']) * 100 if stats['expected_time_sec'] > 0 else 0
+        overhead = stats["total_time_sec"] - stats["expected_time_sec"]
+        stats["overhead_percent"] = (
+            (overhead / stats["expected_time_sec"]) * 100 if stats["expected_time_sec"] > 0 else 0
+        )
 
         return stats
 
@@ -363,10 +379,10 @@ class DiagnosticMoteur:
         print(f"        Outliers      : {stats['outlier_count']} ({stats['outlier_percent']:.2f}%)")
         print(f"        Overhead      : {stats['overhead_percent']:.1f}%")
 
-        if stats['max_ms'] > stats['avg_ms'] * 5:
+        if stats["max_ms"] > stats["avg_ms"] * 5:
             print_warning(f"Délai max très élevé ({stats['max_ms']:.2f}ms)")
 
-        if stats['outlier_percent'] > 1:
+        if stats["outlier_percent"] > 1:
             print_warning(f"Trop d'outliers ({stats['outlier_percent']:.1f}%)")
 
     def executer_tests_isoles(self) -> dict:
@@ -381,15 +397,15 @@ class DiagnosticMoteur:
 
         # Utiliser les vitesses de la config
         tests = [
-            (3.0, self.vitesses_config['NORMAL'], "NORMAL"),
-            (3.0, self.vitesses_config['CRITICAL'], "CRITICAL"),
-            (3.0, self.vitesses_config['CONTINUOUS'], "CONTINUOUS"),
+            (3.0, self.vitesses_config["NORMAL"], "NORMAL"),
+            (3.0, self.vitesses_config["CRITICAL"], "CRITICAL"),
+            (3.0, self.vitesses_config["CONTINUOUS"], "CONTINUOUS"),
         ]
 
         resultats = {}
 
         for angle, vitesse, nom in tests:
-            print_section(f"Test {nom} (délai config={vitesse*1000:.4f}ms)")
+            print_section(f"Test {nom} (délai config={vitesse * 1000:.4f}ms)")
 
             stats = self.test_isole(angle, vitesse, nom)
             resultats[nom] = stats
@@ -406,17 +422,13 @@ class DiagnosticMoteur:
 
     def verifier_motor_service(self) -> bool:
         try:
-            result = subprocess.run(['pgrep', '-f', 'motor_service.py'], capture_output=True)
+            result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True)
             return result.returncode == 0
         except:
             return False
 
     def envoyer_commande_goto(self, angle: float) -> bool:
-        command = {
-            'id': f'diag_{int(time.time())}',
-            'command': 'goto',
-            'angle': angle
-        }
+        command = {"id": f"diag_{int(time.time())}", "command": "goto", "angle": angle}
         try:
             COMMAND_FILE.write_text(json.dumps(command))
             return True
@@ -433,7 +445,7 @@ class DiagnosticMoteur:
         start = time.time()
         while time.time() - start < timeout:
             status = self.lire_status()
-            if status.get('status') == 'idle':
+            if status.get("status") == "idle":
                 return True
             time.sleep(0.1)
         return False
@@ -459,7 +471,7 @@ class DiagnosticMoteur:
         print_ok("Motor Service actif")
 
         status = self.lire_status()
-        position_initiale = status.get('position', 0)
+        position_initiale = status.get("position", 0)
         print_info(f"Position actuelle: {position_initiale:.1f}°")
 
         print_section("Test GOTO via Motor Service")
@@ -497,8 +509,13 @@ class DiagnosticMoteur:
                 pass
 
         return {
-            'observation_code': obs,
-            'observation_texte': {1: "Fluide", 2: "Légères saccades", 3: "Saccades marquées", 4: "Très saccadé"}[obs]
+            "observation_code": obs,
+            "observation_texte": {
+                1: "Fluide",
+                2: "Légères saccades",
+                3: "Saccades marquées",
+                4: "Très saccadé",
+            }[obs],
         }
 
     # =========================================================================
@@ -521,7 +538,9 @@ class DiagnosticMoteur:
 
         diag_a = "N/A"
         if resultats_isole:
-            rapport.append(f"{'Mode':<12} {'Delay cfg':<12} {'Delay réel':<12} {'Vitesse':<12} {'Outliers':<10}")
+            rapport.append(
+                f"{'Mode':<12} {'Delay cfg':<12} {'Delay réel':<12} {'Vitesse':<12} {'Outliers':<10}"
+            )
             for nom, stats in resultats_isole.items():
                 rapport.append(
                     f"{nom:<12} {stats['vitesse_ms']:.4f} ms   "
@@ -531,8 +550,8 @@ class DiagnosticMoteur:
                 )
 
             rapport.append("")
-            max_outlier = max(s['outlier_percent'] for s in resultats_isole.values())
-            
+            max_outlier = max(s["outlier_percent"] for s in resultats_isole.values())
+
             if max_outlier < 0.5:
                 rapport.append("✅ DIAGNOSTIC A: Boucle moteur OK")
                 diag_a = "OK"
@@ -553,8 +572,8 @@ class DiagnosticMoteur:
 
         diag_b = "N/A"
         if resultats_service:
-            obs = resultats_service['observation_texte']
-            code = resultats_service['observation_code']
+            obs = resultats_service["observation_texte"]
+            code = resultats_service["observation_code"]
             rapport.append(f"Observation: {obs} ({code}/4)")
 
             if code == 1:
@@ -615,7 +634,7 @@ class DiagnosticMoteur:
         resultats_service = {}
 
         services = verifier_services_actifs()
-        if not services['motor_service']:
+        if not services["motor_service"]:
             print()
             if demander_oui_non("Exécuter TEST A (mode isolé)?"):
                 resultats_isole = self.executer_tests_isoles()
@@ -647,6 +666,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Erreur: {e}")
         import traceback
+
         traceback.print_exc()
         diagnostic.restaurer_services()
     finally:

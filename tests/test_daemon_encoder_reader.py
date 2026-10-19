@@ -16,13 +16,14 @@ from core.hardware.daemon_encoder_reader import (
     StaleDataError,
     get_daemon_reader,
     set_daemon_reader,
-    reset_daemon_reader
+    reset_daemon_reader,
 )
 
 
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def temp_json_file(tmp_path):
@@ -45,6 +46,7 @@ def write_json_data(json_file: Path, data: dict):
 # =============================================================================
 # TESTS BASIQUES
 # =============================================================================
+
 
 class TestDaemonEncoderReaderBasics:
     """Tests pour les fonctions de base."""
@@ -76,6 +78,7 @@ class TestDaemonEncoderReaderBasics:
 # =============================================================================
 # TESTS READ_ANGLE
 # =============================================================================
+
 
 class TestReadAngle:
     """Tests pour la méthode read_angle."""
@@ -116,6 +119,7 @@ class TestReadAngle:
 # =============================================================================
 # TESTS DÉTECTION DONNÉES PÉRIMÉES
 # =============================================================================
+
 
 class TestStaleDataDetection:
     """Tests pour la détection de données périmées."""
@@ -165,6 +169,7 @@ class TestStaleDataDetection:
 # TESTS DÉTECTION ENCODEUR FIGÉ
 # =============================================================================
 
+
 class TestFrozenStatusRetroCompat:
     """Tests pour la rétro-compatibilité du statut FROZEN (supprimé en v5.5)."""
 
@@ -175,7 +180,7 @@ class TestFrozenStatusRetroCompat:
             "ts": time.time(),
             "status": "FROZEN",
             "frozen": True,
-            "frozen_duration": 5.0
+            "frozen_duration": 5.0,
         }
         write_json_data(temp_json_file, data)
 
@@ -186,6 +191,7 @@ class TestFrozenStatusRetroCompat:
 # =============================================================================
 # TESTS READ_STABLE
 # =============================================================================
+
 
 class TestReadStable:
     """Tests pour la méthode read_stable."""
@@ -209,6 +215,7 @@ class TestReadStable:
 # =============================================================================
 # TESTS GESTION INSTANCE GLOBALE
 # =============================================================================
+
 
 class TestGlobalInstance:
     """Tests pour la gestion de l'instance globale."""
@@ -259,6 +266,7 @@ class TestGlobalInstance:
 # TESTS EXCEPTIONS
 # =============================================================================
 
+
 class TestExceptions:
     """Tests pour les classes d'exception."""
 
@@ -276,6 +284,7 @@ class TestExceptions:
 # =============================================================================
 # TESTS CALIBRATION FORCÉE (v6.20)
 # =============================================================================
+
 
 class TestForceCalibration:
     """force_calibration() demande au démon de se recaler à 45° via son port TCP."""

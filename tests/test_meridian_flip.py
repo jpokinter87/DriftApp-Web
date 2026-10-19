@@ -29,47 +29,55 @@ pytestmark = pytest.mark.slow
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def mock_hardware_info():
     """Hardware info dict for simulation mode."""
     return {
-        'raspberry_pi': False,
-        'rpi_model': None,
-        'gpio': False,
-        'gpio_error': 'Non teste',
-        'encoder_daemon': False,
-        'encoder_error': 'Non teste',
-        'encoder_position': None,
-        'daemon_process': False,
-        'motor': False,
-        'motor_error': 'Non teste',
-        'spi_available': False,
-        'spi_devices': [],
-        'platform': 'Linux-test',
-        'machine': 'x86_64',
-        'system': 'Linux',
+        "raspberry_pi": False,
+        "rpi_model": None,
+        "gpio": False,
+        "gpio_error": "Non teste",
+        "encoder_daemon": False,
+        "encoder_error": "Non teste",
+        "encoder_position": None,
+        "daemon_process": False,
+        "motor": False,
+        "motor_error": "Non teste",
+        "spi_available": False,
+        "spi_devices": [],
+        "platform": "Linux-test",
+        "machine": "x86_64",
+        "system": "Linux",
     }
 
 
 @pytest.fixture
 def motor_service(mock_hardware_info, tmp_path):
     """Crée un MotorService en mode simulation."""
-    with patch('services.motor_service.HardwareDetector.detect_hardware', return_value=(False, mock_hardware_info)), \
-         patch('services.motor_service.HardwareDetector.get_hardware_summary', return_value='Test'), \
-         patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
-         patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
-         patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+    with (
+        patch(
+            "services.motor_service.HardwareDetector.detect_hardware",
+            return_value=(False, mock_hardware_info),
+        ),
+        patch("services.motor_service.HardwareDetector.get_hardware_summary", return_value="Test"),
+        patch("services.ipc_manager.COMMAND_FILE", tmp_path / "command.json"),
+        patch("services.ipc_manager.STATUS_FILE", tmp_path / "status.json"),
+        patch("services.ipc_manager.ENCODER_FILE", tmp_path / "encoder.json"),
+    ):
         from services.motor_service import MotorService
+
         return MotorService()
 
 
 @pytest.fixture
 def mock_config():
     """Mock de la configuration (v5.10 : plus de mode adaptatif)."""
+
     class MockTracking:
         seuil_correction_deg = 0.5
         intervalle_verification_sec = 60
-        abaque_file = 'data/Loi_coupole.xlsx'
+        abaque_file = "data/Loi_coupole.xlsx"
 
     class MockThresholds:
         feedback_min_deg = 3.0
@@ -115,9 +123,11 @@ def tracking_session():
     config = load_config()
     set_simulated_position(0.0)
     moteur = MoteurSimule()
-    calc = AstronomicalCalculations(config.site.latitude, config.site.longitude, config.site.tz_offset)
+    calc = AstronomicalCalculations(
+        config.site.latitude, config.site.longitude, config.site.tz_offset
+    )
     logger = TrackingLogger()
-    abaque_path = str(Path(__file__).parent.parent / 'data' / 'Loi_coupole.xlsx')
+    abaque_path = str(Path(__file__).parent.parent / "data" / "Loi_coupole.xlsx")
 
     session = TrackingSession(
         moteur=moteur,
@@ -135,6 +145,7 @@ def tracking_session():
 # =============================================================================
 # TESTS WATCHDOG THREAD
 # =============================================================================
+
 
 class TestWatchdogThread:
     """Tests pour le thread watchdog dédié."""
@@ -178,7 +189,9 @@ class TestWatchdogThread:
         time.sleep(0.5)
 
         # Le watchdog devrait avoir envoyé plusieurs heartbeats
-        assert len(call_count) >= 3, f"Watchdog n'a envoyé que {len(call_count)} heartbeats pendant le blocage"
+        assert len(call_count) >= 3, (
+            f"Watchdog n'a envoyé que {len(call_count)} heartbeats pendant le blocage"
+        )
 
         # Cleanup
         motor_service.running = False
@@ -201,14 +214,17 @@ class TestWatchdogThread:
         """La boucle principale n'envoie plus de heartbeat (délégué au thread)."""
         import inspect
         from services.motor_service import MotorService
+
         source = inspect.getsource(MotorService.run)
-        assert "last_watchdog_ping" not in source, \
+        assert "last_watchdog_ping" not in source, (
             "La boucle principale ne devrait plus gérer le watchdog"
+        )
 
 
 # =============================================================================
 # TESTS TUPLE UNPACKING
 # =============================================================================
+
 
 class TestTrackingStartUnpacking:
     """Tests pour le décompactage du tuple retourné par session.start()."""
@@ -217,6 +233,7 @@ class TestTrackingStartUnpacking:
     def tracking_handler(self, mock_config):
         """Crée un TrackingHandler avec mocks."""
         from services.command_handlers import TrackingHandler
+
         return TrackingHandler(
             moteur=MagicMock(),
             feedback_controller=MagicMock(),
@@ -230,12 +247,12 @@ class TestTrackingStartUnpacking:
         """TrackingHandler.start() détecte le succès via le tuple."""
         mock_session = MagicMock()
         mock_session.start.return_value = (True, "Suivi démarré: NGC 5033")
-        mock_session.get_status.return_value = {
-            "running": True, "encoder_offset": 0.5
-        }
+        mock_session.get_status.return_value = {"running": True, "encoder_offset": 0.5}
 
-        with patch('services.command_handlers.TrackingSession', return_value=mock_session), \
-             patch('services.command_handlers._get_rotate_log_func', return_value=MagicMock()):
+        with (
+            patch("services.command_handlers.TrackingSession", return_value=mock_session),
+            patch("services.command_handlers._get_rotate_log_func", return_value=MagicMock()),
+        ):
             status = {"status": "idle", "tracking_object": None}
             tracking_handler.start("NGC 5033", status)
 
@@ -247,8 +264,10 @@ class TestTrackingStartUnpacking:
         mock_session = MagicMock()
         mock_session.start.return_value = (False, "Objet introuvable")
 
-        with patch('services.command_handlers.TrackingSession', return_value=mock_session), \
-             patch('services.command_handlers._get_rotate_log_func', return_value=MagicMock()):
+        with (
+            patch("services.command_handlers.TrackingSession", return_value=mock_session),
+            patch("services.command_handlers._get_rotate_log_func", return_value=MagicMock()),
+        ):
             status = {"status": "idle", "tracking_object": None}
             tracking_handler.start("FAUX_OBJET", status)
 
@@ -260,6 +279,7 @@ class TestTrackingStartUnpacking:
 # TESTS NORMALISATION POSITION
 # =============================================================================
 
+
 class TestPositionNormalization:
     """Tests pour la normalisation de position_relative."""
 
@@ -270,8 +290,9 @@ class TestPositionNormalization:
 
         tracking_session._apply_correction_sans_feedback(15.0, 0.002)
 
-        assert abs(tracking_session.position_relative - 5.0) < 0.01, \
+        assert abs(tracking_session.position_relative - 5.0) < 0.01, (
             f"Attendu 5.0°, obtenu {tracking_session.position_relative}°"
+        )
 
     def test_sans_feedback_normalise_wraparound_negatif(self, tracking_session):
         """position_relative normalisée après correction négative sous 0°."""
@@ -280,8 +301,9 @@ class TestPositionNormalization:
 
         tracking_session._apply_correction_sans_feedback(-15.0, 0.002)
 
-        assert abs(tracking_session.position_relative - 355.0) < 0.01, \
+        assert abs(tracking_session.position_relative - 355.0) < 0.01, (
             f"Attendu 355.0°, obtenu {tracking_session.position_relative}°"
+        )
 
     def test_avec_feedback_normalise(self, tracking_session):
         """_finaliser_correction normalise via % 360."""
@@ -296,6 +318,7 @@ class TestPositionNormalization:
 # TESTS RE-SYNC ENCODEUR
 # =============================================================================
 
+
 class TestEncoderResync:
     """Tests pour la re-synchronisation de l'offset encodeur."""
 
@@ -307,13 +330,13 @@ class TestEncoderResync:
 
         # Mock le moteur pour simuler une rotation feedback réussie
         mock_result = {
-            'success': True,
-            'position_initiale': 95.0,
-            'position_finale': 135.0,
-            'erreur_finale': 0.2,
-            'iterations': 1,
-            'corrections': [],
-            'position_cible': 135.0,
+            "success": True,
+            "position_initiale": 95.0,
+            "position_finale": 135.0,
+            "erreur_finale": 0.2,
+            "iterations": 1,
+            "corrections": [],
+            "position_cible": 135.0,
         }
         tracking_session.moteur = MagicMock()
         tracking_session.moteur.rotation_avec_feedback = MagicMock(return_value=mock_result)
@@ -322,8 +345,9 @@ class TestEncoderResync:
         mock_reader = MagicMock()
         mock_reader.read_angle.return_value = 130.0
 
-        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
-                   return_value=mock_reader):
+        with patch(
+            "core.hardware.daemon_encoder_reader.get_daemon_reader", return_value=mock_reader
+        ):
             tracking_session._apply_correction_avec_feedback(35.0, 0.001)
 
             # Vérifier que encoder_offset a été recalculé
@@ -331,8 +355,9 @@ class TestEncoderResync:
             # real_position = 130°
             # new_offset = 135 - 130 = 5°
             expected_offset = 135.0 - 130.0
-            assert abs(tracking_session.encoder_offset - expected_offset) < 0.1, \
+            assert abs(tracking_session.encoder_offset - expected_offset) < 0.1, (
                 f"Attendu offset={expected_offset}, obtenu {tracking_session.encoder_offset}"
+            )
 
     def test_no_resync_for_small_movement(self, tracking_session):
         """encoder_offset n'est PAS recalculé pour les petits mouvements."""
@@ -341,21 +366,22 @@ class TestEncoderResync:
         tracking_session.position_relative = 100.0
 
         mock_result = {
-            'success': True,
-            'position_initiale': 95.0,
-            'position_finale': 103.0,
-            'erreur_finale': 0.1,
-            'iterations': 1,
-            'corrections': [],
-            'position_cible': 103.0,
+            "success": True,
+            "position_initiale": 95.0,
+            "position_finale": 103.0,
+            "erreur_finale": 0.1,
+            "iterations": 1,
+            "corrections": [],
+            "position_cible": 103.0,
         }
         tracking_session.moteur = MagicMock()
         tracking_session.moteur.rotation_avec_feedback = MagicMock(return_value=mock_result)
 
         mock_reader = MagicMock()
 
-        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
-                   return_value=mock_reader):
+        with patch(
+            "core.hardware.daemon_encoder_reader.get_daemon_reader", return_value=mock_reader
+        ):
             tracking_session._apply_correction_avec_feedback(3.0, 0.001)
 
             # read_angle ne devrait PAS avoir été appelé (pas de re-sync)
@@ -367,6 +393,7 @@ class TestEncoderResync:
 # TESTS DÉTECTION TRANSIT MÉRIDIEN
 # =============================================================================
 
+
 class TestMeridianTransitDetection:
     """Tests pour la détection et le logging du transit méridien."""
 
@@ -376,12 +403,12 @@ class TestMeridianTransitDetection:
 
         # Simuler un check_and_correct avec un grand delta
         # On appelle directement _log_goto pour vérifier le mécanisme
-        tracking_session._log_goto(246.0, 112.0, -134.0, 'meridian_transit')
+        tracking_session._log_goto(246.0, 112.0, -134.0, "meridian_transit")
 
-        assert len(tracking_session.drift_tracking['goto_log']) == 1
-        entry = tracking_session.drift_tracking['goto_log'][0]
-        assert entry['reason'] == 'meridian_transit'
-        assert entry['delta'] == -134.0
+        assert len(tracking_session.drift_tracking["goto_log"]) == 1
+        entry = tracking_session.drift_tracking["goto_log"][0]
+        assert entry["reason"] == "meridian_transit"
+        assert entry["delta"] == -134.0
 
     def test_transit_detection_log_message(self, tracking_session, caplog):
         """Le log TRANSIT MÉRIDIEN est émis quand delta > LARGE_MOVEMENT_THRESHOLD."""
@@ -394,12 +421,13 @@ class TestMeridianTransitDetection:
         tracking_session._calculate_target_position = MagicMock(return_value=(112.0, {}))
         tracking_session._apply_correction = MagicMock()
 
-        with caplog.at_level(logging.INFO, logger='core.tracking.tracker'):
+        with caplog.at_level(logging.INFO, logger="core.tracking.tracker"):
             tracking_session.check_and_correct()
 
         transit_logs = [r for r in caplog.records if "meridian_transit |" in r.message]
-        assert len(transit_logs) >= 1, \
+        assert len(transit_logs) >= 1, (
             f"Aucun log 'meridian_transit' trouvé. Logs: {[r.message for r in caplog.records]}"
+        )
 
     def test_no_transit_for_small_delta(self, tracking_session):
         """Pas de log transit pour les petits deltas."""
@@ -411,13 +439,14 @@ class TestMeridianTransitDetection:
         tracking_session._calculate_target_position = MagicMock(return_value=(102.0, {}))
         tracking_session._apply_correction = MagicMock()
 
-        initial_goto_count = len(tracking_session.drift_tracking['goto_log'])
+        initial_goto_count = len(tracking_session.drift_tracking["goto_log"])
         tracking_session.check_and_correct()
 
         # Pas de nouvel entry meridian_transit
         meridian_entries = [
-            e for e in tracking_session.drift_tracking['goto_log'][initial_goto_count:]
-            if e.get('reason') == 'meridian_transit'
+            e
+            for e in tracking_session.drift_tracking["goto_log"][initial_goto_count:]
+            if e.get("reason") == "meridian_transit"
         ]
         assert len(meridian_entries) == 0
 
@@ -434,8 +463,10 @@ class TestVitesseDesCorrections:
         tracking_session._calculate_target_position = MagicMock(return_value=(cible, {}))
         tracking_session._apply_correction = MagicMock()
 
-        with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
-             patch('core.config.config.FAST_MOTOR_DELAY', 124e-6):
+        with (
+            patch("core.config.config.SINGLE_SPEED_MOTOR_DELAY", 260e-6),
+            patch("core.config.config.FAST_MOTOR_DELAY", 124e-6),
+        ):
             tracking_session.check_and_correct()
 
         assert tracking_session._apply_correction.call_args.args[1] == attendu
@@ -444,6 +475,7 @@ class TestVitesseDesCorrections:
 # =============================================================================
 # TESTS FLAG LARGE MOVEMENT
 # =============================================================================
+
 
 class TestLargeMovementFlag:
     """Tests pour le lifecycle de is_large_movement_in_progress."""
@@ -455,15 +487,17 @@ class TestLargeMovementFlag:
 
         flag_during_rotation = []
 
-        original_rotation = MagicMock(return_value={
-            'success': True,
-            'position_initiale': 65.0,
-            'position_finale': 100.0,
-            'erreur_finale': 0.2,
-            'iterations': 1,
-            'corrections': [],
-            'position_cible': 100.0,
-        })
+        original_rotation = MagicMock(
+            return_value={
+                "success": True,
+                "position_initiale": 65.0,
+                "position_finale": 100.0,
+                "erreur_finale": 0.2,
+                "iterations": 1,
+                "corrections": [],
+                "position_cible": 100.0,
+            }
+        )
 
         def capture_flag(*args, **kwargs):
             flag_during_rotation.append(tracking_session.is_large_movement_in_progress)
@@ -475,13 +509,15 @@ class TestLargeMovementFlag:
         mock_reader = MagicMock()
         mock_reader.read_angle.return_value = 135.0
 
-        with patch('core.hardware.daemon_encoder_reader.get_daemon_reader',
-                   return_value=mock_reader):
+        with patch(
+            "core.hardware.daemon_encoder_reader.get_daemon_reader", return_value=mock_reader
+        ):
             tracking_session._apply_correction_avec_feedback(35.0, 0.001)
 
         assert flag_during_rotation[0] is True, "Flag devrait être True pendant la rotation"
-        assert tracking_session.is_large_movement_in_progress is False, \
+        assert tracking_session.is_large_movement_in_progress is False, (
             "Flag devrait être False après la rotation"
+        )
 
     def test_flag_not_set_for_small_correction(self, tracking_session):
         """is_large_movement_in_progress reste False pour les petites corrections."""
@@ -489,13 +525,13 @@ class TestLargeMovementFlag:
         tracking_session.position_relative = 100.0
 
         mock_result = {
-            'success': True,
-            'position_initiale': 95.0,
-            'position_finale': 103.0,
-            'erreur_finale': 0.1,
-            'iterations': 1,
-            'corrections': [],
-            'position_cible': 103.0,
+            "success": True,
+            "position_initiale": 95.0,
+            "position_finale": 103.0,
+            "erreur_finale": 0.1,
+            "iterations": 1,
+            "corrections": [],
+            "position_cible": 103.0,
         }
         tracking_session.moteur = MagicMock()
         tracking_session.moteur.rotation_avec_feedback = MagicMock(return_value=mock_result)
@@ -509,6 +545,7 @@ class TestLargeMovementFlag:
 # TESTS TIMEOUT ACCEPTABLE
 # =============================================================================
 
+
 class TestTimeoutAcceptable:
     """Tests pour le timeout acceptable post-méridien."""
 
@@ -517,37 +554,39 @@ class TestTimeoutAcceptable:
         tracking_session.failed_feedback_count = 0
 
         result = {
-            'success': False,
-            'timeout': True,
-            'erreur_finale': 1.5,
-            'position_initiale': 100.0,
-            'position_finale': 234.0,
-            'position_cible': 235.0,
-            'iterations': 10,
-            'corrections': [],
+            "success": False,
+            "timeout": True,
+            "erreur_finale": 1.5,
+            "position_initiale": 100.0,
+            "position_finale": 234.0,
+            "position_cible": 235.0,
+            "iterations": 10,
+            "corrections": [],
         }
 
         tracking_session._traiter_resultat_feedback(result, 95.0)
 
-        assert tracking_session.failed_feedback_count == 0, \
+        assert tracking_session.failed_feedback_count == 0, (
             "Un timeout avec erreur < 2° ne devrait pas incrémenter le compteur"
+        )
 
     def test_timeout_with_large_error_counted(self, tracking_session):
         """Timeout avec erreur >= 2° compte comme échec."""
         tracking_session.failed_feedback_count = 0
 
         result = {
-            'success': False,
-            'timeout': True,
-            'erreur_finale': 3.5,
-            'position_initiale': 100.0,
-            'position_finale': 231.0,
-            'position_cible': 235.0,
-            'iterations': 10,
-            'corrections': [],
+            "success": False,
+            "timeout": True,
+            "erreur_finale": 3.5,
+            "position_initiale": 100.0,
+            "position_finale": 231.0,
+            "position_cible": 235.0,
+            "iterations": 10,
+            "corrections": [],
         }
 
         tracking_session._traiter_resultat_feedback(result, 95.0)
 
-        assert tracking_session.failed_feedback_count == 1, \
+        assert tracking_session.failed_feedback_count == 1, (
             "Un timeout avec erreur >= 2° devrait incrémenter le compteur"
+        )

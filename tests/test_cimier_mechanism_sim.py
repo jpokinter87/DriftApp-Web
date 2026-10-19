@@ -1,4 +1,5 @@
 """Tests du mécanisme virtuel cimier (core/hardware/cimier_mechanism_sim.py)."""
+
 from __future__ import annotations
 
 from core.hardware.cimier_mechanism_sim import CimierMechanismSim

@@ -280,8 +280,8 @@ class TestProfilAccelConstante:
         delais = [d for _, d in _tout(profil)]
         assert min(delais) > 110
         pic = delais.index(min(delais))
-        assert all(b <= a for a, b in zip(delais[:pic], delais[1:pic + 1]))
-        assert all(b >= a for a, b in zip(delais[pic:], delais[pic + 1:]))
+        assert all(b <= a for a, b in zip(delais[:pic], delais[1 : pic + 1]))
+        assert all(b >= a for a, b in zip(delais[pic:], delais[pic + 1 :]))
 
 
 class TestStopDoux:

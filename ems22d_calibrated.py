@@ -29,6 +29,7 @@ import lgpio
 
 try:
     import spidev
+
     SPIDEV = True
 except Exception:
     SPIDEV = False
@@ -47,7 +48,7 @@ SPI_DEVICE = 0
 SPI_SPEED_HZ = 500_000
 SPI_MODE = 0
 
-SWITCH_GPIO = 27         # GPIO connecté au microswitch SS-5GL
+SWITCH_GPIO = 27  # GPIO connecté au microswitch SS-5GL
 SWITCH_CALIB_ANGLE = 45  # Angle auquel se recale la couronne
 SWITCH_DEBOUNCE_SEC = 2.0  # Délai minimum entre calibrations (anti-rebond)
 
@@ -65,6 +66,7 @@ LOG_DIR.mkdir(exist_ok=True)
 
 # Nom de fichier avec horodatage de la session
 from datetime import datetime as dt_logging
+
 SESSION_TIMESTAMP = dt_logging.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE = LOG_DIR / f"ems22d_{SESSION_TIMESTAMP}.log"
 
@@ -75,7 +77,7 @@ logger.setLevel(logging.INFO)
 formatter = logging.Formatter("[ems22d] %(asctime)s %(levelname)s %(message)s")
 
 # Handler 1 : Fichier unique pour cette session
-file_handler = logging.FileHandler(LOG_FILE, encoding='utf-8')
+file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
 file_handler.setLevel(logging.INFO)
 file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
@@ -85,6 +87,7 @@ console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
+
 
 # Nettoyage : supprimer les anciens logs (garder les 10 derniers)
 def cleanup_old_logs(keep=10):
@@ -96,6 +99,7 @@ def cleanup_old_logs(keep=10):
             logger.debug(f"Ancien log supprimé: {old_file.name}")
         except Exception:
             pass
+
 
 cleanup_old_logs(10)
 
@@ -128,7 +132,9 @@ class EMS22Daemon:
         # Calibration forcée (v6.20) : demandée par le thread TCP, appliquée par
         # la boucle principale (seule à écrire total_counts).
         self.force_calib_requested = False
-        logger.info(f"Switch GPIO {SWITCH_GPIO} configuré (pull-up) - état initial : {self.switch_last_state}")
+        logger.info(
+            f"Switch GPIO {SWITCH_GPIO} configuré (pull-up) - état initial : {self.switch_last_state}"
+        )
 
     # ------------------------------------------------
     # SPI
@@ -225,7 +231,9 @@ class EMS22Daemon:
             time_since_last_calib = now - self.last_calibration_time
 
             if time_since_last_calib < SWITCH_DEBOUNCE_SEC:
-                logger.info(f"⏭️  Rebond ignoré (délai={time_since_last_calib:.2f}s < {SWITCH_DEBOUNCE_SEC}s)")
+                logger.info(
+                    f"⏭️  Rebond ignoré (délai={time_since_last_calib:.2f}s < {SWITCH_DEBOUNCE_SEC}s)"
+                )
             else:
                 logger.info(f"🔄 Microswitch activé → recalage à {SWITCH_CALIB_ANGLE}°")
                 angle = self._recaler(now)
@@ -444,4 +452,5 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"❌ Erreur fatale : {e}")
         import traceback
+
         traceback.print_exc()

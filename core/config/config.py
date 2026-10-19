@@ -33,7 +33,7 @@ DEFAULTS = {
     "motor": {
         "steps_per_revolution": 200,
         "microstepping": 4,
-        "gear_ratio": 2230.0,      # 50×44.6 ≈ 2230
+        "gear_ratio": 2230.0,  # 50×44.6 ≈ 2230
     },
     "gpio": {
         "dir_pin": 17,
@@ -47,6 +47,7 @@ DEFAULTS = {
     },
 }
 
+
 # Lecture config.json (sans effets de bord)
 def _load_json(path: Path) -> dict:
     if not path.exists():
@@ -56,8 +57,10 @@ def _load_json(path: Path) -> dict:
             return json.load(f)
     except (json.JSONDecodeError, FileNotFoundError, OSError) as e:
         import logging
+
         logging.getLogger(__name__).warning(f"Erreur chargement config {path}: {e}")
         return {}
+
 
 def _deep_update(base: dict, override: dict) -> dict:
     out = dict(base)
@@ -68,7 +71,9 @@ def _deep_update(base: dict, override: dict) -> dict:
             out[k] = v
     return out
 
+
 _config = _deep_update(DEFAULTS, _load_json(CONFIG_FILE))
+
 
 def get_current_utc_offset(fuseau: str | None = None) -> int:
     """Décalage UTC en heures pour le fuseau donné, à l'instant présent.
@@ -83,14 +88,17 @@ def get_current_utc_offset(fuseau: str | None = None) -> int:
     off = now.utcoffset()
     return int(round(off.total_seconds() / 3600.0))
 
+
 # Expose a few top-level convenience values expected elsewhere
-SITE_LATITUDE: float  = float(_config["site"]["latitude"])
+SITE_LATITUDE: float = float(_config["site"]["latitude"])
 SITE_LONGITUDE: float = float(_config["site"]["longitude"])
 SITE_FUSEAU: str = str(_config["site"].get("fuseau", "Europe/Paris"))
+
 
 def get_site_tz_offset() -> int:
     """Offset UTC actuel pour le fuseau du site (DST-aware)."""
     return get_current_utc_offset(SITE_FUSEAU)
+
 
 # Rétro-compatibilité : les appelants qui lisent SITE_TZ_OFFSET obtiennent
 # la valeur correcte au moment de l'import. Pour un calcul précis en cours
@@ -206,8 +214,12 @@ RAMP_TIME_S_MAX: float = 10.0
 def resolve_ramp_time_s(motor_driver_cfg: dict) -> float:
     """Durée (s) de la rampe jusqu'à la vitesse rapide, bornée."""
     return _resolve_borne(
-        motor_driver_cfg, "ramp_time_s", DEFAULT_RAMP_TIME_S,
-        RAMP_TIME_S_MIN, RAMP_TIME_S_MAX, "s",
+        motor_driver_cfg,
+        "ramp_time_s",
+        DEFAULT_RAMP_TIME_S,
+        RAMP_TIME_S_MIN,
+        RAMP_TIME_S_MAX,
+        "s",
     )
 
 
@@ -236,15 +248,17 @@ def motor_delay_for(delta_deg: float, slow: float = None, fast: float = None) ->
         return FAST_MOTOR_DELAY if fast is None else fast
     return SINGLE_SPEED_MOTOR_DELAY if slow is None else slow
 
-SINGLE_SPEED_CHECK_INTERVAL_S: int = 30     # secondes entre deux corrections
+
+SINGLE_SPEED_CHECK_INTERVAL_S: int = 30  # secondes entre deux corrections
 SINGLE_SPEED_CORRECTION_THRESHOLD_DEG: float = 0.3  # seuil au-delà duquel on corrige
 
 MOTOR_STEPS_PER_REV: int = int(_config["motor"]["steps_per_revolution"])
 MOTOR_MICROSTEPPING: int = int(_config["motor"]["microstepping"])
-MOTOR_GEAR_RATIO: float  = float(_config["motor"]["gear_ratio"])
+MOTOR_GEAR_RATIO: float = float(_config["motor"]["gear_ratio"])
 
 GPIO_PINS = dict(_config["gpio"])
 DOME_OFFSETS = dict(_config["dome_offsets"])
+
 
 # Helpers pour le reste de l’app (lecture simple et centralisée)
 def get_site_config() -> Tuple[float, float, int, str, bool]:
@@ -252,6 +266,7 @@ def get_site_config() -> Tuple[float, float, int, str, bool]:
     Retourne (latitude, longitude, tz_offset, encoder_mode, simulation).
     """
     return SITE_LATITUDE, SITE_LONGITUDE, get_site_tz_offset(), ENCODER_MODE, SIMULATION
+
 
 def get_motor_config() -> dict:
     """
@@ -262,6 +277,7 @@ def get_motor_config() -> dict:
         "microstepping": MOTOR_MICROSTEPPING,
         "gear_ratio": MOTOR_GEAR_RATIO,
     }
+
 
 def save_config() -> None:
     """Sauvegarde l'état courant (facultatif, utilisé si tu veux modifier à chaud)."""

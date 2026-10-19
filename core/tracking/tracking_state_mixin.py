@@ -76,15 +76,15 @@ class TrackingStateMixin:
         self._position_log_interval = 30  # secondes
 
         # Distribution du temps par mode (vitesse unique v5.10)
-        self._mode_time_counters = {'continuous': 0}
+        self._mode_time_counters = {"continuous": 0}
         self._mode_time_last_mode = None
         self._mode_time_last_time = None
 
         self.drift_tracking = {
-            'start_time': datetime.now(),
-            'corrections_log': [],
-            'position_log': [],  # Sampling positions pour graphiques
-            'goto_log': [],      # Mouvements GOTO
+            "start_time": datetime.now(),
+            "corrections_log": [],
+            "position_log": [],  # Sampling positions pour graphiques
+            "goto_log": [],  # Mouvements GOTO
         }
 
         self.logger.info(f"Facteur de correction pas: {self.steps_correction_factor:.4f}")
@@ -181,8 +181,7 @@ class TrackingStateMixin:
     # SESSION DATA LOGGING
     # =========================================================================
 
-    def _log_position_sample(self, azimut: float, altitude: float,
-                             dome_position: float, mode: str):
+    def _log_position_sample(self, azimut: float, altitude: float, dome_position: float, mode: str):
         """
         Enregistre un échantillon de position pour les graphiques.
 
@@ -198,16 +197,17 @@ class TrackingStateMixin:
 
         self._last_position_log_time = now
 
-        self.drift_tracking['position_log'].append({
-            'timestamp': now.isoformat(),
-            'azimut': round(azimut, 2),
-            'altitude': round(altitude, 2),
-            'dome_position': round(dome_position, 2),
-            'mode': mode
-        })
+        self.drift_tracking["position_log"].append(
+            {
+                "timestamp": now.isoformat(),
+                "azimut": round(azimut, 2),
+                "altitude": round(altitude, 2),
+                "dome_position": round(dome_position, 2),
+                "mode": mode,
+            }
+        )
 
-    def _log_goto(self, start_position: float, target_position: float,
-                  delta: float, reason: str):
+    def _log_goto(self, start_position: float, target_position: float, delta: float, reason: str):
         """
         Enregistre un mouvement GOTO.
 
@@ -217,13 +217,15 @@ class TrackingStateMixin:
             delta: Déplacement en degrés
             reason: 'initial' ou 'large_correction'
         """
-        self.drift_tracking['goto_log'].append({
-            'timestamp': datetime.now().isoformat(),
-            'start_position': round(start_position, 2),
-            'target_position': round(target_position, 2),
-            'delta': round(delta, 2),
-            'reason': reason
-        })
+        self.drift_tracking["goto_log"].append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "start_position": round(start_position, 2),
+                "target_position": round(target_position, 2),
+                "delta": round(delta, 2),
+                "reason": reason,
+            }
+        )
 
     def _update_mode_time(self, current_mode: str):
         """
@@ -232,7 +234,7 @@ class TrackingStateMixin:
         Conservé pour compat historique : un seul compteur `continuous`.
         """
         now = datetime.now()
-        mode_key = 'continuous'
+        mode_key = "continuous"
 
         if self._mode_time_last_time is None:
             self._mode_time_last_mode = mode_key
@@ -263,30 +265,30 @@ class TrackingStateMixin:
             dict avec toutes les données de session pour affichage/sauvegarde
         """
         now = datetime.now()
-        start_time = self.drift_tracking.get('start_time', now)
+        start_time = self.drift_tracking.get("start_time", now)
         duration_seconds = (now - start_time).total_seconds()
 
         # Finaliser le temps du mode courant (vitesse unique v5.10)
-        self._update_mode_time('continuous')
+        self._update_mode_time("continuous")
 
         return {
-            'start_time': start_time.isoformat(),
-            'duration_seconds': int(duration_seconds),
-            'summary': {
-                'total_corrections': self.total_corrections,
-                'total_movement_deg': round(self.total_movement, 2),
-                'clockwise_movement_deg': round(self.clockwise_movement, 2),
-                'counterclockwise_movement_deg': round(self.counterclockwise_movement, 2),
-                'avg_correction_deg': round(
+            "start_time": start_time.isoformat(),
+            "duration_seconds": int(duration_seconds),
+            "summary": {
+                "total_corrections": self.total_corrections,
+                "total_movement_deg": round(self.total_movement, 2),
+                "clockwise_movement_deg": round(self.clockwise_movement, 2),
+                "counterclockwise_movement_deg": round(self.counterclockwise_movement, 2),
+                "avg_correction_deg": round(
                     self.total_movement / max(1, self.total_corrections), 2
                 ),
-                'mode_distribution': {
-                    'continuous': int(self._mode_time_counters.get('continuous', 0)),
-                }
+                "mode_distribution": {
+                    "continuous": int(self._mode_time_counters.get("continuous", 0)),
+                },
             },
-            'corrections_log': self.drift_tracking.get('corrections_log', []),
-            'position_log': self.drift_tracking.get('position_log', []),
-            'goto_log': self.drift_tracking.get('goto_log', []),
+            "corrections_log": self.drift_tracking.get("corrections_log", []),
+            "position_log": self.drift_tracking.get("position_log", []),
+            "goto_log": self.drift_tracking.get("goto_log", []),
         }
 
     # =========================================================================
@@ -295,10 +297,10 @@ class TrackingStateMixin:
 
     def _log_session_summary(self):
         """Affiche le bilan de la session."""
-        if not self.drift_tracking.get('start_time'):
+        if not self.drift_tracking.get("start_time"):
             return
 
-        duration = datetime.now() - self.drift_tracking['start_time']
+        duration = datetime.now() - self.drift_tracking["start_time"]
         duration_hours = duration.total_seconds() / 3600
 
         self.logger.info("=" * 60)
@@ -315,9 +317,7 @@ class TrackingStateMixin:
         """Log les statistiques de base."""
         self.logger.info(f"Objet: {self.objet}")
         self.logger.info("Méthode: ABAQUE")
-        self.logger.info(
-            f"Durée: {duration_hours:.2f}h ({duration.total_seconds() / 60:.1f}min)"
-        )
+        self.logger.info(f"Durée: {duration_hours:.2f}h ({duration.total_seconds() / 60:.1f}min)")
         self.logger.info(f"Corrections appliquées: {self.total_corrections}")
         self.logger.info(f"Mouvement total: {self.total_movement:.1f}°")
 
@@ -336,5 +336,5 @@ class TrackingStateMixin:
         if self.steps_correction_factor != 1.0:
             self.logger.info(f"Facteur de correction: {self.steps_correction_factor:.4f}")
 
-        encoder_status = 'Actif' if self.encoder_available else 'Inactif'
+        encoder_status = "Actif" if self.encoder_available else "Inactif"
         self.logger.info(f"Démon encodeur: {encoder_status}")

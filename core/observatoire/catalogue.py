@@ -19,77 +19,79 @@ logger = logging.getLogger(__name__)
 # Importer astropy si disponible
 try:
     import astropy  # noqa: F401
+
     ASTROPY_AVAILABLE = True
 except Exception:
     ASTROPY_AVAILABLE = False
+
 
 class GestionnaireCatalogue:
     """
     Gestionnaire de catalogue d'objets astronomiques utilisant des API en ligne
     ou des bibliothèques dédiées.
-    
+
     Cette classe fournit des méthodes pour rechercher des objets célestes dans un
     catalogue local ou en ligne via SIMBAD, ainsi que pour importer et exporter
     des données de catalogue.
-    
+
     Attributes:
         objets: Dictionnaire contenant les objets du catalogue
         cache_file: Chemin vers le fichier de cache JSON
         simbad: Instance de Simbad configurée avec des champs supplémentaires
     """
-    
+
     def __init__(self) -> None:
         """
         Initialise le gestionnaire de catalogue.
-        
+
         Charge le cache d'objets s'il existe et configure SIMBAD si disponible.
         """
         self.objets: Dict[str, Dict[str, Any]] = {}  # Catalogue local
         self.cache_file: Path = CACHE_FILE  # Fichier de cache
-        
+
         # Charger le cache s'il existe
         self._charger_cache()
-        
+
         # Configurer Simbad si disponible
         if ASTROPY_AVAILABLE:
             try:
                 from astroquery.simbad import Simbad
+
                 # Ajouter des colonnes à la requête Simbad
                 self.simbad = Simbad()
             except ImportError:
                 self.simbad = None
-    
+
     def _charger_cache(self) -> None:
         """
         Charge le cache d'objets depuis un fichier JSON.
-        
+
         Si le fichier de cache existe, tente de le charger dans le dictionnaire
         d'objets. En cas d'erreur, initialise un dictionnaire vide.
         """
         if self.cache_file.exists():
             try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                with open(self.cache_file, "r", encoding="utf-8") as f:
                     self.objets = json.load(f)
             except Exception as e:
                 logger.warning(f"Erreur lors du chargement du cache: {e}")
                 self.objets = {}
-    
+
     def _sauvegarder_cache(self) -> None:
         """
         Sauvegarde le cache d'objets dans un fichier JSON.
-        
+
         Tente d'écrire le dictionnaire d'objets dans le fichier de cache
         spécifié par self.cache_file.
         """
         try:
             # Vérifier si le répertoire parent existe, le créer si nécessaire
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
+
+            with open(self.cache_file, "w", encoding="utf-8") as f:
                 json.dump(self.objets, f, indent=2, ensure_ascii=False)
         except Exception as e:
             logger.warning(f"Erreur lors de la sauvegarde du cache: {e}")
-
 
     def get_objets_disponibles(self) -> List[Dict[str, Any]]:
         """
@@ -102,23 +104,23 @@ class GestionnaireCatalogue:
 
     def rechercher_simbad(self, identifiant: str) -> Optional[Dict[str, Any]]:
         """
-                Recherche un objet dans la base de données SIMBAD.
+        Recherche un objet dans la base de données SIMBAD.
 
-                Cette méthode recherche d'abord l'objet dans le cache local, puis
-                effectue une requête à SIMBAD si nécessaire. Les résultats sont
-                mis en cache pour les futures recherches.
+        Cette méthode recherche d'abord l'objet dans le cache local, puis
+        effectue une requête à SIMBAD si nécessaire. Les résultats sont
+        mis en cache pour les futures recherches.
 
-                Args:
-                    identifiant: Identifiant de l'objet (M42, NGC7000, etc.)
+        Args:
+            identifiant: Identifiant de l'objet (M42, NGC7000, etc.)
 
-                Returns:
-                    Optional[Dict[str, Any]]: Informations sur l'objet ou None si non trouvé
+        Returns:
+            Optional[Dict[str, Any]]: Informations sur l'objet ou None si non trouvé
 
-                Example:
-                    catalogue = GestionnaireCatalogue()
-                    objet = catalogue.rechercher_simbad("M42")
-                    if objet:
-                    ...     print(f"Objet trouvé: {objet['nom']}, AD={objet['ad']}, DEC={objet['dec']}")
+        Example:
+            catalogue = GestionnaireCatalogue()
+            objet = catalogue.rechercher_simbad("M42")
+            if objet:
+            ...     print(f"Objet trouvé: {objet['nom']}, AD={objet['ad']}, DEC={objet['dec']}")
         """
         if not ASTROPY_AVAILABLE or self.simbad is None:
             logger.warning("Cette fonctionnalité nécessite astropy et astroquery")
@@ -141,34 +143,39 @@ class GestionnaireCatalogue:
             result = result_table[0]
 
             # Utiliser les colonnes par défaut de SIMBAD (noms en minuscules)
-            main_id = result['main_id'].decode('utf-8') if isinstance(result['main_id'], bytes) else str(
-                result['main_id'])
+            main_id = (
+                result["main_id"].decode("utf-8")
+                if isinstance(result["main_id"], bytes)
+                else str(result["main_id"])
+            )
 
             # Coordonnées depuis les colonnes par défaut
-            ra_coord = result['ra']
-            dec_coord = result['dec']
-
+            ra_coord = result["ra"]
+            dec_coord = result["dec"]
 
             # Convertir en SkyCoord
             from astropy.coordinates import SkyCoord
 
             # Les coordonnées sont déjà en degrés selon le résultat
-            coords = SkyCoord(ra=ra_coord, dec=dec_coord, unit='deg')
+            coords = SkyCoord(ra=ra_coord, dec=dec_coord, unit="deg")
 
-
-            ad_str = coords.ra.to_string(unit="hourangle", sep=('h', 'm', 's'), precision=2, pad=True)
-            dec_str = coords.dec.to_string(unit="degree", sep=('°', '\'', '"'), precision=2, pad=True)
+            ad_str = coords.ra.to_string(
+                unit="hourangle", sep=("h", "m", "s"), precision=2, pad=True
+            )
+            dec_str = coords.dec.to_string(
+                unit="degree", sep=("°", "'", '"'), precision=2, pad=True
+            )
 
             # Créer l'objet avec les informations disponibles
             objet = {
-                'nom': main_id,
-                'ad': ad_str,
-                'dec': dec_str,
-                'ra_deg': coords.ra.degree,
-                'dec_deg': coords.dec.degree,
-                'type': 'Unknown',  # Type non disponible sans champs supplémentaires
-                'source': 'SIMBAD',
-                'date_ajout': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                "nom": main_id,
+                "ad": ad_str,
+                "dec": dec_str,
+                "ra_deg": coords.ra.degree,
+                "dec_deg": coords.dec.degree,
+                "type": "Unknown",  # Type non disponible sans champs supplémentaires
+                "source": "SIMBAD",
+                "date_ajout": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
 
             # Ajouter au cache
@@ -184,24 +191,23 @@ class GestionnaireCatalogue:
     def rechercher_catalogue_local(self, identifiant: str) -> Optional[Dict[str, Any]]:
         """
         Recherche un objet dans le catalogue local.
-        
+
         Cette méthode tente de trouver un objet dans le catalogue local en utilisant
         son identifiant exact ou des variantes courantes. Elle effectue également une
         recherche partielle si nécessaire.
-        
+
         Args:
             identifiant: Identifiant de l'objet
-            
+
         Returns:
             Optional[Dict[str, Any]]: Informations sur l'objet ou None si non trouvé
-        
+
         Example:
             catalogue = GestionnaireCatalogue()
             objet = catalogue.rechercher_catalogue_local("M42")
             if objet:
             ...     print(f"Objet trouvé: {objet['nom']}")
         """
-
 
         # Normaliser l'identifiant
         id_norm = identifiant.upper()
@@ -214,12 +220,11 @@ class GestionnaireCatalogue:
         # Essayer quelques variantes courantes
         variantes = [
             id_norm,
-            id_norm.replace(' ', ''),
-            'M' + id_norm if id_norm.isdigit() else id_norm,
-            'NGC' + id_norm if id_norm.isdigit() else id_norm,
-            'IC' + id_norm if id_norm.isdigit() else id_norm
+            id_norm.replace(" ", ""),
+            "M" + id_norm if id_norm.isdigit() else id_norm,
+            "NGC" + id_norm if id_norm.isdigit() else id_norm,
+            "IC" + id_norm if id_norm.isdigit() else id_norm,
         ]
-
 
         for var in variantes:
             if var in self.objets:
@@ -228,9 +233,8 @@ class GestionnaireCatalogue:
         # Recherche partielle
         correspondances = []
         for code, objet in self.objets.items():
-            if id_norm in code or (objet.get('nom') and id_norm in objet['nom'].upper()):
+            if id_norm in code or (objet.get("nom") and id_norm in objet["nom"].upper()):
                 correspondances.append((code, objet))
-
 
         if correspondances:
             # Trier par pertinence (longueur du code)
@@ -240,21 +244,20 @@ class GestionnaireCatalogue:
         logger.debug(f"Aucune correspondance locale pour: {identifiant}")
         return None
 
-
     def rechercher(self, identifiant: str, utiliser_api: bool = True) -> Optional[Dict[str, Any]]:
         """
         Recherche un objet par son identifiant.
-        
+
         Cette méthode recherche d'abord dans le catalogue local, puis en ligne
         via SIMBAD si nécessaire et autorisé.
-        
+
         Args:
             identifiant: Identifiant de l'objet (M42, NGC7000, etc.)
             utiliser_api: Si True, recherche aussi dans les API en ligne
-            
+
         Returns:
             Optional[Dict[str, Any]]: Informations sur l'objet ou None si non trouvé
-        
+
         Example:
             catalogue = GestionnaireCatalogue()
             objet = catalogue.rechercher("M42")
@@ -283,7 +286,7 @@ class GestionnaireCatalogue:
                         "name": identifiant.capitalize(),
                         "ra_deg": ra_deg,
                         "dec_deg": dec_deg,
-                        "type": "planet"
+                        "type": "planet",
                     }
             except Exception:
                 pass

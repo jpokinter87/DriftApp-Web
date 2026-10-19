@@ -48,11 +48,11 @@ def get_local_commit() -> str:
     """
     try:
         result = subprocess.run(
-            ['git', 'rev-parse', '--short', 'HEAD'],
+            ["git", "rev-parse", "--short", "HEAD"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         return result.stdout.strip() if result.returncode == 0 else "unknown"
     except subprocess.TimeoutExpired:
@@ -72,11 +72,11 @@ def fetch_remote() -> bool:
     """
     try:
         result = subprocess.run(
-            ['git', 'fetch', 'origin', 'main'],
+            ["git", "fetch", "origin", "main"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=30
+            timeout=30,
         )
         if result.returncode != 0:
             logger.warning(f"git fetch a échoué: {result.stderr}")
@@ -98,11 +98,11 @@ def get_remote_commit() -> str:
     """
     try:
         result = subprocess.run(
-            ['git', 'rev-parse', '--short', 'origin/main'],
+            ["git", "rev-parse", "--short", "origin/main"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         return result.stdout.strip() if result.returncode == 0 else "unknown"
     except subprocess.TimeoutExpired:
@@ -122,11 +122,11 @@ def count_commits_behind() -> int:
     """
     try:
         result = subprocess.run(
-            ['git', 'rev-list', '--count', 'HEAD..origin/main'],
+            ["git", "rev-list", "--count", "HEAD..origin/main"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         if result.returncode == 0:
             return int(result.stdout.strip())
@@ -151,14 +151,14 @@ def get_commit_messages(count: int = 5) -> list[str]:
     """
     try:
         result = subprocess.run(
-            ['git', 'log', '--oneline', f'-{count}', 'HEAD..origin/main'],
+            ["git", "log", "--oneline", f"-{count}", "HEAD..origin/main"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip().split('\n')
+            return result.stdout.strip().split("\n")
         return []
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git log: {e}")
@@ -174,11 +174,11 @@ def get_remote_version() -> str:
     """
     try:
         result = subprocess.run(
-            ['git', 'show', 'origin/main:pyproject.toml'],
+            ["git", "show", "origin/main:pyproject.toml"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         if result.returncode == 0:
             match = re.search(r'version\s*=\s*"([^"]+)"', result.stdout)
@@ -199,14 +199,14 @@ def get_files_changed() -> list[str]:
     """
     try:
         result = subprocess.run(
-            ['git', 'diff', '--name-only', 'HEAD..origin/main'],
+            ["git", "diff", "--name-only", "HEAD..origin/main"],
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip().split('\n')
+            return result.stdout.strip().split("\n")
         return []
     except (subprocess.SubprocessError, OSError) as e:
         logger.warning(f"Erreur git diff --name-only: {e}")
@@ -216,7 +216,7 @@ def get_files_changed() -> list[str]:
 # Fichiers utilisateur potentiellement personnalisés — avertir l'utilisateur
 # si la MàJ les touche (ses réglages locaux seront préservés mais la version
 # upstream doit être mergée manuellement).
-_USER_CONFIG_PATTERNS = ('data/config.json', 'data/Loi_coupole.xlsx')
+_USER_CONFIG_PATTERNS = ("data/config.json", "data/Loi_coupole.xlsx")
 
 
 def get_config_files_affected(files_changed: list[str] | None = None) -> list[str]:
@@ -247,7 +247,7 @@ def _version_tuple(version_str: str) -> tuple:
     if not version_str or version_str == "unknown":
         return (0,)
     try:
-        return tuple(int(x) for x in version_str.split('.'))
+        return tuple(int(x) for x in version_str.split("."))
     except (ValueError, AttributeError):
         return (0,)
 
@@ -288,20 +288,20 @@ def check_for_updates() -> dict:
     )
 
     result = {
-        'update_available': update_available,
-        'local_version': local_ver,
-        'local_commit': local_commit,
-        'remote_commit': remote_commit,
-        'commits_behind': commits_behind,
-        'remote_version': remote_ver,
-        'fetch_success': fetch_success
+        "update_available": update_available,
+        "local_version": local_ver,
+        "local_commit": local_commit,
+        "remote_commit": remote_commit,
+        "commits_behind": commits_behind,
+        "remote_version": remote_ver,
+        "fetch_success": fetch_success,
     }
 
     # Ajouter les détails de la mise à jour si dispo
     if update_available:
-        result['commit_messages'] = get_commit_messages(min(commits_behind, 10))
+        result["commit_messages"] = get_commit_messages(min(commits_behind, 10))
         files_changed = get_files_changed()
-        result['files_changed'] = files_changed
-        result['config_files_affected'] = get_config_files_affected(files_changed)
+        result["files_changed"] = files_changed
+        result["config_files_affected"] = get_config_files_affected(files_changed)
 
     return result

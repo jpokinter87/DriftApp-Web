@@ -1,4 +1,5 @@
 """Tests du double SimMotorShelly (core/hardware/sim_motor_shelly.py)."""
+
 from __future__ import annotations
 
 from core.hardware.cimier_mechanism_sim import CimierMechanismSim

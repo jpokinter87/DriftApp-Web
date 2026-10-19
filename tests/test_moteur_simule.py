@@ -31,6 +31,7 @@ def reset_simulated_position():
 # Position simulée globale
 # =============================================================================
 
+
 class TestSimulatedPosition:
     def test_set_and_get(self):
         set_simulated_position(45.0)
@@ -53,6 +54,7 @@ class TestSimulatedPosition:
 # Construction
 # =============================================================================
 
+
 class TestMoteurSimuleConstruction:
     def test_no_config(self):
         m = MoteurSimule()
@@ -60,12 +62,17 @@ class TestMoteurSimuleConstruction:
 
     def test_with_dataclass_config(self):
         from core.config.config_loader import MotorConfig, GPIOPins
+
         config = MotorConfig(
             gpio_pins=GPIOPins(dir=17, step=18),
-            steps_per_revolution=200, microsteps=4,
-            gear_ratio=2230.0, steps_correction_factor=1.08849,
-            motor_delay_base=0.002, motor_delay_min=0.00001,
-            motor_delay_max=0.01, max_speed_steps_per_sec=1000,
+            steps_per_revolution=200,
+            microsteps=4,
+            gear_ratio=2230.0,
+            steps_correction_factor=1.08849,
+            motor_delay_base=0.002,
+            motor_delay_min=0.00001,
+            motor_delay_max=0.01,
+            max_speed_steps_per_sec=1000,
             acceleration_steps_per_sec2=500,
         )
         m = MoteurSimule(config)
@@ -74,10 +81,10 @@ class TestMoteurSimuleConstruction:
 
     def test_with_dict_config(self):
         config = {
-            'steps_per_revolution': 200,
-            'microsteps': 4,
-            'gear_ratio': 2230.0,
-            'steps_correction_factor': 1.0,
+            "steps_per_revolution": 200,
+            "microsteps": 4,
+            "gear_ratio": 2230.0,
+            "steps_correction_factor": 1.0,
         }
         m = MoteurSimule(config)
         assert m.steps_per_dome_revolution == int(200 * 4 * 2230.0 * 1.0)
@@ -91,6 +98,7 @@ class TestMoteurSimuleConstruction:
 # =============================================================================
 # Rotation
 # =============================================================================
+
 
 class TestMoteurSimuleRotation:
     def test_rotation_positive(self):
@@ -133,6 +141,7 @@ class TestMoteurSimuleRotation:
 # Daemon encodeur simulé
 # =============================================================================
 
+
 class TestMoteurSimuleDaemon:
     def test_get_daemon_angle(self):
         set_simulated_position(123.4)
@@ -141,30 +150,31 @@ class TestMoteurSimuleDaemon:
     def test_get_daemon_status(self):
         set_simulated_position(45.0)
         status = MoteurSimule.get_daemon_status()
-        assert status['angle'] == 45.0
-        assert status['calibrated'] is True
-        assert 'simulation' in status['status']
+        assert status["angle"] == 45.0
+        assert status["calibrated"] is True
+        assert "simulation" in status["status"]
 
 
 # =============================================================================
 # Feedback simulé
 # =============================================================================
 
+
 class TestMoteurSimuleFeedback:
     def test_rotation_avec_feedback_success(self):
         set_simulated_position(0.0)
         m = MoteurSimule()
         result = m.rotation_avec_feedback(angle_cible=45.0)
-        assert result['success'] is True
-        assert result['erreur_finale'] == 0.0
-        assert result['mode'] == 'simulation'
+        assert result["success"] is True
+        assert result["erreur_finale"] == 0.0
+        assert result["mode"] == "simulation"
         assert get_simulated_position() == pytest.approx(45.0)
 
     def test_rotation_avec_feedback_crossing_zero(self):
         set_simulated_position(350.0)
         m = MoteurSimule()
         result = m.rotation_avec_feedback(angle_cible=10.0)
-        assert result['success'] is True
+        assert result["success"] is True
         assert get_simulated_position() == pytest.approx(10.0)
 
     def test_rotation_avec_feedback_extra_kwargs(self):
@@ -175,14 +185,14 @@ class TestMoteurSimuleFeedback:
             angle_cible=90.0,
             allow_large_movement=True,
         )
-        assert result['success'] is True
+        assert result["success"] is True
         assert get_simulated_position() == pytest.approx(90.0)
 
     def test_rotation_relative_avec_feedback(self):
         set_simulated_position(100.0)
         m = MoteurSimule()
         result = m.rotation_relative_avec_feedback(delta_deg=30.0)
-        assert result['success'] is True
+        assert result["success"] is True
         assert get_simulated_position() == pytest.approx(130.0)
 
     def test_get_feedback_controller_returns_self(self):
@@ -194,6 +204,7 @@ class TestMoteurSimuleFeedback:
 # =============================================================================
 # Contrôle d'arrêt
 # =============================================================================
+
 
 class TestMoteurSimuleStop:
     def test_request_stop(self):

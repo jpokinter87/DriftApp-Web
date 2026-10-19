@@ -32,6 +32,7 @@ from core.hardware.calibration_routine import (
 # FAKES
 # =============================================================================
 
+
 class FakeDaemonReader:
     """Daemon reader stub thread-safe pour tests routine."""
 
@@ -77,6 +78,7 @@ class ResponsiveMoteur:
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def default_config():
     return BootCalibrationConfig(
@@ -104,6 +106,7 @@ def callback_recorder():
 # =============================================================================
 # HELPERS
 # =============================================================================
+
 
 def _trigger_calib_after(
     daemon: FakeDaemonReader,
@@ -142,8 +145,8 @@ def _build_routine(
 # TestCalibrationResult
 # =============================================================================
 
-class TestCalibrationResult:
 
+class TestCalibrationResult:
     def test_dataclass_frozen(self):
         result = CalibrationResult(
             status="ok",
@@ -168,14 +171,17 @@ class TestCalibrationResult:
 # TestSimulationMode
 # =============================================================================
 
-class TestSimulationMode:
 
+class TestSimulationMode:
     def test_simulation_mode_returns_simulated(self, default_config, callback_recorder):
         moteur = ResponsiveMoteur()
         daemon = FakeDaemonReader()
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon, simulation_mode=True,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
+            simulation_mode=True,
         )
         result = routine.run()
         assert result.status == "simulated"
@@ -188,8 +194,8 @@ class TestSimulationMode:
 # TestSweep
 # =============================================================================
 
-class TestSweep:
 
+class TestSweep:
     def test_first_branch_calibrates(self, default_config, callback_recorder):
         """Sweep -7° calibre dès la 1ère branche."""
         moteur = ResponsiveMoteur(max_block_sec=0.5)
@@ -197,8 +203,10 @@ class TestSweep:
         _trigger_calib_after(daemon, 0.05)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -234,8 +242,10 @@ class TestSweep:
         t.start()
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -257,8 +267,10 @@ class TestSweep:
         daemon = FakeDaemonReader(calib_at=None)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -274,8 +286,10 @@ class TestSweep:
         _trigger_calib_after(daemon, 0.05)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -286,6 +300,7 @@ class TestSweep:
 # =============================================================================
 # TestSwitchOvershoot
 # =============================================================================
+
 
 class OvershootFailingMoteur(ResponsiveMoteur):
     """Variante où l'appel d'overshoot (petit delta) lève une exception."""
@@ -298,7 +313,6 @@ class OvershootFailingMoteur(ResponsiveMoteur):
 
 
 class TestSwitchOvershoot:
-
     def test_overshoot_disabled_when_zero(self, callback_recorder):
         """switch_overshoot_deg=0 → pas d'appel supplémentaire après le switch."""
         config = BootCalibrationConfig(
@@ -312,7 +326,10 @@ class TestSwitchOvershoot:
         _trigger_calib_after(daemon, 0.05)
 
         routine = _build_routine(
-            config=config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+            config=config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -326,7 +343,10 @@ class TestSwitchOvershoot:
         _trigger_calib_after(daemon, 0.05)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -347,7 +367,10 @@ class TestSwitchOvershoot:
         _trigger_calib_after(daemon, 0.05)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder, moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         routine.run()
 
@@ -359,16 +382,18 @@ class TestSwitchOvershoot:
 # TestTimeout
 # =============================================================================
 
-class TestTimeout:
 
+class TestTimeout:
     def test_timeout_triggers_stop(self, fast_config, callback_recorder):
         """timeout_sec=0.2, rotation block 1s → watcher détecte timeout, request_stop appelé."""
         moteur = ResponsiveMoteur(max_block_sec=1.0)
         daemon = FakeDaemonReader(calib_at="BASELINE")
 
         routine = _build_routine(
-            config=fast_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=fast_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         t0 = time.monotonic()
         result = routine.run()
@@ -385,8 +410,10 @@ class TestTimeout:
         daemon = FakeDaemonReader(calib_at="BASELINE")
 
         routine = _build_routine(
-            config=fast_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=fast_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         t0 = time.monotonic()
         routine.run()
@@ -399,16 +426,18 @@ class TestTimeout:
 # TestCallback
 # =============================================================================
 
-class TestCallback:
 
+class TestCallback:
     def test_status_callback_invoked(self, default_config, callback_recorder):
         """Le callback reçoit step=sweep."""
         moteur = ResponsiveMoteur(max_block_sec=0.05)
         daemon = FakeDaemonReader(calib_at=None)
 
         routine = _build_routine(
-            config=default_config, callback=callback_recorder,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=callback_recorder,
+            moteur=moteur,
+            daemon=daemon,
         )
         routine.run()
 
@@ -424,8 +453,10 @@ class TestCallback:
         bad_cb = MagicMock(side_effect=RuntimeError("boom"))
 
         routine = _build_routine(
-            config=default_config, callback=bad_cb,
-            moteur=moteur, daemon=daemon,
+            config=default_config,
+            callback=bad_cb,
+            moteur=moteur,
+            daemon=daemon,
         )
         result = routine.run()
 
@@ -436,7 +467,7 @@ class TestCallback:
 # TestModuleConstants
 # =============================================================================
 
-class TestModuleConstants:
 
+class TestModuleConstants:
     def test_switch_calib_angle_is_45(self):
         assert SWITCH_CALIB_ANGLE == 45.0

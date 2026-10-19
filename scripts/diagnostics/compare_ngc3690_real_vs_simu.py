@@ -54,6 +54,7 @@ LOG_FILE = PROJECT_ROOT / "logs" / "motor_service_20260426_213832_NGC_3690.log"
 
 # --- Lecture log réel --------------------------------------------------------
 
+
 def parse_real_corrections(log_path: Path):
     """Renvoie une liste de (t_sec_relatif_session, az, alt, dome, delta_deg)."""
     samples = []
@@ -97,6 +98,7 @@ def parse_real_corrections(log_path: Path):
 
 # --- Comparaison -------------------------------------------------------------
 
+
 def main() -> None:
     calc = AstronomicalCalculations(SITE_LAT, SITE_LON, tz_offset=SITE_TZ_OFFSET)
     abaque = AbaqueManager()
@@ -110,22 +112,28 @@ def main() -> None:
         t = sim_start + timedelta(seconds=i * 10)
         az, alt = calc.calculer_coords_horizontales(NGC3690_RA, NGC3690_DEC, t)
         dome_target, _ = abaque.get_dome_position(alt, az)
-        traj.append({
-            "t_sec": i * 10,
-            "alt": alt,
-            "az": az,
-            "dome_target": float(dome_target),
-        })
+        traj.append(
+            {
+                "t_sec": i * 10,
+                "alt": alt,
+                "az": az,
+                "dome_target": float(dome_target),
+            }
+        )
 
     # 2) Détection flip + schedule
     flip = detect_flip(traj)
     print("=" * 110)
     print("COMPARAISON RÉEL vs SIMULÉ — NGC 3690 (26-27/04/2026)")
     print("=" * 110)
-    print(f"Site : lat={SITE_LAT}° lon={SITE_LON}° | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min")
+    print(
+        f"Site : lat={SITE_LAT}° lon={SITE_LON}° | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min"
+    )
     print(f"Cible : RA={NGC3690_RA}° Dec={NGC3690_DEC}° (circumpolaire, transit nord)")
-    print(f"Session : start {SESSION_START_LOCAL.strftime('%Y-%m-%d %H:%M:%S')} local "
-          f"(tz={SITE_TZ_OFFSET:+d}h) | durée sim {SESSION_DURATION_SEC // 60} min")
+    print(
+        f"Session : start {SESSION_START_LOCAL.strftime('%Y-%m-%d %H:%M:%S')} local "
+        f"(tz={SITE_TZ_OFFSET:+d}h) | durée sim {SESSION_DURATION_SEC // 60} min"
+    )
     print("-" * 110)
 
     if flip is None:
@@ -133,30 +141,42 @@ def main() -> None:
     else:
         flip_t_abs = SESSION_START_LOCAL + timedelta(seconds=flip["start"])
         flip_end_abs = SESSION_START_LOCAL + timedelta(seconds=flip["end"])
-        print(f"Flip détecté : T+{flip['start']}s → T+{flip['end']}s "
-              f"(durée {flip['duration']:.0f}s, Δ={flip['amplitude']:.1f}°, "
-              f"signed={flip['signed_amplitude']:+.1f}°)")
-        print(f"              local absolu : {flip_t_abs.strftime('%H:%M:%S')} → {flip_end_abs.strftime('%H:%M:%S')}")
-        print(f"              pre_target={flip['pre_target']:.1f}° → post_target={flip['post_target']:.1f}°")
+        print(
+            f"Flip détecté : T+{flip['start']}s → T+{flip['end']}s "
+            f"(durée {flip['duration']:.0f}s, Δ={flip['amplitude']:.1f}°, "
+            f"signed={flip['signed_amplitude']:+.1f}°)"
+        )
+        print(
+            f"              local absolu : {flip_t_abs.strftime('%H:%M:%S')} → {flip_end_abs.strftime('%H:%M:%S')}"
+        )
+        print(
+            f"              pre_target={flip['pre_target']:.1f}° → post_target={flip['post_target']:.1f}°"
+        )
 
         slew_t, slew_target, direction = optimal_slew_schedule(flip)
         slew_t_abs = SESSION_START_LOCAL + timedelta(seconds=slew_t)
-        print(f"Schedule E   : t_start=T+{slew_t:.0f}s ({slew_t_abs.strftime('%H:%M:%S')}) "
-              f"target={slew_target:.1f}° direction={direction:+d}")
+        print(
+            f"Schedule E   : t_start=T+{slew_t:.0f}s ({slew_t_abs.strftime('%H:%M:%S')}) "
+            f"target={slew_target:.1f}° direction={direction:+d}"
+        )
 
     # 3) Simulations
     print()
     print(f"{'Stratégie':<24}{'lag_max':>10}{'lag_avg':>10}{'moves':>8}{'distance':>10}")
     print("-" * 62)
     results = {}
-    for name, key in [("A actuel (réactif)", "reactive"),
-                      ("B horizon fixe 180s", "fixed"),
-                      ("C horizon adaptatif", "adaptive"),
-                      ("E timing optimal", "optimal")]:
+    for name, key in [
+        ("A actuel (réactif)", "reactive"),
+        ("B horizon fixe 180s", "fixed"),
+        ("C horizon adaptatif", "adaptive"),
+        ("E timing optimal", "optimal"),
+    ]:
         r = simulate(traj, key)
         results[key] = r
-        print(f"{name:<24}{r['max_lag']:>9.2f}°{r['avg_lag']:>9.2f}°"
-              f"{r['dome'].move_count:>8d}{r['dome'].total_distance:>9.1f}°")
+        print(
+            f"{name:<24}{r['max_lag']:>9.2f}°{r['avg_lag']:>9.2f}°"
+            f"{r['dome'].move_count:>8d}{r['dome'].total_distance:>9.1f}°"
+        )
 
     # 4) Lecture log réel + extraction transit
     print()
@@ -167,23 +187,31 @@ def main() -> None:
     print(f"Corrections enregistrées : {len(real)}")
     if real:
         first, last = real[0], real[-1]
-        print(f"Première : T+{first[0]:>5.0f}s | az={first[1]:.1f}° alt={first[2]:.1f}° "
-              f"dome={first[3]:.1f}° delta={first[4]:+.2f}°")
-        print(f"Dernière : T+{last[0]:>5.0f}s | az={last[1]:.1f}° alt={last[2]:.1f}° "
-              f"dome={last[3]:.1f}° delta={last[4]:+.2f}°")
+        print(
+            f"Première : T+{first[0]:>5.0f}s | az={first[1]:.1f}° alt={first[2]:.1f}° "
+            f"dome={first[3]:.1f}° delta={first[4]:+.2f}°"
+        )
+        print(
+            f"Dernière : T+{last[0]:>5.0f}s | az={last[1]:.1f}° alt={last[2]:.1f}° "
+            f"dome={last[3]:.1f}° delta={last[4]:+.2f}°"
+        )
 
         # Transit réel : la plus grosse correction
         big = max(real, key=lambda r: abs(r[4]))
         big_abs = SESSION_START_LOCAL + timedelta(seconds=big[0])
-        print(f"Plus gros saut : T+{big[0]:>5.0f}s ({big_abs.strftime('%H:%M:%S')} local) | "
-              f"delta={big[4]:+.2f}° az={big[1]:.1f}° alt={big[2]:.1f}° dome→{big[3]:.1f}°")
+        print(
+            f"Plus gros saut : T+{big[0]:>5.0f}s ({big_abs.strftime('%H:%M:%S')} local) | "
+            f"delta={big[4]:+.2f}° az={big[1]:.1f}° alt={big[2]:.1f}° dome→{big[3]:.1f}°"
+        )
 
         # Position dome juste avant la grosse correction
         idx = real.index(big)
         if idx > 0:
             prev = real[idx - 1]
-            print(f"  → avant : T+{prev[0]:>5.0f}s dome={prev[3]:.1f}° "
-                  f"(saut coupole {prev[3]:.1f}° → {big[3]:.1f}°)")
+            print(
+                f"  → avant : T+{prev[0]:>5.0f}s dome={prev[3]:.1f}° "
+                f"(saut coupole {prev[3]:.1f}° → {big[3]:.1f}°)"
+            )
 
         # Lag réel calculé : compare dome observé à dome_target théorique
         lag_real_max = 0.0
@@ -215,13 +243,19 @@ def main() -> None:
         print(f"Gain théorique E vs A : -{gain_e:.1f}° ({pct:+.0f}%)")
         slew_t, _, _ = optimal_slew_schedule(flip)
         if flip["start"] > 3600:
-            print(f"\nDans la session réelle, la fenêtre du détecteur (3600s) était dépassée "
-                  f"de {flip['start'] - 3600}s : le flip était à T+{flip['start']}s, hors fenêtre.")
-            print(f"→ legitimement loggé `meridian_anticipation_no_flip`. "
-                  f"Tracking réactif a pris le relais.")
+            print(
+                f"\nDans la session réelle, la fenêtre du détecteur (3600s) était dépassée "
+                f"de {flip['start'] - 3600}s : le flip était à T+{flip['start']}s, hors fenêtre."
+            )
+            print(
+                f"→ legitimement loggé `meridian_anticipation_no_flip`. "
+                f"Tracking réactif a pris le relais."
+            )
         else:
-            print(f"\nLe flip était dans la fenêtre 3600s du détecteur (T+{flip['start']}s) "
-                  f"→ l'anticipation aurait dû déclencher en runtime.")
+            print(
+                f"\nLe flip était dans la fenêtre 3600s du détecteur (T+{flip['start']}s) "
+                f"→ l'anticipation aurait dû déclencher en runtime."
+            )
 
 
 if __name__ == "__main__":

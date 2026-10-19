@@ -19,16 +19,16 @@ Usage:
 
 import math
 
-RAMP_START_DELAY_US = 3000   # 3 ms — delai de demarrage lent
+RAMP_START_DELAY_US = 3000  # 3 ms — delai de demarrage lent
 
-STOP_IMMEDIAT_DELAY_US = 260 # a partir de ce delai : STOP immediat (calibration)
-DEFAULT_ACCEL = 4545         # pas/s^2 si MOVE n'en precise pas (110 us en 2 s)
+STOP_IMMEDIAT_DELAY_US = 260  # a partir de ce delai : STOP immediat (calibration)
+DEFAULT_ACCEL = 4545  # pas/s^2 si MOVE n'en precise pas (110 us en 2 s)
 # Bornes de l'acceleration recue (memes valeurs cote Pi, core/config/config.py).
 # En dessous, la montee (gardee en liste) deborderait le tas : ~480 paliers
 # au plus jusqu'a 100 us. Au-dessus, elle tiendrait en un palier : calage.
 ACCEL_MIN = 1000
-ACCEL_MAX = 20000            # 100 us atteints en 0,5 s
-SEGMENT_S = 0.02             # duree d'un palier / d'un troncon de croisiere
+ACCEL_MAX = 20000  # 100 us atteints en 0,5 s
+SEGMENT_S = 0.02  # duree d'un palier / d'un troncon de croisiere
 
 
 def arret_doux(delay_us):

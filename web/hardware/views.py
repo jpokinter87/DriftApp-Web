@@ -1,6 +1,7 @@
 """
 Vues API REST pour le contrôle hardware (moteur, encodeur).
 """
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,44 +21,32 @@ class GotoView(APIView):
     """
 
     def post(self, request):
-        angle = request.data.get('angle')
+        angle = request.data.get("angle")
 
         if angle is None:
-            return Response(
-                {'error': 'Angle requis'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Angle requis"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             angle = float(angle) % 360
         except (TypeError, ValueError):
-            return Response(
-                {'error': 'Angle invalide'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Angle invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        speed = request.data.get('speed')
-        params = {'angle': angle}
+        speed = request.data.get("speed")
+        params = {"angle": angle}
         if speed is not None:
             try:
-                params['speed'] = float(speed)
+                params["speed"] = float(speed)
             except (TypeError, ValueError):
-                return Response(
-                    {'error': 'Vitesse invalide'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Vitesse invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        success = motor_client.send_command('goto', **params)
+        success = motor_client.send_command("goto", **params)
 
         if success:
-            return Response({
-                'message': f'GOTO vers {angle:.1f}° lancé',
-                'target': angle
-            })
+            return Response({"message": f"GOTO vers {angle:.1f}° lancé", "target": angle})
         else:
             return Response(
-                {'error': 'Impossible de communiquer avec Motor Service'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                {"error": "Impossible de communiquer avec Motor Service"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 
@@ -73,44 +62,32 @@ class JogView(APIView):
     """
 
     def post(self, request):
-        delta = request.data.get('delta')
+        delta = request.data.get("delta")
 
         if delta is None:
-            return Response(
-                {'error': 'Delta requis'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Delta requis"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             delta = float(delta)
         except (TypeError, ValueError):
-            return Response(
-                {'error': 'Delta invalide'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "Delta invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        speed = request.data.get('speed')
-        params = {'delta': delta}
+        speed = request.data.get("speed")
+        params = {"delta": delta}
         if speed is not None:
             try:
-                params['speed'] = float(speed)
+                params["speed"] = float(speed)
             except (TypeError, ValueError):
-                return Response(
-                    {'error': 'Vitesse invalide'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({"error": "Vitesse invalide"}, status=status.HTTP_400_BAD_REQUEST)
 
-        success = motor_client.send_command('jog', **params)
+        success = motor_client.send_command("jog", **params)
 
         if success:
-            return Response({
-                'message': f'Rotation de {delta:+.1f}° lancée',
-                'delta': delta
-            })
+            return Response({"message": f"Rotation de {delta:+.1f}° lancée", "delta": delta})
         else:
             return Response(
-                {'error': 'Impossible de communiquer avec Motor Service'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                {"error": "Impossible de communiquer avec Motor Service"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 
@@ -122,14 +99,14 @@ class StopView(APIView):
     """
 
     def post(self, request):
-        success = motor_client.send_command('stop')
+        success = motor_client.send_command("stop")
 
         if success:
-            return Response({'message': 'Arrêt demandé'})
+            return Response({"message": "Arrêt demandé"})
         else:
             return Response(
-                {'error': 'Impossible de communiquer avec Motor Service'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                {"error": "Impossible de communiquer avec Motor Service"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 
@@ -144,25 +121,26 @@ class ContinuousView(APIView):
     """
 
     def post(self, request):
-        direction = request.data.get('direction', 'cw')
+        direction = request.data.get("direction", "cw")
 
-        if direction not in ('cw', 'ccw'):
+        if direction not in ("cw", "ccw"):
             return Response(
-                {'error': 'Direction invalide (cw ou ccw)'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Direction invalide (cw ou ccw)"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        success = motor_client.send_command('continuous', direction=direction)
+        success = motor_client.send_command("continuous", direction=direction)
 
         if success:
-            return Response({
-                'message': f'Mouvement continu {direction.upper()} démarré',
-                'direction': direction
-            })
+            return Response(
+                {
+                    "message": f"Mouvement continu {direction.upper()} démarré",
+                    "direction": direction,
+                }
+            )
         else:
             return Response(
-                {'error': 'Impossible de communiquer avec Motor Service'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
+                {"error": "Impossible de communiquer avec Motor Service"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
 
@@ -179,41 +157,47 @@ class EncoderView(APIView):
 
         # Si le daemon encodeur n'est pas disponible, essayer d'utiliser
         # la position du Motor Service (mode simulation)
-        if 'error' in encoder_data:
+        if "error" in encoder_data:
             motor_status = motor_client.get_motor_status()
 
             # En mode simulation, utiliser la position du Motor Service
-            if motor_status.get('simulation', False):
-                return Response({
-                    'angle': motor_status.get('position', 0),
-                    'calibrated': True,
-                    'status': 'simulation',
-                    'raw': 0,
-                    'last_calibration_at': None,
-                    'simulation': True
-                })
+            if motor_status.get("simulation", False):
+                return Response(
+                    {
+                        "angle": motor_status.get("position", 0),
+                        "calibrated": True,
+                        "status": "simulation",
+                        "raw": 0,
+                        "last_calibration_at": None,
+                        "simulation": True,
+                    }
+                )
 
             # Sinon, retourner l'erreur mais avec status 200 pour éviter
             # les erreurs console répétitives
-            return Response({
-                'angle': motor_status.get('position', 0),
-                'calibrated': False,
-                'status': 'unavailable',
-                'raw': 0,
-                'last_calibration_at': None,
-                'error': encoder_data.get('error', 'Daemon encodeur non disponible')
-            })
+            return Response(
+                {
+                    "angle": motor_status.get("position", 0),
+                    "calibrated": False,
+                    "status": "unavailable",
+                    "raw": 0,
+                    "last_calibration_at": None,
+                    "error": encoder_data.get("error", "Daemon encodeur non disponible"),
+                }
+            )
 
         # last_calibration_at : timestamp ISO du dernier recalage sur le
         # microswitch 45°. Change à chaque franchissement → le frontend l'utilise
         # pour signaler « switch atteint » lors d'une recherche manuelle (v6.7.1).
-        return Response({
-            'angle': encoder_data.get('angle', 0),
-            'calibrated': encoder_data.get('calibrated', False),
-            'status': encoder_data.get('status', 'unknown'),
-            'raw': encoder_data.get('raw', 0),
-            'last_calibration_at': encoder_data.get('last_calibration_at')
-        })
+        return Response(
+            {
+                "angle": encoder_data.get("angle", 0),
+                "calibrated": encoder_data.get("calibrated", False),
+                "status": encoder_data.get("status", "unknown"),
+                "raw": encoder_data.get("raw", 0),
+                "last_calibration_at": encoder_data.get("last_calibration_at"),
+            }
+        )
 
 
 class MotorStatusView(APIView):
@@ -227,8 +211,8 @@ class MotorStatusView(APIView):
         data = motor_client.get_motor_status()
 
         # Enrichir avec le temps avant passage au méridien
-        tracking_info = data.get('tracking_info')
-        if tracking_info and tracking_info.get('ra_deg') is not None:
+        tracking_info = data.get("tracking_info")
+        if tracking_info and tracking_info.get("ra_deg") is not None:
             from datetime import datetime
             from core.observatoire import AstronomicalCalculations
             from core.config.config import get_site_config
@@ -236,17 +220,16 @@ class MotorStatusView(APIView):
             latitude, longitude, tz_offset, _, _ = get_site_config()
             calc = AstronomicalCalculations(latitude, longitude, tz_offset)
             now = datetime.now()
-            dec_deg = tracking_info.get('dec_deg', 0.0) or 0.0
+            dec_deg = tracking_info.get("dec_deg", 0.0) or 0.0
             ha = calc.calculer_angle_horaire(
-                tracking_info['ra_deg'], now, deja_jnow=False,
-                declinaison=dec_deg
+                tracking_info["ra_deg"], now, deja_jnow=False, declinaison=dec_deg
             )
-            tracking_info['meridian_seconds'] = round(-ha * 239.3447)
+            tracking_info["meridian_seconds"] = round(-ha * 239.3447)
 
             passage = calc.calculer_heure_passage_meridien(
-                tracking_info['ra_deg'], now, declinaison=dec_deg
+                tracking_info["ra_deg"], now, declinaison=dec_deg
             )
-            tracking_info['meridian_time'] = passage.strftime('%Hh%M')
+            tracking_info["meridian_time"] = passage.strftime("%Hh%M")
 
         return Response(data)
 
@@ -256,8 +239,7 @@ class ParkView(APIView):
 
     def post(self, request):
         return Response(
-            {'error': 'Fonction park non implémentée'},
-            status=status.HTTP_501_NOT_IMPLEMENTED
+            {"error": "Fonction park non implémentée"}, status=status.HTTP_501_NOT_IMPLEMENTED
         )
 
 
@@ -272,16 +254,15 @@ class CalibrateView(APIView):
     """
 
     def post(self, request):
-        success = motor_client.send_command('calibrate')
+        success = motor_client.send_command("calibrate")
 
         if success:
             return Response(
-                {'message': 'Calibration manuelle déclenchée'},
-                status=status.HTTP_202_ACCEPTED
+                {"message": "Calibration manuelle déclenchée"}, status=status.HTTP_202_ACCEPTED
             )
         return Response(
-            {'error': 'Impossible de communiquer avec Motor Service'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
+            {"error": "Impossible de communiquer avec Motor Service"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
 
@@ -294,16 +275,15 @@ class ForceCalibrateView(APIView):
     """
 
     def post(self, request):
-        success = motor_client.send_command('calibrate_force')
+        success = motor_client.send_command("calibrate_force")
 
         if success:
             return Response(
-                {'message': 'Calibration forcée à 45° demandée'},
-                status=status.HTTP_202_ACCEPTED
+                {"message": "Calibration forcée à 45° demandée"}, status=status.HTTP_202_ACCEPTED
             )
         return Response(
-            {'error': 'Impossible de communiquer avec Motor Service'},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
+            {"error": "Impossible de communiquer avec Motor Service"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
 
@@ -312,6 +292,6 @@ class EndSessionView(APIView):
 
     def post(self, request):
         return Response(
-            {'error': 'Fonction end-session non implémentée'},
-            status=status.HTTP_501_NOT_IMPLEMENTED
+            {"error": "Fonction end-session non implémentée"},
+            status=status.HTTP_501_NOT_IMPLEMENTED,
         )

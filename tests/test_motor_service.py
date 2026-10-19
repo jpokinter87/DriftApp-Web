@@ -28,25 +28,26 @@ pytestmark = pytest.mark.slow
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def mock_hardware_info():
     """Hardware info dict for simulation mode."""
     return {
-        'raspberry_pi': False,
-        'rpi_model': None,
-        'gpio': False,
-        'gpio_error': 'Non teste',
-        'encoder_daemon': False,
-        'encoder_error': 'Non teste',
-        'encoder_position': None,
-        'daemon_process': False,
-        'motor': False,
-        'motor_error': 'Non teste',
-        'spi_available': False,
-        'spi_devices': [],
-        'platform': 'Linux-test',
-        'machine': 'x86_64',
-        'system': 'Linux',
+        "raspberry_pi": False,
+        "rpi_model": None,
+        "gpio": False,
+        "gpio_error": "Non teste",
+        "encoder_daemon": False,
+        "encoder_error": "Non teste",
+        "encoder_position": None,
+        "daemon_process": False,
+        "motor": False,
+        "motor_error": "Non teste",
+        "spi_available": False,
+        "spi_devices": [],
+        "platform": "Linux-test",
+        "machine": "x86_64",
+        "system": "Linux",
     }
 
 
@@ -57,12 +58,21 @@ def motor_service(mock_hardware_info, tmp_path):
 
     Utilise des fichiers temporaires pour l'IPC.
     """
-    with patch('services.motor_service.HardwareDetector.detect_hardware', return_value=(False, mock_hardware_info)), \
-         patch('services.motor_service.HardwareDetector.get_hardware_summary', return_value='Test Hardware Summary'), \
-         patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
-         patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
-         patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+    with (
+        patch(
+            "services.motor_service.HardwareDetector.detect_hardware",
+            return_value=(False, mock_hardware_info),
+        ),
+        patch(
+            "services.motor_service.HardwareDetector.get_hardware_summary",
+            return_value="Test Hardware Summary",
+        ),
+        patch("services.ipc_manager.COMMAND_FILE", tmp_path / "command.json"),
+        patch("services.ipc_manager.STATUS_FILE", tmp_path / "status.json"),
+        patch("services.ipc_manager.ENCODER_FILE", tmp_path / "encoder.json"),
+    ):
         from services.motor_service import MotorService
+
         return MotorService()
 
 
@@ -70,22 +80,23 @@ def motor_service(mock_hardware_info, tmp_path):
 # TESTS PROCESS COMMAND DISPATCH
 # =============================================================================
 
+
 class TestProcessCommand:
     """Tests pour la methode process_command dispatch."""
 
     def test_process_command_goto(self, motor_service):
         """process_command handles GOTO correctly."""
-        with patch.object(motor_service.goto_handler, 'execute') as mock_execute:
-            mock_execute.return_value = {'status': 'idle', 'position': 90.0}
-            motor_service.process_command({'command': 'goto', 'angle': 90.0})
+        with patch.object(motor_service.goto_handler, "execute") as mock_execute:
+            mock_execute.return_value = {"status": "idle", "position": 90.0}
+            motor_service.process_command({"command": "goto", "angle": 90.0})
             mock_execute.assert_called_once()
             assert mock_execute.call_args[0][0] == 90.0
 
     def test_process_command_goto_with_speed(self, motor_service):
         """process_command passes speed to GOTO handler."""
-        with patch.object(motor_service.goto_handler, 'execute') as mock_execute:
-            mock_execute.return_value = {'status': 'idle', 'position': 90.0}
-            motor_service.process_command({'command': 'goto', 'angle': 90.0, 'speed': 0.001})
+        with patch.object(motor_service.goto_handler, "execute") as mock_execute:
+            mock_execute.return_value = {"status": "idle", "position": 90.0}
+            motor_service.process_command({"command": "goto", "angle": 90.0, "speed": 0.001})
             mock_execute.assert_called_once()
             assert mock_execute.call_args[0][0] == 90.0
             assert mock_execute.call_args[0][2] == 0.001
@@ -100,59 +111,70 @@ class TestProcessCommand:
         """
         motor_service.tracking_handler.active = True
         calls = []
-        with patch.object(motor_service.tracking_handler, 'stop',
-                          side_effect=lambda status: calls.append('tracking_stop')), \
-             patch.object(motor_service.goto_handler, 'execute',
-                          side_effect=lambda *a, **kw: (calls.append('goto'), {'status': 'idle'})[1]):
-            motor_service.process_command({'command': 'goto', 'angle': 45.0})
+        with (
+            patch.object(
+                motor_service.tracking_handler,
+                "stop",
+                side_effect=lambda status: calls.append("tracking_stop"),
+            ),
+            patch.object(
+                motor_service.goto_handler,
+                "execute",
+                side_effect=lambda *a, **kw: (calls.append("goto"), {"status": "idle"})[1],
+            ),
+        ):
+            motor_service.process_command({"command": "goto", "angle": 45.0})
 
-        assert calls == ['tracking_stop', 'goto']
+        assert calls == ["tracking_stop", "goto"]
 
     def test_process_command_goto_leaves_tracking_alone_when_idle(self, motor_service):
         """Aucun suivi actif: le GOTO ne declenche pas d'arret superflu."""
         motor_service.tracking_handler.active = False
-        with patch.object(motor_service.tracking_handler, 'stop') as mock_stop, \
-             patch.object(motor_service.goto_handler, 'execute',
-                          return_value={'status': 'idle'}):
-            motor_service.process_command({'command': 'goto', 'angle': 45.0})
+        with (
+            patch.object(motor_service.tracking_handler, "stop") as mock_stop,
+            patch.object(motor_service.goto_handler, "execute", return_value={"status": "idle"}),
+        ):
+            motor_service.process_command({"command": "goto", "angle": 45.0})
 
         mock_stop.assert_not_called()
 
     def test_process_command_jog(self, motor_service):
         """process_command handles JOG correctly."""
-        with patch.object(motor_service.jog_handler, 'execute') as mock_execute:
-            mock_execute.return_value = {'status': 'idle', 'position': 10.0}
-            motor_service.process_command({'command': 'jog', 'delta': 10.0})
+        with patch.object(motor_service.jog_handler, "execute") as mock_execute:
+            mock_execute.return_value = {"status": "idle", "position": 10.0}
+            motor_service.process_command({"command": "jog", "delta": 10.0})
             mock_execute.assert_called_once()
             assert mock_execute.call_args[0][0] == 10.0
 
     def test_process_command_stop(self, motor_service):
         """process_command handles STOP correctly."""
-        with patch.object(motor_service.continuous_handler, 'stop'), \
-             patch.object(motor_service.moteur, 'request_stop'):
-            motor_service.process_command({'command': 'stop'})
-            assert motor_service.current_status['status'] == 'idle'
+        with (
+            patch.object(motor_service.continuous_handler, "stop"),
+            patch.object(motor_service.moteur, "request_stop"),
+        ):
+            motor_service.process_command({"command": "stop"})
+            assert motor_service.current_status["status"] == "idle"
 
     def test_process_command_type_alternative_key(self, motor_service):
         """process_command supports 'type' as alternative to 'command' key."""
-        motor_service.process_command({'type': 'status'})  # Should not raise
+        motor_service.process_command({"type": "status"})  # Should not raise
 
     def test_process_command_clears_after(self, motor_service):
         """process_command clears the command after processing."""
-        with patch.object(motor_service.ipc, 'clear_command') as mock_clear:
-            motor_service.process_command({'command': 'status'})
+        with patch.object(motor_service.ipc, "clear_command") as mock_clear:
+            motor_service.process_command({"command": "status"})
             mock_clear.assert_called_once()
 
     def test_unknown_command_logs_warning(self, motor_service, caplog):
         """Verify unknown commands are handled gracefully with warning."""
         with caplog.at_level(logging.WARNING):
-            motor_service.process_command({'command': 'unknown_command_xyz'})
+            motor_service.process_command({"command": "unknown_command_xyz"})
         assert "ipc_command | type=unknown_command_xyz error=unknown_command" in caplog.text
 
     def test_invalid_command_missing_type(self, motor_service, caplog):
         """Verify commands without type are logged as invalid."""
         with caplog.at_level(logging.WARNING):
-            motor_service.process_command({'angle': 90})
+            motor_service.process_command({"angle": 90})
         assert "Commande invalide" in caplog.text
 
     def test_empty_command_handled(self, motor_service, caplog):
@@ -166,6 +188,7 @@ class TestProcessCommand:
 # TESTS HANDLER DELEGATION
 # =============================================================================
 
+
 class TestHandlerDelegation:
     """Tests pour la délégation aux handlers via process_command."""
 
@@ -173,62 +196,71 @@ class TestHandlerDelegation:
         """continuous stops tracking if active before starting."""
         motor_service.tracking_handler.active = True
 
-        with patch.object(motor_service, 'handle_stop') as mock_stop, \
-             patch.object(motor_service.continuous_handler, 'start'):
-            motor_service.process_command({'command': 'continuous', 'direction': 'cw'})
+        with (
+            patch.object(motor_service, "handle_stop") as mock_stop,
+            patch.object(motor_service.continuous_handler, "start"),
+        ):
+            motor_service.process_command({"command": "continuous", "direction": "cw"})
             mock_stop.assert_called_once()
 
     def test_tracking_start_with_name(self, motor_service):
         """tracking_start starts tracking with object name."""
-        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
-            motor_service.process_command({'command': 'tracking_start', 'object': 'M31', 'skip_goto': True})
+        with patch.object(motor_service.tracking_handler, "start") as mock_start:
+            motor_service.process_command(
+                {"command": "tracking_start", "object": "M31", "skip_goto": True}
+            )
             mock_start.assert_called_once()
             call_args = mock_start.call_args
-            assert call_args[0][0] == 'M31'
-            assert call_args[1]['skip_goto'] is True
+            assert call_args[0][0] == "M31"
+            assert call_args[1]["skip_goto"] is True
 
     def test_tracking_start_with_coords(self, motor_service):
         """tracking_start transmet les coordonnées manuelles au handler."""
-        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
-            motor_service.process_command({
-                'command': 'tracking_start', 'object': 'Cible',
-                'ra_deg': 83.82, 'dec_deg': -5.39,
-            })
-            assert mock_start.call_args[1]['coords'] == (83.82, -5.39)
+        with patch.object(motor_service.tracking_handler, "start") as mock_start:
+            motor_service.process_command(
+                {
+                    "command": "tracking_start",
+                    "object": "Cible",
+                    "ra_deg": 83.82,
+                    "dec_deg": -5.39,
+                }
+            )
+            assert mock_start.call_args[1]["coords"] == (83.82, -5.39)
 
     def test_tracking_start_without_coords(self, motor_service):
         """Sans coordonnées, coords=None (recherche catalogue inchangée)."""
-        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
-            motor_service.process_command({'command': 'tracking_start', 'object': 'M31'})
-            assert mock_start.call_args[1]['coords'] is None
+        with patch.object(motor_service.tracking_handler, "start") as mock_start:
+            motor_service.process_command({"command": "tracking_start", "object": "M31"})
+            assert mock_start.call_args[1]["coords"] is None
 
     def test_tracking_start_alternative_key(self, motor_service):
         """tracking_start supports 'name' as alternative to 'object'."""
-        with patch.object(motor_service.tracking_handler, 'start') as mock_start:
-            motor_service.process_command({'command': 'tracking_start', 'name': 'NGC 3079'})
+        with patch.object(motor_service.tracking_handler, "start") as mock_start:
+            motor_service.process_command({"command": "tracking_start", "name": "NGC 3079"})
             call_args = mock_start.call_args
-            assert call_args[0][0] == 'NGC 3079'
+            assert call_args[0][0] == "NGC 3079"
 
     def test_tracking_start_no_name_warns(self, motor_service, caplog):
         """tracking_start warns if no object name provided."""
         with caplog.at_level(logging.WARNING):
-            motor_service.process_command({'command': 'tracking_start'})
+            motor_service.process_command({"command": "tracking_start"})
         assert "ipc_command | type=tracking_start error=missing_object" in caplog.text
 
     def test_tracking_stop_delegates(self, motor_service):
         """tracking_stop delegates to tracking_handler.stop."""
-        with patch.object(motor_service.tracking_handler, 'stop') as mock_stop:
-            motor_service.process_command({'command': 'tracking_stop'})
+        with patch.object(motor_service.tracking_handler, "stop") as mock_stop:
+            motor_service.process_command({"command": "tracking_stop"})
             mock_stop.assert_called_once()
 
     def test_status_is_noop(self, motor_service):
         """status command is a no-op."""
-        motor_service.process_command({'command': 'status'})  # Should not raise
+        motor_service.process_command({"command": "status"})  # Should not raise
 
 
 # =============================================================================
 # TESTS HANDLE_STOP
 # =============================================================================
+
 
 class TestHandleStop:
     """Tests pour handle_stop() public method."""
@@ -236,24 +268,25 @@ class TestHandleStop:
     def test_handle_stop_sets_idle(self, motor_service):
         """handle_stop() sets status to idle."""
         motor_service.handle_stop()
-        assert motor_service.current_status['status'] == 'idle'
+        assert motor_service.current_status["status"] == "idle"
 
     def test_handle_stop_stops_continuous(self, motor_service):
         """handle_stop() stops continuous handler."""
-        with patch.object(motor_service.continuous_handler, 'stop') as mock_cont:
+        with patch.object(motor_service.continuous_handler, "stop") as mock_cont:
             motor_service.handle_stop()
             mock_cont.assert_called_once()
 
     def test_handle_stop_clears_tracking_object(self, motor_service):
         """handle_stop() clears tracking_object."""
-        motor_service.current_status['tracking_object'] = 'M42'
+        motor_service.current_status["tracking_object"] = "M42"
         motor_service.handle_stop()
-        assert motor_service.current_status['tracking_object'] is None
+        assert motor_service.current_status["tracking_object"] is None
 
 
 # =============================================================================
 # TESTS BOOT CALIBRATION INTEGRATION (v6.4 Phase 2)
 # =============================================================================
+
 
 class TestBootCalibrationIntegration:
     """v6.4 Phase 2 : intégration routine boot dans MotorService."""
@@ -277,6 +310,7 @@ class TestBootCalibrationIntegration:
     def test_run_boot_calibration_handles_routine_exception(self, motor_service):
         """Une exception non gérée → status=degraded + error_msg renseigné."""
         from core.hardware.calibration_routine import CalibrationRoutine
+
         with patch.object(CalibrationRoutine, "run", side_effect=RuntimeError("boom")):
             motor_service._run_boot_calibration()
         cal = motor_service.current_status["calibration"]
@@ -294,6 +328,7 @@ class TestBootCalibrationIntegration:
     def test_run_boot_calibration_propagates_ok_result(self, motor_service):
         """Routine retournant 'ok' → champs calibration propagés correctement."""
         from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+
         ok_result = CalibrationResult(
             status="ok",
             method="sweep",
@@ -316,16 +351,22 @@ class TestManualCalibrationCommand:
     def test_process_command_calibrate_dispatches_routine(self, motor_service):
         """process_command('calibrate') invoque _execute_calibration_routine(manual)."""
         from unittest.mock import MagicMock
-        with patch.object(motor_service, '_execute_calibration_routine', new=MagicMock()) as mock_exec, \
-             patch.object(motor_service.ipc, 'clear_command') as mock_clear:
-            motor_service.process_command({'command': 'calibrate', 'id': 'test-1'})
-            mock_exec.assert_called_once_with(trigger_label='manual_calibration')
+
+        with (
+            patch.object(
+                motor_service, "_execute_calibration_routine", new=MagicMock()
+            ) as mock_exec,
+            patch.object(motor_service.ipc, "clear_command") as mock_clear,
+        ):
+            motor_service.process_command({"command": "calibrate", "id": "test-1"})
+            mock_exec.assert_called_once_with(trigger_label="manual_calibration")
             mock_clear.assert_called_once()
 
     def test_calibrate_publishes_calibrating_then_idle(self, motor_service):
         """Cycle de statuts : calibrating + running pendant, idle + ok après."""
         import copy
         from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+
         snapshots = []
 
         def snapshot_status(_=None):
@@ -337,23 +378,26 @@ class TestManualCalibrationCommand:
             last_calibration_at="2026-05-05T12:00:00+00:00",
             duration_sec=12.3,
         )
-        with patch.object(CalibrationRoutine, "run", return_value=ok_result), \
-             patch.object(motor_service, '_write_status', side_effect=snapshot_status):
-            motor_service.process_command({'command': 'calibrate'})
+        with (
+            patch.object(CalibrationRoutine, "run", return_value=ok_result),
+            patch.object(motor_service, "_write_status", side_effect=snapshot_status),
+        ):
+            motor_service.process_command({"command": "calibrate"})
 
         running_seen = any(
-            s.get('status') == 'calibrating' and s['calibration'].get('status') == 'running'
+            s.get("status") == "calibrating" and s["calibration"].get("status") == "running"
             for s in snapshots
         )
         assert running_seen, "Aucun snapshot avec status=calibrating + calibration.status=running"
         final = snapshots[-1]
-        assert final['status'] == 'idle'
-        assert final['calibration']['status'] == 'ok'
-        assert final['calibration']['method'] == 'sweep'
+        assert final["status"] == "idle"
+        assert final["calibration"]["status"] == "ok"
+        assert final["calibration"]["method"] == "sweep"
 
     def test_calibrate_propagates_calibration_subdict(self, motor_service):
         """Les 5 clés du CalibrationResult sont copiées dans current_status['calibration']."""
         from core.hardware.calibration_routine import CalibrationResult, CalibrationRoutine
+
         result = CalibrationResult(
             status="ok",
             method="sweep",
@@ -362,26 +406,27 @@ class TestManualCalibrationCommand:
             error_msg=None,
         )
         with patch.object(CalibrationRoutine, "run", return_value=result):
-            motor_service.process_command({'command': 'calibrate'})
-        cal = motor_service.current_status['calibration']
+            motor_service.process_command({"command": "calibrate"})
+        cal = motor_service.current_status["calibration"]
         assert cal == {
-            'status': 'ok',
-            'method': 'sweep',
-            'last_calibration_at': '2026-05-05T12:00:00+00:00',
-            'duration_sec': 42.0,
-            'error_msg': None,
+            "status": "ok",
+            "method": "sweep",
+            "last_calibration_at": "2026-05-05T12:00:00+00:00",
+            "duration_sec": 42.0,
+            "error_msg": None,
         }
 
     def test_calibrate_handles_routine_exception_gracefully(self, motor_service):
         """Exception non gérée dans la routine → degraded + idle, pas de propagation."""
         from core.hardware.calibration_routine import CalibrationRoutine
+
         with patch.object(CalibrationRoutine, "run", side_effect=RuntimeError("encoder dead")):
-            motor_service.process_command({'command': 'calibrate'})  # ne doit pas raise
-        cal = motor_service.current_status['calibration']
-        assert cal['status'] == 'degraded'
-        assert cal['method'] == 'exception'
-        assert 'encoder dead' in (cal['error_msg'] or '')
-        assert motor_service.current_status['status'] == 'idle'
+            motor_service.process_command({"command": "calibrate"})  # ne doit pas raise
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "degraded"
+        assert cal["method"] == "exception"
+        assert "encoder dead" in (cal["error_msg"] or "")
+        assert motor_service.current_status["status"] == "idle"
 
 
 class TestLiveRecalibration:
@@ -393,109 +438,116 @@ class TestLiveRecalibration:
     """
 
     def _set_calib_status(self, motor_service, status):
-        motor_service.current_status['calibration'] = {
-            'status': status,
-            'method': 'sweep' if status != 'unknown' else None,
-            'last_calibration_at': None,
-            'error_msg': 'boom' if status in ('degraded', 'exception') else None,
-            'duration_sec': None,
+        motor_service.current_status["calibration"] = {
+            "status": status,
+            "method": "sweep" if status != "unknown" else None,
+            "last_calibration_at": None,
+            "error_msg": "boom" if status in ("degraded", "exception") else None,
+            "duration_sec": None,
         }
 
     def test_flips_degraded_to_ok_on_new_timestamp(self, motor_service):
         """Switch franchi (timestamp change) alors que dégradé → status ok / live_switch."""
-        self._set_calib_status(motor_service, 'degraded')
-        motor_service._last_seen_calibration_at = '2026-06-14T20:00:00+00:00'
+        self._set_calib_status(motor_service, "degraded")
+        motor_service._last_seen_calibration_at = "2026-06-14T20:00:00+00:00"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': '2026-06-14T20:05:00+00:00'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "2026-06-14T20:05:00+00:00"},
         ):
             motor_service._check_live_recalibration()
-        cal = motor_service.current_status['calibration']
-        assert cal['status'] == 'ok'
-        assert cal['method'] == 'live_switch'
-        assert cal['last_calibration_at'] == '2026-06-14T20:05:00+00:00'
-        assert cal['error_msg'] is None
-        assert motor_service._last_seen_calibration_at == '2026-06-14T20:05:00+00:00'
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "ok"
+        assert cal["method"] == "live_switch"
+        assert cal["last_calibration_at"] == "2026-06-14T20:05:00+00:00"
+        assert cal["error_msg"] is None
+        assert motor_service._last_seen_calibration_at == "2026-06-14T20:05:00+00:00"
 
     def test_unknown_also_flips_to_ok(self, motor_service):
         """Même comportement depuis l'état 'unknown'."""
-        self._set_calib_status(motor_service, 'unknown')
-        motor_service._last_seen_calibration_at = 'T1'
+        self._set_calib_status(motor_service, "unknown")
+        motor_service._last_seen_calibration_at = "T1"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': 'T2'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T2"},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'ok'
+        assert motor_service.current_status["calibration"]["status"] == "ok"
 
     def test_no_change_is_noop(self, motor_service):
         """Timestamp identique → aucun changement de statut."""
-        self._set_calib_status(motor_service, 'degraded')
-        motor_service._last_seen_calibration_at = 'T1'
+        self._set_calib_status(motor_service, "degraded")
+        motor_service._last_seen_calibration_at = "T1"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': 'T1'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T1"},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'degraded'
+        assert motor_service.current_status["calibration"]["status"] == "degraded"
 
     def test_first_observation_sets_baseline_without_flip(self, motor_service):
         """Premier passage (baseline None) : on enregistre le ts hérité du boot,
         sans considérer cela comme un franchissement → pas de bascule."""
-        self._set_calib_status(motor_service, 'degraded')
+        self._set_calib_status(motor_service, "degraded")
         motor_service._last_seen_calibration_at = None
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': 'T-boot'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T-boot"},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'degraded'
-        assert motor_service._last_seen_calibration_at == 'T-boot'
+        assert motor_service.current_status["calibration"]["status"] == "degraded"
+        assert motor_service._last_seen_calibration_at == "T-boot"
 
     def test_does_not_downgrade_when_already_ok(self, motor_service):
         """Si déjà ok, un nouveau ts n'altère pas le sous-dict (baseline avance seulement)."""
-        self._set_calib_status(motor_service, 'ok')
-        motor_service._last_seen_calibration_at = 'T1'
+        self._set_calib_status(motor_service, "ok")
+        motor_service._last_seen_calibration_at = "T1"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': 'T2'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T2"},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'ok'
-        assert motor_service.current_status['calibration']['method'] == 'sweep'
-        assert motor_service._last_seen_calibration_at == 'T2'
+        assert motor_service.current_status["calibration"]["status"] == "ok"
+        assert motor_service.current_status["calibration"]["method"] == "sweep"
+        assert motor_service._last_seen_calibration_at == "T2"
 
     def test_does_not_interfere_during_running_sweep(self, motor_service):
         """Pendant un sweep (running), la routine possède le statut → pas de bascule,
         mais la baseline avance pour ne pas redéclencher après coup."""
-        self._set_calib_status(motor_service, 'running')
-        motor_service._last_seen_calibration_at = 'T1'
+        self._set_calib_status(motor_service, "running")
+        motor_service._last_seen_calibration_at = "T1"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'last_calibration_at': 'T2'},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T2"},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'running'
-        assert motor_service._last_seen_calibration_at == 'T2'
+        assert motor_service.current_status["calibration"]["status"] == "running"
+        assert motor_service._last_seen_calibration_at == "T2"
 
     def test_missing_status_dict_is_safe(self, motor_service):
         """read_status renvoie None (daemon indispo) → no-op sans exception."""
-        self._set_calib_status(motor_service, 'degraded')
-        motor_service._last_seen_calibration_at = 'T1'
-        with patch.object(motor_service.daemon_reader, 'read_status', return_value=None):
+        self._set_calib_status(motor_service, "degraded")
+        motor_service._last_seen_calibration_at = "T1"
+        with patch.object(motor_service.daemon_reader, "read_status", return_value=None):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'degraded'
+        assert motor_service.current_status["calibration"]["status"] == "degraded"
 
     def test_missing_timestamp_key_is_safe(self, motor_service):
         """Dict sans last_calibration_at → no-op."""
-        self._set_calib_status(motor_service, 'degraded')
-        motor_service._last_seen_calibration_at = 'T1'
+        self._set_calib_status(motor_service, "degraded")
+        motor_service._last_seen_calibration_at = "T1"
         with patch.object(
-            motor_service.daemon_reader, 'read_status',
-            return_value={'angle': 45.0},
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"angle": 45.0},
         ):
             motor_service._check_live_recalibration()
-        assert motor_service.current_status['calibration']['status'] == 'degraded'
+        assert motor_service.current_status["calibration"]["status"] == "degraded"
 
 
 class TestForcedCalibrationCommand:
@@ -505,46 +557,53 @@ class TestForcedCalibrationCommand:
     """
 
     def _set_calib_status(self, motor_service, status):
-        motor_service.current_status['calibration'] = {
-            'status': status,
-            'method': 'sweep',
-            'last_calibration_at': None,
-            'error_msg': 'switch_not_found',
-            'duration_sec': 180.0,
+        motor_service.current_status["calibration"] = {
+            "status": status,
+            "method": "sweep",
+            "last_calibration_at": None,
+            "error_msg": "switch_not_found",
+            "duration_sec": 180.0,
         }
 
     def test_success_marks_calibration_ok_forced(self, motor_service):
-        self._set_calib_status(motor_service, 'degraded')
-        with patch.object(
-            motor_service.daemon_reader, 'force_calibration', return_value=True
-        ) as mock_force, patch.object(motor_service.moteur, 'rotation') as mock_rot:
-            motor_service.process_command({'command': 'calibrate_force'})
+        self._set_calib_status(motor_service, "degraded")
+        with (
+            patch.object(
+                motor_service.daemon_reader, "force_calibration", return_value=True
+            ) as mock_force,
+            patch.object(motor_service.moteur, "rotation") as mock_rot,
+        ):
+            motor_service.process_command({"command": "calibrate_force"})
         mock_force.assert_called_once()
         mock_rot.assert_not_called()
-        cal = motor_service.current_status['calibration']
-        assert cal['status'] == 'ok'
-        assert cal['method'] == 'manual_forced'
-        assert cal['error_msg'] is None
-        assert cal['last_calibration_at'] is not None
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "ok"
+        assert cal["method"] == "manual_forced"
+        assert cal["error_msg"] is None
+        assert cal["last_calibration_at"] is not None
 
     def test_daemon_failure_keeps_status_and_reports(self, motor_service):
-        self._set_calib_status(motor_service, 'degraded')
-        with patch.object(motor_service.daemon_reader, 'force_calibration', return_value=False):
-            motor_service.process_command({'command': 'calibrate_force'})
-        cal = motor_service.current_status['calibration']
-        assert cal['status'] == 'degraded'
-        assert 'force' in cal['error_msg']
+        self._set_calib_status(motor_service, "degraded")
+        with patch.object(motor_service.daemon_reader, "force_calibration", return_value=False):
+            motor_service.process_command({"command": "calibrate_force"})
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "degraded"
+        assert "force" in cal["error_msg"]
 
     def test_refused_while_tracking_active(self, motor_service):
         """Pendant un suivi, la coupole n'est pas au parking : refus."""
-        self._set_calib_status(motor_service, 'degraded')
-        with patch.object(
-            type(motor_service.tracking_handler), 'is_active',
-            new_callable=lambda: property(lambda self: True),
-        ), patch.object(motor_service.daemon_reader, 'force_calibration') as mock_force:
-            motor_service.process_command({'command': 'calibrate_force'})
+        self._set_calib_status(motor_service, "degraded")
+        with (
+            patch.object(
+                type(motor_service.tracking_handler),
+                "is_active",
+                new_callable=lambda: property(lambda self: True),
+            ),
+            patch.object(motor_service.daemon_reader, "force_calibration") as mock_force,
+        ):
+            motor_service.process_command({"command": "calibrate_force"})
         mock_force.assert_not_called()
-        assert motor_service.current_status['calibration']['status'] == 'degraded'
+        assert motor_service.current_status["calibration"]["status"] == "degraded"
 
 
 class TestLogVitessesAuDemarrage:
@@ -556,27 +615,40 @@ class TestLogVitessesAuDemarrage:
     """
 
     def test_vitesses_journalisees(self, mock_hardware_info, tmp_path, caplog):
-        with patch('core.config.config.SINGLE_SPEED_MOTOR_DELAY', 260e-6), \
-             patch('core.config.config.FAST_MOTOR_DELAY', 110e-6), \
-             patch('core.config.config.RAMP_TIME_S', 2.0), \
-             patch('core.config.config.FAST_ACCEL_STEPS_S2', 4545), \
-             caplog.at_level(logging.INFO):
-            with patch('services.motor_service.HardwareDetector.detect_hardware',
-                       return_value=(False, mock_hardware_info)), \
-                 patch('services.motor_service.HardwareDetector.get_hardware_summary',
-                       return_value='Test Hardware Summary'), \
-                 patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
-                 patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
-                 patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+        with (
+            patch("core.config.config.SINGLE_SPEED_MOTOR_DELAY", 260e-6),
+            patch("core.config.config.FAST_MOTOR_DELAY", 110e-6),
+            patch("core.config.config.RAMP_TIME_S", 2.0),
+            patch("core.config.config.FAST_ACCEL_STEPS_S2", 4545),
+            caplog.at_level(logging.INFO),
+        ):
+            with (
+                patch(
+                    "services.motor_service.HardwareDetector.detect_hardware",
+                    return_value=(False, mock_hardware_info),
+                ),
+                patch(
+                    "services.motor_service.HardwareDetector.get_hardware_summary",
+                    return_value="Test Hardware Summary",
+                ),
+                patch("services.ipc_manager.COMMAND_FILE", tmp_path / "command.json"),
+                patch("services.ipc_manager.STATUS_FILE", tmp_path / "status.json"),
+                patch("services.ipc_manager.ENCODER_FILE", tmp_path / "encoder.json"),
+            ):
                 from services.motor_service import MotorService
+
                 MotorService()
 
-        assert "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0 ramp_time_s=2.0 accel=4545" in caplog.text
+        assert (
+            "vitesses | delay_us=260 fast_delay_us=110 seuil_rapide_deg=3.0 ramp_time_s=2.0 accel=4545"
+            in caplog.text
+        )
 
 
 # =============================================================================
 # STOP PENDANT UN MOUVEMENT BLOQUANT
 # =============================================================================
+
 
 class TestStopPendantMouvementBloquant:
     """GOTO et JOG s'exécutent dans la boucle principale : sans veilleur, le
@@ -587,14 +659,20 @@ class TestStopPendantMouvementBloquant:
 
     @pytest.fixture
     def service(self, mock_hardware_info, tmp_path):
-        with patch('services.motor_service.HardwareDetector.detect_hardware',
-                   return_value=(False, mock_hardware_info)), \
-             patch('services.motor_service.HardwareDetector.get_hardware_summary',
-                   return_value='Test'), \
-             patch('services.ipc_manager.COMMAND_FILE', tmp_path / 'command.json'), \
-             patch('services.ipc_manager.STATUS_FILE', tmp_path / 'status.json'), \
-             patch('services.ipc_manager.ENCODER_FILE', tmp_path / 'encoder.json'):
+        with (
+            patch(
+                "services.motor_service.HardwareDetector.detect_hardware",
+                return_value=(False, mock_hardware_info),
+            ),
+            patch(
+                "services.motor_service.HardwareDetector.get_hardware_summary", return_value="Test"
+            ),
+            patch("services.ipc_manager.COMMAND_FILE", tmp_path / "command.json"),
+            patch("services.ipc_manager.STATUS_FILE", tmp_path / "status.json"),
+            patch("services.ipc_manager.ENCODER_FILE", tmp_path / "encoder.json"),
+        ):
             from services.motor_service import MotorService
+
             service = MotorService()
             moteur = service.moteur
 
@@ -608,24 +686,25 @@ class TestStopPendantMouvementBloquant:
             moteur.rotation = rotation_lente
             service.running = True
             service._start_stop_watcher_thread()
-            yield service, tmp_path / 'command.json'
+            yield service, tmp_path / "command.json"
             service.running = False
 
     @staticmethod
     def _ecrire(cmd_file, commande):
         cmd_file.write_text(json.dumps(commande))
 
-    @pytest.mark.parametrize("commande", [
-        {"id": "goto-1", "command": "goto", "angle": 180.0},
-        {"id": "jog-1", "command": "jog", "delta": 90.0},
-    ])
+    @pytest.mark.parametrize(
+        "commande",
+        [
+            {"id": "goto-1", "command": "goto", "angle": 180.0},
+            {"id": "jog-1", "command": "jog", "delta": 90.0},
+        ],
+    )
     def test_stop_interrompt_le_mouvement_et_reste_a_traiter(self, service, commande):
         service, cmd_file = service
         self._ecrire(cmd_file, commande)
         cmd = service.ipc.read_command()
-        threading.Timer(
-            0.3, self._ecrire, (cmd_file, {"id": "stop-1", "command": "stop"})
-        ).start()
+        threading.Timer(0.3, self._ecrire, (cmd_file, {"id": "stop-1", "command": "stop"})).start()
 
         debut = time.monotonic()
         service.process_command(cmd)

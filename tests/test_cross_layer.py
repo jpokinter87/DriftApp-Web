@@ -22,6 +22,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "driftapp_web.settings")
 os.environ.setdefault("DRIFTAPP_DEBUG", "1")
 
 import django
+
 django.setup()
 
 
@@ -54,11 +55,12 @@ def cross_layer(tmp_path):
         "ENCODER_FILE": str(encoder_file),
     }
 
-    with patch.object(ipc_module, "COMMAND_FILE", cmd_file), \
-         patch.object(ipc_module, "STATUS_FILE", status_file), \
-         patch.object(ipc_module, "ENCODER_FILE", encoder_file), \
-         patch("django.conf.settings.MOTOR_SERVICE_IPC", ipc_settings):
-
+    with (
+        patch.object(ipc_module, "COMMAND_FILE", cmd_file),
+        patch.object(ipc_module, "STATUS_FILE", status_file),
+        patch.object(ipc_module, "ENCODER_FILE", encoder_file),
+        patch("django.conf.settings.MOTOR_SERVICE_IPC", ipc_settings),
+    ):
         from services.motor_service import MotorService
         from web.common.ipc_client import MotorServiceClient
 
@@ -77,6 +79,7 @@ def cross_layer(tmp_path):
 # =============================================================================
 # Cross-layer: GOTO
 # =============================================================================
+
 
 class TestCrossLayerGoto:
     """Django envoie GOTO -> MotorService execute -> Django lit le status."""
@@ -121,6 +124,7 @@ class TestCrossLayerGoto:
 # Cross-layer: JOG
 # =============================================================================
 
+
 class TestCrossLayerJog:
     """Django envoie JOG -> MotorService execute -> Django lit le status."""
 
@@ -156,6 +160,7 @@ class TestCrossLayerJog:
 # Cross-layer: STOP
 # =============================================================================
 
+
 class TestCrossLayerStop:
     """Django envoie STOP -> MotorService execute -> Django lit idle."""
 
@@ -178,6 +183,7 @@ class TestCrossLayerStop:
 # =============================================================================
 # Cross-layer: Status & Encoder
 # =============================================================================
+
 
 class TestCrossLayerStatusEncoder:
     """Verification que le client lit correctement status et encodeur."""

@@ -47,26 +47,18 @@ def _check_file_freshness(file_path: Path) -> dict:
         dict avec 'exists', 'age_sec', 'fresh'
     """
     if not file_path.exists():
-        return {
-            'exists': False,
-            'age_sec': None,
-            'fresh': False
-        }
+        return {"exists": False, "age_sec": None, "fresh": False}
 
     try:
         mtime = file_path.stat().st_mtime
         age_sec = time.time() - mtime
         return {
-            'exists': True,
-            'age_sec': round(age_sec, 1),
-            'fresh': age_sec < STALE_THRESHOLD_SEC
+            "exists": True,
+            "age_sec": round(age_sec, 1),
+            "fresh": age_sec < STALE_THRESHOLD_SEC,
         }
     except OSError:
-        return {
-            'exists': False,
-            'age_sec': None,
-            'fresh': False
-        }
+        return {"exists": False, "age_sec": None, "fresh": False}
 
 
 def _check_motor_service() -> dict:
@@ -76,46 +68,46 @@ def _check_motor_service() -> dict:
     Returns:
         dict avec 'healthy', 'status', 'details'
     """
-    status_file = Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
+    status_file = Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"])
     file_check = _check_file_freshness(status_file)
 
-    if not file_check['exists']:
+    if not file_check["exists"]:
         return {
-            'healthy': False,
-            'status': 'unavailable',
-            'details': 'Fichier status non trouvé - Motor Service non démarré',
-            'file': file_check
+            "healthy": False,
+            "status": "unavailable",
+            "details": "Fichier status non trouvé - Motor Service non démarré",
+            "file": file_check,
         }
 
-    if not file_check['fresh']:
+    if not file_check["fresh"]:
         return {
-            'healthy': False,
-            'status': 'stale',
-            'details': f"Fichier status trop ancien ({file_check['age_sec']}s)",
-            'file': file_check
+            "healthy": False,
+            "status": "stale",
+            "details": f"Fichier status trop ancien ({file_check['age_sec']}s)",
+            "file": file_check,
         }
 
     # Lire le contenu du status
     motor_status = motor_client.get_motor_status()
 
-    if motor_status.get('status') == 'unknown':
+    if motor_status.get("status") == "unknown":
         return {
-            'healthy': False,
-            'status': 'error',
-            'details': motor_status.get('error', 'Erreur inconnue'),
-            'file': file_check
+            "healthy": False,
+            "status": "error",
+            "details": motor_status.get("error", "Erreur inconnue"),
+            "file": file_check,
         }
 
     return {
-        'healthy': True,
-        'status': motor_status.get('status', 'unknown'),
-        'details': {
-            'mode': motor_status.get('mode'),
-            'position': motor_status.get('position'),
-            'simulation': motor_status.get('simulation', False),
-            'tracking_object': motor_status.get('tracking_object')
+        "healthy": True,
+        "status": motor_status.get("status", "unknown"),
+        "details": {
+            "mode": motor_status.get("mode"),
+            "position": motor_status.get("position"),
+            "simulation": motor_status.get("simulation", False),
+            "tracking_object": motor_status.get("tracking_object"),
         },
-        'file': file_check
+        "file": file_check,
     }
 
 
@@ -126,45 +118,45 @@ def _check_encoder_daemon() -> dict:
     Returns:
         dict avec 'healthy', 'status', 'details'
     """
-    encoder_file = Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
+    encoder_file = Path(settings.MOTOR_SERVICE_IPC["ENCODER_FILE"])
     file_check = _check_file_freshness(encoder_file)
 
-    if not file_check['exists']:
+    if not file_check["exists"]:
         return {
-            'healthy': False,
-            'status': 'unavailable',
-            'details': 'Fichier encodeur non trouvé - Daemon non démarré',
-            'file': file_check
+            "healthy": False,
+            "status": "unavailable",
+            "details": "Fichier encodeur non trouvé - Daemon non démarré",
+            "file": file_check,
         }
 
-    if not file_check['fresh']:
+    if not file_check["fresh"]:
         return {
-            'healthy': False,
-            'status': 'stale',
-            'details': f"Fichier encodeur trop ancien ({file_check['age_sec']}s)",
-            'file': file_check
+            "healthy": False,
+            "status": "stale",
+            "details": f"Fichier encodeur trop ancien ({file_check['age_sec']}s)",
+            "file": file_check,
         }
 
     # Lire le contenu
     encoder_status = motor_client.get_encoder_status()
 
-    if encoder_status.get('status') == 'unavailable':
+    if encoder_status.get("status") == "unavailable":
         return {
-            'healthy': False,
-            'status': 'error',
-            'details': encoder_status.get('error', 'Erreur inconnue'),
-            'file': file_check
+            "healthy": False,
+            "status": "error",
+            "details": encoder_status.get("error", "Erreur inconnue"),
+            "file": file_check,
         }
 
     return {
-        'healthy': True,
-        'status': encoder_status.get('status', 'ok'),
-        'details': {
-            'angle': encoder_status.get('angle'),
-            'calibrated': encoder_status.get('calibrated', False),
-            'raw_value': encoder_status.get('raw_value')
+        "healthy": True,
+        "status": encoder_status.get("status", "ok"),
+        "details": {
+            "angle": encoder_status.get("angle"),
+            "calibrated": encoder_status.get("calibrated", False),
+            "raw_value": encoder_status.get("raw_value"),
         },
-        'file': file_check
+        "file": file_check,
     }
 
 
@@ -176,19 +168,13 @@ def _check_ipc_files() -> dict:
         dict avec l'état de chaque fichier
     """
     return {
-        'command_file': _check_file_freshness(
-            Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
-        ),
-        'status_file': _check_file_freshness(
-            Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
-        ),
-        'encoder_file': _check_file_freshness(
-            Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
-        )
+        "command_file": _check_file_freshness(Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"])),
+        "status_file": _check_file_freshness(Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"])),
+        "encoder_file": _check_file_freshness(Path(settings.MOTOR_SERVICE_IPC["ENCODER_FILE"])),
     }
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def health_check(request):
     """
     Endpoint principal de health check.
@@ -200,54 +186,48 @@ def health_check(request):
     encoder = _check_encoder_daemon()
 
     # Le système est healthy si Motor Service ET Encoder sont OK
-    overall_healthy = motor['healthy'] and encoder['healthy']
+    overall_healthy = motor["healthy"] and encoder["healthy"]
 
     response_data = {
-        'healthy': overall_healthy,
-        'timestamp': datetime.now().isoformat(),
-        'components': {
-            'motor_service': motor,
-            'encoder_daemon': encoder
-        }
+        "healthy": overall_healthy,
+        "timestamp": datetime.now().isoformat(),
+        "components": {"motor_service": motor, "encoder_daemon": encoder},
     }
 
     status_code = 200 if overall_healthy else 503
     return Response(response_data, status=status_code)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def motor_health(request):
     """
     Health check détaillé du Motor Service uniquement.
     """
     motor = _check_motor_service()
-    motor['timestamp'] = datetime.now().isoformat()
+    motor["timestamp"] = datetime.now().isoformat()
 
-    status_code = 200 if motor['healthy'] else 503
+    status_code = 200 if motor["healthy"] else 503
     return Response(motor, status=status_code)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def encoder_health(request):
     """
     Health check détaillé de l'Encoder Daemon uniquement.
     """
     encoder = _check_encoder_daemon()
-    encoder['timestamp'] = datetime.now().isoformat()
+    encoder["timestamp"] = datetime.now().isoformat()
 
-    status_code = 200 if encoder['healthy'] else 503
+    status_code = 200 if encoder["healthy"] else 503
     return Response(encoder, status=status_code)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def ipc_status(request):
     """
     Statut des fichiers IPC (pour debug).
     """
-    return Response({
-        'timestamp': datetime.now().isoformat(),
-        'files': _check_ipc_files()
-    })
+    return Response({"timestamp": datetime.now().isoformat(), "files": _check_ipc_files()})
 
 
 def _read_ipc_file_content(file_path: Path) -> dict:
@@ -258,22 +238,22 @@ def _read_ipc_file_content(file_path: Path) -> dict:
         dict avec 'exists', 'content', 'error', 'empty'
     """
     if not file_path.exists():
-        return {'exists': False, 'content': None, 'error': 'Fichier non trouvé', 'empty': False}
+        return {"exists": False, "content": None, "error": "Fichier non trouvé", "empty": False}
 
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             text = f.read().strip()
 
         # Fichier vide = état normal pour motor_command.json (après traitement)
         if not text:
-            return {'exists': True, 'content': None, 'error': None, 'empty': True}
+            return {"exists": True, "content": None, "error": None, "empty": True}
 
         content = json.loads(text)
-        return {'exists': True, 'content': content, 'error': None, 'empty': False}
+        return {"exists": True, "content": content, "error": None, "empty": False}
     except json.JSONDecodeError as e:
-        return {'exists': True, 'content': None, 'error': f'JSON invalide: {e}', 'empty': False}
+        return {"exists": True, "content": None, "error": f"JSON invalide: {e}", "empty": False}
     except (OSError, IOError) as e:
-        return {'exists': True, 'content': None, 'error': str(e), 'empty': False}
+        return {"exists": True, "content": None, "error": str(e), "empty": False}
 
 
 def _load_config() -> dict:
@@ -282,31 +262,31 @@ def _load_config() -> dict:
     """
     try:
         config_path = settings.DRIFTAPP_CONFIG
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             config = json.load(f)
 
         # Extraire les infos essentielles (sans les commentaires)
         return {
-            'site': config.get('site', {}),
-            'thresholds': config.get('thresholds', {}),
-            'suivi': config.get('suivi', {}),
-            'moteur': {
-                'steps_per_revolution': config.get('moteur', {}).get('steps_per_revolution'),
-                'microsteps': config.get('moteur', {}).get('microsteps'),
-                'gear_ratio': config.get('moteur', {}).get('gear_ratio'),
-                'motor_delay_base': config.get('moteur', {}).get('motor_delay_base'),
+            "site": config.get("site", {}),
+            "thresholds": config.get("thresholds", {}),
+            "suivi": config.get("suivi", {}),
+            "moteur": {
+                "steps_per_revolution": config.get("moteur", {}).get("steps_per_revolution"),
+                "microsteps": config.get("moteur", {}).get("microsteps"),
+                "gear_ratio": config.get("moteur", {}).get("gear_ratio"),
+                "motor_delay_base": config.get("moteur", {}).get("motor_delay_base"),
             },
-            'encodeur': {
-                'enabled': config.get('encodeur', {}).get('enabled'),
-                'calibration_factor': config.get('encodeur', {}).get('calibration_factor'),
+            "encodeur": {
+                "enabled": config.get("encodeur", {}).get("enabled"),
+                "calibration_factor": config.get("encodeur", {}).get("calibration_factor"),
             },
-            'simulation': config.get('simulation', False),
+            "simulation": config.get("simulation", False),
         }
     except (OSError, IOError, json.JSONDecodeError, KeyError) as e:
-        return {'error': str(e)}
+        return {"error": str(e)}
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def diagnostic(request):
     """
     Endpoint de diagnostic complet pour la page système.
@@ -321,15 +301,11 @@ def diagnostic(request):
 
     # Contenu brut des fichiers IPC
     ipc_contents = {
-        'motor_status': _read_ipc_file_content(
-            Path(settings.MOTOR_SERVICE_IPC['STATUS_FILE'])
+        "motor_status": _read_ipc_file_content(Path(settings.MOTOR_SERVICE_IPC["STATUS_FILE"])),
+        "encoder_position": _read_ipc_file_content(
+            Path(settings.MOTOR_SERVICE_IPC["ENCODER_FILE"])
         ),
-        'encoder_position': _read_ipc_file_content(
-            Path(settings.MOTOR_SERVICE_IPC['ENCODER_FILE'])
-        ),
-        'motor_command': _read_ipc_file_content(
-            Path(settings.MOTOR_SERVICE_IPC['COMMAND_FILE'])
-        ),
+        "motor_command": _read_ipc_file_content(Path(settings.MOTOR_SERVICE_IPC["COMMAND_FILE"])),
     }
 
     # Fraîcheur des fichiers
@@ -338,19 +314,15 @@ def diagnostic(request):
     # Configuration
     config = _load_config()
 
-    return Response({
-        'timestamp': datetime.now().isoformat(),
-        'overall_healthy': motor['healthy'] and encoder['healthy'],
-        'components': {
-            'motor_service': motor,
-            'encoder_daemon': encoder
-        },
-        'ipc': {
-            'contents': ipc_contents,
-            'freshness': ipc_freshness
-        },
-        'config': config
-    })
+    return Response(
+        {
+            "timestamp": datetime.now().isoformat(),
+            "overall_healthy": motor["healthy"] and encoder["healthy"],
+            "components": {"motor_service": motor, "encoder_daemon": encoder},
+            "ipc": {"contents": ipc_contents, "freshness": ipc_freshness},
+            "config": config,
+        }
+    )
 
 
 # =============================================================================
@@ -379,23 +351,25 @@ RESTART_STATUS_FILE = PROJECT_ROOT / "logs" / "restart_status.json"
 CONFIG_STATUS_FILE = Path("/dev/shm/config_status.json")
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def config_status_view(request):
     """État du noyau de résilience config (chantier A). Lu depuis l'IPC."""
     try:
-        with CONFIG_STATUS_FILE.open(encoding='utf-8') as f:
+        with CONFIG_STATUS_FILE.open(encoding="utf-8") as f:
             return Response(json.load(f))
     except (OSError, json.JSONDecodeError):
-        return Response({
-            'status': 'unchanged',
-            'added': [],
-            'removed': [],
-            'backup_timestamp': None,
-            'message': '',
-        })
+        return Response(
+            {
+                "status": "unchanged",
+                "added": [],
+                "removed": [],
+                "backup_timestamp": None,
+                "message": "",
+            }
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def check_update(request):
     """
     Vérifie si une mise à jour est disponible.
@@ -410,18 +384,17 @@ def check_update(request):
 
     try:
         result = check_for_updates()
-        result['timestamp'] = datetime.now().isoformat()
+        result["timestamp"] = datetime.now().isoformat()
         return Response(result)
     except (subprocess.SubprocessError, OSError, RuntimeError) as e:
         logger.exception("Erreur lors de la vérification des mises à jour")
-        return Response({
-            'error': str(e),
-            'update_available': False,
-            'timestamp': datetime.now().isoformat()
-        }, status=500)
+        return Response(
+            {"error": str(e), "update_available": False, "timestamp": datetime.now().isoformat()},
+            status=500,
+        )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def apply_update(request):
     """
     Lance le script de mise à jour en détaché (via sudo NOPASSWD).
@@ -435,10 +408,9 @@ def apply_update(request):
     from .update_checker import get_local_commit
 
     if not UPDATE_SCRIPT.exists():
-        return Response({
-            'success': False,
-            'error': f'Script introuvable : {UPDATE_SCRIPT}'
-        }, status=500)
+        return Response(
+            {"success": False, "error": f"Script introuvable : {UPDATE_SCRIPT}"}, status=500
+        )
 
     old_commit = get_local_commit()
     logger.info(f"Lancement script MàJ depuis {old_commit}")
@@ -453,51 +425,58 @@ def apply_update(request):
     try:
         # Le script s'auto-détache (nohup en background). Retour immédiat
         # avec "UPDATE_STARTED pid=XXX" via stdout.
-        cmd = ['sudo', '-n', str(UPDATE_SCRIPT)]
+        cmd = ["sudo", "-n", str(UPDATE_SCRIPT)]
         result = subprocess.run(
-            cmd,
-            cwd=str(PROJECT_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=10
+            cmd, cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=10
         )
 
-        output = (result.stdout or '').strip()
-        if result.returncode == 0 and 'UPDATE_STARTED' in output:
+        output = (result.stdout or "").strip()
+        if result.returncode == 0 and "UPDATE_STARTED" in output:
             logger.info(f"Script MàJ lancé : {output}")
-            return Response({
-                'success': True,
-                'message': 'Mise à jour lancée',
-                'old_commit': old_commit,
-                'detach_info': output,
-            })
+            return Response(
+                {
+                    "success": True,
+                    "message": "Mise à jour lancée",
+                    "old_commit": old_commit,
+                    "detach_info": output,
+                }
+            )
 
         # Échec du lancement
-        err = (result.stderr or '').strip() or output or 'Erreur inconnue'
+        err = (result.stderr or "").strip() or output or "Erreur inconnue"
         logger.error(f"Lancement script MàJ échoué (rc={result.returncode}) : {err}")
-        return Response({
-            'success': False,
-            'error': f'Lancement du script échoué : {err}',
-            'old_commit': old_commit,
-        }, status=500)
+        return Response(
+            {
+                "success": False,
+                "error": f"Lancement du script échoué : {err}",
+                "old_commit": old_commit,
+            },
+            status=500,
+        )
 
     except subprocess.TimeoutExpired:
         logger.warning("Timeout au lancement du script MàJ")
-        return Response({
-            'success': False,
-            'error': 'Timeout au lancement du script',
-            'old_commit': old_commit,
-        }, status=500)
+        return Response(
+            {
+                "success": False,
+                "error": "Timeout au lancement du script",
+                "old_commit": old_commit,
+            },
+            status=500,
+        )
     except (subprocess.SubprocessError, OSError) as e:
         logger.exception("Erreur au lancement du script MàJ")
-        return Response({
-            'success': False,
-            'error': str(e),
-            'old_commit': old_commit,
-        }, status=500)
+        return Response(
+            {
+                "success": False,
+                "error": str(e),
+                "old_commit": old_commit,
+            },
+            status=500,
+        )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def update_status(request):
     """
     Renvoie l'état courant de la mise à jour en cours (ou la dernière).
@@ -506,46 +485,54 @@ def update_status(request):
     Si le fichier n'existe pas → aucune MàJ n'a jamais été lancée.
     """
     if not UPDATE_STATUS_FILE.exists():
-        return Response({
-            'phase': 'idle',
-            'step': 0,
-            'total': 5,
-            'message': 'Aucune mise à jour en cours',
-            'success': None,
-            'done': True,
-            'error': None,
-            'timestamp': None,
-        })
+        return Response(
+            {
+                "phase": "idle",
+                "step": 0,
+                "total": 5,
+                "message": "Aucune mise à jour en cours",
+                "success": None,
+                "done": True,
+                "error": None,
+                "timestamp": None,
+            }
+        )
 
     try:
-        with open(UPDATE_STATUS_FILE, 'r', encoding='utf-8') as f:
+        with open(UPDATE_STATUS_FILE, "r", encoding="utf-8") as f:
             content = f.read().strip()
         if not content:
-            return Response({
-                'phase': 'starting',
-                'step': 0,
-                'total': 5,
-                'message': 'Initialisation...',
-                'success': None,
-                'done': False,
-                'error': None,
-                'timestamp': None,
-            })
+            return Response(
+                {
+                    "phase": "starting",
+                    "step": 0,
+                    "total": 5,
+                    "message": "Initialisation...",
+                    "success": None,
+                    "done": False,
+                    "error": None,
+                    "timestamp": None,
+                }
+            )
         return Response(json.loads(content))
     except (OSError, json.JSONDecodeError) as e:
         logger.warning(f"Lecture update_status.json échouée : {e}")
-        return Response({
-            'phase': 'error',
-            'step': 0,
-            'total': 5,
-            'message': 'Fichier de status illisible',
-            'success': False,
-            'done': False,
-            'error': str(e),
-            'timestamp': None,
-        }, status=500)
+        return Response(
+            {
+                "phase": "error",
+                "step": 0,
+                "total": 5,
+                "message": "Fichier de status illisible",
+                "success": False,
+                "done": False,
+                "error": str(e),
+                "timestamp": None,
+            },
+            status=500,
+        )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def restart_services(request):
     """
     Redémarre les services backend (encodeur, moteur, cimier) via sudo.
@@ -561,11 +548,14 @@ def restart_services(request):
     l'état final de chaque service, lu dans logs/restart_status.json.
     """
     if not RESTART_SCRIPT.exists():
-        return Response({
-            'success': False,
-            'error': f'Script introuvable : {RESTART_SCRIPT}',
-            'services': [],
-        }, status=500)
+        return Response(
+            {
+                "success": False,
+                "error": f"Script introuvable : {RESTART_SCRIPT}",
+                "services": [],
+            },
+            status=500,
+        )
 
     logger.info("Redémarrage des services demandé depuis l'interface")
 
@@ -579,7 +569,7 @@ def restart_services(request):
 
     try:
         result = subprocess.run(
-            ['sudo', '-n', str(RESTART_SCRIPT)],
+            ["sudo", "-n", str(RESTART_SCRIPT)],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
@@ -587,38 +577,46 @@ def restart_services(request):
         )
     except subprocess.TimeoutExpired:
         logger.warning("Timeout au redémarrage des services")
-        return Response({
-            'success': False,
-            'error': 'Timeout : le redémarrage a dépassé 60 s',
-            'services': [],
-        }, status=500)
+        return Response(
+            {
+                "success": False,
+                "error": "Timeout : le redémarrage a dépassé 60 s",
+                "services": [],
+            },
+            status=500,
+        )
     except (subprocess.SubprocessError, OSError) as e:
         logger.exception("Erreur au redémarrage des services")
-        return Response({'success': False, 'error': str(e), 'services': []}, status=500)
+        return Response({"success": False, "error": str(e), "services": []}, status=500)
 
     # Le script détaille chaque service ; on s'y fie de préférence au code de
     # retour, qui ne dit pas lequel a échoué.
     report = {}
     try:
-        with open(RESTART_STATUS_FILE, 'r', encoding='utf-8') as f:
+        with open(RESTART_STATUS_FILE, "r", encoding="utf-8") as f:
             report = json.load(f)
     except (OSError, ValueError):
         report = {}
 
-    services = report.get('services', [])
+    services = report.get("services", [])
 
     if result.returncode == 0:
         logger.info("Services redémarrés : %s", services)
-        return Response({
-            'success': True,
-            'message': report.get('message', 'Services redémarrés'),
-            'services': services,
-        })
+        return Response(
+            {
+                "success": True,
+                "message": report.get("message", "Services redémarrés"),
+                "services": services,
+            }
+        )
 
-    err = (result.stderr or '').strip() or report.get('message') or 'Erreur inconnue'
+    err = (result.stderr or "").strip() or report.get("message") or "Erreur inconnue"
     logger.error("Redémarrage échoué (rc=%s) : %s", result.returncode, err)
-    return Response({
-        'success': False,
-        'error': err,
-        'services': services,
-    }, status=500)
+    return Response(
+        {
+            "success": False,
+            "error": err,
+            "services": services,
+        },
+        status=500,
+    )

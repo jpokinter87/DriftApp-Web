@@ -206,9 +206,7 @@ class TestMeridianTransitLog:
         # Le log serait émis si check_and_correct est appelé
         with caplog.at_level(logging.INFO, logger="test.tracking_corrections"):
             if abs(delta) > mixin.LARGE_MOVEMENT_THRESHOLD:
-                mixin.logger.info(
-                    f"meridian_transit | delta={delta:+.1f}"
-                )
+                mixin.logger.info(f"meridian_transit | delta={delta:+.1f}")
         assert "meridian_transit" in caplog.text
 
     def test_no_meridian_log_for_small_delta(self, mixin):

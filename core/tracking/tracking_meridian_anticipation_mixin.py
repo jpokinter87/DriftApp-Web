@@ -63,9 +63,7 @@ class TrackingMeridianAnticipationMixin:
         self._anticipation_anchor_utc = None
         self._anticipation_consumed = False
         self._anticipation_last_scan_at = None
-        self.logger.info(
-            f"meridian_anticipation_init | enabled={self._anticipation_enabled}"
-        )
+        self.logger.info(f"meridian_anticipation_init | enabled={self._anticipation_enabled}")
 
     def _compute_anticipation_schedule(self, log_no_flip: bool = True) -> None:
         """Calcule le schedule pour la fenêtre 1h à venir.
@@ -135,9 +133,7 @@ class TrackingMeridianAnticipationMixin:
             )
 
         except Exception as e:
-            self.logger.warning(
-                f"meridian_anticipation_compute_failed | error={e}"
-            )
+            self.logger.warning(f"meridian_anticipation_compute_failed | error={e}")
             self._anticipation_schedule = None
             self._anticipation_anchor_utc = None
 
@@ -195,8 +191,7 @@ class TrackingMeridianAnticipationMixin:
 
         if direction == 0:
             self.logger.warning(
-                "meridian_anticipation_direction_indeterminate | "
-                "fallback shortest path"
+                "meridian_anticipation_direction_indeterminate | fallback shortest path"
             )
 
         self.logger.info(
@@ -208,34 +203,25 @@ class TrackingMeridianAnticipationMixin:
             self.moteur.rotation_absolue(
                 position_cible_deg=target,
                 position_actuelle_deg=previous_position,
-                vitesse=motor_delay_for(
-                    shortest_angular_distance(previous_position, target)
-                ),
+                vitesse=motor_delay_for(shortest_angular_distance(previous_position, target)),
                 use_ramp=True,
                 force_direction=direction,
             )
             self.position_relative = target % 360
             self.total_corrections += 1
-            self.total_movement += abs(
-                shortest_angular_distance(previous_position, target)
-            )
+            self.total_movement += abs(shortest_angular_distance(previous_position, target))
 
             if getattr(self, "encoder_available", False):
                 try:
                     self._resync_encoder_offset(target)
                 except Exception as e:
-                    self.logger.debug(
-                        f"meridian_anticipation_resync_non_critical | error={e}"
-                    )
+                    self.logger.debug(f"meridian_anticipation_resync_non_critical | error={e}")
 
             self.logger.info(
-                f"meridian_anticipation_slew_done | target={target:.1f} "
-                f"direction={direction:+d}"
+                f"meridian_anticipation_slew_done | target={target:.1f} direction={direction:+d}"
             )
 
         except (RuntimeError, IOError, OSError) as e:
-            self.logger.error(
-                f"meridian_anticipation_slew_failed | error={e}"
-            )
+            self.logger.error(f"meridian_anticipation_slew_failed | error={e}")
         finally:
             self._anticipation_consumed = True

@@ -25,6 +25,7 @@ import pytest
 # Fixtures E2E
 # =============================================================================
 
+
 class HardwareMockEnvironment:
     """
     Environnement de test avec tout le hardware mocké.
@@ -53,9 +54,9 @@ class HardwareMockEnvironment:
 
     def write_command(self, command: Dict[str, Any]):
         """Écrit une commande IPC."""
-        command['id'] = command.get('id', f"cmd_{time.time()}")
-        command['timestamp'] = datetime.now().isoformat()
-        with open(self.command_file, 'w') as f:
+        command["id"] = command.get("id", f"cmd_{time.time()}")
+        command["timestamp"] = datetime.now().isoformat()
+        with open(self.command_file, "w") as f:
             json.dump(command, f)
 
     def read_status(self) -> Dict[str, Any]:
@@ -77,9 +78,9 @@ class HardwareMockEnvironment:
             "raw": int(self.dome_position * 2.844),  # ~1024 steps / 360°
             "calibrated": self.encoder_calibrated,
             "timestamp": datetime.now().isoformat(),
-            "age_ms": 5
+            "age_ms": 5,
         }
-        with open(self.encoder_file, 'w') as f:
+        with open(self.encoder_file, "w") as f:
             json.dump(encoder_data, f)
 
     def simulate_motor_step(self, direction: int, delay: float):
@@ -88,11 +89,9 @@ class HardwareMockEnvironment:
         step_degrees = 360.0 / (200 * 4 * 2230)
         self.dome_position = (self.dome_position + direction * step_degrees) % 360
         self.steps_executed += 1
-        self.action_log.append({
-            'action': 'step',
-            'direction': direction,
-            'position': self.dome_position
-        })
+        self.action_log.append(
+            {"action": "step", "direction": direction, "position": self.dome_position}
+        )
 
     def simulate_rotation(self, degrees: float, delay: float = 0.002):
         """Simule une rotation complète."""
@@ -103,11 +102,9 @@ class HardwareMockEnvironment:
             self.simulate_motor_step(direction, delay)
 
         self.update_encoder()
-        self.action_log.append({
-            'action': 'rotation',
-            'degrees': degrees,
-            'final_position': self.dome_position
-        })
+        self.action_log.append(
+            {"action": "rotation", "degrees": degrees, "final_position": self.dome_position}
+        )
 
 
 @pytest.fixture
@@ -121,7 +118,7 @@ def e2e_env(tmp_path):
 @pytest.fixture
 def mock_moteur_simule():
     """Mock du moteur simulé."""
-    with patch('core.hardware.moteur_simule.MoteurSimule') as mock:
+    with patch("core.hardware.moteur_simule.MoteurSimule") as mock:
         instance = MagicMock()
         instance.position = 0.0
         instance.steps_per_dome_revolution = 200 * 4 * 2230
@@ -132,6 +129,7 @@ def mock_moteur_simule():
 # =============================================================================
 # Tests E2E - Flux GOTO
 # =============================================================================
+
 
 class TestE2EGotoFlow:
     """Tests E2E pour le flux GOTO complet."""
@@ -171,8 +169,8 @@ class TestE2EGotoFlow:
         e2e_env.simulate_rotation(45.0)
 
         assert len(e2e_env.action_log) > 0
-        assert e2e_env.action_log[-1]['action'] == 'rotation'
-        assert e2e_env.action_log[-1]['degrees'] == 45.0
+        assert e2e_env.action_log[-1]["action"] == "rotation"
+        assert e2e_env.action_log[-1]["degrees"] == 45.0
 
 
 class TestE2EGotoWithFeedback:
@@ -221,6 +219,7 @@ class TestE2EGotoWithFeedback:
 # =============================================================================
 # Tests E2E - Flux Tracking
 # =============================================================================
+
 
 class TestE2ETrackingFlow:
     """Tests E2E pour le flux de suivi complet."""
@@ -275,18 +274,18 @@ class TestE2ETrackingFlow:
         """Le tracking change de mode selon l'altitude."""
         # Mode normal (altitude < 68°)
         altitude = 45.0
-        mode = 'normal' if altitude < 68 else 'critical' if altitude < 75 else 'continuous'
-        assert mode == 'normal'
+        mode = "normal" if altitude < 68 else "critical" if altitude < 75 else "continuous"
+        assert mode == "normal"
 
         # Mode critique (68° ≤ altitude < 75°)
         altitude = 70.0
-        mode = 'normal' if altitude < 68 else 'critical' if altitude < 75 else 'continuous'
-        assert mode == 'critical'
+        mode = "normal" if altitude < 68 else "critical" if altitude < 75 else "continuous"
+        assert mode == "critical"
 
         # Mode continu (altitude ≥ 75°)
         altitude = 80.0
-        mode = 'normal' if altitude < 68 else 'critical' if altitude < 75 else 'continuous'
-        assert mode == 'continuous'
+        mode = "normal" if altitude < 68 else "critical" if altitude < 75 else "continuous"
+        assert mode == "continuous"
 
 
 class TestE2ETrackingCorrections:
@@ -325,6 +324,7 @@ class TestE2ETrackingCorrections:
 # =============================================================================
 # Tests E2E - Flux JOG
 # =============================================================================
+
 
 class TestE2EJogFlow:
     """Tests E2E pour les commandes JOG manuelles."""
@@ -368,6 +368,7 @@ class TestE2EJogFlow:
 # =============================================================================
 # Tests E2E - Récupération d'erreurs
 # =============================================================================
+
 
 class TestE2EErrorRecovery:
     """Tests E2E pour la récupération d'erreurs hardware."""
@@ -426,40 +427,34 @@ class TestE2EErrorRecovery:
 # Tests E2E - Intégration IPC
 # =============================================================================
 
+
 class TestE2EIpcIntegration:
     """Tests E2E pour l'intégration IPC complète."""
 
     def test_command_to_status_cycle(self, e2e_env):
         """Cycle complet commande → exécution → status."""
         # 1. Écriture de la commande
-        e2e_env.write_command({
-            'type': 'GOTO',
-            'target': 180.0
-        })
+        e2e_env.write_command({"type": "GOTO", "target": 180.0})
 
         # 2. Lecture de la commande
         assert e2e_env.command_file.exists()
         with open(e2e_env.command_file) as f:
             cmd = json.load(f)
-        assert cmd['type'] == 'GOTO'
-        assert cmd['target'] == 180.0
+        assert cmd["type"] == "GOTO"
+        assert cmd["target"] == 180.0
 
         # 3. Exécution (simulée)
         e2e_env.simulate_rotation(180.0 - e2e_env.dome_position)
 
         # 4. Écriture du status
-        status = {
-            'state': 'IDLE',
-            'position': e2e_env.dome_position,
-            'last_command': cmd['id']
-        }
-        with open(e2e_env.status_file, 'w') as f:
+        status = {"state": "IDLE", "position": e2e_env.dome_position, "last_command": cmd["id"]}
+        with open(e2e_env.status_file, "w") as f:
             json.dump(status, f)
 
         # 5. Vérification du status
         final_status = e2e_env.read_status()
-        assert final_status['state'] == 'IDLE'
-        assert final_status['position'] == pytest.approx(180.0, abs=1.0)
+        assert final_status["state"] == "IDLE"
+        assert final_status["position"] == pytest.approx(180.0, abs=1.0)
 
     def test_rapid_command_sequence(self, e2e_env):
         """Séquence rapide de commandes."""
@@ -467,11 +462,7 @@ class TestE2EIpcIntegration:
 
         for i in range(5):
             cmd_id = f"rapid_{i}"
-            e2e_env.write_command({
-                'type': 'JOG',
-                'direction': 1,
-                'id': cmd_id
-            })
+            e2e_env.write_command({"type": "JOG", "direction": 1, "id": cmd_id})
 
             # Simule l'exécution
             e2e_env.simulate_rotation(1.0)
@@ -484,6 +475,7 @@ class TestE2EIpcIntegration:
 # =============================================================================
 # Tests E2E - Performance
 # =============================================================================
+
 
 class TestE2EPerformance:
     """Tests E2E pour la performance du système."""
@@ -509,8 +501,8 @@ class TestE2EPerformance:
         e2e_env.simulate_rotation(2.0)
 
         # Vérifie les rotations (pas les steps individuels)
-        rotations = [a for a in e2e_env.action_log if a['action'] == 'rotation']
+        rotations = [a for a in e2e_env.action_log if a["action"] == "rotation"]
         assert len(rotations) == 3
-        assert rotations[0]['degrees'] == 10.0
-        assert rotations[1]['degrees'] == -5.0
-        assert rotations[2]['degrees'] == 2.0
+        assert rotations[0]["degrees"] == 10.0
+        assert rotations[1]["degrees"] == -5.0
+        assert rotations[2]["degrees"] == 2.0

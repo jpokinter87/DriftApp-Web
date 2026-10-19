@@ -18,6 +18,7 @@ from core.hardware.power_switch import (
 # Helpers
 # ----------------------------------------------------------------------
 
+
 def make_mock_urlopen(status_code: int = 200, body: bytes = b'{"was_on":false}'):
     """Construit un mock urlopen qui retourne une reponse context manager."""
     response = MagicMock()
@@ -31,6 +32,7 @@ def make_mock_urlopen(status_code: int = 200, body: bytes = b'{"was_on":false}')
 # ----------------------------------------------------------------------
 # NoopPowerSwitch
 # ----------------------------------------------------------------------
+
 
 class TestNoopPowerSwitch:
     def test_initial_state_off(self):
@@ -59,6 +61,7 @@ class TestNoopPowerSwitch:
 # ShellyPowerSwitch — URL building (RPC Gen 2)
 # ----------------------------------------------------------------------
 
+
 class TestShellyRpc:
     def test_turn_on_url_format(self):
         mock = make_mock_urlopen()
@@ -85,6 +88,7 @@ class TestShellyRpc:
 # ShellyPowerSwitch — URL building (legacy Gen 1)
 # ----------------------------------------------------------------------
 
+
 class TestShellyLegacy:
     def test_turn_on_url_format(self):
         mock = make_mock_urlopen()
@@ -108,6 +112,7 @@ class TestShellyLegacy:
 # ----------------------------------------------------------------------
 # ShellyPowerSwitch — Erreurs reseau
 # ----------------------------------------------------------------------
+
 
 class TestShellyErrors:
     def test_http_500_raises_power_switch_error(self):
@@ -133,6 +138,7 @@ class TestShellyErrors:
 # ShellyPowerSwitch — Timeout
 # ----------------------------------------------------------------------
 
+
 def test_timeout_passed_to_urlopen():
     mock = make_mock_urlopen()
     sw = ShellyPowerSwitch("192.168.1.51", timeout_s=5.0, urlopen=mock)
@@ -152,6 +158,7 @@ def test_default_timeout():
 # ----------------------------------------------------------------------
 # Properties
 # ----------------------------------------------------------------------
+
 
 def test_host_property():
     sw = ShellyPowerSwitch("192.168.1.51", urlopen=make_mock_urlopen())

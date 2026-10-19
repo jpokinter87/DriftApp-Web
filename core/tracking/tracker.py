@@ -108,6 +108,7 @@ class TrackingSession(
         # Anticipation méridien (v5.9 P2 Plan 02) — rétro-compat si config absente
         if meridian_anticipation_config is None:
             from core.config.config_loader import MeridianAnticipationConfig
+
             meridian_anticipation_config = MeridianAnticipationConfig()
         self._init_anticipation(meridian_anticipation_config)
 
@@ -311,7 +312,7 @@ class TrackingSession(
 
     def _check_session_milestone(self):
         """Émet un log session_health toutes les 5 minutes pendant le tracking."""
-        if not self.running or not hasattr(self, '_last_milestone_time'):
+        if not self.running or not hasattr(self, "_last_milestone_time"):
             return
 
         now = datetime.now()
@@ -319,9 +320,9 @@ class TrackingSession(
         if elapsed < 300:  # 5 minutes
             return
 
-        start_time = self.drift_tracking.get('start_time', now)
+        start_time = self.drift_tracking.get("start_time", now)
         duration_min = int((now - start_time).total_seconds() / 60)
-        enc_status = 'ok' if self.encoder_available else 'lost'
+        enc_status = "ok" if self.encoder_available else "lost"
 
         self.logger.info(
             f"session_health | object={self.objet} duration_min={duration_min} "
@@ -369,9 +370,7 @@ class TrackingSession(
 
         remaining = self._calculate_remaining_time(now)
 
-        return self._build_status_dict(
-            azimut, altitude, position_cible, remaining, infos
-        )
+        return self._build_status_dict(azimut, altitude, position_cible, remaining, infos)
 
     def _calculate_remaining_time(self, now: datetime) -> int:
         """Calcule le temps restant avant prochaine correction."""

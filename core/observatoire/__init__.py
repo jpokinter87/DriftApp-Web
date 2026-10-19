@@ -3,4 +3,4 @@
 from core.observatoire.calculations import AstronomicalCalculations
 from core.observatoire.ephemerides import PlanetaryEphemerides
 
-__all__ = ['AstronomicalCalculations', 'PlanetaryEphemerides']
+__all__ = ["AstronomicalCalculations", "PlanetaryEphemerides"]

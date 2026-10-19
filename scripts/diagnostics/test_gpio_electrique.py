@@ -16,7 +16,8 @@ import sys
 import time
 
 STEP_PIN = 18  # GPIO 18 = Pin physique 12
-DIR_PIN = 17   # GPIO 17 = Pin physique 11
+DIR_PIN = 17  # GPIO 17 = Pin physique 11
+
 
 def test_gpio():
     print("=" * 60)
@@ -34,6 +35,7 @@ def test_gpio():
     # Essayer d'importer lgpio
     try:
         import lgpio
+
         print("lgpio importe avec succes")
     except ImportError:
         print("ERREUR: lgpio non disponible!")
@@ -45,7 +47,8 @@ def test_gpio():
     print("-" * 60)
     print("Chips GPIO disponibles:")
     import os
-    chips = sorted([f for f in os.listdir('/dev') if f.startswith('gpiochip')])
+
+    chips = sorted([f for f in os.listdir("/dev") if f.startswith("gpiochip")])
     for chip in chips:
         print(f"  /dev/{chip}")
 
@@ -137,10 +140,10 @@ def test_gpio():
 
     for i in range(10):
         lgpio.gpio_write(h, STEP_PIN, 1)
-        print(f"  Cycle {i+1}/10: HIGH", flush=True)
+        print(f"  Cycle {i + 1}/10: HIGH", flush=True)
         time.sleep(0.5)
         lgpio.gpio_write(h, STEP_PIN, 0)
-        print(f"  Cycle {i+1}/10: LOW", flush=True)
+        print(f"  Cycle {i + 1}/10: LOW", flush=True)
         time.sleep(0.5)
 
     print()
@@ -163,7 +166,7 @@ def test_gpio():
     elapsed = time.time() - start
 
     print(f"  1000 pulses en {elapsed:.3f}s")
-    print(f"  Frequence: {1000/elapsed:.0f} Hz")
+    print(f"  Frequence: {1000 / elapsed:.0f} Hz")
     print()
 
     # Nettoyage

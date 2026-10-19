@@ -87,14 +87,16 @@ def main():
 
     # ── Phase 0 ───────────────────────────────────────────────
     pdf.h1("PHASE 0 — État des lieux (à recoller tel quel)")
-    pdf.code([
-        "ssh slenk@<TON-PI>",
-        "cd ~/DriftApp",
-        'echo "--- version courante ---"; grep \'^version\' pyproject.toml',
-        'echo "--- branche + propreté ---"; git status -sb | head -20',
-        'echo "--- services ---"; sudo systemctl is-active ems22d motor_service cimier_service driftapp_web',
-        'echo "--- unit cimier présente ? ---"; systemctl list-unit-files | grep cimier_service || echo "PAS de cimier_service"',
-    ])
+    pdf.code(
+        [
+            "ssh slenk@<TON-PI>",
+            "cd ~/DriftApp",
+            "echo \"--- version courante ---\"; grep '^version' pyproject.toml",
+            'echo "--- branche + propreté ---"; git status -sb | head -20',
+            'echo "--- services ---"; sudo systemctl is-active ems22d motor_service cimier_service driftapp_web',
+            'echo "--- unit cimier présente ? ---"; systemctl list-unit-files | grep cimier_service || echo "PAS de cimier_service"',
+        ]
+    )
     pdf.bold_bullet(
         "Attendu / à renvoyer :",
         "la version affichée, l'état git (propre ou fichiers modifiés listés), les 4 "
@@ -111,11 +113,13 @@ def main():
     pdf.h1("PHASE A — Mise à jour logicielle 6.7.0 (cimier OFF)")
 
     pdf.h2("A1. Sauvegarde de la config actuelle (indispensable — réutilisée en Phase B)")
-    pdf.code([
-        "cd ~/DriftApp",
-        "cp data/config.json ~/config_AVANT_6.7.0_$(date +%F).json",
-        'echo "Backup OK :"; ls -la ~/config_AVANT_6.7.0_*.json',
-    ])
+    pdf.code(
+        [
+            "cd ~/DriftApp",
+            "cp data/config.json ~/config_AVANT_6.7.0_$(date +%F).json",
+            'echo "Backup OK :"; ls -la ~/config_AVANT_6.7.0_*.json',
+        ]
+    )
     pdf.bold_bullet("Attendu :", "le fichier backup listé.")
 
     pdf.h2("A2. Récupération du code 6.7.0 (JP confirme la voie après la Phase 0)")
@@ -125,14 +129,16 @@ def main():
         "demande quoi garder. → suivre l'assistant, garder le local pour site/moteur/encodeur.",
     )
     pdf.bold_bullet("Voie 2 (manuelle, si l'OTA refuse / Pi pas encore en 6.6.2) :", "")
-    pdf.code([
-        "cd ~/DriftApp",
-        "git checkout -- scripts/update_driftapp.sh   # déblocage one-shot OTA (bug 6.6.2)",
-        "git fetch origin",
-        'git stash push -m "config-terrain-avant-6.7.0"   # écarte les modifs locales le temps du pull',
-        "git pull --ff-only origin main",
-        "uv sync --frozen",
-    ])
+    pdf.code(
+        [
+            "cd ~/DriftApp",
+            "git checkout -- scripts/update_driftapp.sh   # déblocage one-shot OTA (bug 6.6.2)",
+            "git fetch origin",
+            'git stash push -m "config-terrain-avant-6.7.0"   # écarte les modifs locales le temps du pull',
+            "git pull --ff-only origin main",
+            "uv sync --frozen",
+        ]
+    )
     pdf.bold_bullet(
         "Attendu :",
         "Updating … 6.7.0, uv sync sans erreur. Si git pull refuse encore (« local "
@@ -140,18 +146,22 @@ def main():
     )
 
     pdf.h2("A3. Vérifier la version + redémarrer les services")
-    pdf.code([
-        "grep '^version' pyproject.toml          # doit afficher 6.7.0",
-        "sudo systemctl restart ems22d motor_service driftapp_web",
-        "sudo systemctl is-active ems22d motor_service driftapp_web",
-    ])
+    pdf.code(
+        [
+            "grep '^version' pyproject.toml          # doit afficher 6.7.0",
+            "sudo systemctl restart ems22d motor_service driftapp_web",
+            "sudo systemctl is-active ems22d motor_service driftapp_web",
+        ]
+    )
     pdf.bold_bullet("Attendu :", 'version = "6.7.0", trois active.')
 
     pdf.h2("A4. Vérifier que le cœur fonctionne toujours (cimier encore OFF)")
-    pdf.code([
-        "cat /dev/shm/motor_status.json | python3 -m json.tool | head -15",
-        "curl -s http://localhost:8000/api/health/ | head",
-    ])
+    pdf.code(
+        [
+            "cat /dev/shm/motor_status.json | python3 -m json.tool | head -15",
+            "curl -s http://localhost:8000/api/health/ | head",
+        ]
+    )
     pdf.bold_bullet(
         "Attendu :",
         "motor_status.json frais (status idle/tracking), health healthy. Dans le "
@@ -169,13 +179,15 @@ def main():
     pdf.body("(seulement si le matériel Shelly V3 est installé et alimenté)")
 
     pdf.h2("B1. Vérifier d'abord que les 4 Shelly répondent (avant de toucher la config)")
-    pdf.code([
-        'for ip in 83 84 85 86; do echo -n "192.168.1.$ip : "; \\',
-        "  curl -s -m 3 http://192.168.1.$ip/status >/dev/null && echo OK || echo INJOIGNABLE; done",
-        'echo "--- Uni+ entrées brutes ---"',
-        "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=1   # HAUT",
-        "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=0   # BAS",
-    ])
+    pdf.code(
+        [
+            'for ip in 83 84 85 86; do echo -n "192.168.1.$ip : "; \\',
+            "  curl -s -m 3 http://192.168.1.$ip/status >/dev/null && echo OK || echo INJOIGNABLE; done",
+            'echo "--- Uni+ entrées brutes ---"',
+            "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=1   # HAUT",
+            "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=0   # BAS",
+        ]
+    )
     pdf.bold_bullet(
         "Attendu :",
         'les 4 OK, et l\'Uni+ renvoie du JSON {"id":…, "state":true/false}. Un INJOIGNABLE '
@@ -185,63 +197,69 @@ def main():
     pdf.h2("B2. Éditer la section cimier de data/config.json")
     pdf.code(["nano data/config.json"])
     pdf.body(
-        "Remplacer uniquement le bloc \"cimier\": { … } par celui-ci (laisser intactes les "
+        'Remplacer uniquement le bloc "cimier": { … } par celui-ci (laisser intactes les '
         "sections site, moteur, encodeur, motor_driver) :"
     )
-    pdf.code([
-        '"cimier": {',
-        '  "enabled": true,',
-        '  "cycle_timeout_s": 90.0,',
-        '  "post_off_quiet_s": 10.0,',
-        '  "shelly_settle_s": 2.0,',
-        '  "verbose_logging": true,',
-        '  "switch_reader": {',
-        '    "type": "shelly_uni",',
-        '    "host": "192.168.1.84",',
-        '    "api": "rpc",',
-        '    "open_input_id": 1,',
-        '    "closed_input_id": 0,',
-        '    "invert": true,',
-        '    "timeout_s": 3.0',
-        '  },',
-        '  "power_switch": { "type": "shelly_gen1", "host": "192.168.1.83", "switch_id": 0 },',
-        '  "weather_provider": { "type": "noop" },',
-        '  "automation": { "mode": "manual" },',
-        '  "motor_shelly": {',
-        '    "host_motor": "192.168.1.85",',
-        '    "host_dir": "192.168.1.86",',
-        '    "relay_motor": 0,',
-        '    "relay_dir": 0,',
-        '    "open_dir_state": true,',
-        '    "motor_on_relay_state": false,',
-        '    "api": "legacy",',
-        '    "timer_safety_sec": 90.0',
-        '  }',
-        '}',
-    ])
+    pdf.code(
+        [
+            '"cimier": {',
+            '  "enabled": true,',
+            '  "cycle_timeout_s": 90.0,',
+            '  "post_off_quiet_s": 10.0,',
+            '  "shelly_settle_s": 2.0,',
+            '  "verbose_logging": true,',
+            '  "switch_reader": {',
+            '    "type": "shelly_uni",',
+            '    "host": "192.168.1.84",',
+            '    "api": "rpc",',
+            '    "open_input_id": 1,',
+            '    "closed_input_id": 0,',
+            '    "invert": true,',
+            '    "timeout_s": 3.0',
+            "  },",
+            '  "power_switch": { "type": "shelly_gen1", "host": "192.168.1.83", "switch_id": 0 },',
+            '  "weather_provider": { "type": "noop" },',
+            '  "automation": { "mode": "manual" },',
+            '  "motor_shelly": {',
+            '    "host_motor": "192.168.1.85",',
+            '    "host_dir": "192.168.1.86",',
+            '    "relay_motor": 0,',
+            '    "relay_dir": 0,',
+            '    "open_dir_state": true,',
+            '    "motor_on_relay_state": false,',
+            '    "api": "legacy",',
+            '    "timer_safety_sec": 90.0',
+            "  }",
+            "}",
+        ]
+    )
     pdf.warning_box(
-        "Note : automation.mode = \"manual\" et verbose_logging = true exprès pour la "
+        'Note : automation.mode = "manual" et verbose_logging = true exprès pour la '
         "première validation supervisée de l'install — pas d'ouverture/fermeture "
         "automatique le temps de vérifier, et logs détaillés. On repassera en full après (étape C5)."
     )
 
     pdf.h2("B3. Vérifier que le JSON est valide AVANT de redémarrer")
-    pdf.code([
-        "python3 -m json.tool data/config.json >/dev/null \\",
-        '  && echo "JSON OK" || echo "JSON CASSE — ne pas redemarrer"',
-    ])
+    pdf.code(
+        [
+            "python3 -m json.tool data/config.json >/dev/null \\",
+            '  && echo "JSON OK" || echo "JSON CASSE — ne pas redemarrer"',
+        ]
+    )
     pdf.bold_bullet(
         "Attendu :",
         "JSON OK. Si CASSE → rouvrir nano, corriger (ou restaurer le backup A1 et recommencer).",
     )
 
     pdf.h2("B4. Redémarrer le cimier et vérifier qu'il démarre proprement")
-    pdf.code([
-        "sudo systemctl restart cimier_service",
-        "sudo systemctl is-active cimier_service",
-        "sudo journalctl -u cimier_service -n 20 --no-pager",
-        "cat /dev/shm/cimier_status.json | python3 -m json.tool",
-    ])
+    pdf.code(
+        [
+            "sudo systemctl restart cimier_service",
+            "sudo systemctl is-active cimier_service",
+            "sudo journalctl -u cimier_service -n 20 --no-pager",
+            "cat /dev/shm/cimier_status.json | python3 -m json.tool",
+        ]
+    )
     pdf.bold_bullet(
         "Attendu :",
         "active, une ligne cimier_event=started switch_reader=192.168.1.84 …, et "
@@ -262,13 +280,13 @@ def main():
     )
 
     pdf.h2("C1. Convention des butées (switch_reader.invert) — SANS moteur")
-    pdf.body(
-        "Actionner à la main le microswitch HAUT, le maintenir, et lire :"
+    pdf.body("Actionner à la main le microswitch HAUT, le maintenir, et lire :")
+    pdf.code(
+        [
+            "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=1; echo",
+            'cat /dev/shm/cimier_status.json | python3 -m json.tool | grep -E "open_switch|closed_switch"',
+        ]
     )
-    pdf.code([
-        "curl -s http://192.168.1.84/rpc/Input.GetStatus?id=1; echo",
-        "cat /dev/shm/cimier_status.json | python3 -m json.tool | grep -E \"open_switch|closed_switch\"",
-    ])
     pdf.body(
         "Puis relâcher, et faire pareil avec le microswitch BAS (id=0, regarder closed_switch)."
     )
@@ -278,16 +296,14 @@ def main():
     )
     pdf.bullet("OK si ça correspond → invert est bon.")
     pdf.bullet(
-        "Si c'est inversé → repasser \"invert\": false (B2), json.tool + restart cimier_service, refaire C1."
+        'Si c\'est inversé → repasser "invert": false (B2), json.tool + restart cimier_service, refaire C1.'
     )
 
     pdf.h2("C2. Convention du sens (open_dir_state)")
-    pdf.body(
-        "Lancer une OUVERTURE depuis le dashboard (« Ouvrir cimier »), prêt à STOPPER."
-    )
+    pdf.body("Lancer une OUVERTURE depuis le dashboard (« Ouvrir cimier »), prêt à STOPPER.")
     pdf.bold_bullet("Attendu :", "le cimier part dans le sens de l'ouverture.")
     pdf.bullet(
-        "S'il part en fermeture → STOP, inverser \"open_dir_state\": false (B2), restart, refaire C2."
+        'S\'il part en fermeture → STOP, inverser "open_dir_state": false (B2), restart, refaire C2.'
     )
 
     pdf.h2("C3. Convention marche/arrêt moteur (motor_on_relay_state)")
@@ -297,15 +313,13 @@ def main():
         "le moteur tourne pendant le cycle puis s'arrête à la butée (ou au STOP).",
     )
     pdf.bullet(
-        "\"motor_on_relay_state\": false est la convention validée terrain (17-18/06) : le moteur "
+        '"motor_on_relay_state": false est la convention validée terrain (17-18/06) : le moteur '
         "doit tourner pendant le cycle. S'il reste à l'arrêt ou tourne en continu → essayer "
-        "\"motor_on_relay_state\": true (B2), restart, refaire."
+        '"motor_on_relay_state": true (B2), restart, refaire.'
     )
 
     pdf.h2("C4. Cycle complet supervisé")
-    pdf.body(
-        "Une fois C1–C3 OK : lancer une ouverture puis une fermeture complètes, à vue."
-    )
+    pdf.body("Une fois C1–C3 OK : lancer une ouverture puis une fermeture complètes, à vue.")
     pdf.code(["sudo journalctl -u cimier_service -f"])
     pdf.bold_bullet(
         "Attendu :",
@@ -320,7 +334,7 @@ def main():
 
     pdf.h2("C5. Bascule en automatique (après validation)")
     pdf.body(
-        "Quand tout est validé, repasser automation.mode en \"full\" (et éventuellement "
+        'Quand tout est validé, repasser automation.mode en "full" (et éventuellement '
         "verbose_logging en false) dans data/config.json, json.tool + restart cimier_service."
     )
 

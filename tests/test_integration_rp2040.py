@@ -18,28 +18,45 @@ from core.hardware.serial_simulator import SerialSimulator
 # FIXTURES
 # ============================================================================
 
+
 @pytest.fixture
 def rp2040_config_file(tmp_path):
     """Config temporaire avec motor_driver type=rp2040."""
     config_data = {
-        "site": {"latitude": 44.15, "longitude": 5.23, "altitude": 800,
-                 "nom": "Test Obs", "fuseau": "Europe/Paris"},
+        "site": {
+            "latitude": 44.15,
+            "longitude": 5.23,
+            "altitude": 800,
+            "nom": "Test Obs",
+            "fuseau": "Europe/Paris",
+        },
         "motor_driver": {
             "type": "rp2040",
             "serial": {"port": "/dev/ttyACM0", "baudrate": 115200, "timeout": 2.0},
         },
-        "moteur": {"gpio_pins": {"dir": 17, "step": 18},
-                   "steps_per_revolution": 200, "microsteps": 4,
-                   "gear_ratio": 2230, "steps_correction_factor": 1.08849,
-                   "motor_delay_base": 0.002},
-        "suivi": {"seuil_correction_deg": 0.5,
-                  "intervalle_verification_sec": 60,
-                  "abaque_file": "data/Loi_coupole.xlsx"},
-        "encodeur": {"enabled": False, "spi": {"bus": 0, "device": 0,
-                     "speed_hz": 1000000, "mode": 0},
-                     "mecanique": {"wheel_diameter_mm": 50,
-                     "ring_diameter_mm": 2303, "counts_per_rev": 1024},
-                     "calibration_factor": 0.01},
+        "moteur": {
+            "gpio_pins": {"dir": 17, "step": 18},
+            "steps_per_revolution": 200,
+            "microsteps": 4,
+            "gear_ratio": 2230,
+            "steps_correction_factor": 1.08849,
+            "motor_delay_base": 0.002,
+        },
+        "suivi": {
+            "seuil_correction_deg": 0.5,
+            "intervalle_verification_sec": 60,
+            "abaque_file": "data/Loi_coupole.xlsx",
+        },
+        "encodeur": {
+            "enabled": False,
+            "spi": {"bus": 0, "device": 0, "speed_hz": 1000000, "mode": 0},
+            "mecanique": {
+                "wheel_diameter_mm": 50,
+                "ring_diameter_mm": 2303,
+                "counts_per_rev": 1024,
+            },
+            "calibration_factor": 0.01,
+        },
     }
     config_file = tmp_path / "config.json"
     config_file.write_text(json.dumps(config_data))
@@ -50,20 +67,36 @@ def rp2040_config_file(tmp_path):
 def config_no_motor_driver(tmp_path):
     """Config temporaire sans section motor_driver (defaut rp2040)."""
     config_data = {
-        "site": {"latitude": 44.15, "longitude": 5.23, "altitude": 800,
-                 "nom": "Test Obs", "fuseau": "Europe/Paris"},
-        "moteur": {"gpio_pins": {"dir": 17, "step": 18},
-                   "steps_per_revolution": 200, "microsteps": 4,
-                   "gear_ratio": 2230, "steps_correction_factor": 1.08849,
-                   "motor_delay_base": 0.002},
-        "suivi": {"seuil_correction_deg": 0.5,
-                  "intervalle_verification_sec": 60,
-                  "abaque_file": "data/Loi_coupole.xlsx"},
-        "encodeur": {"enabled": False, "spi": {"bus": 0, "device": 0,
-                     "speed_hz": 1000000, "mode": 0},
-                     "mecanique": {"wheel_diameter_mm": 50,
-                     "ring_diameter_mm": 2303, "counts_per_rev": 1024},
-                     "calibration_factor": 0.01},
+        "site": {
+            "latitude": 44.15,
+            "longitude": 5.23,
+            "altitude": 800,
+            "nom": "Test Obs",
+            "fuseau": "Europe/Paris",
+        },
+        "moteur": {
+            "gpio_pins": {"dir": 17, "step": 18},
+            "steps_per_revolution": 200,
+            "microsteps": 4,
+            "gear_ratio": 2230,
+            "steps_correction_factor": 1.08849,
+            "motor_delay_base": 0.002,
+        },
+        "suivi": {
+            "seuil_correction_deg": 0.5,
+            "intervalle_verification_sec": 60,
+            "abaque_file": "data/Loi_coupole.xlsx",
+        },
+        "encodeur": {
+            "enabled": False,
+            "spi": {"bus": 0, "device": 0, "speed_hz": 1000000, "mode": 0},
+            "mecanique": {
+                "wheel_diameter_mm": 50,
+                "ring_diameter_mm": 2303,
+                "counts_per_rev": 1024,
+            },
+            "calibration_factor": 0.01,
+        },
     }
     config_file = tmp_path / "config.json"
     config_file.write_text(json.dumps(config_data))
@@ -73,6 +106,7 @@ def config_no_motor_driver(tmp_path):
 # ============================================================================
 # TESTS FLUX COMPLET
 # ============================================================================
+
 
 class TestFullFlowRP2040:
     """Tests du flux complet config → MoteurRP2040 → serie."""
@@ -168,6 +202,7 @@ class TestFullFlowRP2040:
 # Ces tests necessitent astropy (via TrackingHandler)
 try:
     import astropy  # noqa: F401
+
     HAS_ASTROPY = True
 except ImportError:
     HAS_ASTROPY = False
@@ -183,20 +218,31 @@ class TestMotorServiceRP2040Integration:
         from services.motor_service import MotorService
 
         mock_hw_info = {
-            'raspberry_pi': False, 'rpi_model': None,
-            'gpio': False, 'gpio_error': 'Non teste',
-            'encoder_daemon': False, 'encoder_error': 'Non teste',
-            'encoder_position': None, 'daemon_process': False,
-            'motor': False, 'motor_error': 'Non teste',
-            'spi_available': False, 'spi_devices': [],
-            'platform': 'Linux-test', 'machine': 'x86_64', 'system': 'Linux',
+            "raspberry_pi": False,
+            "rpi_model": None,
+            "gpio": False,
+            "gpio_error": "Non teste",
+            "encoder_daemon": False,
+            "encoder_error": "Non teste",
+            "encoder_position": None,
+            "daemon_process": False,
+            "motor": False,
+            "motor_error": "Non teste",
+            "spi_available": False,
+            "spi_devices": [],
+            "platform": "Linux-test",
+            "machine": "x86_64",
+            "system": "Linux",
         }
 
-        with patch('services.motor_service.HardwareDetector.detect_hardware',
-                   return_value=(False, mock_hw_info)), \
-             patch('services.motor_service.ConfigLoader') as mock_loader, \
-             patch('services.motor_service.IpcManager'):
-
+        with (
+            patch(
+                "services.motor_service.HardwareDetector.detect_hardware",
+                return_value=(False, mock_hw_info),
+            ),
+            patch("services.motor_service.ConfigLoader") as mock_loader,
+            patch("services.motor_service.IpcManager"),
+        ):
             # Charger la vraie config depuis le fichier temporaire
             real_config = ConfigLoader(rp2040_config_file).load()
             mock_loader.return_value.load.return_value = real_config
@@ -208,16 +254,17 @@ class TestMotorServiceRP2040Integration:
 
             # Verifier que le feedback_controller est un FeedbackController (pas self.moteur)
             from core.hardware.feedback_controller import FeedbackController
+
             assert isinstance(service.feedback_controller, FeedbackController)
 
             # Cleanup
             service.moteur.nettoyer()
 
 
-
 # ============================================================================
 # TESTS FEEDBACK CONTROLLER INTEGRATION
 # ============================================================================
+
 
 class TestFeedbackControllerRP2040:
     """Tests integration FeedbackController avec MoteurRP2040."""
@@ -233,8 +280,7 @@ class TestFeedbackControllerRP2040:
 
         # Patcher le daemon reader
         mock_reader = MagicMock()
-        with patch('core.hardware.moteur_rp2040.get_daemon_reader',
-                   return_value=mock_reader):
+        with patch("core.hardware.moteur_rp2040.get_daemon_reader", return_value=mock_reader):
             controller = moteur.get_feedback_controller()
             assert isinstance(controller, FeedbackController)
 

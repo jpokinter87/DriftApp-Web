@@ -41,9 +41,7 @@ def moteur():
 def calc(config):
     """Calculateur astronomique avec config site réelle."""
     return AstronomicalCalculations(
-        config.site.latitude,
-        config.site.longitude,
-        config.site.tz_offset
+        config.site.latitude, config.site.longitude, config.site.tz_offset
     )
 
 
@@ -81,6 +79,7 @@ def session(moteur, calc, tracker_logger, abaque_file, config):
 # Construction
 # =============================================================================
 
+
 class TestTrackingSessionConstruction:
     def test_construction(self, session):
         """TrackingSession se construit correctement."""
@@ -99,7 +98,7 @@ class TestTrackingSessionConstruction:
 
     def test_single_mode_name(self, session):
         """v5.10 : MODE_NAME unique."""
-        assert session.MODE_NAME == 'continuous'
+        assert session.MODE_NAME == "continuous"
 
     def test_statistics_initialized(self, session):
         """Les statistiques sont initialisées à zéro."""
@@ -114,7 +113,9 @@ class TestTrackingSessionConstruction:
         """Abaque manquant → RuntimeError."""
         with pytest.raises(RuntimeError):
             TrackingSession(
-                moteur=moteur, calc=calc, logger=tracker_logger,
+                moteur=moteur,
+                calc=calc,
+                logger=tracker_logger,
                 abaque_file="/nonexistent/file.xlsx",
                 motor_config=config.motor,
                 encoder_config=config.encoder,
@@ -124,7 +125,9 @@ class TestTrackingSessionConstruction:
         """abaque_file=None → ValueError."""
         with pytest.raises(ValueError):
             TrackingSession(
-                moteur=moteur, calc=calc, logger=tracker_logger,
+                moteur=moteur,
+                calc=calc,
+                logger=tracker_logger,
                 abaque_file=None,
                 motor_config=config.motor,
                 encoder_config=config.encoder,
@@ -135,21 +138,23 @@ class TestTrackingSessionConstruction:
 # get_status
 # =============================================================================
 
+
 class TestGetStatus:
     def test_status_idle(self, session):
         """get_status quand pas de tracking → running=False."""
         status = session.get_status()
-        assert status['running'] is False
+        assert status["running"] is False
 
     def test_status_idle_minimal_keys(self, session):
         """Status idle retourne au minimum 'running'."""
         status = session.get_status()
-        assert 'running' in status
+        assert "running" in status
 
 
 # =============================================================================
 # Calcul position coupole (abaque)
 # =============================================================================
+
 
 class TestCalculateTargetPosition:
     def test_position_coupole_valid(self, session):
@@ -157,7 +162,7 @@ class TestCalculateTargetPosition:
         pos, infos = session._calculate_target_position(180.0, 45.0)
         assert isinstance(pos, float)
         assert 0 <= pos < 360
-        assert infos['method'] == 'abaque'
+        assert infos["method"] == "abaque"
 
     def test_position_coupole_different_azimuths(self, session):
         """Positions différentes pour azimuths différents."""
@@ -175,6 +180,7 @@ class TestCalculateTargetPosition:
 # =============================================================================
 # Coordonnées astronomiques
 # =============================================================================
+
 
 class TestCalculateCoords:
     def test_calculate_coords_with_star(self, session):
@@ -194,6 +200,7 @@ class TestCalculateCoords:
 # Tracking state
 # =============================================================================
 
+
 class TestTrackingState:
     def test_position_relative_initial(self, session):
         """Position relative initiale = 0."""
@@ -205,12 +212,13 @@ class TestTrackingState:
 
     def test_mode_icons_defined(self, session):
         """L'icône du mode unique est définie (v5.10)."""
-        assert 'continuous' in session.MODE_ICONS
+        assert "continuous" in session.MODE_ICONS
 
 
 # =============================================================================
 # Recherche d'objet
 # =============================================================================
+
 
 class TestRechercherObjet:
     def test_rechercher_objet_known(self, session):
@@ -233,9 +241,7 @@ class TestRechercherObjet:
         from unittest.mock import patch
 
         with patch("core.tracking.tracking_goto_mixin.GestionnaireCatalogue") as cat:
-            success, msg = session._rechercher_objet(
-                "Cible faible", coords=(83.8221, -5.3911)
-            )
+            success, msg = session._rechercher_objet("Cible faible", coords=(83.8221, -5.3911))
         cat.assert_not_called()
         assert success is True
         assert session.objet == "Cible faible"
@@ -247,8 +253,6 @@ class TestRechercherObjet:
         """start(coords=...) transmet les coordonnées à _rechercher_objet."""
         from unittest.mock import patch
 
-        with patch.object(
-            session, "_rechercher_objet", return_value=(False, "stop")
-        ) as rech:
+        with patch.object(session, "_rechercher_objet", return_value=(False, "stop")) as rech:
             session.start("Cible", coords=(10.0, 20.0))
         rech.assert_called_once_with("Cible", coords=(10.0, 20.0))

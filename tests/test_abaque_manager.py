@@ -13,15 +13,13 @@ from unittest.mock import MagicMock, patch
 # Vérifier si numpy est disponible (requis pour tests d'interpolation)
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
     np = None
 
-pytestmark = pytest.mark.skipif(
-    not HAS_NUMPY,
-    reason="Ces tests nécessitent numpy"
-)
+pytestmark = pytest.mark.skipif(not HAS_NUMPY, reason="Ces tests nécessitent numpy")
 
 
 class TestAbaqueManagerInit:
@@ -67,7 +65,7 @@ class TestAbaqueManagerLoadAbaque:
         assert result is False
         assert manager.is_loaded is False
 
-    @patch('core.tracking.abaque_manager.openpyxl.load_workbook')
+    @patch("core.tracking.abaque_manager.openpyxl.load_workbook")
     def test_load_erreur_lecture(self, mock_load_workbook):
         """Retourne False en cas d'erreur de lecture."""
         from core.tracking.abaque_manager import AbaqueManager
@@ -76,7 +74,7 @@ class TestAbaqueManagerLoadAbaque:
 
         manager = AbaqueManager()
         # Simuler que le fichier existe
-        with patch.object(Path, 'exists', return_value=True):
+        with patch.object(Path, "exists", return_value=True):
             result = manager.load_abaque()
 
         assert result is False
@@ -113,19 +111,19 @@ class TestAbaqueManagerWithMockData:
         # Calculer les statistiques manuellement
         manager.n_altitudes = len(sample_abaque_data)
         first_alt = next(iter(sample_abaque_data.values()))
-        manager.n_azimuths = len(first_alt['az_astre'])
+        manager.n_azimuths = len(first_alt["az_astre"])
 
         altitudes = sorted(sample_abaque_data.keys())
         manager.altitude_range = (altitudes[0], altitudes[-1])
 
         all_azimuths = []
         for data in sample_abaque_data.values():
-            all_azimuths.extend(data['az_astre'])
+            all_azimuths.extend(data["az_astre"])
         manager.azimuth_range = (min(all_azimuths), max(all_azimuths))
 
         # Créer les grilles
         manager._alt_grid = np.array(altitudes)
-        manager._az_grid = np.array(sorted(first_alt['az_astre']))
+        manager._az_grid = np.array(sorted(first_alt["az_astre"]))
         manager._data_dict = sample_abaque_data
 
         return manager
@@ -294,7 +292,7 @@ class TestAbaqueManagerInterpolation:
 
         altitudes = sorted(sample_abaque_data.keys())
         first_alt = sample_abaque_data[altitudes[0]]
-        azimuths = sorted(first_alt['az_astre'])
+        azimuths = sorted(first_alt["az_astre"])
 
         manager._alt_grid = np.array(altitudes)
         manager._az_grid = np.array(azimuths)
@@ -327,13 +325,10 @@ class TestAbaqueManagerInterpolation:
         # Créer des données avec passage par 0°/360°
         data = {
             30.0: {
-                'az_astre': [350, 10],
-                'az_coupole': [355, 5]  # Traverse 0°
+                "az_astre": [350, 10],
+                "az_coupole": [355, 5],  # Traverse 0°
             },
-            45.0: {
-                'az_astre': [350, 10],
-                'az_coupole': [356, 6]
-            }
+            45.0: {"az_astre": [350, 10], "az_coupole": [356, 6]},
         }
 
         manager = AbaqueManager()

@@ -17,6 +17,7 @@ try:
     from astropy.time import Time
     from astropy.coordinates import EarthLocation, AltAz, get_body
     import astropy.units as u
+
     ASTROPY_AVAILABLE = True
 except ImportError:  # pragma: no cover - environnement sans astropy
     ASTROPY_AVAILABLE = False

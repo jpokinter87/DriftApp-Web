@@ -53,8 +53,8 @@ def _site_tz_offset_hours(at: datetime) -> int:
 # (qui soustrait tz_offset en interne pour obtenir l'UTC astronomique).
 SIM_SEARCH_START = datetime(2026, 3, 28, 20, 0, 0)  # 20:00 local ≈ 18:00 UTC
 SEARCH_WINDOW_HOURS = 18
-SIM_DURATION_SEC = 3600   # 1 h autour du méridien
-PRE_MERIDIAN_SEC = 500    # sim commence 500s avant le transit détecté
+SIM_DURATION_SEC = 3600  # 1 h autour du méridien
+PRE_MERIDIAN_SEC = 500  # sim commence 500s avant le transit détecté
 SAMPLING_SEC = 10
 
 DOME_SPEED_DEG_PER_MIN = 42.0
@@ -73,18 +73,18 @@ ANTICIPATION_HORIZON_SEC = 180  # stratégie B (horizon fixe)
 #   → on vise la position où la cible sera AU MOMENT où on y arrive.
 ADAPTIVE_MAX_H_SEC = 300  # on cherche H dans [min, max]
 ADAPTIVE_MIN_H_SEC = 10
-ADAPTIVE_STEP_SEC = 2     # pas de scan (2s = compromis précision/perf)
-ADAPTIVE_TOL_SEC = 3.0    # tolérance |required_H - H|
+ADAPTIVE_STEP_SEC = 2  # pas de scan (2s = compromis précision/perf)
+ADAPTIVE_TOL_SEC = 3.0  # tolérance |required_H - H|
 
 # Stratégie D : chain mode (GOTO adaptatifs enchaînés pendant méridien)
-CHAIN_EXIT_HORIZON_SEC = 20   # sortie de chain mode quand H adaptatif < seuil
-CHAIN_EXIT_DELTA_DEG = 3.0    # ou quand la cible future est très proche (< seuil)
+CHAIN_EXIT_HORIZON_SEC = 20  # sortie de chain mode quand H adaptatif < seuil
+CHAIN_EXIT_DELTA_DEG = 3.0  # ou quand la cible future est très proche (< seuil)
 
 # Stratégie E : timing optimal basé sur la prédiction du flip
 #   Détection : taux du target > FLIP_RATE_THRESHOLD sur une période continue
 #   |t_start|_opt = max(0, (Δ_flip - v·τ_flip) / (2·v))  — équilibre lag pré/post flip
 FLIP_RATE_THRESHOLD_DEG_PER_SEC = 0.8  # abaissé pour capturer flips lents (alt 75-80°)
-FLIP_POST_MARGIN_SEC = 20     # sample target(flip_end + margin) pour valeur stable
+FLIP_POST_MARGIN_SEC = 20  # sample target(flip_end + margin) pour valeur stable
 
 
 # --- Scénarios : objets à tester ---------------------------------------------
@@ -99,18 +99,20 @@ OBJECTS = [
     ("synth alt=83°        ", 150.0, 37.15),
     ("synth alt=86°        ", 160.0, 40.15),
     # Réels : extraits de sessions terrain (data/sessions/)
-    ("IC 445 (réel)        ", 99.3384942483, 67.85992306669),   # alt 66.3°
-    ("M 101 (réel)         ", 210.8024, 54.349),                  # alt 79.8°
+    ("IC 445 (réel)        ", 99.3384942483, 67.85992306669),  # alt 66.3°
+    ("M 101 (réel)         ", 210.8024, 54.349),  # alt 79.8°
     ("46 LMi (réel)        ", 163.32787152823542, 34.214892133082735),  # alt 80.1°
-    ("M 13 (réel)          ", 250.4235, 36.461),                  # alt 82.3°
-    ("α Aur/Capella (réel) ", 79.1723, 45.998),                   # alt 88.2°
+    ("M 13 (réel)          ", 250.4235, 36.461),  # alt 82.3°
+    ("α Aur/Capella (réel) ", 79.1723, 45.998),  # alt 88.2°
 ]
 
 
 # --- Recherche méridien -------------------------------------------------------
 
-def find_meridian_time(calc: AstronomicalCalculations, ra: float, dec: float,
-                       start: datetime, window_hours: int) -> datetime:
+
+def find_meridian_time(
+    calc: AstronomicalCalculations, ra: float, dec: float, start: datetime, window_hours: int
+) -> datetime:
     """Trouve l'UTC de culmination (HA=0). Gère circumpolaire (az=0) ET subpolaire (az=180)."""
     best_t, best_alt = start, -90.0
     total_minutes = window_hours * 60
@@ -137,12 +139,14 @@ def build_trajectory(calc, abaque, ra, dec, sim_start):
         t = sim_start + timedelta(seconds=i * SAMPLING_SEC)
         az, alt = calc.calculer_coords_horizontales(ra, dec, t)
         dome_target, _ = abaque.get_dome_position(alt, az)
-        traj.append({
-            "t_sec": i * SAMPLING_SEC,
-            "alt": alt,
-            "az": az,
-            "dome_target": float(dome_target),
-        })
+        traj.append(
+            {
+                "t_sec": i * SAMPLING_SEC,
+                "alt": alt,
+                "az": az,
+                "dome_target": float(dome_target),
+            }
+        )
     return traj
 
 
@@ -166,6 +170,7 @@ def is_at_meridian(az: float, alt: float) -> bool:
 
 
 # --- Simulation moteur --------------------------------------------------------
+
 
 class DomeSim:
     def __init__(self, initial_pos: float):
@@ -231,8 +236,7 @@ def detect_flip(traj) -> dict | None:
     flip_start_idx, flip_end_idx = None, None
     for i in range(1, len(traj)):
         dt = traj[i]["t_sec"] - traj[i - 1]["t_sec"]
-        d_target = abs(normalize_angle_180(
-            traj[i]["dome_target"] - traj[i - 1]["dome_target"]))
+        d_target = abs(normalize_angle_180(traj[i]["dome_target"] - traj[i - 1]["dome_target"]))
         rate = d_target / dt
         if rate > FLIP_RATE_THRESHOLD_DEG_PER_SEC and not in_flip:
             in_flip = True
@@ -253,8 +257,7 @@ def detect_flip(traj) -> dict | None:
     # Amplitude signée par unwrapping : somme des deltas signés consécutifs
     signed_amplitude = 0.0
     for i in range(flip_start_idx, flip_end_idx):
-        signed_amplitude += normalize_angle_180(
-            traj[i + 1]["dome_target"] - traj[i]["dome_target"])
+        signed_amplitude += normalize_angle_180(traj[i + 1]["dome_target"] - traj[i]["dome_target"])
 
     return {
         "start": flip_start_t,
@@ -298,14 +301,18 @@ def adaptive_horizon(t_trigger: float, pos_now: float, traj, debug: bool = False
         # Scan descendant : premier H avec |err| < tol = plus grand valide
         if err < ADAPTIVE_TOL_SEC:
             if debug:
-                print(f"  [adaptive] T={t_trigger} pos={pos_now:.1f} → H={H:.0f}s "
-                      f"target={future_target:.1f}° (req_H={required_H:.1f}, err={err:.1f})")
+                print(
+                    f"  [adaptive] T={t_trigger} pos={pos_now:.1f} → H={H:.0f}s "
+                    f"target={future_target:.1f}° (req_H={required_H:.1f}, err={err:.1f})"
+                )
             return H, future_target
         if err < best_err:
             best_err, best_H, best_target = err, H, future_target
     if debug:
-        print(f"  [adaptive] T={t_trigger} pos={pos_now:.1f} → fallback H={best_H:.0f}s "
-              f"target={best_target:.1f}° (best_err={best_err:.1f})")
+        print(
+            f"  [adaptive] T={t_trigger} pos={pos_now:.1f} → fallback H={best_H:.0f}s "
+            f"target={best_target:.1f}° (best_err={best_err:.1f})"
+        )
     return (best_H or ADAPTIVE_MIN_H_SEC), best_target
 
 
@@ -349,9 +356,14 @@ def simulate(traj, strategy: str, debug: bool = False):
         t = p["t_sec"]
 
         if t < dome.busy_until:
-            actual = position_during_move(t, pre_move_pos, current_target,
-                                          move_start, dome.busy_until,
-                                          signed_delta=dome.current_signed_delta)
+            actual = position_during_move(
+                t,
+                pre_move_pos,
+                current_target,
+                move_start,
+                dome.busy_until,
+                signed_delta=dome.current_signed_delta,
+            )
         else:
             actual = dome.pos
 
@@ -366,8 +378,9 @@ def simulate(traj, strategy: str, debug: bool = False):
                 pre_move_pos = dome.pos
                 current_target = optimal_schedule["target"]
                 move_start = t
-                if dome.request_move(t, optimal_schedule["target"],
-                                     force_direction=optimal_schedule["direction"]):
+                if dome.request_move(
+                    t, optimal_schedule["target"], force_direction=optimal_schedule["direction"]
+                ):
                     meridian_triggered = True
                     last_correction_t = t
                     trigger_info = {
@@ -394,10 +407,14 @@ def simulate(traj, strategy: str, debug: bool = False):
                 move_start = t
                 if dome.request_move(t, future_target):
                     meridian_triggered = True
-                    chain_active = (strategy == "chained")
+                    chain_active = strategy == "chained"
                     last_correction_t = t
-                    trigger_info = {"t": t, "horizon": horizon, "target": future_target,
-                                    "from": pre_move_pos}
+                    trigger_info = {
+                        "t": t,
+                        "horizon": horizon,
+                        "target": future_target,
+                        "from": pre_move_pos,
+                    }
                     chain_moves.append((t, horizon, future_target))
                 continue
 
@@ -439,6 +456,7 @@ def simulate(traj, strategy: str, debug: bool = False):
 
 # --- Rapport ------------------------------------------------------------------
 
+
 def main():
     tz_offset = _site_tz_offset_hours(SIM_SEARCH_START)
     calc = AstronomicalCalculations(SITE_LAT, SITE_LON, tz_offset=tz_offset)
@@ -446,16 +464,22 @@ def main():
     abaque.load_abaque()
 
     print("=" * 130)
-    print(f"SIMULATION MULTI-ALTITUDES — A (actuel) / B (fixe {ANTICIPATION_HORIZON_SEC}s) / C (adaptatif) / E (timing optimal pré-calculé)")
-    print(f"Site : lat={SITE_LAT}° lon={SITE_LON}° tz={SITE_TZ_NAME} (offset {tz_offset:+d}h, "
-          f"horodatages affichés en LOCAL) | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min")
+    print(
+        f"SIMULATION MULTI-ALTITUDES — A (actuel) / B (fixe {ANTICIPATION_HORIZON_SEC}s) / C (adaptatif) / E (timing optimal pré-calculé)"
+    )
+    print(
+        f"Site : lat={SITE_LAT}° lon={SITE_LON}° tz={SITE_TZ_NAME} (offset {tz_offset:+d}h, "
+        f"horodatages affichés en LOCAL) | vitesse coupole : {DOME_SPEED_DEG_PER_MIN:.0f}°/min"
+    )
     print("=" * 130)
 
-    header = (f"{'Scénario':<22} {'alt_max':>7} | "
-              f"{'A_lagM':>7} | "
-              f"{'B_lagM':>7} | "
-              f"{'C_lagM':>7} | "
-              f"{'E_lagM':>7} {'E_th':>6} {'E_tSt':>6} {'Δ_flip':>7} {'τ_flip':>6}")
+    header = (
+        f"{'Scénario':<22} {'alt_max':>7} | "
+        f"{'A_lagM':>7} | "
+        f"{'B_lagM':>7} | "
+        f"{'C_lagM':>7} | "
+        f"{'E_lagM':>7} {'E_th':>6} {'E_tSt':>6} {'Δ_flip':>7} {'τ_flip':>6}"
+    )
     print(header)
     print("-" * len(header))
 
@@ -502,14 +526,18 @@ def main():
     print("-" * 130)
     print("GAIN LAG MAX vs stratégie actuelle (A)")
     print("-" * 130)
-    print(f"{'Scénario':<22} {'alt_max':>7}  {'A_lagM':>8}  {'B vs A':>10}  {'C vs A':>10}  {'E vs A':>10}  {'E vs C':>10}")
+    print(
+        f"{'Scénario':<22} {'alt_max':>7}  {'A_lagM':>8}  {'B vs A':>10}  {'C vs A':>10}  {'E vs A':>10}  {'E vs C':>10}"
+    )
     for name, alt_max, r_a, r_b, r_c, r_e, _, _ in results:
         dba = r_b["max_lag"] - r_a["max_lag"]
         dca = r_c["max_lag"] - r_a["max_lag"]
         dea = r_e["max_lag"] - r_a["max_lag"]
         dec_ = r_e["max_lag"] - r_c["max_lag"]
-        print(f"{name:<22} {alt_max:>6.1f}°  {r_a['max_lag']:>7.2f}°  "
-              f"{dba:>+9.2f}°  {dca:>+9.2f}°  {dea:>+9.2f}°  {dec_:>+9.2f}°")
+        print(
+            f"{name:<22} {alt_max:>6.1f}°  {r_a['max_lag']:>7.2f}°  "
+            f"{dba:>+9.2f}°  {dca:>+9.2f}°  {dea:>+9.2f}°  {dec_:>+9.2f}°"
+        )
 
     # Détail schedule pour le pire cas
     print()
@@ -523,12 +551,18 @@ def main():
         tr = r_e["trigger"]
         flip = tr["flip"]
         print(f"Méridien (local {SITE_TZ_NAME}) : {mer_t.strftime('%H:%M:%S')}")
-        print(f"Flip détecté : T+{flip['start']:.0f}s → T+{flip['end']:.0f}s "
-              f"(durée {flip['duration']:.0f}s, Δ={flip['amplitude']:.1f}°)")
-        print(f"              pre_target={flip['pre_target']:.1f}° → post_target={flip['post_target']:.1f}°")
+        print(
+            f"Flip détecté : T+{flip['start']:.0f}s → T+{flip['end']:.0f}s "
+            f"(durée {flip['duration']:.0f}s, Δ={flip['amplitude']:.1f}°)"
+        )
+        print(
+            f"              pre_target={flip['pre_target']:.1f}° → post_target={flip['post_target']:.1f}°"
+        )
         print(f"Slew E lancé à T+{tr['t']}s (offset pré-flip {flip['start'] - tr['t']:.0f}s)")
-        print(f"              from={tr['from']:.1f}° → to={tr['target']:.1f}° "
-              f"(delta={abs(normalize_angle_180(tr['target'] - tr['from'])):.1f}°)")
+        print(
+            f"              from={tr['from']:.1f}° → to={tr['target']:.1f}° "
+            f"(delta={abs(normalize_angle_180(tr['target'] - tr['from'])):.1f}°)"
+        )
 
 
 if __name__ == "__main__":

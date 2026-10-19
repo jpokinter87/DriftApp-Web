@@ -17,16 +17,18 @@ class TestGetCurrentUtcOffset:
     def test_retourne_entier(self):
         """Le décalage UTC est un entier."""
         from core.config.config import get_current_utc_offset
+
         result = get_current_utc_offset()
         assert isinstance(result, int)
 
     def test_plage_valide(self):
         """Le décalage est dans une plage raisonnable (-12 à +14)."""
         from core.config.config import get_current_utc_offset
+
         result = get_current_utc_offset()
         assert -12 <= result <= 14
 
-    @patch('core.config.config.datetime')
+    @patch("core.config.config.datetime")
     def test_calcul_offset(self, mock_datetime):
         """Vérifie le calcul du décalage."""
         # Simuler un fuseau UTC+2
@@ -38,6 +40,7 @@ class TestGetCurrentUtcOffset:
         mock_datetime.now.return_value = mock_now
 
         from core.config.config import get_current_utc_offset
+
         # Note: Le module est déjà importé, donc le patch ne s'applique pas
         # Ce test vérifie la logique mais pas le résultat mocké
         result = get_current_utc_offset()
@@ -130,13 +133,8 @@ class TestConfigLoading:
         """Deep update avec dictionnaires imbriqués."""
         from core.config.config import _deep_update
 
-        base = {
-            "site": {"latitude": 0, "longitude": 0},
-            "motor": {"steps": 200}
-        }
-        override = {
-            "site": {"latitude": 44.15}
-        }
+        base = {"site": {"latitude": 0, "longitude": 0}, "motor": {"steps": 200}}
+        override = {"site": {"latitude": 44.15}}
 
         result = _deep_update(base, override)
         assert result["site"]["latitude"] == 44.15
@@ -221,20 +219,19 @@ class TestGlobalVariables:
     def test_site_latitude_existe(self):
         """SITE_LATITUDE est défini."""
         from core.config.config import SITE_LATITUDE
+
         assert isinstance(SITE_LATITUDE, float)
 
     def test_site_longitude_existe(self):
         """SITE_LONGITUDE est défini."""
         from core.config.config import SITE_LONGITUDE
+
         assert isinstance(SITE_LONGITUDE, float)
 
     def test_motor_variables(self):
         """Variables moteur sont définies."""
-        from core.config.config import (
-            MOTOR_STEPS_PER_REV,
-            MOTOR_MICROSTEPPING,
-            MOTOR_GEAR_RATIO
-        )
+        from core.config.config import MOTOR_STEPS_PER_REV, MOTOR_MICROSTEPPING, MOTOR_GEAR_RATIO
+
         assert MOTOR_STEPS_PER_REV == 200
         assert MOTOR_MICROSTEPPING == 4
         assert MOTOR_GEAR_RATIO == 2230.0
@@ -242,6 +239,7 @@ class TestGlobalVariables:
     def test_gpio_pins_dict(self):
         """GPIO_PINS est un dictionnaire."""
         from core.config.config import GPIO_PINS
+
         assert isinstance(GPIO_PINS, dict)
         assert "dir_pin" in GPIO_PINS
         assert "step_pin" in GPIO_PINS
@@ -249,6 +247,7 @@ class TestGlobalVariables:
     def test_dome_offsets_dict(self):
         """DOME_OFFSETS est un dictionnaire."""
         from core.config.config import DOME_OFFSETS
+
         assert isinstance(DOME_OFFSETS, dict)
 
 
@@ -258,6 +257,7 @@ class TestPathConstants:
     def test_data_dir(self):
         """DATA_DIR est un Path."""
         from core.config.config import DATA_DIR
+
         assert isinstance(DATA_DIR, Path)
         assert DATA_DIR.is_absolute()
         assert DATA_DIR.name == "data"
@@ -265,6 +265,7 @@ class TestPathConstants:
     def test_logs_dir(self):
         """LOGS_DIR est un Path absolu."""
         from core.config.config import LOGS_DIR
+
         assert isinstance(LOGS_DIR, Path)
         assert LOGS_DIR.is_absolute()
         assert LOGS_DIR.name == "logs"
@@ -272,12 +273,14 @@ class TestPathConstants:
     def test_config_file(self):
         """CONFIG_FILE pointe vers data/config.json."""
         from core.config.config import CONFIG_FILE
+
         assert isinstance(CONFIG_FILE, Path)
         assert CONFIG_FILE.name == "config.json"
 
     def test_cache_file(self):
         """CACHE_FILE est défini."""
         from core.config.config import CACHE_FILE
+
         assert isinstance(CACHE_FILE, Path)
 
 
@@ -287,32 +290,38 @@ class TestResolveMotorDelayUs:
     def test_section_absente_donne_le_defaut_v510(self):
         """Sans la clé, on retrouve exactement les 260 µs de la v5.10."""
         from core.config.config import resolve_motor_delay_us
+
         assert resolve_motor_delay_us({}) == 260.0
 
     def test_valeur_configuree_est_respectee(self):
         """Une valeur dans les bornes est transmise telle quelle."""
         from core.config.config import resolve_motor_delay_us
+
         assert resolve_motor_delay_us({"delay_us": 150}) == 150.0
 
     def test_chaine_numerique_acceptee(self):
         """L'UI peut renvoyer une chaîne : elle est convertie."""
         from core.config.config import resolve_motor_delay_us
+
         assert resolve_motor_delay_us({"delay_us": "150"}) == 150.0
 
     def test_valeur_non_numerique_retombe_sur_le_defaut(self):
         """Une saisie aberrante ne doit jamais atteindre le moteur."""
         from core.config.config import resolve_motor_delay_us
+
         assert resolve_motor_delay_us({"delay_us": "vite"}) == 260.0
         assert resolve_motor_delay_us({"delay_us": None}) == 260.0
 
     def test_valeur_trop_basse_est_bornee(self):
         """Une faute de frappe (1 au lieu de 100) est bornée, pas obéie."""
         from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MIN
+
         assert resolve_motor_delay_us({"delay_us": 1}) == MOTOR_DELAY_US_MIN
 
     def test_valeur_trop_haute_est_bornee(self):
         """Au-dessus de RAMP_START_DELAY_US la rampe s'inverserait."""
         from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MAX
+
         assert resolve_motor_delay_us({"delay_us": 10_000}) == MOTOR_DELAY_US_MAX
 
     def test_constante_exposee_en_secondes_et_dans_les_bornes(self):
@@ -322,6 +331,7 @@ class TestResolveMotorDelayUs:
             MOTOR_DELAY_US_MIN,
             MOTOR_DELAY_US_MAX,
         )
+
         assert MOTOR_DELAY_US_MIN / 1e6 <= SINGLE_SPEED_MOTOR_DELAY <= MOTOR_DELAY_US_MAX / 1e6
 
 
@@ -337,6 +347,7 @@ class TestVitesseSelonAmplitude:
 
     def _delay(self, delta):
         from core.config.config import motor_delay_for
+
         return motor_delay_for(delta, slow=self.SLOW, fast=self.FAST)
 
     def test_petit_deplacement_vitesse_lente(self):
@@ -353,18 +364,24 @@ class TestVitesseSelonAmplitude:
 
     def test_seuil_de_trois_degres(self):
         from core.config.config import FAST_SPEED_MIN_DEG
+
         assert FAST_SPEED_MIN_DEG == 3.0
 
     def test_cle_rapide_absente_reprend_la_vitesse_lente(self):
         """Sans fast_delay_us, rien ne change : une seule vitesse, comme en v6.17."""
         from core.config.config import resolve_motor_delay_us
+
         assert resolve_motor_delay_us({}, key="fast_delay_us", default=200.0) == 200.0
 
     def test_cle_rapide_bornee_comme_la_lente(self):
         from core.config.config import resolve_motor_delay_us, MOTOR_DELAY_US_MIN
-        assert resolve_motor_delay_us({"fast_delay_us": 5}, key="fast_delay_us") == MOTOR_DELAY_US_MIN
+
+        assert (
+            resolve_motor_delay_us({"fast_delay_us": 5}, key="fast_delay_us") == MOTOR_DELAY_US_MIN
+        )
         assert resolve_motor_delay_us({"fast_delay_us": 124}, key="fast_delay_us") == 124.0
 
     def test_constante_rapide_dans_les_bornes(self):
         from core.config.config import FAST_MOTOR_DELAY, MOTOR_DELAY_US_MIN, MOTOR_DELAY_US_MAX
+
         assert MOTOR_DELAY_US_MIN / 1e6 <= FAST_MOTOR_DELAY <= MOTOR_DELAY_US_MAX / 1e6

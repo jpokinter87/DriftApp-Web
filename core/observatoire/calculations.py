@@ -8,6 +8,7 @@ La correction de parallaxe est maintenant gérée par la méthode abaque
 - Coordonnées horizontales (azimut, altitude)
 - Temps sidéral et angle horaire
 """
+
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
@@ -45,20 +46,23 @@ class AstronomicalCalculations:
     def _normaliser_angle_180(angle: float) -> float:
         """Normalise un angle entre -180° et +180°."""
         from core.utils.angle_utils import normalize_angle_180
+
         return normalize_angle_180(angle)
 
     @staticmethod
     def _normaliser_angle_360(angle: float) -> float:
         """Normalise un angle entre 0° et 360°."""
         from core.utils.angle_utils import normalize_angle_360
+
         return normalize_angle_360(angle)
 
     # =========================================================================
     # CONVERSION DE COORDONNÉES
     # =========================================================================
 
-    def convertir_j2000_vers_jnow(self, ad_j2000: float, dec_j2000: float,
-                                  date_heure: datetime) -> Tuple[float, float]:
+    def convertir_j2000_vers_jnow(
+        self, ad_j2000: float, dec_j2000: float, date_heure: datetime
+    ) -> Tuple[float, float]:
         """
         Convertit les coordonnées J2000 en coordonnées JNOW (époque actuelle).
 
@@ -71,8 +75,7 @@ class AstronomicalCalculations:
             Tuple (ad_jnow, dec_jnow) en degrés
         """
         # Créer une coordonnée J2000
-        coord_j2000 = SkyCoord(ra=ad_j2000 * u.degree, dec=dec_j2000 * u.degree,
-                               frame='icrs')
+        coord_j2000 = SkyCoord(ra=ad_j2000 * u.degree, dec=dec_j2000 * u.degree, frame="icrs")
 
         # Convertir en temps Astropy
         if date_heure.tzinfo is None:
@@ -80,7 +83,7 @@ class AstronomicalCalculations:
         else:
             dt_utc = date_heure.astimezone(timezone.utc).replace(tzinfo=None)
 
-        temps_obs = Time(dt_utc, scale='utc')
+        temps_obs = Time(dt_utc, scale="utc")
 
         # Appliquer précession/nutation vers l'époque actuelle
         coord_jnow = coord_j2000.transform_to(CIRS(obstime=temps_obs))
@@ -120,22 +123,29 @@ class AstronomicalCalculations:
         """GMST (degrés) – formule IAU approchée."""
         T = (JD - 2451545.0) / 36525.0
         # GMST en secondes
-        GMST_sec = 67310.54841 + (876600.0 * 3600 + 8640184.812866) * T + 0.093104 * T ** 2 - 6.2e-6 * T ** 3
+        GMST_sec = (
+            67310.54841 + (876600.0 * 3600 + 8640184.812866) * T + 0.093104 * T**2 - 6.2e-6 * T**3
+        )
         GMST_sec %= 86400.0
         if GMST_sec < 0:
             GMST_sec += 86400.0
         return GMST_sec / 240.0  # 86400 s -> 360°, donc 1° = 240 s
 
     @staticmethod
-    def _add_time_component(theta_G0: float, hour: int, minute: int,
-                            second: int, microsecond: int) -> float:
+    def _add_time_component(
+        theta_G0: float, hour: int, minute: int, second: int, microsecond: int
+    ) -> float:
         """Ajoute la composante temporelle au temps sidéral."""
         time_seconds = hour * 3600 + minute * 60 + second + microsecond / 1000000.0
         return theta_G0 + 15.04106728 * (time_seconds / 3600.0)
 
-    def calculer_angle_horaire(self, ascension_droite: float, date_heure: datetime,
-                               deja_jnow: bool = False,
-                               declinaison: float = 0.0) -> float:
+    def calculer_angle_horaire(
+        self,
+        ascension_droite: float,
+        date_heure: datetime,
+        deja_jnow: bool = False,
+        declinaison: float = 0.0,
+    ) -> float:
         """
         Calcule l'angle horaire en degrés.
 
@@ -161,11 +171,14 @@ class AstronomicalCalculations:
 
         return ha
 
-    def calculer_coords_horizontales(self, ascension_droite: float, declinaison: float,
-                                     date_heure: datetime) -> Tuple[float, float]:
+    def calculer_coords_horizontales(
+        self, ascension_droite: float, declinaison: float, date_heure: datetime
+    ) -> Tuple[float, float]:
         """Convertit les coordonnées équatoriales en coordonnées horizontales."""
         # Conversion J2000 -> JNOW
-        ad_jnow, dec_jnow = self.convertir_j2000_vers_jnow(ascension_droite, declinaison, date_heure)
+        ad_jnow, dec_jnow = self.convertir_j2000_vers_jnow(
+            ascension_droite, declinaison, date_heure
+        )
 
         # Calcul angle horaire avec coordonnées JNOW (déjà converties)
         ha = self.calculer_angle_horaire(ad_jnow, date_heure, deja_jnow=True)
@@ -177,7 +190,9 @@ class AstronomicalCalculations:
         dec_rad = math.radians(declinaison)
         lat_rad = math.radians(self.latitude)
 
-        sin_alt = math.sin(lat_rad) * math.sin(dec_rad) + math.cos(lat_rad) * math.cos(dec_rad) * math.cos(ha_rad)
+        sin_alt = math.sin(lat_rad) * math.sin(dec_rad) + math.cos(lat_rad) * math.cos(
+            dec_rad
+        ) * math.cos(ha_rad)
         alt_rad = math.asin(sin_alt)
 
         numerator = math.sin(ha_rad)
@@ -205,8 +220,9 @@ class AstronomicalCalculations:
 
         return altitude_deg + refraction_deg
 
-    def calculer_heure_passage_meridien(self, ad_deg: float, date_reference: datetime,
-                                        declinaison: float = 0.0) -> datetime:
+    def calculer_heure_passage_meridien(
+        self, ad_deg: float, date_reference: datetime, declinaison: float = 0.0
+    ) -> datetime:
         """Calcule l'heure exacte du passage au méridien pour un objet.
 
         Utilise le même calcul que le countdown (HA → secondes) pour
@@ -224,9 +240,9 @@ class AstronomicalCalculations:
         seconds_to_transit = -ha * 239.3447
         return date_reference + timedelta(seconds=round(seconds_to_transit))
 
-    def calculer_coords_horizontales_coupole(self, ascension_droite: float,
-                                             declinaison: float,
-                                             date_heure: datetime) -> Tuple[float, float, float]:
+    def calculer_coords_horizontales_coupole(
+        self, ascension_droite: float, declinaison: float, date_heure: datetime
+    ) -> Tuple[float, float, float]:
         """
         Calcule les coordonnées horizontales pour la coupole.
 
@@ -248,8 +264,9 @@ class AstronomicalCalculations:
         )
         return azimut, altitude, 0.0
 
-    def calculer_vitesse_rotation_coupole(self, ascension_droite: float, declinaison: float,
-                                          date_heure: datetime) -> Tuple[float, int, float, float]:
+    def calculer_vitesse_rotation_coupole(
+        self, ascension_droite: float, declinaison: float, date_heure: datetime
+    ) -> Tuple[float, int, float, float]:
         """
         Calcule la vitesse et le sens de rotation nécessaires pour la coupole.
 
@@ -279,8 +296,9 @@ class AstronomicalCalculations:
 
         return vitesse_relative, sens, azimut1, altitude1
 
-    def est_proche_meridien(self, ad_deg: float, date_heure: datetime,
-                            seuil_minutes: int = 5) -> Tuple[bool, float]:
+    def est_proche_meridien(
+        self, ad_deg: float, date_heure: datetime, seuil_minutes: int = 5
+    ) -> Tuple[bool, float]:
         """Vérifie si un objet est proche du passage au méridien."""
         angle_horaire = self.calculer_angle_horaire(ad_deg, date_heure, deja_jnow=True)
         temps_avant_passage_secondes = -angle_horaire * 239.3447

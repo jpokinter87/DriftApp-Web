@@ -21,9 +21,11 @@ _mock_astropy = MagicMock()
 _mock_astropy_time = MagicMock()
 _mock_astropy_coords = MagicMock()
 
+
 # Mock pour AstronomicalCalculations
 class MockAstronomicalCalculations:
     """Mock de AstronomicalCalculations sans astropy."""
+
     def __init__(self, latitude=44.15, longitude=5.23, tz_offset=1):
         self.latitude = latitude
         self.longitude = longitude
@@ -42,6 +44,7 @@ class MockAstronomicalCalculations:
 # Mock pour PlanetaryEphemerides
 class MockPlanetaryEphemerides:
     """Mock de PlanetaryEphemerides sans astropy."""
+
     def get_planet_position(self, planet_name, dt, lat, lon):
         return (250.0, 36.0)
 
@@ -61,10 +64,10 @@ def mock_astropy_modules():
     # Sauvegarder les modules existants
     saved_modules = {}
     modules_to_mock = [
-        'astropy',
-        'astropy.time',
-        'astropy.coordinates',
-        'astropy.units',
+        "astropy",
+        "astropy.time",
+        "astropy.coordinates",
+        "astropy.units",
     ]
 
     for mod in modules_to_mock:
@@ -72,18 +75,21 @@ def mock_astropy_modules():
             saved_modules[mod] = sys.modules[mod]
 
     # Injecter les mocks
-    sys.modules['astropy'] = _mock_astropy
-    sys.modules['astropy.time'] = _mock_astropy_time
-    sys.modules['astropy.coordinates'] = _mock_astropy_coords
-    sys.modules['astropy.units'] = MagicMock()
+    sys.modules["astropy"] = _mock_astropy
+    sys.modules["astropy.time"] = _mock_astropy_time
+    sys.modules["astropy.coordinates"] = _mock_astropy_coords
+    sys.modules["astropy.units"] = MagicMock()
 
     # Aussi patcher le module observatoire pour utiliser nos mocks
-    with patch.dict('sys.modules', {
-        'lgpio': MagicMock(),
-        'RPi': MagicMock(),
-        'RPi.GPIO': MagicMock(),
-        'spidev': MagicMock(),
-    }):
+    with patch.dict(
+        "sys.modules",
+        {
+            "lgpio": MagicMock(),
+            "RPi": MagicMock(),
+            "RPi.GPIO": MagicMock(),
+            "spidev": MagicMock(),
+        },
+    ):
         yield
 
     # Restaurer les modules originaux
@@ -98,6 +104,7 @@ def mock_astropy_modules():
 # FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def mock_moteur():
     """Mock pour le moteur (MoteurRP2040 ou MoteurSimule)."""
@@ -105,15 +112,17 @@ def mock_moteur():
     moteur.steps_per_dome_revolution = 1942968
     moteur.stop_requested = False
     moteur.rotation = MagicMock()
-    moteur.rotation_avec_feedback = MagicMock(return_value={
-        'success': True,
-        'position_finale': 90.0,
-        'erreur_finale': 0.1,
-        'position_initiale': 85.0,
-        'position_cible': 90.0,
-        'iterations': 1,
-        'corrections': []
-    })
+    moteur.rotation_avec_feedback = MagicMock(
+        return_value={
+            "success": True,
+            "position_finale": 90.0,
+            "erreur_finale": 0.1,
+            "position_initiale": 85.0,
+            "position_cible": 90.0,
+            "iterations": 1,
+            "corrections": [],
+        }
+    )
     moteur.request_stop = MagicMock()
     moteur.clear_stop_request = MagicMock()
     return moteur
@@ -143,10 +152,7 @@ def mock_abaque_manager():
     manager = MagicMock()
     manager.load_abaque.return_value = True
     manager.is_loaded = True
-    manager.get_dome_position.return_value = (125.0, {
-        'method': 'interpolation',
-        'in_bounds': True
-    })
+    manager.get_dome_position.return_value = (125.0, {"method": "interpolation", "in_bounds": True})
     return manager
 
 
@@ -168,8 +174,12 @@ def mock_motor_config():
 
 @pytest.fixture
 def tracking_session(
-    mock_moteur, mock_calc, mock_tracking_logger,
-    mock_encoder_config, mock_motor_config, mock_abaque_manager
+    mock_moteur,
+    mock_calc,
+    mock_tracking_logger,
+    mock_encoder_config,
+    mock_motor_config,
+    mock_abaque_manager,
 ):
     """Crée une TrackingSession avec toutes les dépendances mockées."""
     # Créer les mocks des modules qui dépendent de numpy/pandas
@@ -177,17 +187,20 @@ def tracking_session(
     mock_abaque_module.AbaqueManager = MagicMock(return_value=mock_abaque_manager)
 
     # Nettoyer le cache d'imports pour forcer le rechargement
-    mods_to_remove = [m for m in sys.modules if m.startswith('core.tracking.tracker')]
+    mods_to_remove = [m for m in sys.modules if m.startswith("core.tracking.tracker")]
     for m in mods_to_remove:
         del sys.modules[m]
 
     # Injecter les mocks dans sys.modules AVANT l'import
-    with patch.dict('sys.modules', {
-        'numpy': MagicMock(),
-        'pandas': MagicMock(),
-        'core.tracking.abaque_manager': mock_abaque_module,
-    }):
-        with patch('core.hardware.hardware_detector.HardwareDetector'):
+    with patch.dict(
+        "sys.modules",
+        {
+            "numpy": MagicMock(),
+            "pandas": MagicMock(),
+            "core.tracking.abaque_manager": mock_abaque_module,
+        },
+    ):
+        with patch("core.hardware.hardware_detector.HardwareDetector"):
             from core.tracking.tracker import TrackingSession
 
             session = TrackingSession(
@@ -198,7 +211,7 @@ def tracking_session(
                 intervalle=60,
                 abaque_file="data/Loi_coupole.xlsx",
                 encoder_config=mock_encoder_config,
-                motor_config=mock_motor_config
+                motor_config=mock_motor_config,
             )
 
             return session
@@ -208,12 +221,12 @@ def tracking_session(
 # TESTS INITIALISATION
 # =============================================================================
 
+
 class TestTrackingSessionInit:
     """Tests pour l'initialisation de TrackingSession."""
 
     def test_init_sans_abaque_leve_erreur(
-        self, mock_moteur, mock_calc, mock_tracking_logger,
-        mock_encoder_config, mock_motor_config
+        self, mock_moteur, mock_calc, mock_tracking_logger, mock_encoder_config, mock_motor_config
     ):
         """Lève ValueError si abaque_file non fourni."""
         from core.tracking.tracker import TrackingSession
@@ -225,7 +238,7 @@ class TestTrackingSessionInit:
                 logger=mock_tracking_logger,
                 abaque_file=None,
                 encoder_config=mock_encoder_config,
-                motor_config=mock_motor_config
+                motor_config=mock_motor_config,
             )
 
     def test_init_avec_abaque_valide(self, tracking_session):
@@ -249,12 +262,12 @@ class TestTrackingSessionInit:
 # TESTS ENCODEUR
 # =============================================================================
 
+
 class TestTrackingSessionEncoder:
     """Tests pour la gestion de l'encodeur."""
 
     def test_encoder_desactive(
-        self, mock_moteur, mock_calc, mock_tracking_logger,
-        mock_motor_config, mock_abaque_manager
+        self, mock_moteur, mock_calc, mock_tracking_logger, mock_motor_config, mock_abaque_manager
     ):
         """Encodeur désactivé dans la config."""
         encoder_config = MagicMock()
@@ -264,11 +277,14 @@ class TestTrackingSessionEncoder:
         mock_abaque_module = MagicMock()
         mock_abaque_module.AbaqueManager = MagicMock(return_value=mock_abaque_manager)
 
-        with patch.dict('sys.modules', {
-            'numpy': MagicMock(),
-            'pandas': MagicMock(),
-            'core.tracking.abaque_manager': mock_abaque_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "numpy": MagicMock(),
+                "pandas": MagicMock(),
+                "core.tracking.abaque_manager": mock_abaque_module,
+            },
+        ):
             from core.tracking.tracker import TrackingSession
 
             session = TrackingSession(
@@ -277,14 +293,13 @@ class TestTrackingSessionEncoder:
                 logger=mock_tracking_logger,
                 abaque_file="data/Loi_coupole.xlsx",
                 encoder_config=encoder_config,
-                motor_config=mock_motor_config
+                motor_config=mock_motor_config,
             )
 
             assert session.encoder_available is False
 
     def test_encoder_active_et_disponible(
-        self, mock_moteur, mock_calc, mock_tracking_logger,
-        mock_motor_config, mock_abaque_manager
+        self, mock_moteur, mock_calc, mock_tracking_logger, mock_motor_config, mock_abaque_manager
     ):
         """Encodeur activé et daemon disponible."""
         encoder_config = MagicMock()
@@ -294,22 +309,26 @@ class TestTrackingSessionEncoder:
         mock_abaque_module = MagicMock()
         mock_abaque_module.AbaqueManager = MagicMock(return_value=mock_abaque_manager)
 
-        with patch.dict('sys.modules', {
-            'numpy': MagicMock(),
-            'pandas': MagicMock(),
-            'core.tracking.abaque_manager': mock_abaque_module,
-        }):
-            with patch('core.hardware.hardware_detector.HardwareDetector') as mock_hw:
+        with patch.dict(
+            "sys.modules",
+            {
+                "numpy": MagicMock(),
+                "pandas": MagicMock(),
+                "core.tracking.abaque_manager": mock_abaque_module,
+            },
+        ):
+            with patch("core.hardware.hardware_detector.HardwareDetector") as mock_hw:
                 mock_hw.check_encoder_daemon.return_value = (True, None, 45.0)
 
                 mock_reader = MagicMock()
                 mock_reader.read_angle.return_value = 45.0
                 mock_reader.read_status.return_value = {
-                    'angle': 45.0, 'status': 'OK', 'calibrated': True
+                    "angle": 45.0,
+                    "status": "OK",
+                    "calibrated": True,
                 }
 
-                with patch('core.tracking.tracker.get_daemon_reader',
-                           return_value=mock_reader):
+                with patch("core.tracking.tracker.get_daemon_reader", return_value=mock_reader):
                     from core.tracking.tracker import TrackingSession
 
                     session = TrackingSession(
@@ -318,7 +337,7 @@ class TestTrackingSessionEncoder:
                         logger=mock_tracking_logger,
                         abaque_file="data/Loi_coupole.xlsx",
                         encoder_config=encoder_config,
-                        motor_config=mock_motor_config
+                        motor_config=mock_motor_config,
                     )
 
                     assert session.encoder_available is True
@@ -327,6 +346,7 @@ class TestTrackingSessionEncoder:
 # =============================================================================
 # TESTS CALCUL COORDONNÉES
 # =============================================================================
+
 
 class TestCalculateCurrentCoords:
     """Tests pour _calculate_current_coords."""
@@ -349,6 +369,7 @@ class TestCalculateCurrentCoords:
 # TESTS STATISTIQUES ET ÉTAT
 # =============================================================================
 
+
 class TestTrackingSessionState:
     """Tests pour la gestion de l'état."""
 
@@ -364,14 +385,15 @@ class TestTrackingSessionState:
 
     def test_drift_tracking_structure(self, tracking_session):
         """Structure du suivi de dérive."""
-        assert 'start_time' in tracking_session.drift_tracking
-        assert 'corrections_log' in tracking_session.drift_tracking
-        assert isinstance(tracking_session.drift_tracking['corrections_log'], list)
+        assert "start_time" in tracking_session.drift_tracking
+        assert "corrections_log" in tracking_session.drift_tracking
+        assert isinstance(tracking_session.drift_tracking["corrections_log"], list)
 
 
 # =============================================================================
 # TESTS PROTECTION OSCILLATIONS
 # =============================================================================
+
 
 class TestOscillationProtection:
     """Tests pour la protection contre les oscillations."""
@@ -397,6 +419,7 @@ class TestOscillationProtection:
 # TESTS INTÉGRATION ABAQUE
 # =============================================================================
 
+
 class TestAbaqueIntegration:
     """Tests pour l'intégration avec l'abaque."""
 
@@ -407,10 +430,10 @@ class TestAbaqueIntegration:
 
     def test_calculate_target_position_utilise_abaque(self, tracking_session):
         """_calculate_target_position utilise l'abaque."""
-        tracking_session.abaque_manager.get_dome_position.return_value = (130.0, {
-            'method': 'interpolation',
-            'in_bounds': True
-        })
+        tracking_session.abaque_manager.get_dome_position.return_value = (
+            130.0,
+            {"method": "interpolation", "in_bounds": True},
+        )
 
         result, infos = tracking_session._calculate_target_position(120.0, 45.0)
         tracking_session.abaque_manager.get_dome_position.assert_called()
@@ -421,17 +444,19 @@ class TestAbaqueIntegration:
 # TESTS MODE UNIQUE v5.10
 # =============================================================================
 
+
 class TestSingleModeTracking:
     """Tests pour le mode unique (v5.10)."""
 
     def test_mode_name(self, tracking_session):
         """La session expose MODE_NAME = 'continuous'."""
-        assert tracking_session.MODE_NAME == 'continuous'
+        assert tracking_session.MODE_NAME == "continuous"
 
 
 # =============================================================================
 # TESTS GET STATUS
 # =============================================================================
+
 
 class TestGetStatus:
     """Tests pour get_status."""
@@ -442,12 +467,13 @@ class TestGetStatus:
 
         status = tracking_session.get_status()
         assert isinstance(status, dict)
-        assert status.get('running') is False
+        assert status.get("running") is False
 
 
 # =============================================================================
 # TESTS PARAMÈTRES CORRECTIONS
 # =============================================================================
+
 
 class TestCorrectionParameters:
     """Tests pour les paramètres de correction."""
@@ -468,6 +494,7 @@ class TestCorrectionParameters:
 # =============================================================================
 # TESTS LISSAGE POSITION
 # =============================================================================
+
 
 class TestSmoothPositionCible:
     """Tests pour _smooth_position_cible."""

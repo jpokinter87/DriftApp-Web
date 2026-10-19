@@ -34,7 +34,7 @@ def _cleanup_old_logs(log_path: Path, max_files: int):
     log_files = sorted(
         log_path.glob("driftapp_*.log*"),  # Inclut .log et .log.1, .log.2 (rotations)
         key=lambda f: f.stat().st_mtime,
-        reverse=True  # Plus récent en premier
+        reverse=True,  # Plus récent en premier
     )
 
     # Supprimer les fichiers au-delà de la limite
@@ -52,7 +52,7 @@ def setup_logging(
     log_level: str = "INFO",
     max_bytes: int = 10 * 1024 * 1024,  # 10 MB
     backup_count: int = 5,
-    max_log_files: int = 10
+    max_log_files: int = 10,
 ):
     """
     Configure le logging Python pour toute l'application.
@@ -93,18 +93,14 @@ def setup_logging(
 
     # === Handler de fichier avec rotation ===
     file_handler = RotatingFileHandler(
-        log_file,
-        maxBytes=max_bytes,
-        backupCount=backup_count,
-        encoding='utf-8'
+        log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
     )
     file_handler.setLevel(numeric_level)
 
     # Format détaillé avec nom de module complet (via __name__)
     # Exemple: "core.tracking.tracker" au lieu de "TrackingSession"
     file_formatter = logging.Formatter(
-        '%(asctime)s | %(name)-35s | %(levelname)-8s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s | %(name)-35s | %(levelname)-8s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
     file_handler.setFormatter(file_formatter)
 
@@ -112,10 +108,10 @@ def setup_logging(
     root_logger.addHandler(file_handler)
 
     # === Réduire la verbosité de certains modules externes ===
-    logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    logging.getLogger('PIL').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('astropy').setLevel(logging.WARNING)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("astropy").setLevel(logging.WARNING)
 
     # === Message de confirmation ===
     root_logger.info("=" * 70)
@@ -123,7 +119,7 @@ def setup_logging(
     root_logger.info("=" * 70)
     root_logger.info(f"Logging configure - Fichier : {log_file}")
     root_logger.info(f"Niveau : {log_level}")
-    root_logger.info(f"Rotation : {max_bytes / (1024*1024):.0f} MB, {backup_count} backups")
+    root_logger.info(f"Rotation : {max_bytes / (1024 * 1024):.0f} MB, {backup_count} backups")
     root_logger.info(f"Retention : {max_log_files} sessions max")
     root_logger.info("=" * 70)
 
@@ -181,8 +177,8 @@ def log_system_info():
 
     # Détecter Raspberry Pi
     try:
-        with open('/proc/device-tree/model', 'r') as f:
-            model = f.read().strip('\x00')
+        with open("/proc/device-tree/model", "r") as f:
+            model = f.read().strip("\x00")
             logger.info(f"Raspberry Pi : {model}")
     except (FileNotFoundError, PermissionError):
         pass
@@ -223,5 +219,5 @@ if __name__ == "__main__":
     print("\nContenu du fichier :\n")
 
     # Afficher le contenu
-    with open(log_file, 'r', encoding='utf-8') as f:
+    with open(log_file, "r", encoding="utf-8") as f:
         print(f.read())

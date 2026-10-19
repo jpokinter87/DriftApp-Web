@@ -234,7 +234,10 @@ pdf.body(
 pdf.body("→ Commencer à l'étape 3.")
 
 pdf.step(3, "Noter les micro-interrupteurs (DIP)")
-pdf.bold_bullet("À faire :", "photographier ou noter la position des petits interrupteurs sur le côté du driver (ON/OFF, généralement 8).")
+pdf.bold_bullet(
+    "À faire :",
+    "photographier ou noter la position des petits interrupteurs sur le côté du driver (ON/OFF, généralement 8).",
+)
 pdf.bold_bullet("À rapporter :", "la photo, ou la suite ON/OFF.")
 pdf.body(
     "Cela permet de confirmer le réglage de courant et le microstepping (on attend "
@@ -252,8 +255,13 @@ pdf.add_page()
 pdf.h2("Bloc B — Mise à jour, flash et mesures")
 
 pdf.step(4, "Installer la mise à jour 6.16.0")
-pdf.bold_bullet("À faire :", "sur le tableau de bord, cliquer sur « Mettre à jour » et laisser faire.")
-pdf.bold_bullet("Attendu :", "la version affichée en bas de page passe à 6.16.0. La coupole effectue sa calibration habituelle au redémarrage.")
+pdf.bold_bullet(
+    "À faire :", "sur le tableau de bord, cliquer sur « Mettre à jour » et laisser faire."
+)
+pdf.bold_bullet(
+    "Attendu :",
+    "la version affichée en bas de page passe à 6.16.0. La coupole effectue sa calibration habituelle au redémarrage.",
+)
 pdf.body(
     "Si une bannière de configuration apparaît avec la mention « migrated » : c'est "
     "normal, elle signale simplement qu'un nouveau réglage a été ajouté. Aucune valeur "
@@ -261,7 +269,10 @@ pdf.body(
 )
 
 pdf.step(5, "Vérifier que rien n'a changé")
-pdf.bold_bullet("À faire :", "utiliser la coupole normalement — un GOTO, quelques JOG, éventuellement un début de suivi.")
+pdf.bold_bullet(
+    "À faire :",
+    "utiliser la coupole normalement — un GOTO, quelques JOG, éventuellement un début de suivi.",
+)
 pdf.bold_bullet("Attendu :", "strictement le même comportement qu'avant, même vitesse, même son.")
 pdf.body(
     "C'est la vérification la plus importante du protocole : si quelque chose diffère "
@@ -270,63 +281,87 @@ pdf.body(
 
 pdf.step(6, "Sauvegarder puis flasher le Pico")
 pdf.body("En SSH sur le Pi :")
-pdf.code_block([
-    "ssh slenk@<pi-du-site>",
-    "cd ~/DriftApp",
-    "",
-    "# 1. SAUVEGARDE de l'ancien firmware — a ne pas sauter",
-    "mkdir -p ~/firmware_backup",
-    "mpremote cp :main.py            ~/firmware_backup/main.py",
-    "mpremote cp :step_generator.py  ~/firmware_backup/step_generator.py",
-    "mpremote cp :ramp.py            ~/firmware_backup/ramp.py",
-    "ls -l ~/firmware_backup      # doit lister les 3 fichiers",
-    "",
-    "# 2. Flash du nouveau firmware",
-    "cd ~/DriftApp/firmware",
-    "mpremote cp main.py            :main.py",
-    "mpremote cp step_generator.py  :step_generator.py",
-    "mpremote cp ramp.py            :ramp.py",
-])
+pdf.code_block(
+    [
+        "ssh slenk@<pi-du-site>",
+        "cd ~/DriftApp",
+        "",
+        "# 1. SAUVEGARDE de l'ancien firmware — a ne pas sauter",
+        "mkdir -p ~/firmware_backup",
+        "mpremote cp :main.py            ~/firmware_backup/main.py",
+        "mpremote cp :step_generator.py  ~/firmware_backup/step_generator.py",
+        "mpremote cp :ramp.py            ~/firmware_backup/ramp.py",
+        "ls -l ~/firmware_backup      # doit lister les 3 fichiers",
+        "",
+        "# 2. Flash du nouveau firmware",
+        "cd ~/DriftApp/firmware",
+        "mpremote cp main.py            :main.py",
+        "mpremote cp step_generator.py  :step_generator.py",
+        "mpremote cp ramp.py            :ramp.py",
+    ]
+)
 pdf.bold_bullet("Attendu :", "aucune erreur. Le Pico redémarre tout seul.")
-pdf.bold_bullet("Retour arrière :", "à tout moment, recopier les trois fichiers de ~/firmware_backup vers le Pico (mêmes commandes dans l'autre sens) et débrancher/rebrancher le Pico.")
+pdf.bold_bullet(
+    "Retour arrière :",
+    "à tout moment, recopier les trois fichiers de ~/firmware_backup vers le Pico (mêmes commandes dans l'autre sens) et débrancher/rebrancher le Pico.",
+)
 
 pdf.step(7, "Re-vérifier que rien n'a changé")
-pdf.bold_bullet("À faire :", "redémarrer les services (page Configuration > « Redémarrer les services »), puis refaire un GOTO et quelques JOG.")
-pdf.bold_bullet("Attendu :", "là encore, comportement identique. Le flash est censé être neutre tant que la vitesse reste à 260 µs.")
+pdf.bold_bullet(
+    "À faire :",
+    "redémarrer les services (page Configuration > « Redémarrer les services »), puis refaire un GOTO et quelques JOG.",
+)
+pdf.bold_bullet(
+    "Attendu :",
+    "là encore, comportement identique. Le flash est censé être neutre tant que la vitesse reste à 260 µs.",
+)
 pdf.body("Si ce n'est pas le cas, revenir à l'ancien firmware (étape 6) et prévenir.")
 
 # ─────────────────────────────────────────────────────────────────────────────
 pdf.add_page()
 pdf.step(8, "Campagne de mesure")
-pdf.body(
-    "C'est l'étape où la coupole va tourner de plus en plus vite. Rester à proximité."
+pdf.body("C'est l'étape où la coupole va tourner de plus en plus vite. Rester à proximité.")
+pdf.code_block(
+    [
+        "cd ~/DriftApp",
+        "",
+        "# D'abord voir le plan, sans rien faire bouger",
+        "python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run",
+        "",
+        "# Puis la mesure reelle (demande de taper « go » avant de demarrer)",
+        "python3 scripts/diagnostics/calibration_vitesse_encodeur.py",
+    ]
 )
-pdf.code_block([
-    "cd ~/DriftApp",
-    "",
-    "# D'abord voir le plan, sans rien faire bouger",
-    "python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run",
-    "",
-    "# Puis la mesure reelle (demande de taper « go » avant de demarrer)",
-    "python3 scripts/diagnostics/calibration_vitesse_encodeur.py",
-])
 pdf.body(
     "Le script teste dix vitesses, de la plus lente à la plus rapide. À chaque palier "
     "il fait tourner la coupole de 10° et compare la vitesse obtenue à la vitesse "
     "demandée. Il affiche un tableau de ce type :"
 )
-pdf.code_block([
-    "  délai       mesuré         visé   rendement",
-    "  260 µs    42.8°/min    42.8°/min       100 %",
-    "  235 µs    47.2°/min    47.3°/min       100 %",
-    "  ...",
-])
-pdf.bold_bullet("Arrêt automatique :", "le script s'arrête seul au premier palier où la coupole ne suit plus, et annonce une valeur recommandée.")
-pdf.bold_bullet("Arrêt manuel :", "Ctrl-C interrompt tout immédiatement si quelque chose semble anormal.")
-pdf.bold_bullet("À rapporter :", "le tableau complet affiché en fin de script, et le fichier logs/calibration_vitesse_*.json.")
+pdf.code_block(
+    [
+        "  délai       mesuré         visé   rendement",
+        "  260 µs    42.8°/min    42.8°/min       100 %",
+        "  235 µs    47.2°/min    47.3°/min       100 %",
+        "  ...",
+    ]
+)
+pdf.bold_bullet(
+    "Arrêt automatique :",
+    "le script s'arrête seul au premier palier où la coupole ne suit plus, et annonce une valeur recommandée.",
+)
+pdf.bold_bullet(
+    "Arrêt manuel :", "Ctrl-C interrompt tout immédiatement si quelque chose semble anormal."
+)
+pdf.bold_bullet(
+    "À rapporter :",
+    "le tableau complet affiché en fin de script, et le fichier logs/calibration_vitesse_*.json.",
+)
 
 pdf.step(9, "Régler la vitesse définitive")
-pdf.bold_bullet("À faire :", "page Configuration > Avancé > motor_driver > delay_us, saisir la valeur recommandée par le script (jamais une valeur plus basse), enregistrer, puis « Redémarrer les services ».")
+pdf.bold_bullet(
+    "À faire :",
+    "page Configuration > Avancé > motor_driver > delay_us, saisir la valeur recommandée par le script (jamais une valeur plus basse), enregistrer, puis « Redémarrer les services ».",
+)
 pdf.bold_bullet("Attendu :", "la coupole est plus rapide, sans bruit anormal.")
 pdf.body(
     "À valider sur une vraie session avant de considérer l'affaire close : un suivi "

@@ -14,16 +14,17 @@ import json
 import pytest
 
 
-
 @pytest.fixture
 def empty_catalogue(tmp_path, monkeypatch):
     """Catalogue avec un cache vide dans un répertoire temporaire."""
     cache_file = tmp_path / "objets_cache.json"
     import core.config.config as config_module
+
     monkeypatch.setattr(config_module, "CACHE_FILE", cache_file)
     # Reload le module catalogue pour utiliser le nouveau CACHE_FILE
     import importlib
     import core.observatoire.catalogue as cat_module
+
     importlib.reload(cat_module)
     return cat_module.GestionnaireCatalogue()
 
@@ -58,9 +59,11 @@ def populated_catalogue(tmp_path, monkeypatch):
     cache_file.write_text(json.dumps(objects, indent=2))
 
     import core.config.config as config_module
+
     monkeypatch.setattr(config_module, "CACHE_FILE", cache_file)
     import importlib
     import core.observatoire.catalogue as cat_module
+
     importlib.reload(cat_module)
     return cat_module.GestionnaireCatalogue()
 
@@ -68,6 +71,7 @@ def populated_catalogue(tmp_path, monkeypatch):
 # =============================================================================
 # Construction et cache
 # =============================================================================
+
 
 class TestCatalogueConstruction:
     def test_empty_catalogue(self, empty_catalogue):
@@ -83,6 +87,7 @@ class TestCatalogueConstruction:
 # =============================================================================
 # Recherche locale
 # =============================================================================
+
 
 class TestRechercheLocale:
     def test_exact_match(self, populated_catalogue):
@@ -119,6 +124,7 @@ class TestRechercheLocale:
 # Recherche principale (locale + SIMBAD + planètes)
 # =============================================================================
 
+
 class TestRechercher:
     def test_local_found(self, populated_catalogue):
         result = populated_catalogue.rechercher("M42", utiliser_api=False)
@@ -151,6 +157,7 @@ class TestRechercher:
 # Sauvegarde cache
 # =============================================================================
 
+
 class TestSauvegardeCache:
     def test_save_and_reload(self, empty_catalogue, tmp_path, monkeypatch):
         """Sauvegarde puis rechargement du cache."""
@@ -166,9 +173,11 @@ class TestSauvegardeCache:
 
         # Recharger
         import core.config.config as config_module
+
         monkeypatch.setattr(config_module, "CACHE_FILE", empty_catalogue.cache_file)
         import importlib
         import core.observatoire.catalogue as cat_module
+
         importlib.reload(cat_module)
         new_cat = cat_module.GestionnaireCatalogue()
         assert "TEST" in new_cat.objets
