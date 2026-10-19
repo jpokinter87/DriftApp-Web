@@ -70,6 +70,7 @@ from core.hardware.weather_provider import (
     WeatherProvider,
     make_weather_provider,
 )
+from core.utils.log_paths import logs_subdir, ranger_anciens_logs
 from services import night_journal
 from services.cimier_ipc_manager import CimierIpcManager
 from services.cimier_scheduler import (
@@ -117,7 +118,9 @@ DEFAULT_RUN_LOOP_INTERVAL_S = 0.5
 # sortie standard part dans journald — introuvable pour l'opérateur, qui
 # récupère les incidents en zippant `logs/`. Rotation pour borner le disque
 # d'un service qui tourne 24/7 (verbose_logging peut être bavard).
-LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
+# Sous-dossier logs/cimier/, résolu au démarrage du service (pas à l'import :
+# Django et les tests importent ce module).
+LOG_SUBDIR = "cimier"
 LOG_FILE_NAME = "cimier_service.log"
 LOG_MAX_BYTES = 1_000_000
 LOG_BACKUP_COUNT = 3
@@ -1401,29 +1404,30 @@ def _build_service_from_config(config_path=None) -> CimierService:
 def _build_log_handlers() -> list:
     """Handlers de log du service : stdout, plus un fichier hors dev-mode.
 
-    En dev, `start_dev.sh` redirige déjà stdout vers `logs/cimier_service.log` ;
-    y ajouter un FileHandler écrirait chaque ligne deux fois dans le même
-    fichier. En prod (systemd), stdout part dans journald et le fichier est la
-    seule trace récupérable sans SSH.
+    En dev, `start_dev.sh` redirige déjà stdout vers
+    `logs/cimier/cimier_service.log` ; y ajouter un FileHandler écrirait chaque
+    ligne deux fois dans le même fichier. En prod (systemd), stdout part dans
+    journald et le fichier est la seule trace récupérable sans SSH.
 
-    Un `logs/` non écrivable n'empêche jamais le démarrage : on perd la trace,
-    pas la protection pluie.
+    Les logs d'avant la 6.22, restés à la racine de `logs/`, sont d'abord rangés
+    dans `logs/cimier/` (en dev aussi). Un `logs/` non écrivable n'empêche
+    jamais le démarrage : on perd la trace, pas la protection pluie.
     """
     handlers = [logging.StreamHandler()]
+    ranger_anciens_logs([LOG_FILE_NAME, LOG_FILE_NAME + ".*"], LOG_SUBDIR)
     if _is_dev_mode_enabled():
         return handlers
     try:
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
         handlers.append(
             RotatingFileHandler(
-                LOG_DIR / LOG_FILE_NAME,
+                logs_subdir(LOG_SUBDIR) / LOG_FILE_NAME,
                 maxBytes=LOG_MAX_BYTES,
                 backupCount=LOG_BACKUP_COUNT,
                 encoding="utf-8",
             )
         )
     except OSError as exc:
-        logger.warning("cimier_event=log_file_unavailable dir=%s exc=%s", LOG_DIR, exc)
+        logger.warning("cimier_event=log_file_unavailable subdir=%s exc=%s", LOG_SUBDIR, exc)
     return handlers
 
 

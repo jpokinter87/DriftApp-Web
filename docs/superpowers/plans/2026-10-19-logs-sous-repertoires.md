@@ -89,10 +89,10 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 **Fichiers :** `services/cimier_service.py` (`LOG_DIR`, `_build_log_handlers`).
 
-- [ ] Test : `_build_log_handlers()` hors dev-mode ouvre
+- [x] Test : `_build_log_handlers()` hors dev-mode ouvre
   `…/cimier/cimier_service.log` et range `cimier_service.log*` (fichier courant
   et rotations `.1`…`.3`) présents à la racine.
-- [ ] Le rangement se fait dans `_build_log_handlers()`, avant l'ouverture du
+- [x] Le rangement se fait dans `_build_log_handlers()`, avant l'ouverture du
   `RotatingFileHandler` (pas à l'import : le module est importé par les tests
   et par Django). En dev-mode, ranger aussi (le fichier est alors ouvert par la
   redirection de `start_dev.sh`, cf. tâche 7).

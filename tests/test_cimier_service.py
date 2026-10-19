@@ -3165,25 +3165,27 @@ class TestServiceLogHandlers:
         from services import cimier_service
 
         monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
-        monkeypatch.setattr(cimier_service, "LOG_DIR", tmp_path / "logs")
+        monkeypatch.setenv("DRIFTAPP_LOGS_DIR", str(tmp_path / "logs"))
 
         handlers = cimier_service._build_log_handlers()
 
         file_handlers = [h for h in handlers if isinstance(h, logging.handlers.RotatingFileHandler)]
         assert len(file_handlers) == 1
-        assert Path(file_handlers[0].baseFilename).name == "cimier_service.log"
+        assert Path(file_handlers[0].baseFilename) == tmp_path / "logs" / "cimier" / (
+            "cimier_service.log"
+        )
         for h in handlers:
             h.close()
 
     def test_dev_mode_keeps_stdout_only(self, tmp_path, monkeypatch):
-        """start_dev.sh redirige déjà stdout vers logs/cimier_service.log :
+        """start_dev.sh redirige déjà stdout vers logs/cimier/cimier_service.log :
         un FileHandler y écrirait chaque ligne en double."""
         import logging.handlers
 
         from services import cimier_service
 
         monkeypatch.setenv("CIMIER_DEV_MODE", "1")
-        monkeypatch.setattr(cimier_service, "LOG_DIR", tmp_path / "logs")
+        monkeypatch.setenv("DRIFTAPP_LOGS_DIR", str(tmp_path / "logs"))
 
         handlers = cimier_service._build_log_handlers()
 
@@ -3198,11 +3200,39 @@ class TestServiceLogHandlers:
         monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
         blocker = tmp_path / "blocker"
         blocker.write_text("je ne suis pas un répertoire")
-        monkeypatch.setattr(cimier_service, "LOG_DIR", blocker / "logs")
+        monkeypatch.setenv("DRIFTAPP_LOGS_DIR", str(blocker))
 
         handlers = cimier_service._build_log_handlers()
 
         assert len(handlers) == 1
+
+    @pytest.mark.parametrize("dev_mode", [False, True])
+    def test_range_ses_anciens_logs_dans_cimier(self, tmp_path, monkeypatch, dev_mode):
+        """Logs d'avant la 6.22 (fichier courant et rotations) rangés dans
+        logs/cimier/ au démarrage, en prod comme en dev ; les fichiers de mise
+        à jour restent à la racine."""
+        from services import cimier_service
+
+        if dev_mode:
+            monkeypatch.setenv("CIMIER_DEV_MODE", "1")
+        else:
+            monkeypatch.delenv("CIMIER_DEV_MODE", raising=False)
+        racine = tmp_path / "logs"
+        racine.mkdir()
+        monkeypatch.setenv("DRIFTAPP_LOGS_DIR", str(racine))
+        for nom in ("cimier_service.log", "cimier_service.log.1", "cimier_service.log.3"):
+            (racine / nom).write_text(nom)
+        (racine / "update.log").write_text("maj")
+
+        for h in cimier_service._build_log_handlers():
+            h.close()
+
+        cimier = racine / "cimier"
+        assert (cimier / "cimier_service.log.1").read_text() == "cimier_service.log.1"
+        assert (cimier / "cimier_service.log.3").exists()
+        assert (cimier / "cimier_service.log").exists()
+        assert not list(racine.glob("cimier_service.log*"))
+        assert (racine / "update.log").exists()
 
 
 class TestAutomationCloseRetryEndToEnd:
