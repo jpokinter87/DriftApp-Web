@@ -173,22 +173,33 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 ## Tâche 9 — Vérification de bout en bout (critères de succès de la spec)
 
-- [ ] Déposer à la racine de `logs/` de la machine de dev quelques copies
+- [x] Déposer à la racine de `logs/` de la machine de dev quelques copies
   datées de `motor_service_*`, `ems22d_*`, `django_*`, `cimier_service.log.1`.
-- [ ] `./start_dev.sh start 8080`, démarrer un suivi (`M31`, `skip_goto`),
+- [x] `./start_dev.sh start 8080`, démarrer un suivi (`M31`, `skip_goto`),
   arrêter. Attendu : plus aucun fichier de service à la racine ; chaque famille
   dans son sous-dossier ; log de session `moteur/motor_service_…_M31.log`.
-- [ ] Redémarrer la stack : rien ne bouge (idempotence).
-- [ ] `./start_dev.sh status` et les `tail -f` indiqués pointent des fichiers
+- [x] Redémarrer la stack : rien ne bouge (idempotence).
+- [x] `./start_dev.sh status` et les `tail -f` indiqués pointent des fichiers
   qui existent.
-- [ ] Fichiers de mise à jour : inchangés à la racine, et `git diff --stat`
+- [x] Fichiers de mise à jour : inchangés à la racine, et `git diff --stat`
   ne touche ni `web/health/views.py`, ni `scripts/update_driftapp.sh`, ni
   `scripts/restart_services.sh`. (Le critère 5 de la spec, « OTA simulée en
   dev », se ramène à ça : le chemin OTA n'est pas modifié. La vraie
   vérification est la mise à jour sur le Pi.)
-- [ ] Suite complète, `ruff format --check .`, `ruff check .` ; aucune
+- [x] Suite complète, `ruff format --check .`, `ruff check .` ; aucune
   écriture dans le vrai `logs/` pendant les tests (même contrôle `find -newer`
   qu'en 6.21.17).
+- [x] *Résultats (19/10, 23:06) :* témoins moteur/web/cimier rangés ; témoin
+  `ems22d` resté à la racine (le démon ne tourne pas en dev, rangement vérifié
+  en tâche 3 avec le Python système) ; log de session `moteur/…_M31.log` ;
+  redémarrage : aucun fichier déplacé, seuls deux logs de démarrage ajoutés ;
+  `/api/health/update/status/` 200 sur `logs/update_status.json` ; diff OTA
+  contre origin vide ; 1592 tests verts, ruff propre, rien écrit dans `logs/`.
+- [x] *Hors chantier, constaté :* échec intermittent de
+  `TestCalibrateView::test_calibrate_post_returns_503_when_motor_client_fails`
+  (2 sur ~20 passages ; doublon `hardware.views` / `web.hardware.views` sous
+  xdist, déjà relevé en 6.11.0) ; un test interroge le vrai SIMBAD
+  (`NoResultsWarning` intermittent).
 
 ## Tâche 10 — Livraison
 
