@@ -22,9 +22,22 @@ def logs_root() -> Path:
 
 
 def logs_subdir(nom: str) -> Path:
-    """Sous-dossier `nom` de la racine des logs, créé si besoin."""
+    """Sous-dossier `nom` de la racine des logs, créé si besoin.
+
+    Créé sous `sudo` (scripts de diagnostic), il est rendu à l'utilisateur qui a
+    tapé sudo : sinon les scripts lancés ensuite sans sudo ne pourraient plus y
+    écrire. Un service root sous systemd (pas de SUDO_UID) garde son dossier.
+    """
     dossier = logs_root() / nom
+    if dossier.is_dir():
+        return dossier
     dossier.mkdir(parents=True, exist_ok=True)
+    sudo_uid = os.environ.get("SUDO_UID")
+    if os.geteuid() == 0 and sudo_uid:
+        try:
+            os.chown(dossier, int(sudo_uid), int(os.environ.get("SUDO_GID", sudo_uid)))
+        except (OSError, ValueError):
+            pass
     return dossier
 
 

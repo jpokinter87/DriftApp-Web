@@ -14,7 +14,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 
 LANCER=(uv run --with bleak python scripts/diagnostics/inclinometre_monture.py)
-CONSOLE=logs/inclinometre_console.txt
+CONSOLE=logs/diagnostics/inclinometre_console.txt
 MOTIF=inclinometre_monture.py
 
 en_cours() { pgrep -f "$MOTIF" >/dev/null; }
@@ -31,7 +31,7 @@ case "${1:-}" in
             echo "L'acquisition tourne déjà."
             exit 0
         fi
-        mkdir -p logs
+        mkdir -p logs/diagnostics
         nohup "${LANCER[@]}" "${@:2}" >"$CONSOLE" 2>&1 &
         sleep 2
         echo "Acquisition lancée en tâche de fond. Vérifier avec : ./scripts/inclinometre.sh etat"

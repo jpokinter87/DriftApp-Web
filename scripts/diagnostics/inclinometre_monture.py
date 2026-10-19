@@ -35,6 +35,9 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from core.utils.log_paths import logs_subdir  # noqa: E402
 
 NOTIFY_UUID = "0000ffe4-0000-1000-8000-00805f9a34fb"
 TAILLE_TRAME = 20
@@ -159,8 +162,7 @@ async def _trouver_capteur() -> str | None:
 async def _acquerir(adresse: str | None) -> None:
     from bleak import BleakClient
 
-    chemin = PROJECT_ROOT / "logs" / f"inclinometre_{datetime.now():%Y%m%d_%H%M%S}.csv"
-    chemin.parent.mkdir(exist_ok=True)
+    chemin = logs_subdir("diagnostics") / f"inclinometre_{datetime.now():%Y%m%d_%H%M%S}.csv"
     detecteur = DetecteurMouvement()
     tampon = b""
     dernier_affichage = 0.0

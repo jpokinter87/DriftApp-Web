@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from typing import Tuple, Optional
 
+from core.utils.log_paths import logs_subdir
+
 logger = logging.getLogger(__name__)
 
 
@@ -373,11 +375,13 @@ class HardwareDetector:
         return "\n".join(summary)
 
     @staticmethod
-    def save_detection_report(hardware_info: dict, filepath: str = "logs/hardware_detection.txt"):
-        """Sauvegarde un rapport de détection dans un fichier."""
+    def save_detection_report(hardware_info: dict, filepath: Optional[str] = None):
+        """Sauvegarde un rapport de détection (défaut : logs/diagnostics/)."""
         try:
             import time
 
+            if filepath is None:
+                filepath = logs_subdir("diagnostics") / "hardware_detection.txt"
             Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 
             with open(filepath, "w", encoding="utf-8") as f:
@@ -409,6 +413,6 @@ if __name__ == "__main__":
     print()
 
     if HardwareDetector.save_detection_report(hw_info):
-        print("✓ Rapport sauvegardé dans logs/hardware_detection.txt")
+        print("✓ Rapport sauvegardé dans logs/diagnostics/hardware_detection.txt")
 
     print(f"\nRésultat: Mode {'PRODUCTION' if is_prod else 'SIMULATION'}")

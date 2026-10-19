@@ -109,3 +109,35 @@ def test_fichiers_de_mise_a_jour_jamais_concernes(racine, motifs):
 
     for nom in garder:
         assert (racine / nom).exists(), nom
+
+
+def test_dossier_cree_sous_sudo_rendu_a_l_utilisateur(racine, monkeypatch):
+    """`sudo python3 scripts/diagnostics/…` créerait logs/diagnostics/ en root :
+    les scripts lancés ensuite en slenk (inclinometre.sh) ne pourraient plus y
+    écrire avant la prochaine mise à jour (chown -R de l'OTA)."""
+    import core.utils.log_paths as log_paths
+
+    appels = []
+    monkeypatch.setattr(log_paths.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(log_paths.os, "chown", lambda p, u, g: appels.append((Path(p), u, g)))
+    monkeypatch.setenv("SUDO_UID", "1000")
+    monkeypatch.setenv("SUDO_GID", "1001")
+
+    logs_subdir("diagnostics")
+    logs_subdir("diagnostics")  # déjà là : on ne touche plus à rien
+
+    assert appels == [(racine / "diagnostics", 1000, 1001)]
+
+
+def test_root_sans_sudo_garde_le_dossier(racine, monkeypatch):
+    """motor_service sous systemd (root, sans SUDO_UID) : moteur/ reste à root."""
+    import core.utils.log_paths as log_paths
+
+    appels = []
+    monkeypatch.setattr(log_paths.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(log_paths.os, "chown", lambda *a: appels.append(a))
+    monkeypatch.delenv("SUDO_UID", raising=False)
+
+    logs_subdir("moteur")
+
+    assert appels == []

@@ -43,6 +43,8 @@ if not (DRIFTAPP_DIR / "core").exists():
 
 sys.path.insert(0, str(DRIFTAPP_DIR))
 
+from core.utils.log_paths import logs_subdir  # noqa: E402
+
 # Fichiers IPC
 COMMAND_FILE = Path("/dev/shm/motor_command.json")
 STATUS_FILE = Path("/dev/shm/motor_status.json")
@@ -50,7 +52,7 @@ ENCODER_FILE = Path("/dev/shm/ems22_position.json")
 
 # Fichier de rapport
 RAPPORT_FILE = (
-    DRIFTAPP_DIR / "logs" / f"diagnostic_moteur_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    logs_subdir("diagnostics") / f"diagnostic_moteur_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 )
 
 
@@ -603,7 +605,6 @@ class DiagnosticMoteur:
             print(ligne)
 
         try:
-            RAPPORT_FILE.parent.mkdir(exist_ok=True)
             RAPPORT_FILE.write_text("\n".join(rapport))
             print()
             print_ok(f"Rapport: {RAPPORT_FILE}")

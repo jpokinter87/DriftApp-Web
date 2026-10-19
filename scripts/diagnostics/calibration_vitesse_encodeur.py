@@ -47,6 +47,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+from core.utils.log_paths import logs_subdir  # noqa: E402
+
 COMMAND_FILE = Path("/dev/shm/motor_command.json")
 STATUS_FILE = Path("/dev/shm/motor_status.json")
 ENCODER_FILE = Path("/dev/shm/ems22_position.json")
@@ -481,7 +483,7 @@ def _rapport(resultats, decroche_a, spd):
     )
 
     horodatage = datetime.now().strftime("%Y%m%d_%H%M%S")
-    rapport = PROJECT_ROOT / "logs" / f"calibration_vitesse_{horodatage}.json"
+    rapport = logs_subdir("diagnostics") / f"calibration_vitesse_{horodatage}.json"
     try:
         rapport.write_text(
             json.dumps(

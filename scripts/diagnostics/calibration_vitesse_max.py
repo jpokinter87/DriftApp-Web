@@ -50,10 +50,14 @@ VITESSES_A_TESTER = [
 # Angle de rotation pour chaque test
 ANGLE_TEST = 5.0  # degrés
 
-# Fichier de rapport
-DRIFTAPP_DIR = Path(__file__).parent
+# Fichier de rapport (DRIFTAPP_DIR visait scripts/diagnostics/ depuis le
+# déplacement du script : le rapport partait dans scripts/diagnostics/logs/)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from core.utils.log_paths import logs_subdir  # noqa: E402
+
 RAPPORT_FILE = (
-    DRIFTAPP_DIR / "logs" / f"calibration_vitesse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    logs_subdir("diagnostics")
+    / f"calibration_vitesse_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
 )
 
 
@@ -370,7 +374,6 @@ def generer_rapport(resultats: list):
 
     # Sauvegarder le rapport
     try:
-        RAPPORT_FILE.parent.mkdir(exist_ok=True)
         RAPPORT_FILE.write_text("\n".join(rapport))
         print()
         print_ok(f"Rapport sauvegardé: {RAPPORT_FILE}")

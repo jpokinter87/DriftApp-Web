@@ -117,17 +117,25 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 `inclinometre_monture.py`, `scripts/inclinometre.sh`,
 `core/hardware/hardware_detector.py` (`save_detection_report`).
 
-- [ ] Python : remplacer `PROJECT_ROOT / "logs"` par
+- [x] Python : remplacer `PROJECT_ROOT / "logs"` par
   `logs_subdir("diagnostics")` (règle aussi le `mkdir` manquant de
   `calibration_vitesse_encodeur.py` relevé par la revue).
-- [ ] `inclinometre.sh` : `CONSOLE=logs/diagnostics/inclinometre_console.txt`
+- [x] `inclinometre.sh` : `CONSOLE=logs/diagnostics/inclinometre_console.txt`
   et `mkdir -p logs/diagnostics`. Vérifier en dev : `scripts/inclinometre.sh
   etat` sans capteur ne plante pas sur le chemin.
-- [ ] `save_detection_report` : défaut `logs/diagnostics/hardware_detection.txt`.
-- [ ] Pas de rangement automatique ici (pas de service qui démarre) : les
+- [x] `save_detection_report` : défaut `logs/diagnostics/hardware_detection.txt`.
+- [x] Pas de rangement automatique ici (pas de service qui démarre) : les
   anciens rapports restent à la racine, ce sont des fichiers ponctuels.
-- [ ] `compare_ngc3690_real_vs_simu.py` pointe un log historique précis :
+- [x] `compare_ngc3690_real_vs_simu.py` pointe un log historique précis :
   laisser tel quel.
+- [x] *Ajouté en cours de route :* `logs_subdir` rend à l'utilisateur de `sudo`
+  un dossier créé sous sudo (le README fait lancer `diagnostic_moteur_complet.py`
+  avec sudo : `diagnostics/` aurait appartenu à root et `inclinometre.sh`, lancé
+  en slenk, n'aurait plus pu y écrire avant la mise à jour suivante).
+- [x] *Ajouté en cours de route :* `calibration_vitesse_max.py` écrivait dans
+  `scripts/diagnostics/logs/` (racine calculée depuis l'ancien emplacement du
+  script). Script obsolète (modes CRITICAL/CONTINUOUS de la v5.10), à signaler,
+  pas supprimé.
 
 ## Tâche 7 — `start_dev.sh` et `start_web.sh`
 
