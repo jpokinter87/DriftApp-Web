@@ -203,7 +203,7 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 ## Tâche 10 — Livraison
 
-- [ ] Bump 6.22.0 (`pyproject.toml` + `uv lock`), entrée CLAUDE.md, commit,
+- [x] Bump 6.22.0 (`pyproject.toml` + `uv lock`), entrée CLAUDE.md, commit,
   push.
 - [ ] Message pour Serge (à rédiger avec JP) : où trouver les logs
   désormais, nouveaux PDF, et contrôle au premier démarrage `ls -l logs/`
