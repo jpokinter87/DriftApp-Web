@@ -244,6 +244,26 @@ class TestConfigLoader:
         assert config.site.latitude == 44.15
         assert config.site.nom == "Observatoire Test"
 
+    def test_backup_ecrit_a_cote_de_la_config_chargee(self, tmp_config_file, monkeypatch):
+        """Un ConfigLoader sur une config temporaire écrivait sa copie de secours
+        dans le vrai data/.config.lastgood.json (contenu de test à la place de
+        la dernière config valide de la machine)."""
+        from core.config import config_resilience as cr
+
+        cr._REPORT_CACHE.clear()
+        monkeypatch.setattr(ConfigLoader, "_ensure_ready", _REAL_ENSURE_READY)
+        ecritures = []
+        real_atomic = cr._atomic_write_json
+
+        def _espion(path, *args, **kwargs):
+            ecritures.append(Path(path))
+            return real_atomic(path, *args, **kwargs)
+
+        monkeypatch.setattr(cr, "_atomic_write_json", _espion)
+        ConfigLoader(tmp_config_file).load()
+        assert ecritures, "aucune écriture : le test ne prouve rien"
+        assert all(p.parent == tmp_config_file.parent for p in ecritures), ecritures
+
     def test_load_missing_file_and_missing_template_raises(self, tmp_path, monkeypatch):
         """Config absente ET template absent → ensure_config_ready ne peut rien
         bootstrapper (RuntimeError avalé par _ensure_ready), donc _load_json lève

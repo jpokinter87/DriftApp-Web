@@ -526,7 +526,10 @@ class ConfigLoader:
                 ensure_config_ready,
             )
 
-            ensure_config_ready(self.config_path, DEFAULT_TEMPLATE_PATH, DEFAULT_BACKUP_PATH)
+            # Copie de secours à côté de la config chargée : data/ en prod,
+            # le dossier temporaire d'un test (qui écrasait sinon la vraie).
+            backup_path = Path(self.config_path).parent / DEFAULT_BACKUP_PATH.name
+            ensure_config_ready(self.config_path, DEFAULT_TEMPLATE_PATH, backup_path)
         except Exception as exc:  # ne jamais empêcher le chargement à cause du filet
             self.logger.warning(f"ensure_config_ready a échoué (ignoré) : {exc}")
 
