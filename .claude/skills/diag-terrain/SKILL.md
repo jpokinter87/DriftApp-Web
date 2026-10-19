@@ -5,7 +5,7 @@ description: >-
   site) pour un incident terrain du système DriftApp Web (coupole astronomique
   Observatoire Ubik), puis interprète ses retours. La machine de dev est à 800 km
   du Raspberry Pi : ce skill NE lance jamais les commandes lui-même, il produit des
-  étapes copier-coller (SSH/systemd/IPC côté Pi + protocoles multimètre/continuité/
+  étapes à taper au clavier (systemd/IPC côté Pi + protocoles multimètre/continuité/
   pinout côté hardware) avec un « résultat attendu » par étape, puis diagnostique à
   partir de ce que Serge recolle. À utiliser quand un incident terrain est rapporté :
   « Serge a un souci avec le Pico / Shelly / moteur », « la coupole ne répond plus
@@ -35,15 +35,15 @@ Ne jamais coder en dur les IPs/ports/GPIO dans le protocole. Les lire à l'exéc
 python3 .claude/skills/diag-terrain/scripts/read_terrain_values.py
 ```
 
-Injecter ces valeurs (Pico W host, Shelly host, ports, GPIO, type de driver…) dans le
+Injecter ces valeurs (hosts des Shelly cimier/pluie, port série du Pico moteur, type de driver…) dans le
 protocole. Toute valeur « non configuré » → faire **demander la valeur à Serge** dans
 le protocole plutôt que d'inventer.
 
-⚠️ Le script lit le `data/config.json` **du dépôt**, qui sur la machine de dev est le
-**template** : les *hosts/ports* sont les réservations DHCP terrain (fiables), mais des
+⚠️ Sur la machine de dev, le script lit le `data/config.json` local (ou à défaut
+`data/config.template.json`), **pas celui du Pi** : les *hosts/ports* sont les réservations DHCP terrain (fiables), mais des
 champs divergent dev↔prod (`cimier.enabled=false`, `power_switch.type=noop` côté template).
 Ne jamais en déduire un diagnostic ; inclure dans le protocole une étape qui fait
-**confirmer la valeur sur le Pi** (ex. `grep -A3 '"cimier"' data/config.json` en SSH).
+**confirmer la valeur sur le Pi** (ex. `grep -A3 '"cimier"' data/config.json` dans un terminal du Pi).
 
 ## Mode A — Générer un protocole (entrée = symptôme)
 
@@ -51,15 +51,15 @@ Ne jamais en déduire un diagnostic ; inclure dans le protocole une étape qui f
 2. Identifier la **couche** concernée par le symptôme (souvent les deux) :
    - **Logiciel Pi** (service mort, IPC figé, suivi qui ne démarre pas, Django KO,
      cimier silencieux) → lire `references/pi_software.md`.
-   - **Hardware** (Pico W injoignable, court-circuit/surcourant, moteur muet ou qui
-     frémit, Shelly, câblage) → lire `references/hardware.md`.
+   - **Hardware** (Shelly injoignable, butées cimier, capteur de pluie, moteur muet
+     ou qui frémit, câblage) → lire `references/hardware.md`.
 3. Assembler un protocole **numéroté et séquentiel**. Chaque étape comporte :
-   - la **commande exacte** (SSH) ou le **point de mesure** (multimètre), avec les
+   - la **commande exacte** (à taper sur le Pi) ou le **point de mesure** (multimètre), avec les
      valeurs terrain réelles injectées ;
    - le **résultat attendu** (« doit afficher `active (running)` », « continuité OUVERTE »,
      « ≈ 3,3 V ») pour que Serge sache quoi rapporter.
-4. Rappeler les **règles d'or** pertinentes (cf. `references/hardware.md`, ex. jamais
-   QC 3.0 + USB Pi simultanés).
+4. Rappeler les **règles d'or** pertinentes (cf. `references/hardware.md`, ex. arrêter
+   `motor_service` avant toute commande `mpremote`).
 5. Sortie en **français**, condensée, copier-collable telle quelle.
 
 ## Mode B — Interpréter (entrée = retour de Serge)
@@ -74,8 +74,8 @@ Ne jamais en déduire un diagnostic ; inclure dans le protocole une étape qui f
 
 ## Références
 
-- `references/pi_software.md` — banque de commandes SSH/systemd/IPC/journalctl par
+- `references/pi_software.md` — banque de commandes systemd/IPC/journalctl par
   symptôme logiciel.
-- `references/hardware.md` — protocoles multimètre/continuité/pinout (Pico W, Shelly,
-  DM556T, ULN2803A) + règles d'or. Faits hardware durables uniquement ; les IPs/ports
+- `references/hardware.md` — protocoles multimètre/continuité/pinout (Shelly V3,
+  capteur de pluie, DM860T coupole, DM556T cimier, Pico RP2040) + règles d'or. Faits hardware durables uniquement ; les IPs/ports
   viennent toujours du script de valeurs terrain.

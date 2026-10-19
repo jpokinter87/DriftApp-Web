@@ -4,7 +4,6 @@
 Ne modifie RIEN (pas de git add/commit/push, pas d'écriture pyproject).
 Produit un rapport que le skill exploite pour dérouler sa checklist :
   - fichiers modifiés (commits non poussés + working tree + non suivis)
-  - périmètre cimier détecté (→ décision de bump)
   - valeurs en dur ajoutées dans le diff (IP, /dev/tty, /dev/shm, localhost)
   - mapping fichiers → tests pytest + détection code partagé
   - version courante pyproject.toml
@@ -12,6 +11,7 @@ Produit un rapport que le skill exploite pour dérouler sa checklist :
 Usage : python3 check_push_readiness.py [--repo <chemin>]
 Sortie : rapport texte sur stdout, exit 0 (aide, ne bloque pas par lui-même).
 """
+
 from __future__ import annotations
 
 import argparse
@@ -45,7 +45,8 @@ SHARED_CODE = (
 def git(repo: Path, *args: str) -> str:
     out = subprocess.run(
         ["git", "-C", str(repo), *args],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     return out.stdout
 
@@ -95,20 +96,12 @@ def scan_hardcoded(repo: Path, base: str, untracked: list[str]) -> list[tuple[st
     return findings
 
 
-def is_cimier(path: str) -> bool:
-    p = path.lower()
-    return "cimier" in p or p.startswith("firmware/")
-
-
 def changed_python(files: list[str]) -> list[str]:
     """Fichiers .py modifiés à passer à ruff (scope = périmètre touché).
 
     Exclut .claude/ (outillage skill) pour ne cibler que le code du projet.
     """
-    return [
-        f for f in files
-        if f.endswith(".py") and not f.startswith(".claude/")
-    ]
+    return [f for f in files if f.endswith(".py") and not f.startswith(".claude/")]
 
 
 def map_tests(repo: Path, files: list[str]) -> tuple[list[str], bool]:
@@ -157,17 +150,6 @@ def main() -> int:
         print(f"  ?? {f}")
     if not all_files:
         print("  (aucun — rien à pousser ?)")
-    print()
-
-    cimier_hits = [f for f in all_files if is_cimier(f)]
-    print("--- Décision de bump ---")
-    if cimier_hits:
-        print("  PÉRIMÈTRE CIMIER détecté → proposer PAS de bump (chantier en cours).")
-        for f in cimier_hits:
-            print(f"      {f}")
-    else:
-        print("  Hors cimier → proposer un bump PATCH dans pyproject.toml.")
-    print("  (Confirmation utilisateur requise dans tous les cas.)")
     print()
 
     findings = scan_hardcoded(repo, base, untracked)

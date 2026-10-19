@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM860T 36 V (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.21.12 (Octobre 2026)
+**Version actuelle**: 6.21.13 (Octobre 2026)
 
 ---
 
@@ -591,34 +591,14 @@ vivent uniquement dans `data/config.json` (ignoré par git) + `data/config.json.
 
 ## Skills Claude Disponibles
 
-### Diagnostic et Debug
 | Skill | Description |
 |-------|-------------|
-| `/diagnose` | Diagnostic complet systeme (IPC, services, logs) |
-| `/test-motor` | Tests moteur, feedback, rampe, precision |
-| `/tracking-debug` | Debug suivi astronomique (calculs, abaque, modes) |
-| `/logs` | Analyse des logs (patterns, erreurs, anomalies) |
+| `/diag-terrain` | Protocole de diagnostic à transmettre à Serge pour un incident terrain, puis interprétation de ses retours |
+| `/pre-push` | Hygiène avant push : tests ciblés, ruff, valeurs en dur, bump, commit + push |
 
-### Operations
-| Skill | Description |
-|-------|-------------|
-| `/calibrate` | Calibration encodeur via microswitch 45° |
-| `/config` | Validation et modification de configuration |
-| `/catalogue` | Recherche objets celestes, visibilite |
-| `/session-report` | Rapport detaille de session de suivi |
-
-### Maintenance
-| Skill | Description |
-|-------|-------------|
-| `/deploy` | Deploiement complet sur Raspberry Pi |
-| `/update` | Mise a jour du systeme (git pull + restart) |
-| `/backup` | Sauvegarde/restauration config et sessions |
-
-### Qualite de Code
-| Skill | Description |
-|-------|-------------|
-| `/code-review` | Review complete + refactoring (SOLID, DRY, Clean Code) |
-| `/refactor-code` | Refactoring de code assiste |
+Les anciennes commandes projet (`/diagnose`, `/logs`, `/calibrate`, `/deploy`…) ont été
+retirées en 6.21.13 : écrites en janvier 2026, elles décrivaient des modes supprimés en
+v5.10. La revue de code passe par la commande intégrée `/code-review`.
 
 ---
 
@@ -626,6 +606,7 @@ vivent uniquement dans `data/config.json` (ignoré par git) + `data/config.json.
 
 | Version | Date | Changements |
 |---------|------|-------------|
+| **6.21.13** | Octobre 2026 | **Ménage de l'outillage Claude (aucun effet sur l'application).** Retrait des 13 commandes `.claude/commands/` datant de janvier 2026 (jamais invoquées hormis `code-review` et `refactor-code`, plusieurs décrivaient encore les modes NORMAL/CRITICAL/CONTINUOUS supprimés en v5.10 ; `code-review.md` masquait la commande intégrée `/code-review`). Skill `pre-push` : bump systématique (l'exception du chantier cimier n'a plus lieu d'être) et commit + push d'office. Skill `diag-terrain` : cimier V3 tout-Shelly au lieu du Pico W (sections Pico W et ULN2803A retirées, commandes Uni+ RPC, conventions MOT/UPDN/butées, capteur de pluie), commandes à taper directement sur le Pi (Serge ne pratique pas le SSH), logs cimier lus dans `logs/cimier_service.log`, script de valeurs terrain qui se replie sur `data/config.template.json` et affiche les sections V3. Table des skills de ce fichier mise à jour. |
 | **6.21.12** | Octobre 2026 | **Protocole inclinomètre adapté à un travail directement sur le Pi (Serge ne pratique pas le SSH).** Nouveau lanceur `scripts/inclinometre.sh` à taper au clavier : `scan`, `essai` (dans le terminal, Ctrl+C), `demarrer` (tâche de fond `nohup`, survit à la fermeture du terminal, refuse un double lancement), `etat` (en cours ou non + 5 dernières lignes de `logs/inclinometre_console.txt`), `arreter` ; plus d'adresse à recopier, le premier capteur « WT… » est trouvé seul (`--adresse` en dépannage s'il y en a plusieurs). PDF régénéré (7 pages) : ouverture d'un terminal par-dessus le dashboard en kiosque (Ctrl+Alt+T, retour Alt+Tab), `cd ~/DriftApp`, flèche Haut pour rappeler une commande, toutes les étapes réécrites avec le lanceur, dépannage complété (mauvais dossier, plusieurs capteurs). Lanceur vérifié sur la machine de dev (démarrer → état → double lancement refusé → arrêter). |
 | **6.21.11** | Octobre 2026 | **Protocole terrain de mise en place de l'inclinomètre de la monture + nettoyage.** `docs/protocole_inclinometre_terrain.pdf` (6 pages, généré par `scripts/diagnostics/gen_protocole_inclinometre_pdf.py`) : charge et mise en marche, contrôle facultatif au téléphone (une seule connexion BLE à la fois), Bluetooth du Pi (`bluetoothctl`, `rfkill`), scan et RSSI à l'emplacement prévu, essai à la main, fixation sur l'axe d'ascension droite, retournement simulé de jour par deux GOTO de part et d'autre du méridien, mesure de l'autonomie (inconnue : 8 à 40 h selon les revendeurs), nuit d'enregistrement avec les heures du méridien et du retournement à noter, dépannage. `inclinometre_monture.py` écrit désormais sa console ligne par ligne (sinon `nohup … > fichier` restait vide, sortie mise en tampon). **Retirés** (décision JP, après le retour de Serge : les abaques sont bonnes, seul le moment du retournement pose problème) : le modèle géométrique de la 6.21.8 (`core/tracking/dome_geometry.py`, son test, le script de calage) et le protocole de remesure de la 6.21.9 (PDF et générateur). |
 | **6.21.10** | Octobre 2026 | **Acquisition de l'inclinomètre de la monture (diagnostic, sans effet sur le suivi).** Retour de Serge : les abaques sont bonnes, aucun décalage cimier/tube décelé depuis des mois ; le seul problème est l'heure du retournement, l'ASIAIR (fermé) ne dit pas quand il retourne la monture. Piste retenue : un inclinomètre **WitMotion WT9011DCL-BT50** (Bluetooth BLE) fixé sur la monture, lu par le Pi. Nouveau `scripts/diagnostics/inclinometre_monture.py` (`uv run --with bleak …`, `--scan` pour trouver l'adresse) : notifications BLE `0000ffe4`, trames `0x55 0x61` décodées (accélération, vitesse angulaire, roulis/tangage/lacet), CSV horodaté en heure locale dans `logs/inclinometre_*.csv`, détection des mouvements de la monture (seuil 1 °/s, le suivi sidéral tourne à 0,004 °/s ; fin après 3 s de calme) affichés avec durée et variation de roulis/tangage, reconnexion automatique. Le modèle géométrique de la 6.21.8 et le protocole de remesure de la 6.21.9 ne sont pas poursuivis (non utilisés, gardés en référence). **7 tests** (`tests/test_inclinometre_monture.py`). ⚠️ Protocole BLE repris de la famille WT901BLE, non vérifié sur ce capteur. |

@@ -9,6 +9,7 @@ protocole transmis à Serge le demande explicitement.
 Usage : python3 read_terrain_values.py [--config <chemin/config.json>]
 Sortie : résumé texte sur stdout, exit 0.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -21,9 +22,11 @@ PLACEHOLDER = "<non configuré — à confirmer avec Serge>"
 
 def find_config(start: Path) -> Path | None:
     for d in [start, *start.parents]:
-        cand = d / "data" / "config.json"
-        if cand.exists():
-            return cand
+        # config.json est dé-tracké (v6.9) : repli sur le gabarit du dépôt.
+        for name in ("config.json", "config.template.json"):
+            cand = d / "data" / name
+            if cand.exists():
+                return cand
     return None
 
 
@@ -64,7 +67,7 @@ def main() -> int:
 
     print("--- Encodeur ---")
     enc = cfg.get("encodeur", {})
-    for k, v in (enc.items() if isinstance(enc, dict) else []):
+    for k, v in enc.items() if isinstance(enc, dict) else []:
         show(f"encodeur.{k}", v)
     if not enc:
         print(f"  encodeur: {PLACEHOLDER}")
@@ -73,16 +76,22 @@ def main() -> int:
     print("--- Cimier ---")
     cim = cfg.get("cimier", {})
     show("cimier.enabled", cim.get("enabled"))
-    show("cimier.host (Pico W)", cim.get("host"))
-    show("cimier.port", cim.get("port"))
-    ps = cim.get("power_switch", {})
-    show("power_switch.type", ps.get("type"))
-    show("power_switch.host (Shelly alim)", ps.get("host"))
-    show("power_switch.switch_id", ps.get("switch_id"))
-    ms = cim.get("motor_shelly", {})
-    if isinstance(ms, dict) and ms:
-        for k, v in ms.items():
-            show(f"motor_shelly.{k}", v)
+    # V3 tout-Shelly : 24V (power_switch), Uni+ butées (switch_reader),
+    # MOT/UPDN (motor_shelly), pluie (weather_provider) et sa résistance.
+    for section in (
+        "power_switch",
+        "switch_reader",
+        "motor_shelly",
+        "weather_provider",
+        "rain_heater_switch",
+    ):
+        sub = cim.get(section, {})
+        if not isinstance(sub, dict) or not sub:
+            print(f"  {section}: {PLACEHOLDER}")
+            continue
+        for k, v in sub.items():
+            if not k.startswith("_"):
+                show(f"{section}.{k}", v)
     auto = cim.get("automation", {})
     show("automation.mode", auto.get("mode") if isinstance(auto, dict) else auto)
     print()

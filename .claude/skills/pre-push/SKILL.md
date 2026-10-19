@@ -4,9 +4,8 @@ description: >-
   Checklist d'hygiène avant un commit/push sur le dépôt DriftApp Web (contrôle de
   coupole astronomique). Déroule en une passe : tests pytest ciblés sur le périmètre
   touché, ruff format + check, détection de valeurs terrain codées en dur (IP/host/
-  device/IPC) dans le diff, décision de bump de pyproject.toml (avec l'exception du
-  chantier cimier en cours où l'on ne bumpe pas), rédaction d'un message de commit
-  conventionnel, puis commit + push après validation explicite. À utiliser quand
+  device/IPC) dans le diff, bump de pyproject.toml (systématique), rédaction d'un message de commit
+  conventionnel, puis commit + push. À utiliser quand
   l'utilisateur s'apprête à pousser : « je vais pousser », « commit + push »,
   « prépare le push », « pousse les changements », ou avant toute écriture vers
   origin/main.
@@ -25,7 +24,7 @@ Lancer l'analyse en lecture seule (ne modifie rien) :
 python3 .claude/skills/pre-push/scripts/check_push_readiness.py --repo .
 ```
 
-Le rapport fournit : fichiers concernés, périmètre cimier (→ décision de bump),
+Le rapport fournit : fichiers concernés,
 valeurs en dur ajoutées, tests à lancer, version courante. Utiliser ses conclusions
 pour les étapes suivantes au lieu de les recalculer à la main.
 
@@ -72,15 +71,9 @@ exception légitime : `127.0.0.1` dans des tests/fixtures (déjà exclus du scan
 
 ## Étape 4 — Décision de bump pyproject.toml
 
-- **Le diff touche le périmètre cimier** (chemins `firmware/cimier`, fichiers
-  `*cimier*`, sim `CimierMechanismSim`/`SimMotorShelly`) → proposer de **NE PAS
-  bumper** : le chantier cimier ne bumpe pas par commit intermédiaire tant qu'il
-  n'est pas terminé.
-- **Hors cimier** → proposer un **bump patch** (ex. `6.4.0` → `6.4.1`). Milestone
-  complet = bump mineur. Sans bump, la MAJ OTA n'est jamais proposée sur le terrain.
-
-**Toujours demander confirmation** avant d'éditer `pyproject.toml`. Ne jamais bumper
-silencieusement.
+**Bump systématique** à chaque push : patch par défaut (ex. `6.4.0` → `6.4.1`),
+mineur pour un milestone complet. Sans bump, la MAJ OTA n'est jamais proposée sur
+le terrain. Ajouter la ligne correspondante au changelog de `CLAUDE.md`.
 
 ## Étape 5 — Message de commit
 
@@ -91,9 +84,9 @@ de commit en vigueur dans la session.
 
 ## Étape 6 — Commit + push
 
-**Uniquement après OK explicite de l'utilisateur.** Présenter d'abord un récapitulatif :
-version (bumpée ou non + raison), résultat des tests, fichiers inclus, message de commit.
-Puis, sur accord :
+Une fois les tests verts, **commit + push d'office** (attendu par l'utilisateur),
+sauf consigne explicite d'attendre. Récapituler ensuite : version, résultat des
+tests, fichiers inclus, message de commit.
 
 ```bash
 git add <fichiers>

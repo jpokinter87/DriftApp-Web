@@ -1,7 +1,9 @@
 # Diagnostic logiciel Pi — banque de commandes pour Serge
 
-Commandes à **faire exécuter par Serge en SSH sur le Pi** (`ssh slenk@<pi-host>`,
-`cd ~/DriftApp`). Injecter les valeurs réelles (host, port) lues via
+Commandes à **faire taper par Serge directement sur le Pi** : il ne pratique pas
+le SSH. Terminal par-dessus le dashboard en kiosque avec **Ctrl+Alt+T** (retour
+Alt+Tab), puis `cd ~/DriftApp`. Préférer des commandes courtes ; la flèche Haut
+rappelle la précédente. Injecter les valeurs réelles (host, port) lues via
 `read_terrain_values.py`. Chaque commande est donnée avec son **résultat attendu**.
 
 ## Sommaire
@@ -90,15 +92,22 @@ motor_service bloqué/mort.
 ```bash
 cat /dev/shm/cimier_status.json
 sudo systemctl status cimier_service --no-pager
-sudo journalctl -u cimier_service -n 40 --no-pager
 ```
-Attendu : fichier présent, `state` non nul. Vérifier joignabilité du Pico W
-(host lu en config) :
+Attendu : fichier présent, `state` non nul. Les logs utiles sont dans le fichier
+(un `journalctl` vide est normal en prod) :
 ```bash
-curl -s http://<cimier.host>:<cimier.port>/status
+tail -n 60 logs/cimier_service.log
+tail data/nights/$(date +%Y-%m-%d).jsonl    # journal de nuit (pluie, fermetures)
 ```
-Attendu : JSON capteurs (fins de course). Timeout/refus → Pico W injoignable → volet
-hardware (`references/hardware.md`).
+Joignabilité des Shelly V3 (hosts lus en config) :
+```bash
+curl -s "http://<switch_reader.host>/rpc/Input.GetStatus?id=0"   # butée BAS
+curl -s "http://<switch_reader.host>/rpc/Input.GetStatus?id=1"   # butée HAUT
+curl -s http://<power_switch.host>/relay/0                        # alim 24 V
+```
+Attendu : JSON quasi instantané. Timeout → Shelly injoignable → volet hardware
+(`references/hardware.md`). Les Shelly MOT/UPDN sont alimentés en aval du 24 V :
+injoignables tant que le 24 V est coupé (normal hors cycle).
 
 ## Symptôme : calibration bloquée
 
