@@ -18,7 +18,6 @@ CORRECTIONS APPLIQUÉES (5 décembre 2025):
 
 import json
 import logging
-import os
 import socket
 import threading
 import time
@@ -27,6 +26,8 @@ from pathlib import Path
 from typing import Optional
 
 import lgpio
+
+from core.utils.log_paths import logs_subdir, ranger_anciens_logs
 
 try:
     import spidev
@@ -61,10 +62,10 @@ MAX_CONSECUTIVE_SPI_ERRORS = 5
 WRITE_TMP = JSON_OUT.with_suffix(".tmp")
 
 # Configuration logging : fichier horodaté par session + console
-PROJECT_ROOT = Path(__file__).parent
-# DRIFTAPP_LOGS_DIR : redirigé par les tests (tests/conftest.py).
-LOG_DIR = Path(os.environ.get("DRIFTAPP_LOGS_DIR") or PROJECT_ROOT / "logs")
-LOG_DIR.mkdir(exist_ok=True)
+# Sous-dossier logs/encodeur/ ; les logs d'avant la 6.22, restés à la racine,
+# y sont rangés pour que la purge (10 derniers) les retrouve.
+LOG_DIR = logs_subdir("encodeur")
+ranger_anciens_logs(["ems22d_*.log"], "encodeur")
 
 # Nom de fichier avec horodatage de la session
 SESSION_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")

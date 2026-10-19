@@ -77,10 +77,10 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 **Fichier :** `ems22d_calibrated.py` (lignes `LOG_DIR`, `cleanup_old_logs`).
 
-- [ ] Test sur le modèle de `tests/test_ems22d_force_calibration.py` (stub
+- [x] Test sur le modèle de `tests/test_ems22d_force_calibration.py` (stub
   `lgpio`) : un `ems22d_*.log` à la racine est rangé dans `encodeur/` à
   l'import, `LOG_DIR` vaut `…/encodeur`.
-- [ ] `LOG_DIR = logs_subdir("encodeur")` + rangement de `ems22d_*.log` avant
+- [x] `LOG_DIR = logs_subdir("encodeur")` + rangement de `ems22d_*.log` avant
   `cleanup_old_logs(10)`. Le script est lancé depuis la racine du projet par
   `ems22d.service` : vérifier que `core.utils.log_paths` s'importe (sinon
   ajouter le `sys.path.insert` utilisé ailleurs).

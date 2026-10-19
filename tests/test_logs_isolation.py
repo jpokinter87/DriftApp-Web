@@ -48,13 +48,34 @@ def test_motor_service_range_ses_anciens_logs(tmp_path):
     assert (tmp_path / "update_status.json").exists()
 
 
-def test_ems22d_ecrit_dans_le_dossier_de_test():
+def _importer_ems22d():
     # Le démon importe lgpio au chargement (cf. test_ems22d_force_calibration).
     with patch.dict(sys.modules, {"lgpio": MagicMock()}):
         sys.modules.pop("ems22d_calibrated", None)
         module = importlib.import_module("ems22d_calibrated")
         sys.modules.pop("ems22d_calibrated", None)
-    assert module.LOG_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"])
+    return module
+
+
+def test_ems22d_ecrit_dans_le_dossier_de_test():
+    module = _importer_ems22d()
+    assert module.LOG_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"]) / "encodeur"
+
+
+def test_ems22d_range_ses_anciens_logs(tmp_path, monkeypatch):
+    """Au démarrage, le démon range dans encodeur/ ses logs restés à la racine
+    avant sa purge (10 derniers), qui sinon ne les verrait plus."""
+    monkeypatch.setenv("DRIFTAPP_LOGS_DIR", str(tmp_path))
+    (tmp_path / "ems22d_20261001_120000.log").write_text("ancien")
+    (tmp_path / "update.log").write_text("maj")
+
+    module = _importer_ems22d()
+
+    encodeur = tmp_path / "encodeur"
+    assert (encodeur / "ems22d_20261001_120000.log").read_text() == "ancien"
+    assert module.LOG_FILE.parent == encodeur
+    assert not list(tmp_path.glob("ems22d_*.log"))
+    assert (tmp_path / "update.log").exists()
 
 
 def test_django_ecrit_dans_le_dossier_de_test():
