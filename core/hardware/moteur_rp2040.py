@@ -61,6 +61,9 @@ class MoteurRP2040:
         self.stop_requested = False
         self._needs_drain = False
         self._serial_lock = threading.Lock()
+        # Controleur partage avec motor_service (celui que le veilleur STOP
+        # arrete) ; None hors service : un controleur neuf par appel.
+        self.feedback_controller = None
 
         # Parser la config moteur
         params = parse_motor_config(config_moteur)
@@ -446,6 +449,9 @@ class MoteurRP2040:
         Returns:
             FeedbackController configure avec ce moteur et le daemon reader
         """
+        if self.feedback_controller is not None:
+            return self.feedback_controller
+
         from core.hardware.feedback_controller import FeedbackController
 
         return FeedbackController(self, get_daemon_reader())

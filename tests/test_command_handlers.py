@@ -178,6 +178,22 @@ class TestGotoHandler:
         assert status["status"] == "error"
         assert "error" in status
 
+    def test_petit_goto_en_echec_horodate_l_erreur(self, handler, mock_feedback_controller):
+        """Sans error_timestamp, la récupération automatique ne remet jamais
+        idle : un parking raté à moins de 3° restait en erreur indéfiniment."""
+        mock_feedback_controller.rotation_avec_feedback.return_value = {
+            "success": False,
+            "position_initiale": 44.0,
+            "position_finale": 44.0,
+            "erreur_finale": 1.0,
+            "iterations": 10,
+        }
+
+        status = handler.execute(45.0, {"position": 44.0})
+
+        assert status["status"] == "error"
+        assert status["error_timestamp"] is not None
+
     def test_get_motor_speed_default(self, handler, mock_config):
         """Utilise la vitesse unique v5.10 (260 µs) par défaut."""
         from services.command_handlers import _get_motor_speed
@@ -453,13 +469,37 @@ class TestTrackingHandler:
             patch("services.command_handlers.TrackingSession") as session_cls,
             patch("services.command_handlers.TrackingLogger"),
             patch("services.command_handlers.AstronomicalCalculations"),
-            patch("services.command_handlers._get_rotate_log_func"),
         ):
             session_cls.return_value.start.return_value = (False, "stop")
             handler.start("Cible", {"status": "idle"}, coords=(83.82, -5.39))
         session_cls.return_value.start.assert_called_once_with(
             "Cible", skip_goto=False, coords=(83.82, -5.39)
         )
+
+    def test_start_en_exception_horodate_l_erreur(self, handler):
+        handler.config = MagicMock()
+        status = {"status": "idle"}
+        with (
+            patch("services.command_handlers.TrackingSession") as session_cls,
+            patch("services.command_handlers.TrackingLogger"),
+            patch("services.command_handlers.AstronomicalCalculations"),
+        ):
+            session_cls.return_value.start.side_effect = RuntimeError("encodeur")
+            handler.start("Cible", status)
+        assert status["status"] == "error"
+        assert status["error_timestamp"] is not None
+
+    def test_start_fait_tourner_le_log_de_session(self, handler):
+        handler.config = MagicMock()
+        handler.rotate_log = MagicMock()
+        with (
+            patch("services.command_handlers.TrackingSession") as session_cls,
+            patch("services.command_handlers.TrackingLogger"),
+            patch("services.command_handlers.AstronomicalCalculations"),
+        ):
+            session_cls.return_value.start.return_value = (False, "stop")
+            handler.start("M 31", {"status": "idle"})
+        handler.rotate_log.assert_called_once_with("M 31")
 
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""

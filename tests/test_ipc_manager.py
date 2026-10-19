@@ -6,6 +6,7 @@ entre Motor Service et Django.
 """
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -206,6 +207,34 @@ class TestClearCommand:
 
             ipc_manager.clear_command()
 
+            assert ipc_manager.read_command()["id"] == "stop-1"
+
+    def test_clear_command_preserve_un_stop_ecrit_juste_avant_l_effacement(
+        self, ipc_manager, tmp_path, monkeypatch
+    ):
+        """STOP écrit par Django entre la vérification et l'ouverture du fichier
+        par clear_command : l'ouverture ne doit pas l'effacer sans l'avoir lu."""
+        import builtins
+
+        import services.ipc_manager as ipc_module
+
+        cmd_file = tmp_path / "command.json"
+        real_open = builtins.open
+
+        def open_apres_ecriture_django(path, mode="r", *args, **kwargs):
+            if Path(path) == cmd_file and mode != "r":
+                with real_open(cmd_file, "w") as f:
+                    f.write('{"id": "stop-1", "command": "stop"}')
+            return real_open(path, mode, *args, **kwargs)
+
+        with patch("services.ipc_manager.COMMAND_FILE", cmd_file):
+            cmd_file.write_text('{"id": "goto-1", "command": "goto", "angle": 180}')
+            assert ipc_manager.read_command()["id"] == "goto-1"
+            monkeypatch.setattr(ipc_module, "open", open_apres_ecriture_django, raising=False)
+
+            ipc_manager.clear_command()
+
+            monkeypatch.delattr(ipc_module, "open")
             assert ipc_manager.read_command()["id"] == "stop-1"
 
     def test_peek_command_ne_consomme_pas(self, ipc_manager, tmp_path):

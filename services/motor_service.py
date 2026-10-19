@@ -267,6 +267,9 @@ class MotorService:
                 self.daemon_reader,
                 protection_threshold=self.config.thresholds.feedback_protection_deg,
             )
+        # Le suivi passe par moteur.rotation_avec_feedback : même contrôleur
+        # que le veilleur STOP, sinon un STOP n'interrompt pas une correction.
+        self.moteur.feedback_controller = self.feedback_controller
 
     def _open_serial_port(self):
         """
@@ -325,6 +328,7 @@ class MotorService:
             self.simulation_mode,
             self._write_status,
             self._add_tracking_log,
+            rotate_log=rotate_log_for_tracking,
         )
 
     def _cleanup_on_startup(self):
@@ -697,7 +701,10 @@ class MotorService:
 
         elif cmd_type == "calibrate":
             logger.info("ipc_command | type=calibrate")
-            self._execute_calibration_routine(trigger_label="manual_calibration")
+            if self.tracking_handler.is_active:
+                logger.warning("manual_calibration | refusée : suivi actif")
+            else:
+                self._execute_calibration_routine(trigger_label="manual_calibration")
 
         elif cmd_type == "calibrate_force":
             logger.info("ipc_command | type=calibrate_force")

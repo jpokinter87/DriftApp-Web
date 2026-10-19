@@ -251,7 +251,6 @@ class TestTrackingStartUnpacking:
 
         with (
             patch("services.command_handlers.TrackingSession", return_value=mock_session),
-            patch("services.command_handlers._get_rotate_log_func", return_value=MagicMock()),
         ):
             status = {"status": "idle", "tracking_object": None}
             tracking_handler.start("NGC 5033", status)
@@ -266,7 +265,6 @@ class TestTrackingStartUnpacking:
 
         with (
             patch("services.command_handlers.TrackingSession", return_value=mock_session),
-            patch("services.command_handlers._get_rotate_log_func", return_value=MagicMock()),
         ):
             status = {"status": "idle", "tracking_object": None}
             tracking_handler.start("FAUX_OBJET", status)

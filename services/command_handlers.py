@@ -29,20 +29,6 @@ from core.utils.angle_utils import shortest_angular_distance
 
 logger = logging.getLogger(__name__)
 
-# Import différé pour éviter import circulaire
-_rotate_log_func = None
-
-
-def _get_rotate_log_func():
-    """Importe la fonction de rotation de log de manière différée."""
-    global _rotate_log_func
-    if _rotate_log_func is None:
-        from services.motor_service import rotate_log_for_tracking
-
-        _rotate_log_func = rotate_log_for_tracking
-    return _rotate_log_func
-
-
 # =============================================================================
 # FONCTIONS UTILITAIRES COMMUNES (DRY)
 # =============================================================================
@@ -273,6 +259,7 @@ class GotoHandler:
 
             if not result["success"]:
                 status["error"] = f"Erreur finale: {result['erreur_finale']:.2f}°"
+                status["error_timestamp"] = time.time()
 
             logger.info(
                 f"GOTO terminé: {result['position_initiale']:.1f}° -> "
@@ -483,6 +470,7 @@ class TrackingHandler:
         simulation_mode: bool,
         status_callback: Callable,
         log_callback: Callable,
+        rotate_log: Optional[Callable[[str], Any]] = None,
     ):
         self.moteur = moteur
         self.feedback_controller = feedback_controller
@@ -490,6 +478,9 @@ class TrackingHandler:
         self.simulation_mode = simulation_mode
         self.status_callback = status_callback
         self.log_callback = log_callback
+        # Fournie par motor_service : un import de services.motor_service ici
+        # rechargerait le module (le service tourne en __main__).
+        self.rotate_log = rotate_log
         self.session: Optional[TrackingSession] = None
         self.active = False
         self._consecutive_errors = 0
@@ -512,11 +503,11 @@ class TrackingHandler:
             coords: (RA, DEC) J2000 en degrés saisis à la main (None = catalogue)
         """
         # Rotation du fichier de log pour cette session de suivi
-        try:
-            rotate_log = _get_rotate_log_func()
-            rotate_log(object_name)
-        except Exception as e:
-            logger.warning(f"Impossible de créer le fichier de log dédié: {e}")
+        if self.rotate_log is not None:
+            try:
+                self.rotate_log(object_name)
+            except Exception as e:
+                logger.warning(f"Impossible de créer le fichier de log dédié: {e}")
 
         logger.info(f"Démarrage suivi de: {object_name} (skip_goto={skip_goto})")
 
@@ -600,6 +591,7 @@ class TrackingHandler:
             current_status["tracking_pending"] = False
             current_status["goto_info"] = None
             current_status["error"] = str(e)
+            current_status["error_timestamp"] = time.time()
 
         self.status_callback(current_status)
 

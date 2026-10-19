@@ -262,6 +262,27 @@ class TestHandlerDelegation:
 # =============================================================================
 
 
+class TestSharedFeedbackController:
+    """Le suivi (corrections, GOTO initial) passe par moteur.rotation_avec_feedback :
+    il doit utiliser le contrôleur que le veilleur STOP arrête, sinon un STOP
+    pendant une correction relance la boucle jusqu'à 10 fois."""
+
+    def test_moteur_uses_service_controller(self, motor_service):
+        assert motor_service.moteur.get_feedback_controller() is motor_service.feedback_controller
+
+
+class TestTrackingLogRotation:
+    """motor_service tourne en __main__ : la rotation de log doit être celle de
+    ce module-là, pas d'un second import de services.motor_service (qui créait
+    un log vide et laissait le handler d'origine attaché)."""
+
+    def test_tracking_handler_uses_rotation_of_service_module(self, motor_service):
+        import sys
+
+        module = sys.modules[type(motor_service).__module__]
+        assert motor_service.tracking_handler.rotate_log is module.rotate_log_for_tracking
+
+
 class TestHandleStop:
     """Tests pour handle_stop() public method."""
 
@@ -361,6 +382,18 @@ class TestManualCalibrationCommand:
             motor_service.process_command({"command": "calibrate", "id": "test-1"})
             mock_exec.assert_called_once_with(trigger_label="manual_calibration")
             mock_clear.assert_called_once()
+
+    def test_calibrate_refused_while_tracking(self, motor_service):
+        """Le balayage déplacerait la coupole sous le suivi puis publierait idle
+        alors que les corrections continuent (même refus que calibrate_force)."""
+        from unittest.mock import MagicMock
+
+        motor_service.tracking_handler.active = True
+        with patch.object(
+            motor_service, "_execute_calibration_routine", new=MagicMock()
+        ) as mock_exec:
+            motor_service.process_command({"command": "calibrate", "id": "test-2"})
+        mock_exec.assert_not_called()
 
     def test_calibrate_publishes_calibrating_then_idle(self, motor_service):
         """Cycle de statuts : calibrating + running pendant, idle + ok après."""

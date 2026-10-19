@@ -171,18 +171,26 @@ class IpcManager:
         Une commande arrivée pendant le traitement (STOP pendant un GOTO)
         n'est pas effacée : elle sera lue au tour suivant.
 
-        Utilise un verrou exclusif pour éviter les conflits.
+        Vérification et effacement sous le même verrou exclusif : ouvrir en 'w'
+        tronquerait avant le verrou une commande écrite après la vérification.
         """
-        pending = self._load_command()
-        if pending is not None and pending.get("id") not in (None, self.last_command_id):
-            return
         try:
             if COMMAND_FILE.exists():
-                with open(COMMAND_FILE, "w") as f:
-                    # 'w' mode tronque déjà le fichier, pas besoin de write('')
+                with open(COMMAND_FILE, "r+") as f:
                     fcntl.flock(f.fileno(), fcntl.LOCK_EX)
                     try:
-                        f.flush()
+                        text = f.read()
+                        try:
+                            pending = json.loads(text) if text.strip() else None
+                        except json.JSONDecodeError:
+                            pending = None
+                        if isinstance(pending, dict) and pending.get("id") not in (
+                            None,
+                            self.last_command_id,
+                        ):
+                            return
+                        f.seek(0)
+                        f.truncate()
                     finally:
                         fcntl.flock(f.fileno(), fcntl.LOCK_UN)
         except (IOError, OSError):
