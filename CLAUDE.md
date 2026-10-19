@@ -339,7 +339,7 @@ countdown ouverture/fermeture s'affichent (alimentés par fallback Django).
 `core.hardware.cimier_simulator` (Uni+ RPC + relais 24V/MOT/UPDN). `data/config.json`
 reste intact (template repo respecté pour la prod). Si l'UI reste vide après
 `./start_dev.sh restart`, vérifier `cat /dev/shm/cimier_status.json` (présent + state
-non-null) et `logs/cimier_service.log`.
+non-null) et `logs/cimier/cimier_service.log`.
 
 ### Simuler une averse en dev
 
@@ -358,7 +358,7 @@ d'un Shelly dédié (.87) à la cadence `watch_interval_s`. Ce qu'on observe :
 
 ```bash
 python3 -c "import json;print(json.load(open('/dev/shm/cimier_status.json'))['rain'])"
-grep -E "rain_read|rain_transition|rain_emergency" logs/cimier_service.log
+grep -E "rain_read|rain_transition|rain_emergency" logs/cimier/cimier_service.log
 tail data/nights/$(date +%Y-%m-%d).jsonl     # journal de nuit (dé-tracké)
 ```
 

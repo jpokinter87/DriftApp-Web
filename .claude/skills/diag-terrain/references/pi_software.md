@@ -94,9 +94,12 @@ cat /dev/shm/cimier_status.json
 sudo systemctl status cimier_service --no-pager
 ```
 Attendu : fichier présent, `state` non nul. Les logs utiles sont dans le fichier
-(un `journalctl` vide est normal en prod) :
+(un `journalctl` vide est normal en prod). Depuis la 6.22 ils sont rangés par thème
+(`logs/moteur/`, `logs/encodeur/`, `logs/cimier/`, `logs/web/`, `logs/diagnostics/`) ;
+les fichiers d'avant la mise à jour y ont été déplacés au premier démarrage.
+Sur une version antérieure, chercher `logs/cimier_service.log` à la racine :
 ```bash
-tail -n 60 logs/cimier_service.log
+tail -n 60 logs/cimier/cimier_service.log
 tail data/nights/$(date +%Y-%m-%d).jsonl    # journal de nuit (pluie, fermetures)
 ```
 Joignabilité des Shelly V3 (hosts lus en config) :

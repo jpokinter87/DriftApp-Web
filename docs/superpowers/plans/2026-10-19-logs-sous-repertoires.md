@@ -152,17 +152,24 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 ## Tâche 8 — Documentation et PDF terrain
 
-- [ ] `CLAUDE.md` : chemins dans « Debugging Courant » (indicateurs cimier,
+- [x] `CLAUDE.md` : chemins dans « Debugging Courant » (indicateurs cimier,
   simuler une averse), aide `start_dev.sh`.
-- [ ] `scripts/diagnostics/README.md` (section « Les scripts génèrent des
+- [x] `scripts/diagnostics/README.md` (section « Les scripts génèrent des
   rapports dans `logs/` »).
-- [ ] Skill `diag-terrain` (`SKILL.md`, `references/hardware.md`,
+- [x] Skill `diag-terrain` (`SKILL.md`, `references/hardware.md`,
   `references/pi_software.md`) : `logs/cimier/cimier_service.log`, et préciser
   que les fichiers d'avant la mise à jour ont été rangés automatiquement.
-- [ ] Régénérer `docs/protocole_inclinometre_terrain.pdf` et
+- [x] Régénérer `docs/protocole_inclinometre_terrain.pdf` et
   `docs/protocole_vitesse_v6.16_terrain.pdf` (générateurs dans
   `scripts/diagnostics/gen_protocole_*_pdf.py`, `uv run --with fpdf2 …`) ;
   relire le rendu (pages concernées).
+- [x] *Écart :* `docs/protocole_vitesse_v6.16_terrain.pdf` **non modifié**. C'est
+  le protocole d'une campagne close (27/09) qui fait installer la 6.16.0 :
+  y écrire `logs/diagnostics/` le rendrait incohérent. Pour une nouvelle
+  campagne, le script affiche le chemin de son rapport (« Rapport détaillé : … »).
+- [x] Protocole inclinomètre : édition passée à 6.22.0 (en-tête, sous-titre,
+  prérequis, dépannage), pour que Serge distingue la nouvelle version ; pages
+  1, 4 et 6 relues en rendu.
 
 ## Tâche 9 — Vérification de bout en bout (critères de succès de la spec)
 

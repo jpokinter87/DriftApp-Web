@@ -46,8 +46,8 @@ class Protocole(Report):
 
 pdf = Protocole(
     title="Inclinomètre de la monture",
-    subtitle="Mise en place et initialisation — DriftApp 6.21.12",
-    header_text="Protocole inclinomètre — v6.21.12",
+    subtitle="Mise en place et initialisation — DriftApp 6.22.0",
+    header_text="Protocole inclinomètre — v6.22.0",
 )
 
 pdf.title_page(
@@ -65,7 +65,7 @@ pdf.title_page(
         "Observatoire Ubik — DriftApp Web",
         "Destinataire : Serge, sur site",
         "Étapes 1 à 6 de jour (environ 1 h), étape 7 pendant une nuit d'observation",
-        "Prérequis : mise à jour 6.21.12 installée (bouton « Mettre à jour »)",
+        "Prérequis : mise à jour 6.22.0 installée (bouton « Mettre à jour »)",
         "Octobre 2026",
     ],
 )
@@ -196,8 +196,10 @@ pdf.attendu(
     "(ou tangage 90°, selon l'axe autour duquel on a tourné)."
 )
 pdf.body("Arrêter avec Ctrl + C, puis vérifier que le fichier de mesures existe :")
-pdf.code_block(["ls -l logs/inclinometre_*"])
-pdf.attendu("au moins un fichier logs/inclinometre_<date>_<heure>.csv, de taille supérieure à 0.")
+pdf.code_block(["ls -l logs/diagnostics/inclinometre_*"])
+pdf.attendu(
+    "au moins un fichier logs/diagnostics/inclinometre_<date>_<heure>.csv, de taille supérieure à 0."
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 pdf.add_page()
@@ -287,9 +289,11 @@ pdf.table(
 pdf.body(f"Le lendemain matin : « {CMD} arreter ».")
 
 pdf.h1("Étape 8 — Ce qu'il faut m'envoyer")
-pdf.body("Dans le dossier DriftApp/logs du Pi (comme pour les autres logs) :")
-pdf.bullet("les fichiers inclinometre_*.csv de la nuit et inclinometre_console.txt ;")
-pdf.bullet("les logs motor_service de la nuit (motor_service_*.log).")
+pdf.body("Dans le dossier DriftApp/logs du Pi, rangé par thème :")
+pdf.bullet(
+    "logs/diagnostics : les fichiers inclinometre_*.csv de la nuit et inclinometre_console.txt ;"
+)
+pdf.bullet("logs/moteur : les logs motor_service de la nuit (motor_service_*.log).")
 pdf.bullet("le tableau de l'étape 7, les relevés des étapes 4 et 6, et la photo du montage.")
 pdf.info_box(
     "Avec ces données, je vérifie que le retournement se distingue de tout autre mouvement (GOTO, "
@@ -306,7 +310,7 @@ pdf.table(
     [
         [
             "« Aucun fichier ou dossier de ce nom » en tapant ./scripts/inclinometre.sh",
-            "Terminal pas dans le bon dossier, ou mise à jour 6.21.12 pas installée",
+            "Terminal pas dans le bon dossier, ou mise à jour 6.22.0 pas installée",
             "Taper « cd ~/DriftApp » puis recommencer ; sinon installer la mise à jour",
         ],
         [

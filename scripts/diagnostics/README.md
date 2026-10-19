@@ -81,7 +81,7 @@ sudo ./start_web.sh restart
 - Identification vitesse max fluide
 
 **Résultat** :
-- Rapport dans `logs/calibration_vitesse_YYYYMMDD_HHMMSS.txt`
+- Rapport dans `logs/diagnostics/calibration_vitesse_YYYYMMDD_HHMMSS.txt`
 - Recommandation pour config.json
 
 ---
@@ -196,13 +196,21 @@ Si le résumé affiche une ligne `⚠ ... épisode(s) INJOIGNABLE`, c'est que la
 
 ## 📁 Fichiers générés
 
-Les scripts génèrent des rapports dans `logs/` :
+Les scripts génèrent leurs rapports dans `logs/diagnostics/` (depuis la 6.22 ;
+les rapports plus anciens sont restés à la racine de `logs/`) :
 
 ```
 logs/
-├── diagnostic_moteur_YYYYMMDD_HHMMSS.txt
-├── calibration_vitesse_YYYYMMDD_HHMMSS.txt
-└── motor_service.log
+├── diagnostics/
+│   ├── diagnostic_moteur_YYYYMMDD_HHMMSS.txt
+│   ├── calibration_vitesse_YYYYMMDD_HHMMSS.json
+│   ├── inclinometre_YYYYMMDD_HHMMSS.csv
+│   └── hardware_detection.txt
+├── moteur/      motor_service_*.log (un par démarrage et par session de suivi)
+├── encodeur/    ems22d_*.log
+├── cimier/      cimier_service.log
+├── web/         django_*.log
+└── update.log, update_status.json, restart*.json   (mises à jour : restent à la racine)
 ```
 
 ---

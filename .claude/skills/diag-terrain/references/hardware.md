@@ -98,6 +98,6 @@ curl -s "http://<weather_provider.host>/rpc/Input.GetStatus?id=0"   # state=true
 ```
 - Pluie réelle mais `state=false` → réglage du trimpot du comparateur (seuil trop dur).
 - Alternance rapide true/false sous l'averse → le capteur « bavarde » ; voir les lignes
-  `rain_read` dans `logs/cimier_service.log`.
+  `rain_read` dans `logs/cimier/cimier_service.log`.
 - Résistance chauffante (`rain_heater_switch.host`, `/relay/0`) : ON tant que la
   protection pluie est armée ; l'auto_off du relais est réglé à 300 s côté app Shelly.

@@ -24,7 +24,8 @@ aucune commande Pi/hardware en local.** Il :
 1. **génère** un protocole copier-coller pour Serge (en français, prêt pour WhatsApp/SMS) ;
 2. **interprète** ce que Serge recolle, et propose **une** prochaine étape.
 
-Les seules choses lisibles ici : le code du dépôt, les logs déjà copiés dans `logs/`,
+Les seules choses lisibles ici : le code du dépôt, les logs déjà copiés dans `logs/`
+(rangés par thème depuis la 6.22 : `moteur/`, `encodeur/`, `cimier/`, `web/`, `diagnostics/`),
 les sessions dans `data/sessions/`, et `data/config.json`.
 
 ## Étape préalable — valeurs terrain (script)
