@@ -108,6 +108,22 @@ def test_send_leaves_file_world_writable(writer, tmp_path):
     assert (target.stat().st_mode & 0o777) == 0o666
 
 
+def test_send_falls_back_to_in_place_write_when_rename_refused(writer, tmp_path, monkeypatch):
+    """Django (slenk) ne peut pas remplacer par rename le motor_command.json
+    créé par motor_service (root) : sticky bit de /dev/shm → EPERM. Le bouton
+    « Parking session » n'arrêtait ni le suivi ni ne parquait la coupole."""
+    target = tmp_path / "motor_command.json"
+    assert writer.send_goto(10.0) is True
+
+    def _eperm(self, _target):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(Path, "rename", _eperm)
+    assert writer.send_tracking_stop() is True
+    assert _read_cmd(target)["command"] == "tracking_stop"
+    assert not target.with_suffix(".tmp").exists()
+
+
 def test_send_returns_false_on_ioerror(writer):
     """Patch open pour lever OSError → False, pas d'exception remontée au caller."""
     with patch("builtins.open", side_effect=OSError("disk full")):

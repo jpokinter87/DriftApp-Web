@@ -359,6 +359,31 @@ class TestForceDirection:
         direction = int(move_cmds[0].split()[2])
         assert direction == 0  # imposé CW
 
+    @pytest.mark.parametrize(
+        "actuelle, cible, sens, attendu",
+        [
+            (100.0, 260.0, -1, 200.0),  # flip > 180° : chemin court +160° refusé
+            (260.0, 100.0, +1, 200.0),
+            (10.0, 45.0, +1, 35.0),  # sens imposé = chemin court : inchangé
+        ],
+    )
+    def test_rotation_absolue_forced_direction_travels_to_target(
+        self, moteur_rp2040, serial_sim, actuelle, cible, sens, attendu
+    ):
+        """Avec un sens imposé contraire au chemin court (slew d'anticipation
+        méridien), la coupole doit parcourir le chemin long jusqu'à la cible,
+        pas la longueur du chemin court."""
+        cmds = self._capture_moves(serial_sim)
+        moteur_rp2040.rotation_absolue(
+            position_cible_deg=cible,
+            position_actuelle_deg=actuelle,
+            vitesse=0.002,
+            force_direction=sens,
+        )
+        moteur_rp2040.rotation(attendu, 0.002)
+        moves = [c for c in cmds if c.startswith("MOVE")]
+        assert moves[0].split()[1] == moves[1].split()[1]
+
     def test_rotation_absolue_default_force_direction_uses_shortest_path(
         self, moteur_rp2040, serial_sim
     ):

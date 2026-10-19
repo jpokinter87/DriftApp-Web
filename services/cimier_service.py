@@ -262,16 +262,18 @@ class CimierService:
         # d'urgence, y compris quand l'automatisation est en "manual".
         motor_ipc = motor_ipc or MotorIpcWriter()
 
-        # Phase 3 : scheduler astropy. Court-circuit complet si automation off.
+        # Phase 3 : scheduler astropy. Créé même en "manual" : c'est lui qui relit
+        # le mode à chaud, un passage à semi/full depuis l'UI doit prendre effet.
         self._scheduler: Optional[CimierScheduler] = scheduler
         self._last_scheduler_check_ts: Optional[float] = None
         # Phase 4 : prochains horaires de trigger (pour countdown UI dashboard).
         # Mis à jour dans tick() après maybe_trigger, lus dans _publish_status().
         self._last_next_open_at: Optional[Any] = None  # datetime UTC ou None
         self._last_next_close_at: Optional[Any] = None  # datetime UTC ou None
-        if self._scheduler is None and cimier_config.automation.mode != "manual":
+        if self._scheduler is None:
             if site_config is None:
-                logger.warning("cimier_event=automation_disabled reason=site_config_missing")
+                if cimier_config.automation.mode != "manual":
+                    logger.warning("cimier_event=automation_disabled reason=site_config_missing")
             else:
                 self._scheduler = CimierScheduler(
                     automation_config=cimier_config.automation,
@@ -434,7 +436,9 @@ class CimierService:
                         self._scheduler.refresh_mode_from_config(self._config_path)
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("cimier_event=mode_refresh_exception exc=%s", exc)
-                current_state = self._derive_current_cimier_state()
+                # Relecture des butées : après un redémarrage, aucun cycle ne
+                # les a encore lues et l'état resterait « inconnu ».
+                current_state = self._read_cimier_state_now()
                 try:
                     decision = self._scheduler.maybe_trigger(current_state)
                     logger.debug(
@@ -1181,8 +1185,8 @@ class CimierService:
             reason=reason,
         )
 
-    def _read_cimier_state_for_rain(self) -> str:
-        """État du cimier pour la décision pluie, sur une lecture fraîche des butées.
+    def _read_cimier_state_now(self) -> str:
+        """État du cimier sur une lecture fraîche des butées (pluie, scheduler).
 
         Les butées ne sont interrogées qu'au cours d'un cycle : au repos,
         ``_last_open_switch`` / ``_last_closed_switch`` datent du dernier cycle
@@ -1195,7 +1199,7 @@ class CimierService:
         try:
             switches = self._switch_reader.read()
         except SwitchReaderError as exc:
-            logger.info("cimier_event=rain_switch_read_failed exc=%s", exc)
+            logger.info("cimier_event=switch_read_failed exc=%s", exc)
         else:
             self._last_open_switch = switches.open_switch
             self._last_closed_switch = switches.closed_switch
@@ -1258,7 +1262,7 @@ class CimierService:
         # la garde d'alors exigeait "open" et la protection armée n'a rien fait,
         # en silence. Un état inconnu, une anomalie capteur ou un cimier en
         # mouvement déclenchent désormais la fermeture.
-        cimier_state = self._read_cimier_state_for_rain()
+        cimier_state = self._read_cimier_state_now()
         if cimier_state == CIMIER_STATE_CLOSED:
             self._log_rain_skip_once("already_closed")
             return

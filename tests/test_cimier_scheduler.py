@@ -11,12 +11,15 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
+import pytest
+
 from core.config.config_loader import CimierAutomationConfig, SiteConfig
 from services.cimier_scheduler import (
     CimierScheduler,
     CIMIER_STATE_CLOSED,
     CIMIER_STATE_OPEN,
     CIMIER_STATE_CYCLE,
+    CIMIER_STATE_ERROR,
     PARKING_WAIT_TIMEOUT_S,
 )
 
@@ -221,6 +224,29 @@ def test_rising_with_closed_cimier_skips_state():
     assert decision.trigger == "skip:state"
     assert cimier.commands == []
     assert motor.calls == []
+
+
+@pytest.mark.parametrize("state", ["unknown", CIMIER_STATE_ERROR])
+def test_rising_with_unconfirmed_state_triggers_close(state):
+    """Butées illisibles (Uni+ injoignable) ou incohérentes : on ferme quand
+    même, comme la protection pluie (6.15.2) — fermer un cimier déjà fermé ne
+    coûte rien, le laisser ouvert en plein jour coûte le télescope."""
+    alt_values = [-10.0, -5.0]
+    call_count = [0]
+
+    def alt_fn(*a, **kw):
+        idx = call_count[0]
+        call_count[0] += 1
+        return alt_values[idx] if idx < 2 else -10.0
+
+    sched, cimier, motor, _ = _scheduler(
+        automation=_automation(),
+        alt_fn=alt_fn,
+        dir_fn=lambda *a, **kw: "rising",
+    )
+    decision = sched.maybe_trigger(state)
+    assert decision.trigger == "close"
+    assert motor.calls == [("tracking_stop",), ("goto", 45.0)]
 
 
 def test_rising_alt_future_runtime_error_logs_warning_and_falls_back(caplog):

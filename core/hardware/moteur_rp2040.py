@@ -370,7 +370,8 @@ class MoteurRP2040:
             vitesse: Delai entre les pas
             use_ramp: Si True, utilise la rampe S-curve
             force_direction: 0 (defaut) = chemin le plus court (comportement inchange).
-                +1/-1 = direction imposee, la grandeur reste abs(shortest_path).
+                +1/-1 = direction imposee, chemin parcouru dans ce sens jusqu'a
+                la cible (le chemin long si le sens contredit le plus court).
         """
         position_cible = position_cible_deg % 360
         position_actuelle = position_actuelle_deg % 360
@@ -383,8 +384,10 @@ class MoteurRP2040:
         elif diff < -180:
             diff += 360
 
-        if force_direction != 0:
-            diff = abs(diff)
+        if force_direction > 0:
+            diff = (position_cible - position_actuelle) % 360
+        elif force_direction < 0:
+            diff = (position_actuelle - position_cible) % 360
 
         self.rotation(diff, vitesse, use_ramp=use_ramp, force_direction=force_direction)
 

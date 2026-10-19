@@ -223,7 +223,7 @@ class CimierScheduler:
                 self._last_open_trigger_ts = now
                 return SchedulerDecision("open", alt_now, direction, now)
 
-        # 2. CLOSE trigger : montant + alt projeté(advance + safety) >= target + cimier ouvert ou en cycle
+        # 2. CLOSE trigger : montant + alt projeté(advance + safety) >= target + cimier pas confirmé fermé
         if direction == "rising":
             advance_min = self._cfg.closing_advance_minutes + self._cfg.clock_safety_margin_minutes
             future = now + timedelta(minutes=advance_min)
@@ -242,7 +242,10 @@ class CimierScheduler:
                 )
                 alt_future = alt_now
             if alt_future >= self._cfg.closing_target_sun_altitude_deg:
-                if current_cimier_state in (CIMIER_STATE_OPEN, CIMIER_STATE_CYCLE):
+                # Tout sauf « fermé confirmé » ferme (inconnu, anomalie butées
+                # comprises), comme la protection pluie ; le repos post-cycle
+                # jetterait la commande (mode Drop), on attend le tick suivant.
+                if current_cimier_state not in (CIMIER_STATE_CLOSED, CIMIER_STATE_COOLDOWN):
                     if self._is_in_cooldown(self._last_close_trigger_ts, now):
                         return SchedulerDecision("skip:cooldown", alt_now, direction, now)
                     self._trigger_close()

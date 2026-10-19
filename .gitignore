@@ -9,8 +9,7 @@ venv/
 ENV/
 
 # Logs (garder le dossier mais pas les fichiers)
-logs/*.log
-logs/*.json
+logs/*
 !logs/.gitkeep
 
 # Fichiers temporaires

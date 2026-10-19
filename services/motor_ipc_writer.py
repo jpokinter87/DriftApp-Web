@@ -71,7 +71,20 @@ class MotorIpcWriter:
             # (non-root) écrit aussi ce fichier — le rename ne doit pas
             # remplacer un fichier 666 par un 644 (umask root).
             os.chmod(tmp_file, 0o666)
-            tmp_file.rename(self.command_file)
+            try:
+                tmp_file.rename(self.command_file)
+            except PermissionError:
+                # Django (slenk) ne peut pas remplacer le fichier créé par
+                # motor_service (root) : sticky bit de /dev/shm. Écriture en
+                # place sous verrou, comme MotorServiceClient.send_command.
+                tmp_file.unlink()
+                with open(self.command_file, "w") as f:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    try:
+                        f.write(content)
+                        f.flush()
+                    finally:
+                        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             return True
         except (IOError, OSError) as exc:
             logger.error("motor_ipc_writer error: cmd=%s exc=%s", command, exc)

@@ -973,6 +973,34 @@ class TestSchedulerWiring:
         )
         assert isinstance(service._scheduler, CimierScheduler)
 
+    def test_mode_switched_from_manual_in_ui_takes_effect(
+        self, ipc_manager: RecordingIpcManager, tmp_path: Path
+    ) -> None:
+        """Service démarré en manual, puis « semi » choisi sur le dashboard : le
+        scheduler doit exister pour relire le mode à chaud, sinon la fermeture
+        de fin de nuit ne se déclenche jamais."""
+        from core.config.config_loader import SiteConfig
+
+        site = SiteConfig(
+            latitude=44.15, longitude=5.23, altitude=800.0, nom="Test", fuseau="Europe/Paris"
+        )
+        config_path = tmp_path / "config.json"
+        config_path.write_text(json.dumps({"cimier": {"automation": {"mode": "manual"}}}))
+        cfg = self._make_config_with_automation(mode="manual")
+        clock = MockClock(start=1000.0)
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            ipc_manager=ipc_manager,
+            site_config=site,
+            config_path=config_path,
+            clock=clock,
+            sleep=clock.sleep,
+        )
+        config_path.write_text(json.dumps({"cimier": {"automation": {"mode": "semi"}}}))
+        service.tick()
+        assert ipc_manager.history[-1]["mode"] == "semi"
+
     def test_scheduler_skipped_when_automation_on_without_site_config(
         self, ipc_manager: RecordingIpcManager
     ) -> None:
@@ -1026,6 +1054,41 @@ class TestSchedulerWiring:
         clock.advance(70.0)
         service.tick()
         assert scheduler.call_count == 2
+
+    def test_scheduler_sees_switches_read_after_restart(
+        self, ipc_manager: RecordingIpcManager
+    ) -> None:
+        """Après un redémarrage (OTA, bouton « Redémarrer les services »), aucun
+        cycle n'a encore lu les butées : sans relecture, le scheduler recevait
+        'unknown' et ne fermait jamais un cimier resté ouvert."""
+        from datetime import datetime, timezone
+
+        from services.cimier_scheduler import CIMIER_STATE_OPEN, SchedulerDecision
+
+        class RecordingScheduler:
+            def __init__(self) -> None:
+                self.states: list = []
+
+            def maybe_trigger(self, current_state: str) -> SchedulerDecision:
+                self.states.append(current_state)
+                return SchedulerDecision(
+                    "skip:state", float("nan"), "flat", datetime.now(timezone.utc)
+                )
+
+        cfg = self._make_config_with_automation(mode="semi", scheduler_interval_seconds=60)
+        clock = MockClock(start=1000.0)
+        scheduler = RecordingScheduler()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=NoopPowerSwitch(),
+            switch_reader=FakeSwitchReader(script=[(True, False)]),
+            ipc_manager=ipc_manager,
+            scheduler=scheduler,  # type: ignore[arg-type]
+            clock=clock,
+            sleep=clock.sleep,
+        )
+        service.tick()
+        assert scheduler.states == [CIMIER_STATE_OPEN]
 
     def test_scheduler_exception_does_not_crash_tick(
         self, ipc_manager: RecordingIpcManager, caplog: pytest.LogCaptureFixture
@@ -3229,7 +3292,8 @@ class TestAutomationCloseRetryEndToEnd:
         assert mech.closed_switch is True
 
         # Confirmé fermé : plus aucun renvoi.
+        # Une seule lecture des butées par passage du scheduler, aucun cycle.
         reads_before = reader.read_count
         tick_after(5)
         tick_after(5)
-        assert reader.read_count == reads_before
+        assert reader.read_count == reads_before + 2
