@@ -14,7 +14,6 @@ Version: 1.0
 
 import json
 import os
-import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -26,7 +25,7 @@ import pytest
 
 # Vérifier si astropy est disponible (requis pour tests GOTO/Tracking handlers)
 try:
-    import astropy
+    import astropy  # noqa: F401 — test de disponibilité
 
     HAS_ASTROPY = True
 except ImportError:
@@ -206,7 +205,6 @@ class TestIpcConcurrentAccess:
         """Plusieurs écritures de statut concurrentes ne corrompent pas les données."""
         ipc, helper = ipc_manager_patched
         errors = []
-        results = []
 
         def write_status(i):
             try:

@@ -4,8 +4,6 @@ Tests pour le module Simulation.
 Ce module teste le lecteur d'encodeur simulé utilisé en mode développement.
 """
 
-from unittest.mock import patch, MagicMock
-
 import pytest
 
 

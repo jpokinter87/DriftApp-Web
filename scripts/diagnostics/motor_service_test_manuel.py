@@ -21,7 +21,6 @@ import json
 import subprocess
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 # Fichiers IPC
@@ -58,7 +57,7 @@ def verifier_motor_service() -> bool:
         result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True, text=True)
         if result.returncode == 0:
             return True
-    except:
+    except Exception:
         pass
 
     # Méthode 2: fichier status (backup)
@@ -69,7 +68,7 @@ def verifier_motor_service() -> bool:
             age = time.time() - mtime
             if age < 10:
                 return True
-        except:
+        except Exception:
             pass
 
     return False
@@ -79,7 +78,7 @@ def lire_status() -> dict:
     """Lit le status complet du Motor Service."""
     try:
         return json.loads(STATUS_FILE.read_text())
-    except:
+    except Exception:
         return {}
 
 
@@ -209,22 +208,22 @@ def afficher_status_services():
     if verifier_motor_service():
         etat = lire_etat()
         pos = lire_position()
-        print(f"  │ Motor Service: ✅ EN COURS             │")
+        print("  │ Motor Service: ✅ EN COURS             │")
         print(f"  │   État: {etat:<10} Position: {pos:>6.1f}°  │")
     else:
-        print(f"  │ Motor Service: ❌ ARRÊTÉ               │")
+        print("  │ Motor Service: ❌ ARRÊTÉ               │")
 
     # Daemon encodeur
     if ENCODER_FILE.exists():
         try:
             data = json.loads(ENCODER_FILE.read_text())
             angle = data.get("angle", 0)
-            print(f"  │ Daemon encodeur: ✅ EN COURS           │")
+            print("  │ Daemon encodeur: ✅ EN COURS           │")
             print(f"  │   Position: {angle:>6.1f}°                   │")
-        except:
-            print(f"  │ Daemon encodeur: ⚠️ ERREUR LECTURE     │")
+        except Exception:
+            print("  │ Daemon encodeur: ⚠️ ERREUR LECTURE     │")
     else:
-        print(f"  │ Daemon encodeur: ❌ ARRÊTÉ             │")
+        print("  │ Daemon encodeur: ❌ ARRÊTÉ             │")
 
     print("  └─────────────────────────────────────────┘")
 

@@ -108,27 +108,27 @@ class MotorCalibrator:
         print("📊 PARAMÈTRES SYSTÈME (lecture seule)")
         print("=" * 70)
 
-        print(f"\n🔧 Moteur NEMA:")
+        print("\n🔧 Moteur NEMA:")
         print(f"  Steps/revolution    : {self.config.motor.steps_per_revolution}")
         print(f"  Microsteps          : {self.config.motor.microsteps}")
         print(
             f"  → Steps moteur/tour : {self.config.motor.steps_per_revolution * self.config.motor.microsteps}"
         )
 
-        print(f"\n⚙️  Mécanique:")
+        print("\n⚙️  Mécanique:")
         print(f"  Gear ratio          : {self.config.motor.gear_ratio:.1f}:1")
         print(f"  Correction factor   : {self.config.motor.steps_correction_factor:.5f}")
 
-        print(f"\n📐 Résultat final:")
+        print("\n📐 Résultat final:")
         print(f"  Steps/tour coupole  : {self.moteur.steps_per_dome_revolution:,}")
         precision = 360 / self.moteur.steps_per_dome_revolution
         print(f"  Précision           : {precision:.6f}°/step")
         print(f"                      = {precision * 60:.4f}'/step")
         print(f"                      = {precision * 3600:.2f}''/step")
 
-        print(f"\n⚠️  Ces paramètres sont FIXES (calibrés sur site)")
-        print(f"   → Modifier gear_ratio ou correction_factor casserait le positionnement")
-        print(f"   → Seul motor_delay est ajustable pour changer la vitesse")
+        print("\n⚠️  Ces paramètres sont FIXES (calibrés sur site)")
+        print("   → Modifier gear_ratio ou correction_factor casserait le positionnement")
+        print("   → Seul motor_delay est ajustable pour changer la vitesse")
 
     def menu_principal(self):
         """Menu interactif principal."""
@@ -269,7 +269,7 @@ def main():
     finally:
         try:
             calibrator.moteur.nettoyer()
-        except:
+        except Exception:
             pass
 
     print("\n👋 Calibration terminée")

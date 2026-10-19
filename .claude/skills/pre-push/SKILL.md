@@ -56,7 +56,8 @@ uv run --extra dev ruff check <fichiers .py modifiés>
 ```
 
 Corriger les erreurs de lint sur ces fichiers (ou justifier proprement une exception
-ciblée). `ruff` est le formateur du projet ; `black` est aussi disponible. Il n'y a
+ciblée). `ruff` est le seul formateur du projet (black retiré en 6.21.14) ; le dépôt est
+entièrement propre et la CI vérifie `ruff format --check .` + `ruff check .`. Il n'y a
 **pas de mypy** dans ce projet → ne pas l'ajouter.
 
 ## Étape 3 — Valeurs terrain en dur

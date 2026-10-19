@@ -8,7 +8,7 @@ des positions de coupole basées sur les mesures empiriques.
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # Vérifier si numpy est disponible (requis pour tests d'interpolation)
 try:

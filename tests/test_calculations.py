@@ -5,13 +5,12 @@ Ce module teste les calculs astronomiques: conversions de coordonnées,
 parallaxe, temps sidéral, etc.
 """
 
-import math
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 # Vérifier si astropy est disponible (requis pour AstronomicalCalculations)
 try:
-    import astropy
+    import astropy  # noqa: F401 — test de disponibilité
 
     HAS_ASTROPY = True
 except ImportError:

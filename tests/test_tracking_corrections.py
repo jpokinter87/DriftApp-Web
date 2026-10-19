@@ -6,7 +6,7 @@ et la protection des petites corrections.
 """
 
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -144,7 +144,6 @@ class TestApplyCorrectionAvecFeedback:
 
     def test_large_movement_flag_set_during_correction(self, mixin):
         """is_large_movement_in_progress est True pendant un grand mouvement."""
-        original_rotation = mixin.moteur.rotation_avec_feedback
         flag_during_rotation = []
 
         def capture_flag(*args, **kwargs):

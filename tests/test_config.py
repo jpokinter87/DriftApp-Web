@@ -5,9 +5,7 @@ Ce module teste le chargement et la gestion de la configuration.
 """
 
 import json
-import pytest
 from pathlib import Path
-from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
 

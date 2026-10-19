@@ -7,9 +7,9 @@ Ces tests fonctionnent SANS astropy grâce au mocking des dépendances.
 
 import sys
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 from collections import deque
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================

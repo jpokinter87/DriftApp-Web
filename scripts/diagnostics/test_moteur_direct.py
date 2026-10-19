@@ -39,7 +39,7 @@ def test_gpio():
     try:
         h = lgpio.gpiochip_open(4)  # Chip 4 pour Pi 5
         print("Chip GPIO 4 ouvert (Raspberry Pi 5)")
-    except Exception as e:
+    except Exception:
         try:
             h = lgpio.gpiochip_open(0)  # Fallback Pi 1-4
             print("Chip GPIO 0 ouvert (Raspberry Pi 1-4)")

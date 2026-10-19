@@ -248,8 +248,8 @@ def main() -> None:
                 f"de {flip['start'] - 3600}s : le flip était à T+{flip['start']}s, hors fenêtre."
             )
             print(
-                f"→ legitimement loggé `meridian_anticipation_no_flip`. "
-                f"Tracking réactif a pris le relais."
+                "→ legitimement loggé `meridian_anticipation_no_flip`. "
+                "Tracking réactif a pris le relais."
             )
         else:
             print(

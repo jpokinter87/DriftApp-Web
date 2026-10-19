@@ -6,7 +6,7 @@ Ce module teste le contrôleur de feedback en boucle fermée.
 
 import pytest
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 from core.hardware.daemon_encoder_reader import StaleDataError
 

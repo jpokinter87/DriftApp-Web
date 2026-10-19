@@ -29,7 +29,7 @@ def test_gpio():
     print()
     print(f"  STEP = GPIO {STEP_PIN} (pin physique 12)")
     print(f"  DIR  = GPIO {DIR_PIN} (pin physique 11)")
-    print(f"  GND  = pin physique 6, 9, 14, 20, 25, 30, 34, 39")
+    print("  GND  = pin physique 6, 9, 14, 20, 25, 30, 34, 39")
     print()
 
     # Essayer d'importer lgpio

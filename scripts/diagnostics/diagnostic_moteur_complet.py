@@ -17,10 +17,8 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-import gc
 import json
 import os
-import signal
 import statistics
 import subprocess
 import sys
@@ -130,7 +128,7 @@ def verifier_services_actifs() -> dict:
             ["pgrep", "-f", "ems22d_calibrated"], capture_output=True, text=True
         )
         services["daemon"] = result.returncode == 0
-    except:
+    except Exception:
         pass
 
     return services
@@ -200,7 +198,7 @@ class DiagnosticMoteur:
             from core.config.config_loader import ConfigLoader
 
             self.config = ConfigLoader().load()
-            print_ok(f"Configuration chargée")
+            print_ok("Configuration chargée")
         except Exception as e:
             print_error(f"Impossible de charger la configuration: {e}")
             return False
@@ -216,7 +214,7 @@ class DiagnosticMoteur:
                 calibrated = data.get("calibrated", False)
                 status = "calibré" if calibrated else "non calibré"
                 print_ok(f"Daemon encodeur actif (position: {angle:.1f}°, {status})")
-            except:
+            except Exception:
                 print_warning("Daemon encodeur présent mais illisible")
         else:
             print_warning("Daemon encodeur non détecté")
@@ -265,7 +263,7 @@ class DiagnosticMoteur:
         # Valeur par défaut si non trouvée
         if "SINGLE" not in self.vitesses_config:
             self.vitesses_config["SINGLE"] = 0.00026
-            print(f"     SINGLE:     0.2600 ms (défaut)")
+            print("     SINGLE:     0.2600 ms (défaut)")
 
         print()
 
@@ -282,7 +280,7 @@ class DiagnosticMoteur:
                 timeout=serial_cfg.timeout,
             )
             self.moteur = MoteurRP2040(self.config.motor, serial_port)
-            print_ok(f"Moteur RP2040 initialisé")
+            print_ok("Moteur RP2040 initialisé")
             print_info(f"Steps par tour de coupole: {self.moteur.steps_per_dome_revolution:,}")
             return True
         except Exception as e:
@@ -293,7 +291,7 @@ class DiagnosticMoteur:
         if self.moteur:
             try:
                 self.moteur.nettoyer()
-            except:
+            except Exception:
                 pass
             self.moteur = None
 
@@ -345,7 +343,6 @@ class DiagnosticMoteur:
 
         outlier_threshold = avg * 2
         outliers = [t for t in timings_ms if t > outlier_threshold]
-        outlier_indices = [i for i, t in enumerate(timings_ms) if t > outlier_threshold]
 
         stats = {
             "description": description,
@@ -370,7 +367,7 @@ class DiagnosticMoteur:
         return stats
 
     def afficher_stats(self, stats: dict):
-        print(f"     📊 Résultats:")
+        print("     📊 Résultats:")
         print(f"        Délai config  : {stats['vitesse_ms']:.4f} ms")
         print(f"        Délai moyen   : {stats['avg_ms']:.4f} ms")
         print(f"        Délai min/max : {stats['min_ms']:.4f} / {stats['max_ms']:.4f} ms")
@@ -424,7 +421,7 @@ class DiagnosticMoteur:
         try:
             result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True)
             return result.returncode == 0
-        except:
+        except Exception:
             return False
 
     def envoyer_commande_goto(self, angle: float) -> bool:
@@ -432,13 +429,13 @@ class DiagnosticMoteur:
         try:
             COMMAND_FILE.write_text(json.dumps(command))
             return True
-        except:
+        except Exception:
             return False
 
     def lire_status(self) -> dict:
         try:
             return json.loads(STATUS_FILE.read_text())
-        except:
+        except Exception:
             return {}
 
     def attendre_fin_mouvement(self, timeout: float = 60) -> bool:

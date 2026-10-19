@@ -65,9 +65,7 @@ LOG_DIR = PROJECT_ROOT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # Nom de fichier avec horodatage de la session
-from datetime import datetime as dt_logging
-
-SESSION_TIMESTAMP = dt_logging.now().strftime("%Y%m%d_%H%M%S")
+SESSION_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 LOG_FILE = LOG_DIR / f"ems22d_{SESSION_TIMESTAMP}.log"
 
 logger = logging.getLogger("ems22d")
@@ -310,8 +308,8 @@ class EMS22Daemon:
             logger.info(f"TCP en écoute 127.0.0.1:{TCP_PORT}")
         except OSError as e:
             logger.error(f"❌ Impossible de démarrer TCP sur port {TCP_PORT}: {e}")
-            logger.error(f"   Un autre démon utilise probablement ce port.")
-            logger.error(f"   Arrêtez l'ancien démon : sudo pkill -f ems22d_calibrated")
+            logger.error("   Un autre démon utilise probablement ce port.")
+            logger.error("   Arrêtez l'ancien démon : sudo pkill -f ems22d_calibrated")
             return
 
         while self.running:
@@ -346,7 +344,7 @@ class EMS22Daemon:
         logger.info(f"Port TCP : {TCP_PORT}")
         logger.info(f"CALIBRATION_FACTOR : {CALIBRATION_FACTOR:.6f}")
         logger.info(f"Switch GPIO : {SWITCH_GPIO} (recalage à {SWITCH_CALIB_ANGLE}°)")
-        logger.info(f"Méthode : INCRÉMENTALE (accumulation)")
+        logger.info("Méthode : INCRÉMENTALE (accumulation)")
         logger.info("=" * 70)
 
         self.running = True

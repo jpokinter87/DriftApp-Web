@@ -4,7 +4,6 @@ Tests pour le module web/health/update_checker.py
 Ce module teste les fonctions de vérification des mises à jour GitHub.
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import subprocess

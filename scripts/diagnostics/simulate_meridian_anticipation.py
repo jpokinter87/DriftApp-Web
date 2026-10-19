@@ -340,7 +340,6 @@ def simulate(traj, strategy: str, debug: bool = False):
 
     # Stratégie E : pré-calcul du schedule optimal
     optimal_schedule = None
-    signed_delta_E = None  # pour position_during_move
     if strategy == "optimal":
         flip = detect_flip(traj)
         if flip:

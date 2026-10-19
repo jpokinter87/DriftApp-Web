@@ -83,7 +83,7 @@ def verifier_motor_service() -> bool:
     try:
         result = subprocess.run(["pgrep", "-f", "motor_service.py"], capture_output=True, text=True)
         return result.returncode == 0
-    except:
+    except Exception:
         pass
     return False
 
@@ -92,7 +92,7 @@ def lire_status() -> dict:
     """Lit le status du Motor Service."""
     try:
         return json.loads(STATUS_FILE.read_text())
-    except:
+    except Exception:
         return {}
 
 
@@ -113,7 +113,6 @@ def verifier_commande_test_speed() -> bool:
     """
     # On vérifie simplement si last_test_result existe dans le status
     # après avoir envoyé une commande minimale
-    status = lire_status()
 
     # Envoyer une commande test_speed minimale
     command = {
@@ -409,20 +408,20 @@ def afficher_status_services():
     if verifier_motor_service():
         etat = lire_etat()
         pos = lire_position()
-        print(f"  │ Motor Service: ✅ EN COURS             │")
+        print("  │ Motor Service: ✅ EN COURS             │")
         print(f"  │   État: {etat:<10} Position: {pos:>6.1f}°  │")
     else:
-        print(f"  │ Motor Service: ❌ ARRÊTÉ               │")
+        print("  │ Motor Service: ❌ ARRÊTÉ               │")
 
     if ENCODER_FILE.exists():
         try:
             data = json.loads(ENCODER_FILE.read_text())
             angle = data.get("angle", 0)
             print(f"  │ Daemon encodeur: ✅ Position: {angle:>5.1f}°  │")
-        except:
-            print(f"  │ Daemon encodeur: ⚠️  ERREUR            │")
+        except Exception:
+            print("  │ Daemon encodeur: ⚠️  ERREUR            │")
     else:
-        print(f"  │ Daemon encodeur: ❌ ARRÊTÉ             │")
+        print("  │ Daemon encodeur: ❌ ARRÊTÉ             │")
 
     print("  └─────────────────────────────────────────┘")
 
@@ -482,9 +481,9 @@ def main():
 
     for i, (delay, description) in enumerate(VITESSES_A_TESTER):
         print()
-        print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         print(f"                    TEST {i + 1}/{len(VITESSES_A_TESTER)}")
-        print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        print("  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         result = tester_vitesse(delay, description, direction)
         resultats.append(result)

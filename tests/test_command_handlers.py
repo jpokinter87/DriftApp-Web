@@ -11,9 +11,8 @@ Note: Ces tests nécessitent astropy (via core.tracking.tracker).
 Ils sont automatiquement ignorés si astropy n'est pas installé.
 """
 
-import threading
 import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -208,7 +207,7 @@ class TestGotoHandler:
 
         # Petit déplacement (< 3°)
         with patch("core.hardware.moteur_simule.set_simulated_position"):
-            result = handler.execute(2.0, status)
+            handler.execute(2.0, status)
 
         mock_feedback_controller.rotation_avec_feedback.assert_called()
 
@@ -217,7 +216,7 @@ class TestGotoHandler:
         status = {"status": "idle", "position": 0.0}
 
         with patch("core.hardware.moteur_simule.set_simulated_position"):
-            result = handler.execute(90.0, status)
+            handler.execute(90.0, status)
 
         # Rotation directe appelée
         mock_moteur.rotation.assert_called()
@@ -275,7 +274,7 @@ class TestJogHandler:
         status = {"status": "idle", "position": 0.0}
 
         with patch("core.hardware.moteur_simule.set_simulated_position"):
-            result = handler.execute(10.0, status)
+            handler.execute(10.0, status)
 
         mock_moteur.rotation.assert_called()
         # Vérifie que le delta est positif
@@ -287,7 +286,7 @@ class TestJogHandler:
         status = {"status": "idle", "position": 0.0}
 
         with patch("core.hardware.moteur_simule.set_simulated_position"):
-            result = handler.execute(-10.0, status)
+            handler.execute(-10.0, status)
 
         call_args = mock_moteur.rotation.call_args
         assert call_args[0][0] == -10.0
@@ -385,7 +384,7 @@ class TestContinuousHandler:
         status = {"status": "idle", "position": 0.0}
 
         with (
-            patch("core.hardware.moteur_simule.set_simulated_position") as mock_set,
+            patch("core.hardware.moteur_simule.set_simulated_position"),
             patch("core.hardware.moteur_simule.get_simulated_position", return_value=0.0),
         ):
             handler.start("cw", status)
@@ -399,7 +398,7 @@ class TestContinuousHandler:
         status = {"status": "idle", "position": 180.0}
 
         with (
-            patch("core.hardware.moteur_simule.set_simulated_position") as mock_set,
+            patch("core.hardware.moteur_simule.set_simulated_position"),
             patch("core.hardware.moteur_simule.get_simulated_position", return_value=180.0),
         ):
             handler.start("ccw", status)
@@ -464,7 +463,6 @@ class TestTrackingHandler:
 
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
-        from datetime import datetime
         from core.observatoire import AstronomicalCalculations
 
         handler.active = True
