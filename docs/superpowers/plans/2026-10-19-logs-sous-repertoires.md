@@ -101,11 +101,11 @@ tête de module, `rotate_log_for_tracking`, `main()`).
 
 **Fichier :** `web/driftapp_web/settings.py` (`LOGS_DIR`, purge, `DJANGO_LOG_FILE`).
 
-- [ ] Test : `settings.LOGS_DIR` vaut `…/web` (adapter
+- [x] Test : `settings.LOGS_DIR` vaut `…/web` (adapter
   `tests/test_logs_isolation.py`).
-- [ ] `LOGS_DIR = logs_subdir("web")`, rangement de `django_*.log` avant
+- [x] `LOGS_DIR = logs_subdir("web")`, rangement de `django_*.log` avant
   `_cleanup_old_django_logs()`.
-- [ ] **Ne pas toucher** `web/health/views.py` (`UPDATE_STATUS_FILE`,
+- [x] **Ne pas toucher** `web/health/views.py` (`UPDATE_STATUS_FILE`,
   `UPDATE_LOG_FILE`, `RESTART_STATUS_FILE`) ni `scripts/update_driftapp.sh`,
   `scripts/restart_services.sh` (décision 1). Vérification en fin de plan :
   `git diff --stat` ne les liste pas.

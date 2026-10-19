@@ -129,9 +129,13 @@ CIMIER_SERVICE_IPC = {
 DRIFTAPP_CONFIG = PROJECT_ROOT / "data" / "config.json"
 
 # Logging - fichier horodaté par session
-# DRIFTAPP_LOGS_DIR : redirigé par les tests (tests/conftest.py).
-LOGS_DIR = Path(os.environ.get("DRIFTAPP_LOGS_DIR") or PROJECT_ROOT / "logs")
-LOGS_DIR.mkdir(exist_ok=True)
+# Sous-dossier logs/web/ ; les logs d'avant la 6.22, restés à la racine, y sont
+# rangés pour que la purge les retrouve. Les fichiers de mise à jour restent à la
+# racine (lus par health/views.py, écrits par l'ancien script pendant une MAJ).
+from core.utils.log_paths import logs_subdir, ranger_anciens_logs  # noqa: E402
+
+LOGS_DIR = logs_subdir("web")
+ranger_anciens_logs(["django_*.log"], "web")
 
 # Rétention des fichiers de log Django par âge (en jours)
 MAX_DJANGO_LOG_AGE_DAYS = 7

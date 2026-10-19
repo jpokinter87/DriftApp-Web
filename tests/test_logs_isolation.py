@@ -86,4 +86,32 @@ def test_django_ecrit_dans_le_dossier_de_test():
     django.setup()
     from django.conf import settings
 
-    assert settings.LOGS_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"])
+    assert settings.LOGS_DIR == Path(os.environ["DRIFTAPP_LOGS_DIR"]) / "web"
+
+
+def test_django_range_ses_anciens_logs(tmp_path):
+    """Au chargement des settings, les logs Django restés à la racine sont
+    rangés dans web/ avant la purge à 7 jours ; les fichiers de mise à jour,
+    lus par web/health/views.py, restent à la racine (spec, décision 1)."""
+    import subprocess
+
+    (tmp_path / "django_20261001_120000.log").write_text("ancien")
+    for nom in ("update.log", "update_status.json", "restart_status.json"):
+        (tmp_path / nom).write_text("{}")
+    projet = Path(__file__).resolve().parent.parent
+    env = dict(os.environ, DRIFTAPP_LOGS_DIR=str(tmp_path))
+    sortie = subprocess.run(
+        [sys.executable, "-c", "import driftapp_web.settings as s; print(s.DJANGO_LOG_FILE)"],
+        cwd=projet / "web",
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    web = tmp_path / "web"
+    assert (web / "django_20261001_120000.log").read_text() == "ancien"
+    assert Path(sortie.stdout.strip()).parent == web
+    assert not list(tmp_path.glob("django_*.log"))
+    for nom in ("update.log", "update_status.json", "restart_status.json"):
+        assert (tmp_path / nom).exists(), nom
