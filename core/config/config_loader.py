@@ -398,6 +398,20 @@ class BootCalibrationConfig:
 
 
 @dataclass
+class AsiairConfig:
+    """ASIAIR de la monture, interrogé par le bouton « ASIAIR » du dashboard
+    (JSON-RPC ``scope_get_info`` sur le port TCP 4400) pour importer l'AD/Déc
+    pointée. ``host`` vide = non configuré.
+
+    IP réelle uniquement dans ``data/config.json`` — code neutre.
+    """
+
+    host: str = ""
+    port: int = 4400
+    timeout_s: float = 3.0
+
+
+@dataclass
 class SerialConfig:
     """Configuration du port serie pour RP2040."""
 
@@ -465,6 +479,7 @@ class DriftAppConfig:
     )
     cimier: CimierConfig = field(default_factory=CimierConfig)
     boot_calibration: BootCalibrationConfig = field(default_factory=BootCalibrationConfig)
+    asiair: AsiairConfig = field(default_factory=AsiairConfig)
 
     def __str__(self) -> str:
         return (
@@ -557,6 +572,7 @@ class ConfigLoader:
             meridian_anticipation=self._parse_meridian_anticipation(),
             cimier=self._parse_cimier(),
             boot_calibration=self._parse_boot_calibration(),
+            asiair=self._parse_asiair(),
         )
 
     # =========================================================================
@@ -645,6 +661,18 @@ class ConfigLoader:
             large_movement_deg=float(c.get("large_movement_deg", 30.0)),
             feedback_protection_deg=float(c.get("feedback_protection_deg", 20.0)),
             default_tolerance_deg=float(c.get("default_tolerance_deg", 0.5)),
+        )
+
+    def _parse_asiair(self) -> AsiairConfig:
+        """Parse la section asiair (section absente ou malformée = défauts)."""
+        c = self.cfg.get("asiair", {})
+        if not isinstance(c, dict):
+            c = {}
+        defaults = AsiairConfig()
+        return AsiairConfig(
+            host=str(c.get("host", defaults.host)).strip(),
+            port=int(c.get("port", defaults.port)),
+            timeout_s=float(c.get("timeout_s", defaults.timeout_s)),
         )
 
     def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:

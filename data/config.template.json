@@ -167,5 +167,11 @@
     "timeout_sec": 180.0,
     "poll_interval_sec": 0.1,
     "switch_overshoot_deg": 0.5
+  },
+  "asiair": {
+    "_comment": "ASIAIR de la monture : le bouton « ASIAIR » du dashboard y lit l'AD/Déc pointée (JSON-RPC scope_get_info, port 4400) et l'injecte dans la recherche d'objet. host vide = non configuré.",
+    "host": "192.168.1.70",
+    "port": 4400,
+    "timeout_s": 3.0
   }
 }

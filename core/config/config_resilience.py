@@ -398,6 +398,16 @@ HELP_REGISTRY: dict[str, str] = {
         "reposer en continu sur la lamelle du rupteur. Ne pas dépasser 0,5° (contacts de "
         "charge batterie)."
     ),
+    # --- asiair ---
+    "asiair.host": (
+        "Adresse IP de l'ASIAIR de la monture, lue par le bouton « ASIAIR » du dashboard. "
+        "Vide = non configuré."
+    ),
+    "asiair.port": "Port TCP JSON-RPC de l'ASIAIR (4400).",
+    "asiair.timeout_s": (
+        "Délai maximal (secondes) d'attente de la réponse de l'ASIAIR avant d'afficher "
+        "« injoignable »."
+    ),
 }
 
 

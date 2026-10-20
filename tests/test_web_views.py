@@ -473,6 +473,51 @@ class TestManualCoordsView:
         assert response.status_code == 400
 
 
+class TestAsiairCoordsView:
+    """Import de l'AD/Déc pointée par l'ASIAIR (20/10/2026)."""
+
+    def test_asiair_returns_coords_and_meridian(self, api_client, mock_ipc):
+        from core.config.config_loader import AsiairConfig
+
+        with (
+            patch("tracking.views._asiair_config", return_value=AsiairConfig("10.0.0.5")),
+            patch("tracking.views.lire_coordonnees", return_value=(83.8221, -5.3911)) as lire,
+        ):
+            response = api_client.get("/api/tracking/asiair/")
+        lire.assert_called_once_with("10.0.0.5", 4400, 3.0)
+        assert response.status_code == 200
+        assert response.data["ra_deg"] == 83.8221
+        assert response.data["dec_deg"] == -5.3911
+        assert isinstance(response.data["meridian_seconds"], int)
+
+    def test_asiair_not_configured(self, api_client, mock_ipc):
+        from core.config.config_loader import AsiairConfig
+
+        with (
+            patch("tracking.views._asiair_config", return_value=AsiairConfig("")),
+            patch("tracking.views.lire_coordonnees") as lire,
+        ):
+            response = api_client.get("/api/tracking/asiair/")
+        lire.assert_not_called()
+        assert response.status_code == 400
+        assert "non configuré" in response.data["error"]
+
+    def test_asiair_unreachable(self, api_client, mock_ipc):
+        from core.config.config_loader import AsiairConfig
+        from core.hardware.asiair_client import AsiairError
+
+        with (
+            patch("tracking.views._asiair_config", return_value=AsiairConfig("10.0.0.5")),
+            patch(
+                "tracking.views.lire_coordonnees",
+                side_effect=AsiairError("ASIAIR injoignable (10.0.0.5:4400) : délai dépassé"),
+            ),
+        ):
+            response = api_client.get("/api/tracking/asiair/")
+        assert response.status_code == 502
+        assert "délai dépassé" in response.data["error"]
+
+
 class TestTrackingStopView:
     def test_stop(self, api_client, mock_ipc):
         response = api_client.post("/api/tracking/stop/")

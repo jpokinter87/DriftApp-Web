@@ -12,4 +12,5 @@ urlpatterns = [
     path("objects/", views.ObjectListView.as_view(), name="object-list"),
     path("search/", views.ObjectSearchView.as_view(), name="object-search"),
     path("coords/", views.ManualCoordsView.as_view(), name="manual-coords"),
+    path("asiair/", views.AsiairCoordsView.as_view(), name="asiair-coords"),
 ]

@@ -16,6 +16,7 @@ import pytest
 
 from core.config.config_loader import (
     VALID_AUTOMATION_MODES,
+    AsiairConfig,
     BootCalibrationConfig,
     CimierAutomationConfig,
     CimierConfig,
@@ -1174,3 +1175,33 @@ class TestWeatherProviderConfig:
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(payload))
         assert ConfigLoader(config_file).load().cimier.weather_provider.type == "noop"
+
+
+class TestAsiairConfig:
+    """Section `asiair` (bouton « ASIAIR » du dashboard, 20/10/2026)."""
+
+    def _load(self, tmp_path, sample_config_dict, section):
+        cfg = dict(sample_config_dict)
+        if section is not None:
+            cfg["asiair"] = section
+        config_file = tmp_path / "config.json"
+        config_file.write_text(json.dumps(cfg))
+        return ConfigLoader(config_file).load()
+
+    def test_dataclass_defaults(self):
+        assert AsiairConfig() == AsiairConfig(host="", port=4400, timeout_s=3.0)
+
+    def test_section_missing_does_not_fail(self, tmp_path, sample_config_dict):
+        # Le merge structurel complète la section depuis le template.
+        config = self._load(tmp_path, sample_config_dict, None)
+        assert config.asiair.port == 4400
+
+    def test_values_read(self, tmp_path, sample_config_dict):
+        config = self._load(
+            tmp_path, sample_config_dict, {"host": "10.0.0.5", "port": 4401, "timeout_s": 5}
+        )
+        assert config.asiair == AsiairConfig(host="10.0.0.5", port=4401, timeout_s=5.0)
+
+    def test_malformed_section_gives_defaults(self, tmp_path, sample_config_dict):
+        config = self._load(tmp_path, sample_config_dict, "oui")
+        assert config.asiair == AsiairConfig()

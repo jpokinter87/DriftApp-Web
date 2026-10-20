@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 # Import du catalogue depuis core/
+from core.hardware.asiair_client import AsiairError, lire_coordonnees
 from core.observatoire.catalogue import GestionnaireCatalogue
 from web.common.ipc_client import motor_client
 
@@ -192,5 +193,41 @@ class ManualCoordsView(APIView):
             )
 
         result = {"ra_deg": coords[0], "dec_deg": coords[1]}
+        _add_meridian_info(result)
+        return Response(result)
+
+
+def _asiair_config():
+    """Section `asiair` de data/config.json (relue à chaque clic : pas de redémarrage)."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from core.config.config_loader import load_config
+
+    return load_config(Path(settings.DRIFTAPP_CONFIG)).asiair
+
+
+class AsiairCoordsView(APIView):
+    """
+    GET /api/tracking/asiair/
+
+    Lit l'AD/Déc pointée par la monture via l'ASIAIR et la renvoie au même
+    format que la saisie manuelle (avec infos méridien).
+    """
+
+    def get(self, request):
+        cfg = _asiair_config()
+        if not cfg.host:
+            return Response(
+                {"error": "ASIAIR non configuré (asiair.host, page Configuration)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            ra_deg, dec_deg = lire_coordonnees(cfg.host, cfg.port, cfg.timeout_s)
+        except AsiairError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        result = {"ra_deg": ra_deg, "dec_deg": dec_deg}
         _add_meridian_info(result)
         return Response(result)

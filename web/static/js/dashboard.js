@@ -310,6 +310,7 @@ const elements = {
     // Tracking
     objectName: document.getElementById('object-name'),
     btnSearch: document.getElementById('btn-search'),
+    btnAsiair: document.getElementById('btn-asiair'),
     objectInfo: document.getElementById('object-info'),
     objectCoords: document.getElementById('object-coords'),
     btnStartTracking: document.getElementById('btn-start-tracking'),
@@ -474,6 +475,7 @@ function initElements() {
 function initEventListeners() {
     // Recherche objet
     elements.btnSearch.addEventListener('click', searchObject);
+    elements.btnAsiair.addEventListener('click', importAsiair);
     elements.objectName.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') searchObject();
     });
@@ -712,8 +714,7 @@ async function searchObject() {
     }
 }
 
-// Saisie manuelle AD/Déc J2000 (v6.17) — même effet qu'une recherche réussie :
-// affiche les coordonnées + cartouche méridien et arme « Démarrer le suivi ».
+// Saisie manuelle AD/Déc J2000 (v6.17) — même effet qu'une recherche réussie.
 async function applyManualCoords(name, raDeg, decDeg) {
     const result = await apiCall(
         `/api/tracking/coords/?ra_deg=${raDeg}&dec_deg=${decDeg}`
@@ -723,15 +724,43 @@ async function applyManualCoords(name, raDeg, decDeg) {
         log(`Coordonnées refusées : ${result.error}`, 'error');
         return;
     }
+    armCoords(name, raDeg, decDeg, result, 'manuel');
+    log(`Coordonnées saisies : ${name}`, 'success');
+}
 
+// Import de l'AD/Déc pointée par la monture via l'ASIAIR (20/10/2026) — même
+// effet que la saisie manuelle. Nom : ce qui est tapé dans le champ objet et
+// n'a pas été trouvé (cible faible), sinon un nom automatique.
+async function importAsiair() {
+    elements.btnAsiair.disabled = true;
+    log('Lecture ASIAIR...');
+    try {
+        const result = await apiCall('/api/tracking/asiair/');
+        if (result.error) {
+            log(`ASIAIR : ${result.error}`, 'error');
+            return;
+        }
+        const typed = elements.objectName.value.trim();
+        const name = typed && typed !== state.searchedObject
+            ? typed
+            : `ASIAIR RA ${formatHMS(result.ra_deg, 1)} DEC ${formatDMS(result.dec_deg)}`;
+        armCoords(name, result.ra_deg, result.dec_deg, result, 'ASIAIR');
+        log(`Coordonnées ASIAIR importées : ${name}`, 'success');
+    } finally {
+        elements.btnAsiair.disabled = false;
+    }
+}
+
+// Affiche des coordonnées validées par l'API (avec infos méridien) et arme
+// « Démarrer le suivi », comme une recherche réussie.
+function armCoords(name, raDeg, decDeg, result, source) {
     elements.objectName.value = name;
     elements.objectCoords.innerHTML =
-        `RA: ${formatHMS(raDeg, 1)} &mdash; DEC: ${formatDMS(decDeg)} (manuel)`;
+        `RA: ${formatHMS(raDeg, 1)} &mdash; DEC: ${formatDMS(decDeg)} (${source})`;
     elements.objectInfo.classList.remove('hidden');
     elements.btnStartTracking.disabled = false;
     state.searchedObject = name;
     state.searchedCoords = { ra_deg: raDeg, dec_deg: decDeg };
-    log(`Coordonnées saisies : ${name}`, 'success');
 
     setMeridianFromApi(result.meridian_seconds, result.meridian_time);
     flashButtonSuccess(elements.btnStartTracking, 5000);
