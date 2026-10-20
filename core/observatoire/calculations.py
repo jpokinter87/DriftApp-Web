@@ -13,7 +13,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Tuple
 
-from astropy.coordinates import SkyCoord, CIRS
+from astropy.coordinates import CIRS, TETE, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 
@@ -89,6 +89,37 @@ class AstronomicalCalculations:
         coord_jnow = coord_j2000.transform_to(CIRS(obstime=temps_obs))
 
         return coord_jnow.ra.degree, coord_jnow.dec.degree
+
+    def convertir_jnow_vers_j2000(
+        self, ad_jnow: float, dec_jnow: float, date_heure: datetime
+    ) -> Tuple[float, float]:
+        """
+        Convertit des coordonnées JNOW d'une monture (ASIAIR) en J2000.
+
+        Le JNOW des montures compte l'ascension droite depuis l'équinoxe vraie
+        de la date (repère TETE d'astropy), pas depuis l'origine CIO du repère
+        CIRS : l'écart entre les deux atteint 0,35° en 2026.
+
+        Args:
+            ad_jnow: Ascension droite JNOW en degrés
+            dec_jnow: Déclinaison JNOW en degrés
+            date_heure: Date/heure de la lecture
+
+        Returns:
+            Tuple (ad_j2000, dec_j2000) en degrés
+        """
+        if date_heure.tzinfo is None:
+            dt_utc = date_heure - timedelta(hours=self.tz_offset)
+        else:
+            dt_utc = date_heure.astimezone(timezone.utc).replace(tzinfo=None)
+
+        coord_jnow = SkyCoord(
+            ra=ad_jnow * u.degree,
+            dec=dec_jnow * u.degree,
+            frame=TETE(obstime=Time(dt_utc, scale="utc")),
+        )
+        coord_j2000 = coord_jnow.transform_to("icrs")
+        return coord_j2000.ra.degree, coord_j2000.dec.degree
 
     def calculer_temps_sideral(self, date_heure: datetime) -> float:
         """Temps sidéral local (degrés) au méridien de l'observatoire."""

@@ -122,6 +122,22 @@ class TestConversionJ2000JNOW:
         # La déclinaison reste proche du pôle
         assert dec_jnow > 88.0
 
+    def test_jnow_vers_j2000_m31(self, calc):
+        """JNow d'une monture (équinoxe vraie de la date, ASIAIR) → J2000.
+
+        M31 le 20/10/2026 : 0,73733 h / +41,4193° en JNow → 0,712314 h / +41,26875° J2000.
+        """
+        date = datetime(2026, 10, 20, 20, 0, 0, tzinfo=timezone.utc)
+        ad, dec = calc.convertir_jnow_vers_j2000(0.73733 * 15, 41.4193, date)
+        assert ad == pytest.approx(10.684708, abs=0.002)
+        assert dec == pytest.approx(41.26875, abs=0.001)
+
+    def test_jnow_vers_j2000_ra_dans_0_360(self, calc):
+        """Près de RA 0h, le résultat reste dans [0 ; 360[."""
+        date = datetime(2026, 10, 20, 20, 0, 0, tzinfo=timezone.utc)
+        ad, _ = calc.convertir_jnow_vers_j2000(0.1, 10.0, date)
+        assert 0.0 <= ad < 360.0
+
 
 class TestTempsSideral:
     """Tests pour le calcul du temps sidéral."""

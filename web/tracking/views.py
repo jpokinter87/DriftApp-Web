@@ -208,12 +208,23 @@ def _asiair_config():
     return load_config(Path(settings.DRIFTAPP_CONFIG)).asiair
 
 
+def _jnow_vers_j2000(ra_deg, dec_deg):
+    from datetime import datetime, timezone
+
+    from core.config.config import get_site_config
+    from core.observatoire import AstronomicalCalculations
+
+    latitude, longitude, tz_offset, _, _ = get_site_config()
+    calc = AstronomicalCalculations(latitude, longitude, tz_offset)
+    return calc.convertir_jnow_vers_j2000(ra_deg, dec_deg, datetime.now(timezone.utc))
+
+
 class AsiairCoordsView(APIView):
     """
     GET /api/tracking/asiair/
 
-    Lit l'AD/Déc pointée par la monture via l'ASIAIR et la renvoie au même
-    format que la saisie manuelle (avec infos méridien).
+    Lit l'AD/Déc pointée par la monture via l'ASIAIR, la convertit de JNow en
+    J2000 et la renvoie au même format que la saisie manuelle (avec infos méridien).
     """
 
     def get(self, request):
@@ -224,10 +235,12 @@ class AsiairCoordsView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            ra_deg, dec_deg = lire_coordonnees(cfg.host, cfg.port, cfg.timeout_s)
+            ra_jnow, dec_jnow = lire_coordonnees(cfg.host, cfg.port, cfg.timeout_s)
         except AsiairError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
+        # L'ASIAIR renvoie du JNow (vérifié par Serge, 20/10/2026) ; le suivi attend du J2000.
+        ra_deg, dec_deg = _jnow_vers_j2000(ra_jnow, dec_jnow)
         result = {"ra_deg": ra_deg, "dec_deg": dec_deg}
         _add_meridian_info(result)
         return Response(result)

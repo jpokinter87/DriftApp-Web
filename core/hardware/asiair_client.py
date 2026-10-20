@@ -25,11 +25,9 @@ class AsiairError(Exception):
 
 
 def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, float]:
-    """Interroge l'ASIAIR et renvoie ``(ra_deg, dec_deg)``.
-
-    Les coordonnées sont prises telles quelles comme J2000 (décision du
-    20/10/2026, époque à confirmer sur le terrain) : si l'ASIAIR s'avère
-    renvoyer du JNow, la conversion s'ajoute ici et nulle part ailleurs.
+    """Interroge l'ASIAIR et renvoie ``(ra_deg, dec_deg)`` telles que l'ASIAIR
+    les donne, c'est-à-dire en **JNow** (vérifié par Serge, 20/10/2026). La
+    conversion en J2000 appartient à l'appelant.
 
     Raises:
         AsiairError: message lisible par l'opérateur.

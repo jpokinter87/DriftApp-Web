@@ -20,7 +20,7 @@ Ce n'est pas encore l'heure du retournement au méridien (piste inclinomètre,
 
 | # | Question | Décision |
 |---|---|---|
-| 1 | Époque des coordonnées ASIAIR | **J2000, sans conversion** — hypothèse non vérifiée, cf. « Point ouvert » |
+| 1 | Époque des coordonnées ASIAIR | **JNow, converti en J2000** (vérifié par Serge le 20/10, après une première livraison en J2000 sans conversion, 6.23.0) |
 | 2 | Effet du clic | **Injection directe**, comme une recherche réussie |
 | 3 | Bouton sans adresse configurée | **Toujours actif** ; le clic affiche l'erreur |
 | 4 | Libellé, place | **« ASIAIR »** à droite de « Coordonnées », même ligne |
@@ -60,8 +60,9 @@ défaut, pas d'erreur).
   émet aussi des événements non sollicités sur la même connexion — le script de
   Serge les écarte déjà) ; délai global borné par `timeout_s` ;
 - `ra_deg = RA × 15`, `dec_deg = Dec`, normalisés/bornés (RA dans [0 ; 360[) ;
-- **l'époque est traitée à cet endroit et nulle part ailleurs** : si l'ASIAIR
-  s'avère renvoyer du JNow, la conversion vers J2000 s'ajoute ici ;
+- renvoie les valeurs brutes de l'ASIAIR (JNow) ; la vue les convertit en J2000
+  par `AstronomicalCalculations.convertir_jnow_vers_j2000` (repère TETE, équinoxe
+  vraie de la date — pas CIRS, dont l'origine CIO décale la RA de 0,35° en 2026) ;
 - échecs → `AsiairError` avec un message lisible pour Serge : injoignable
   (connexion refusée / délai), réponse sans `RA`/`Dec`, réponse d'erreur JSON-RPC.
 
@@ -102,7 +103,7 @@ Requête synchrone, bornée par `timeout_s` (3 s) : acceptable pour un clic.
 
 ## Point ouvert — à faire vérifier par Serge
 
-1. **Époque.** GOTO sur M31 + plate-solve, puis `python3 test_suivi5.py` :
+1. ~~**Époque.**~~ Tranché le 20/10 : JNow. GOTO sur M31 + plate-solve, puis `python3 test_suivi5.py` :
    - J2000 : RA ≈ 0,7123 h (00h42m44s), Dec ≈ +41,27° ;
    - JNow 2026 : RA ≈ 0,736 h (00h44m10s), Dec ≈ +41,40°.
 2. **Réponse complète** de `scope_get_info` (afficher tout `result`) : un champ

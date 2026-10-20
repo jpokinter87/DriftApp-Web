@@ -476,18 +476,20 @@ class TestManualCoordsView:
 class TestAsiairCoordsView:
     """Import de l'AD/Déc pointée par l'ASIAIR (20/10/2026)."""
 
-    def test_asiair_returns_coords_and_meridian(self, api_client, mock_ipc):
+    def test_asiair_returns_j2000_and_meridian(self, api_client, mock_ipc):
+        """L'ASIAIR renvoie du JNow (vérifié par Serge, 20/10) : converti en J2000."""
         from core.config.config_loader import AsiairConfig
 
+        # M31 en JNow (octobre 2026) — J2000 : 10,6847° / +41,2688°
         with (
             patch("tracking.views._asiair_config", return_value=AsiairConfig("10.0.0.5")),
-            patch("tracking.views.lire_coordonnees", return_value=(83.8221, -5.3911)) as lire,
+            patch("tracking.views.lire_coordonnees", return_value=(11.06, 41.4193)) as lire,
         ):
             response = api_client.get("/api/tracking/asiair/")
         lire.assert_called_once_with("10.0.0.5", 4400, 3.0)
         assert response.status_code == 200
-        assert response.data["ra_deg"] == 83.8221
-        assert response.data["dec_deg"] == -5.3911
+        assert response.data["ra_deg"] == pytest.approx(10.6847, abs=0.1)
+        assert response.data["dec_deg"] == pytest.approx(41.2688, abs=0.05)
         assert isinstance(response.data["meridian_seconds"], int)
 
     def test_asiair_not_configured(self, api_client, mock_ipc):
