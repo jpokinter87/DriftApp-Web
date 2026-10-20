@@ -457,6 +457,9 @@ class TestManualCoordsView:
         assert response.data["dec_deg"] == -5.3911
         assert isinstance(response.data["meridian_seconds"], int)
         assert "h" in response.data["meridian_time"]
+        # Affichage en JNow (comme l'ASIAIR) : M42 a avancé d'environ 0,3° en RA.
+        assert 83.9 < response.data["ra_jnow"] < 84.3
+        assert response.data["dec_jnow"] == pytest.approx(-5.38, abs=0.05)
 
     @pytest.mark.parametrize(
         "query",
@@ -491,6 +494,8 @@ class TestAsiairCoordsView:
         assert response.data["ra_deg"] == pytest.approx(10.6847, abs=0.1)
         assert response.data["dec_deg"] == pytest.approx(41.2688, abs=0.05)
         assert isinstance(response.data["meridian_seconds"], int)
+        # Affichage : les valeurs brutes de l'ASIAIR, pour coller à son écran.
+        assert (response.data["ra_jnow"], response.data["dec_jnow"]) == (11.06, 41.4193)
 
     def test_asiair_not_configured(self, api_client, mock_ipc):
         from core.config.config_loader import AsiairConfig
@@ -546,6 +551,15 @@ class TestObjectSearchView:
     def test_search_empty_query(self, api_client, mock_ipc):
         response = api_client.get("/api/tracking/search/?q=")
         assert response.status_code == 400
+
+    def test_search_adds_jnow_for_display(self, api_client, mock_ipc):
+        found = {"nom": "M42", "ra_deg": 83.8221, "dec_deg": -5.3911}
+        with patch("tracking.views.GestionnaireCatalogue") as cat:
+            cat.return_value.rechercher.return_value = found
+            response = api_client.get("/api/tracking/search/?q=M42")
+        assert response.status_code == 200
+        assert response.data["ra_deg"] == 83.8221
+        assert 83.9 < response.data["ra_jnow"] < 84.3
 
     def test_search_known_object(self, api_client, mock_ipc):
         """Recherche d'un objet — résultat dépend du cache."""

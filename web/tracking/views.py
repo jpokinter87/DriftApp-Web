@@ -37,12 +37,9 @@ def _parse_manual_coords(data):
 def _add_meridian_info(result):
     """Ajoute le temps avant passage au méridien (`meridian_seconds`, `meridian_time`)."""
     from datetime import datetime
-    from core.observatoire import AstronomicalCalculations
-    from core.config.config import get_site_config
 
     ra_deg = result["ra_deg"]
-    latitude, longitude, tz_offset, _, _ = get_site_config()
-    calc = AstronomicalCalculations(latitude, longitude, tz_offset)
+    calc = _calc()
     now = datetime.now()
     dec_deg = result.get("dec_deg", 0.0) or 0.0
     ha = calc.calculer_angle_horaire(ra_deg, now, deja_jnow=False, declinaison=dec_deg)
@@ -50,6 +47,25 @@ def _add_meridian_info(result):
 
     passage = calc.calculer_heure_passage_meridien(ra_deg, now, declinaison=dec_deg)
     result["meridian_time"] = passage.strftime("%Hh%M")
+
+
+def _add_display_jnow(result):
+    """Ajoute `ra_jnow`/`dec_jnow` : les coordonnées affichées, en JNow comme
+    l'ASIAIR. Les calculs du suivi continuent d'utiliser `ra_deg`/`dec_deg` (J2000)."""
+    from datetime import datetime, timezone
+
+    calc = _calc()
+    result["ra_jnow"], result["dec_jnow"] = calc.convertir_j2000_vers_jnow_equinoxe(
+        result["ra_deg"], result.get("dec_deg", 0.0) or 0.0, datetime.now(timezone.utc)
+    )
+
+
+def _calc():
+    from core.config.config import get_site_config
+    from core.observatoire import AstronomicalCalculations
+
+    latitude, longitude, tz_offset, _, _ = get_site_config()
+    return AstronomicalCalculations(latitude, longitude, tz_offset)
 
 
 class TrackingStartView(APIView):
@@ -168,6 +184,7 @@ class ObjectSearchView(APIView):
             # Ajouter le temps avant passage au méridien
             if result.get("ra_deg") is not None:
                 _add_meridian_info(result)
+                _add_display_jnow(result)
 
             return Response(result)
         else:
@@ -194,6 +211,7 @@ class ManualCoordsView(APIView):
 
         result = {"ra_deg": coords[0], "dec_deg": coords[1]}
         _add_meridian_info(result)
+        _add_display_jnow(result)
         return Response(result)
 
 
@@ -211,12 +229,7 @@ def _asiair_config():
 def _jnow_vers_j2000(ra_deg, dec_deg):
     from datetime import datetime, timezone
 
-    from core.config.config import get_site_config
-    from core.observatoire import AstronomicalCalculations
-
-    latitude, longitude, tz_offset, _, _ = get_site_config()
-    calc = AstronomicalCalculations(latitude, longitude, tz_offset)
-    return calc.convertir_jnow_vers_j2000(ra_deg, dec_deg, datetime.now(timezone.utc))
+    return _calc().convertir_jnow_vers_j2000(ra_deg, dec_deg, datetime.now(timezone.utc))
 
 
 class AsiairCoordsView(APIView):
@@ -241,6 +254,7 @@ class AsiairCoordsView(APIView):
 
         # L'ASIAIR renvoie du JNow (vérifié par Serge, 20/10/2026) ; le suivi attend du J2000.
         ra_deg, dec_deg = _jnow_vers_j2000(ra_jnow, dec_jnow)
-        result = {"ra_deg": ra_deg, "dec_deg": dec_deg}
+        # Affichage : les valeurs brutes, identiques à l'écran de l'ASIAIR.
+        result = {"ra_deg": ra_deg, "dec_deg": dec_deg, "ra_jnow": ra_jnow, "dec_jnow": dec_jnow}
         _add_meridian_info(result)
         return Response(result)

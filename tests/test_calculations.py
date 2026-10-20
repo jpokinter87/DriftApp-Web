@@ -132,6 +132,15 @@ class TestConversionJ2000JNOW:
         assert ad == pytest.approx(10.684708, abs=0.002)
         assert dec == pytest.approx(41.26875, abs=0.001)
 
+    def test_j2000_vers_jnow_equinoxe_m31(self, calc):
+        """J2000 → JNow des montures (affichage, comme l'ASIAIR) : inverse exact."""
+        date = datetime(2026, 10, 20, 20, 0, 0, tzinfo=timezone.utc)
+        ad, dec = calc.convertir_j2000_vers_jnow_equinoxe(10.684708, 41.26875, date)
+        assert ad == pytest.approx(0.73733 * 15, abs=0.002)
+        assert dec == pytest.approx(41.4193, abs=0.001)
+        retour = calc.convertir_jnow_vers_j2000(ad, dec, date)
+        assert retour == pytest.approx((10.684708, 41.26875), abs=1e-6)
+
     def test_jnow_vers_j2000_ra_dans_0_360(self, calc):
         """Près de RA 0h, le résultat reste dans [0 ; 360[."""
         date = datetime(2026, 10, 20, 20, 0, 0, tzinfo=timezone.utc)

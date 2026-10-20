@@ -120,3 +120,11 @@ Requête synchrone, bornée par `timeout_s` (3 s) : acceptable pour un clic.
   affichées « (ASIAIR) », cartouche méridien, « Démarrer le suivi » armé, suivi
   démarré sur ces coordonnées.
 - `ruff format --check .`, `ruff check .`, suite pytest verte.
+
+## Addendum 20/10 — affichage en JNow (6.23.2)
+
+Serge ne retrouvait pas sur l'application les coordonnées de l'ASIAIR. Décision
+JP : le dashboard **affiche** le JNow pour toutes les sources (recherche, saisie
+manuelle, import), les calculs restent en J2000. L'API ajoute `ra_jnow`/`dec_jnow`
+(affichage seul) ; pour l'import, ce sont les valeurs brutes de l'ASIAIR. La
+pop-up de saisie reste en J2000 ; la page Session n'est pas touchée.

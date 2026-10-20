@@ -90,6 +90,26 @@ class AstronomicalCalculations:
 
         return coord_jnow.ra.degree, coord_jnow.dec.degree
 
+    def convertir_j2000_vers_jnow_equinoxe(
+        self, ad_j2000: float, dec_j2000: float, date_heure: datetime
+    ) -> Tuple[float, float]:
+        """
+        Convertit des coordonnées J2000 en JNOW des montures (équinoxe vraie de
+        la date, repère TETE), pour l'affichage : ce sont les valeurs qu'affiche
+        l'ASIAIR. Inverse exact de `convertir_jnow_vers_j2000`.
+
+        Returns:
+            Tuple (ad_jnow, dec_jnow) en degrés
+        """
+        if date_heure.tzinfo is None:
+            dt_utc = date_heure - timedelta(hours=self.tz_offset)
+        else:
+            dt_utc = date_heure.astimezone(timezone.utc).replace(tzinfo=None)
+
+        coord_j2000 = SkyCoord(ra=ad_j2000 * u.degree, dec=dec_j2000 * u.degree, frame="icrs")
+        coord_jnow = coord_j2000.transform_to(TETE(obstime=Time(dt_utc, scale="utc")))
+        return coord_jnow.ra.degree, coord_jnow.dec.degree
+
     def convertir_jnow_vers_j2000(
         self, ad_jnow: float, dec_jnow: float, date_heure: datetime
     ) -> Tuple[float, float]:

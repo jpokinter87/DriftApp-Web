@@ -692,12 +692,13 @@ async function searchObject() {
         state.searchedObject = null;
         setMeridianFromApi(null);
     } else {
-        const raHMS = formatHMS(result.ra_deg ?? null);
-        const decDMS = formatDMS(result.dec_deg ?? null);
+        // Affichage en JNow, comme l'ASIAIR (le suivi utilise ra_deg/dec_deg J2000).
+        const raHMS = formatHMS(result.ra_jnow ?? null, 1);
+        const decDMS = formatDMS(result.dec_jnow ?? null);
 
         // Affichage compact sur une ligne
         elements.objectCoords.innerHTML =
-            `RA: ${raHMS} &mdash; DEC: ${decDMS}`;
+            `RA: ${raHMS} &mdash; DEC: ${decDMS} (JNow)`;
         elements.objectInfo.classList.remove('hidden');
         elements.btnStartTracking.disabled = false;
         state.searchedObject = result.nom || name;
@@ -743,7 +744,7 @@ async function importAsiair() {
         const typed = elements.objectName.value.trim();
         const name = typed && typed !== state.searchedObject
             ? typed
-            : `ASIAIR RA ${formatHMS(result.ra_deg, 1)} DEC ${formatDMS(result.dec_deg)}`;
+            : `ASIAIR RA ${formatHMS(result.ra_jnow, 1)} DEC ${formatDMS(result.dec_jnow)}`;
         armCoords(name, result.ra_deg, result.dec_deg, result, 'ASIAIR');
         log(`Coordonnées ASIAIR importées : ${name}`, 'success');
     } finally {
@@ -752,11 +753,12 @@ async function importAsiair() {
 }
 
 // Affiche des coordonnées validées par l'API (avec infos méridien) et arme
-// « Démarrer le suivi », comme une recherche réussie.
+// « Démarrer le suivi », comme une recherche réussie. Affichage en JNow comme
+// l'ASIAIR ; raDeg/decDeg (J2000) partent au suivi.
 function armCoords(name, raDeg, decDeg, result, source) {
     elements.objectName.value = name;
     elements.objectCoords.innerHTML =
-        `RA: ${formatHMS(raDeg, 1)} &mdash; DEC: ${formatDMS(decDeg)} (${source})`;
+        `RA: ${formatHMS(result.ra_jnow, 1)} &mdash; DEC: ${formatDMS(result.dec_jnow)} (${source}, JNow)`;
     elements.objectInfo.classList.remove('hidden');
     elements.btnStartTracking.disabled = false;
     state.searchedObject = name;
