@@ -12,10 +12,10 @@ Spec : `docs/superpowers/specs/2026-10-21-bascule-coupole-signal-asiair.md`
    `delta_h = range12(RA − sidereal_time)`).
    → vérifier : TDD contre le serveur TCP local de `test_asiair_client.py`
    (nominal, `delta_h` autour de 0 h et de 24 h, côté inconnu → `None`, erreurs).
-3. **Règle** — fonction pure `cote_attendu(delta_h)` et `doit_attendre(etat, …)`
+3. **Règle** — fonction pure `monture_en_retard(etat, azimut_objet)`
    (module `core/tracking/dome_flip_wait.py`), plus l'état d'attente (début,
    délai écoulé, levée par timeout).
-   → vérifier : tests unitaires de la spec (côtés, `|delta_h| ≥ 6 h`, état périmé,
+   → vérifier : tests unitaires de la spec (côtés, avant/après méridien, `|delta_h| ≥ 6 h`, état périmé,
    délai maximal, pas de relance après timeout).
 4. **Watcher** — `core/hardware/asiair_watcher.py` (`AsiairPierWatcher`, thread
    démon, 5 s, `etat_frais(30)`, `stop()`).

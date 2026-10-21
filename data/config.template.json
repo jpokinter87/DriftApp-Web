@@ -172,6 +172,8 @@
     "_comment": "ASIAIR de la monture : le bouton « ASIAIR » du dashboard y lit l'AD/Déc pointée (JSON-RPC scope_get_info, port 4400) et l'injecte dans la recherche d'objet. host vide = non configuré.",
     "host": "192.168.1.70",
     "port": 4400,
-    "timeout_s": 3.0
+    "timeout_s": 3.0,
+    "dome_flip_on_pierside": false,
+    "max_wait_minutes": 30
   }
 }

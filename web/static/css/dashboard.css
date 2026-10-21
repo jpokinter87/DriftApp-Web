@@ -1137,6 +1137,19 @@ header h1 span {
 .tracking-under-meta .lbl { color: var(--color-obs-text-muted); }
 .tracking-under-meta .sep { color: var(--color-obs-text-muted); margin: 0 0.25rem; }
 
+/* v6.24 : côté du pied ASIAIR, ambre pendant l'attente du retournement */
+.tracking-under-pier {
+    margin-top: 0.3rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--color-obs-text-secondary);
+}
+.tracking-under-pier.waiting {
+    color: var(--color-accent-amber);
+    font-weight: 700;
+}
+
 /* =========================================================================
    Mode compact « écran bas » (≤ 760px de haut) — v6.11
    Cible l'écran tactile 720p de l'observatoire : resserre paddings, gaps et

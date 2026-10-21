@@ -403,12 +403,18 @@ class AsiairConfig:
     (JSON-RPC ``scope_get_info`` sur le port TCP 4400) pour importer l'AD/Déc
     pointée. ``host`` vide = non configuré.
 
+    ``dome_flip_on_pierside`` : la coupole attend le retournement réel de la
+    monture (``scope_get_pierside``) au lieu de basculer au transit, au plus
+    ``max_wait_minutes`` (v6.24).
+
     IP réelle uniquement dans ``data/config.json`` — code neutre.
     """
 
     host: str = ""
     port: int = 4400
     timeout_s: float = 3.0
+    dome_flip_on_pierside: bool = False
+    max_wait_minutes: float = 30.0
 
 
 @dataclass
@@ -673,6 +679,10 @@ class ConfigLoader:
             host=str(c.get("host", defaults.host)).strip(),
             port=int(c.get("port", defaults.port)),
             timeout_s=float(c.get("timeout_s", defaults.timeout_s)),
+            dome_flip_on_pierside=bool(
+                c.get("dome_flip_on_pierside", defaults.dome_flip_on_pierside)
+            ),
+            max_wait_minutes=float(c.get("max_wait_minutes", defaults.max_wait_minutes)),
         )
 
     def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:

@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import Optional, Callable, Dict, Any, Tuple
 
 from core.config.config import SINGLE_SPEED_MOTOR_DELAY, motor_delay_for
+from core.config.config_loader import AsiairConfig, ConfigLoader
+from core.hardware.asiair_watcher import AsiairPierWatcher
 from core.hardware.moteur_simule import set_simulated_position, get_simulated_position
 from core.tracking.tracker import TrackingSession
 from core.tracking.tracking_logger import TrackingLogger
@@ -455,6 +457,12 @@ class ContinuousHandler:
         self.status_callback(current_status)
 
 
+def _lire_config_asiair() -> AsiairConfig:
+    """Section `asiair` relue au démarrage de chaque suivi (réglable sur la page
+    Configuration sans redémarrer les services, qui recalibreraient la coupole)."""
+    return ConfigLoader().load().asiair
+
+
 class TrackingHandler:
     """Handler pour le suivi d'objets célestes."""
 
@@ -485,6 +493,28 @@ class TrackingHandler:
         self.active = False
         self._consecutive_errors = 0
         self._calc: Optional[AstronomicalCalculations] = None
+        self.pier_watcher: Optional[AsiairPierWatcher] = None
+
+    def _demarrer_pier_watcher(self) -> float:
+        """Lance la surveillance du côté du pied si `asiair.dome_flip_on_pierside`
+        et `asiair.host` sont renseignés (v6.24). Renvoie le délai maximal d'attente."""
+        try:
+            cfg = _lire_config_asiair()
+        except Exception as e:
+            logger.warning(f"asiair_config_reload_failed | {e}")
+            cfg = self.config.asiair
+        if cfg.dome_flip_on_pierside and cfg.host:
+            logger.info(
+                f"asiair_pier_watch | host={cfg.host}:{cfg.port} "
+                f"max_wait_min={cfg.max_wait_minutes:g}"
+            )
+            self.pier_watcher = AsiairPierWatcher(cfg.host, cfg.port, cfg.timeout_s).start()
+        return cfg.max_wait_minutes
+
+    def _arreter_pier_watcher(self) -> None:
+        if self.pier_watcher is not None:
+            self.pier_watcher.stop()
+            self.pier_watcher = None
 
     def start(
         self,
@@ -545,6 +575,7 @@ class TrackingHandler:
             )
 
             tracking_logger = TrackingLogger()
+            flip_max_wait_minutes = self._demarrer_pier_watcher()
 
             self.session = TrackingSession(
                 moteur=self.moteur,
@@ -557,6 +588,8 @@ class TrackingHandler:
                 encoder_config=self.config.encoder,
                 meridian_anticipation_config=self.config.meridian_anticipation,
                 goto_callback=on_goto_info,
+                pier_watcher=self.pier_watcher,
+                flip_max_wait_minutes=flip_max_wait_minutes,
             )
 
             success, start_message = self.session.start(
@@ -583,9 +616,11 @@ class TrackingHandler:
                 current_status["tracking_pending"] = False
                 current_status["goto_info"] = None
                 current_status["error"] = f"Échec démarrage suivi: {start_message}"
+                self._arreter_pier_watcher()
 
         except Exception as e:
             logger.error(f"Erreur démarrage suivi: {e}")
+            self._arreter_pier_watcher()
             current_status["status"] = "error"
             current_status["tracking_object"] = None
             current_status["tracking_pending"] = False
@@ -617,6 +652,7 @@ class TrackingHandler:
                 except Exception as e2:
                     logger.error(f"Échec sauvegarde fallback: {e2}")
             self.session = None
+        self._arreter_pier_watcher()
 
         self.active = False
         current_status["status"] = "idle"
@@ -660,6 +696,8 @@ class TrackingHandler:
                     "encoder_offset": status.get("encoder_offset", 0.0),
                     "ra_deg": ra_deg,
                     "dec_deg": getattr(self.session, "dec_deg", None),
+                    "asiair_pier": status.get("asiair_pier"),
+                    "flip_wait": status.get("flip_wait"),
                 }
 
                 if ra_deg is not None and self._calc is not None:
@@ -688,6 +726,7 @@ class TrackingHandler:
                 current_status["session_data"] = session_data
             else:
                 self.active = False
+                self._arreter_pier_watcher()
                 current_status["status"] = "idle"
                 current_status["tracking_object"] = None
 

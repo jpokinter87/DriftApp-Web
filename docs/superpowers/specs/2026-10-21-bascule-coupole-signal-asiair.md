@@ -34,21 +34,36 @@ On veut que la coupole attende le retournement réel au lieu de basculer au tran
 
 ## Règle
 
-Côté attendu du tube d'après l'angle horaire **de l'ASIAIR** (`delta_h`) :
-`delta_h > 0` (avant le méridien) → `pier_west` ; `delta_h ≤ 0` (après) → `pier_east`.
-Convention vérifiée le 21/10 (pier_west → pier_east au retournement).
+Principe (JP, 21/10) : **tant que la monture est encore du côté d'avant le
+méridien, la coupole ne bascule pas** ; elle part au feu vert de l'ASIAIR
+(changement de côté du pied), à vitesse rapide, pendant que la monture termine son
+retournement.
 
-**Attente** = option active ET état ASIAIR frais (< 30 s) ET `|delta_h| < 6 h` ET
-côté rapporté ≠ côté attendu ET délai maximal pas encore écoulé.
+« Objet passé au méridien » est jugé par **DriftApp**, avec l'azimut qui sert à
+l'abaque : azimut dans [180°, 360°[ (moitié Ouest du ciel), ce qui équivaut
+exactement à un angle horaire positif quelle que soit la déclinaison. On ne compare
+pas au méridien de l'ASIAIR : les deux calculs ne tombent pas à la même seconde
+(le 21/10 l'ASIAIR a lancé le retournement à `delta_h = +0,002 h`), et dans
+l'intervalle la coupole aurait pu basculer avant le feu vert. (Révision du 21/10 ;
+la première version comparait `delta_h` de l'ASIAIR au côté rapporté.)
 
-- `|delta_h| < 6 h` : comme l'ASIAIR, on ne raisonne qu'autour du passage
-  supérieur. Au passage inférieur (sous le pôle) la monture ne retourne pas.
+**Attente** = option active ET état ASIAIR frais (< 30 s) ET côté rapporté
+`pier_west` (côté d'avant le méridien, vérifié le 21/10 : pier_west → pier_east au
+retournement) ET objet passé au méridien selon DriftApp ET `|delta_h| < 6 h` ET
+délai maximal pas encore écoulé.
+
+- `delta_h = range12(RA − sidereal_time)` de `scope_get_info` ne sert qu'au garde-fou
+  `|delta_h| < 6 h` : comme l'ASIAIR, on ne raisonne qu'autour du passage supérieur.
+  Au passage inférieur (sous le pôle) la monture ne retourne pas.
+- Monture déjà côté Est (retournement fait en avance ou à la main) ou côté inconnu :
+  pas d'attente, comportement actuel.
 - Pas d'état « avant/après transit » à mémoriser : la règle se recalcule à chaque
   correction. Elle couvre aussi un suivi lancé après le méridien sur une monture pas
-  encore retournée, et un retournement fait à la main.
+  encore retournée.
 - Le délai maximal compte depuis la première correction suspendue. Une fois écoulé,
-  l'attente est levée jusqu'à ce que la règle redevienne vraie (côté conforme) ;
-  la même cause ne la relance pas.
+  l'attente est levée jusqu'à ce que la monture soit vue hors de cette situation
+  (côté Est, ou objet revenu avant le méridien) ; la même cause ne la relance pas,
+  un ASIAIR devenu muet non plus.
 
 ## Comportement pendant le suivi
 
@@ -118,7 +133,8 @@ la fin de l'attente. Toujours visible, aucun survol.
 
 ## Critères de succès
 
-- Tests : règle (côtés, `|delta_h| ≥ 6 h`, état périmé, délai maximal) ; watcher
+- Tests : règle (côtés, objet avant/après le méridien, `|delta_h| ≥ 6 h`, état périmé,
+  délai maximal) ; watcher
   contre un faux ASIAIR TCP ; `check_and_correct` suspendu puis bascule immédiate au
   changement de côté ; rejeu de la chronologie du 21/10.
 - Option désactivée → comportement strictement inchangé (tests existants verts).

@@ -15,13 +15,22 @@ from __future__ import annotations
 import json
 import socket
 import time
-from typing import Tuple
+from typing import List, NamedTuple, Optional, Tuple
 
 REQUEST_ID = 501
+COTES_PIED = ("pier_east", "pier_west")
 
 
 class AsiairError(Exception):
     """Lecture impossible (réseau, délai, réponse d'erreur ou incomplète)."""
+
+
+class EtatMonture(NamedTuple):
+    """Côté du pied (``"pier_east"``, ``"pier_west"`` ou ``None`` si inconnu) et
+    écart au méridien selon l'ASIAIR, en heures : > 0 avant le passage, < 0 après."""
+
+    pier: Optional[str]
+    delta_h: float
 
 
 def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, float]:
@@ -32,7 +41,7 @@ def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, flo
     Raises:
         AsiairError: message lisible par l'opérateur.
     """
-    result = _requete(host, port, timeout_s, "scope_get_info")
+    (result,) = _requetes(host, port, timeout_s, ["scope_get_info"])
     try:
         ra_h, dec_deg = float(result["RA"]), float(result["Dec"])
     except (KeyError, TypeError, ValueError):
@@ -42,14 +51,36 @@ def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, flo
     return (ra_h * 15.0) % 360.0, dec_deg
 
 
-def _requete(host: str, port: int, timeout_s: float, method: str) -> dict:
-    """Envoie `method` et renvoie le ``result`` de la réponse portant notre id."""
+def lire_etat_monture(host: str, port: int, timeout_s: float) -> EtatMonture:
+    """Côté du pied et écart au méridien de la monture, sur une seule connexion.
+
+    ``delta_h = range12(RA − sidereal_time)`` de ``scope_get_info`` : le calcul
+    du firmware ASIAIR pour décider du retournement (``meridian_flip.cpp``).
+
+    Raises:
+        AsiairError: message lisible par l'opérateur.
+    """
+    info, pier = _requetes(host, port, timeout_s, ["scope_get_info", "scope_get_pierside"])
+    try:
+        ra_h, lst_h = float(info["RA"]), float(info["sidereal_time"])
+    except (KeyError, TypeError, ValueError):
+        raise AsiairError("réponse sans temps sidéral (monture connectée ?)") from None
+    delta_h = (ra_h - lst_h + 12.0) % 24.0 - 12.0
+    return EtatMonture(pier if pier in COTES_PIED else None, delta_h)
+
+
+def _requetes(host: str, port: int, timeout_s: float, methods: List[str]) -> list:
+    """Envoie les `methods` (ids REQUEST_ID, REQUEST_ID+1…) sur une connexion et
+    renvoie leurs ``result`` dans le même ordre."""
+    ids = [REQUEST_ID + i for i in range(len(methods))]
+    resultats: dict = {}
     echeance = time.monotonic() + timeout_s
     try:
         with socket.create_connection((host, port), timeout=timeout_s) as s:
-            s.sendall((json.dumps({"id": REQUEST_ID, "method": method}) + "\r\n").encode())
+            for i, method in zip(ids, methods):
+                s.sendall((json.dumps({"id": i, "method": method}) + "\r\n").encode())
             tampon = b""
-            while True:
+            while len(resultats) < len(ids):
                 reste = echeance - time.monotonic()
                 if reste <= 0:
                     raise TimeoutError
@@ -61,17 +92,16 @@ def _requete(host: str, port: int, timeout_s: float, method: str) -> dict:
                 *lignes, tampon = tampon.split(b"\n")
                 for ligne in lignes:
                     msg = _decoder(ligne)
-                    if msg is None or msg.get("id") != REQUEST_ID:
+                    if msg is None or msg.get("id") not in ids:
                         continue
                     if "error" in msg:
                         raise AsiairError(f"erreur ASIAIR : {msg['error']}")
-                    if not isinstance(msg.get("result"), dict):
-                        raise AsiairError("réponse sans coordonnées (monture connectée ?)")
-                    return msg["result"]
+                    resultats[msg["id"]] = msg.get("result")
     except AsiairError:
         raise
     except OSError as exc:  # inclut délai dépassé et connexion refusée/fermée
         raise AsiairError(f"ASIAIR injoignable ({host}:{port}) : {_motif(exc)}") from None
+    return [resultats[i] for i in ids]
 
 
 def _motif(exc: OSError) -> str:

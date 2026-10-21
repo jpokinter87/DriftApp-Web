@@ -408,6 +408,15 @@ HELP_REGISTRY: dict[str, str] = {
         "Délai maximal (secondes) d'attente de la réponse de l'ASIAIR avant d'afficher "
         "« injoignable »."
     ),
+    "asiair.dome_flip_on_pierside": (
+        "La coupole attend le retournement réel de la monture (côté du pied lu sur "
+        "l'ASIAIR) au lieu de basculer au passage au méridien. ASIAIR muet = bascule au "
+        "méridien comme avant. Désactive l'anticipation méridien. Relu au démarrage du suivi."
+    ),
+    "asiair.max_wait_minutes": (
+        "Durée maximale (minutes) d'attente du retournement de la monture ; au-delà, la "
+        "coupole bascule quand même (avertissement au journal)."
+    ),
 }
 
 

@@ -49,6 +49,14 @@ class TrackingCorrectionsMixin:
     # Évite l'arrêt automatique lors de grands déplacements post-méridien
     ACCEPTABLE_ERROR_THRESHOLD = 2.0
 
+    # v6.24 : pendant l'attente du retournement de la monture, on revérifie à la
+    # cadence de lecture de l'ASIAIR pour partir dès le changement de côté.
+    FLIP_WAIT_POLL_S = 5.0
+
+    # Attente du retournement (v6.24) — posés par TrackingSession, absents = inactif.
+    pier_watcher = None
+    _flip_wait = None
+
     def check_and_correct(self) -> Tuple[bool, str]:
         """
         Vérifie si une correction est nécessaire et l'applique.
@@ -86,6 +94,11 @@ class TrackingCorrectionsMixin:
 
         # Calculer la position actuelle de l'objet (méthode centralisée)
         azimut, altitude = self._calculate_current_coords(now)
+
+        # v6.24 : monture pas encore retournée → la coupole ne bascule pas.
+        if self._attendre_retournement(azimut, now):
+            self.next_correction_time = now + timedelta(seconds=self.FLIP_WAIT_POLL_S)
+            return False, "dome_flip_wait"
 
         # Calculer la position cible (abaque)
         position_cible, infos = self._calculate_target_position(azimut, altitude)
@@ -156,6 +169,25 @@ class TrackingCorrectionsMixin:
         self.next_correction_time = now + timedelta(seconds=SINGLE_SPEED_CHECK_INTERVAL_S)
 
         return True, log_message
+
+    def _attendre_retournement(self, azimut: float, now: datetime) -> bool:
+        """True si la correction doit attendre le retournement de la monture (v6.24)."""
+        if self._flip_wait is None:
+            return False
+        etat = self.pier_watcher.etat_frais()
+        decision = self._flip_wait.evaluer(etat, azimut, now.timestamp())
+        if decision.evenement == "start":
+            self.logger.info(
+                f"dome_flip_wait_start | pier={etat.pier} delta_h={etat.delta_h:+.3f} "
+                f"az={azimut:.1f} max_min={self._flip_wait.max_wait_s / 60:.0f}"
+            )
+        elif decision.evenement is not None:
+            log = self.logger.info if decision.evenement == "pierside" else self.logger.warning
+            log(
+                f"dome_flip_wait_end | reason={decision.evenement} "
+                f"waited_s={decision.attente_s:.0f}"
+            )
+        return decision.attendre
 
     def _apply_correction(self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY):
         """

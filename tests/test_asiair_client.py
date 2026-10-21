@@ -10,7 +10,12 @@ import threading
 
 import pytest
 
-from core.hardware.asiair_client import AsiairError, lire_coordonnees
+from core.hardware.asiair_client import (
+    AsiairError,
+    EtatMonture,
+    lire_coordonnees,
+    lire_etat_monture,
+)
 
 
 def _faux_asiair(reponses):
@@ -119,3 +124,78 @@ def test_connexion_refusee():
     s.close()  # port libre, personne n'écoute
     with pytest.raises(AsiairError, match="injoignable"):
         lire_coordonnees("127.0.0.1", port, 1.0)
+
+
+# --- lire_etat_monture (bascule coupole sur le côté du pied, 6.24) ---
+
+
+def _faux_asiair_monture(info, pier, evenement_avant=False):
+    """Répond à chaque requête de la connexion : `info` pour scope_get_info,
+    `pier` pour scope_get_pierside (le résultat est une chaîne, comme l'ASIAIR)."""
+
+    def servir_requete(requete):
+        lignes = [json.dumps({"Event": "ScopeTrack", "state": "on"})] if evenement_avant else []
+        if requete["method"] == "scope_get_info":
+            lignes.append(_resultat(requete, info))
+        elif requete["method"] == "scope_get_pierside":
+            lignes.append(_resultat(requete, pier))
+        return lignes
+
+    serveur = socket.socket()
+    serveur.bind(("127.0.0.1", 0))
+    serveur.listen(1)
+
+    def servir():
+        conn, _ = serveur.accept()
+        with conn:
+            for ligne in conn.makefile():
+                for rep in servir_requete(json.loads(ligne)):
+                    conn.sendall((rep + "\r\n").encode())
+        serveur.close()
+
+    threading.Thread(target=servir, daemon=True).start()
+    return serveur.getsockname()[1]
+
+
+def test_etat_monture_avant_meridien():
+    # Valeurs relevées par la sonde le 21/10 à 17:14:52.
+    port = _faux_asiair_monture(
+        {"RA": 17.614039, "Dec": 68.749687, "sidereal_time": 17.611908}, "pier_west"
+    )
+    etat = lire_etat_monture("127.0.0.1", port, 2.0)
+    assert etat.pier == "pier_west"
+    assert etat.delta_h == pytest.approx(0.002131)
+
+
+def test_etat_monture_apres_meridien_et_evenements_intercales():
+    port = _faux_asiair_monture(
+        {"RA": 17.6236, "Dec": 68.75, "sidereal_time": 17.6539}, "pier_east", evenement_avant=True
+    )
+    etat = lire_etat_monture("127.0.0.1", port, 2.0)
+    assert etat == EtatMonture("pier_east", pytest.approx(-0.0303))
+
+
+@pytest.mark.parametrize(
+    "ra_h, lst_h, attendu",
+    [(23.9, 0.1, -0.2), (0.1, 23.9, 0.2), (6.0, 18.0, -12.0), (12.0, 1.0, 11.0)],
+)
+def test_etat_monture_delta_h_ramene_dans_12h(ra_h, lst_h, attendu):
+    port = _faux_asiair_monture({"RA": ra_h, "Dec": 10.0, "sidereal_time": lst_h}, "pier_east")
+    assert lire_etat_monture("127.0.0.1", port, 2.0).delta_h == pytest.approx(attendu)
+
+
+def test_etat_monture_cote_inconnu():
+    port = _faux_asiair_monture({"RA": 1.0, "Dec": 10.0, "sidereal_time": 1.5}, "pier_unknown")
+    assert lire_etat_monture("127.0.0.1", port, 2.0).pier is None
+
+
+def test_etat_monture_sans_temps_sideral():
+    port = _faux_asiair_monture({"RA": 1.0, "Dec": 10.0}, "pier_east")
+    with pytest.raises(AsiairError, match="temps sidéral"):
+        lire_etat_monture("127.0.0.1", port, 2.0)
+
+
+def test_etat_monture_injoignable():
+    port = _faux_asiair(lambda r: None)
+    with pytest.raises(AsiairError, match="injoignable"):
+        lire_etat_monture("127.0.0.1", port, 0.3)

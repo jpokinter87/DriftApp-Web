@@ -1,6 +1,6 @@
 [project]
 name = "driftapp-web"
-version = "6.23.4"
+version = "6.24.0"
 description = "Gestion de coupole d'observatoire astronomique - Interface Web Django"
 readme = "README.md"
 requires-python = ">=3.11"

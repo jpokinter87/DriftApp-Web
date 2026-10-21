@@ -321,6 +321,7 @@ const elements = {
     trackingObject: document.getElementById('tracking-object'),
     trackingAz: document.getElementById('tracking-az'),
     trackingAlt: document.getElementById('tracking-alt'),
+    trackingPier: document.getElementById('tracking-pier'),
     trackingMode: document.getElementById('tracking-mode'),
     trackingCorrections: document.getElementById('tracking-corrections'),
     trackingRemaining: document.getElementById('tracking-remaining'),
@@ -1961,6 +1962,35 @@ function setManualControlsDisabled(disabled) {
     if (elements.gotoAngle) elements.gotoAngle.disabled = disabled;
 }
 
+// v6.24 : côté du pied ASIAIR et attente du retournement de la monture
+// (option asiair.dome_flip_on_pierside). Rien d'affiché si l'option est inactive
+// ou l'ASIAIR muet. Journal aux transitions de l'attente.
+let flipWaitShown = false;
+
+function updatePierDisplay(info) {
+    const el = elements.trackingPier;
+    if (!el) return;
+    const wait = info.flip_wait;
+    if (wait) {
+        const elapsedMin = Math.floor(wait.elapsed_s / 60);
+        const maxMin = Math.round(wait.max_s / 60);
+        el.textContent = `Attente retournement monture — ${elapsedMin} min / ${maxMin}`;
+    } else if (info.asiair_pier) {
+        el.textContent = `Monture : côté ${info.asiair_pier === 'east' ? 'Est' : 'Ouest'}`;
+    }
+    el.classList.toggle('waiting', !!wait);
+    el.classList.toggle('hidden', !wait && !info.asiair_pier);
+
+    if (wait && !flipWaitShown) {
+        log('Coupole en attente du retournement de la monture (ASIAIR)', 'warning');
+    } else if (!wait && flipWaitShown && Object.keys(info).length > 0) {
+        log(info.asiair_pier === 'east'
+            ? 'Monture retournée : bascule de la coupole'
+            : 'Fin de l\'attente du retournement : bascule de la coupole', 'info');
+    }
+    flipWaitShown = !!wait;
+}
+
 function updateTrackingDisplay(motor) {
     // Afficher le panneau pendant l'initialisation (GOTO initial) OU pendant le tracking actif
     const isInitializing = motor.status === 'initializing' && motor.tracking_object;
@@ -2007,6 +2037,7 @@ function updateTrackingDisplay(motor) {
 
         elements.trackingAz.textContent = info.azimut ? `${info.azimut.toFixed(2)}°` : '--';
         elements.trackingAlt.textContent = info.altitude ? `${info.altitude.toFixed(2)}°` : '--';
+        updatePierDisplay(info);
 
         const mode = motor.mode || 'normal';
         const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
@@ -2072,6 +2103,7 @@ function updateTrackingDisplay(motor) {
     } else {
         Alpine.store('dashboard').trackingVisible = false;
         elements.trackingInfo.classList.add('hidden');
+        updatePierDisplay({});
         elements.btnStartTracking.disabled = !state.searchedObject;
         elements.btnStopTracking.disabled = true;
         setManualControlsDisabled(false);

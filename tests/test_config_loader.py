@@ -1205,3 +1205,23 @@ class TestAsiairConfig:
     def test_malformed_section_gives_defaults(self, tmp_path, sample_config_dict):
         config = self._load(tmp_path, sample_config_dict, "oui")
         assert config.asiair == AsiairConfig()
+
+    def test_dome_flip_defaults(self):
+        cfg = AsiairConfig()
+        assert cfg.dome_flip_on_pierside is False
+        assert cfg.max_wait_minutes == 30.0
+
+    def test_dome_flip_values_read(self, tmp_path, sample_config_dict):
+        config = self._load(
+            tmp_path,
+            sample_config_dict,
+            {"host": "10.0.0.5", "dome_flip_on_pierside": True, "max_wait_minutes": 12},
+        )
+        assert config.asiair.dome_flip_on_pierside is True
+        assert config.asiair.max_wait_minutes == 12.0
+
+    def test_old_section_without_dome_flip_keys(self, tmp_path, sample_config_dict):
+        # config.json terrain antérieur à 6.24 : le merge ajoute les clés désactivées.
+        config = self._load(tmp_path, sample_config_dict, {"host": "10.0.0.5"})
+        assert config.asiair.dome_flip_on_pierside is False
+        assert config.asiair.max_wait_minutes == 30.0

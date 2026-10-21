@@ -69,6 +69,8 @@ class TrackingSession(
         encoder_config=None,
         goto_callback=None,
         meridian_anticipation_config=None,
+        pier_watcher=None,
+        flip_max_wait_minutes: float = 30.0,
     ):
         """
         Initialise une session de suivi.
@@ -85,6 +87,9 @@ class TrackingSession(
                           - current_position: position actuelle
                           - target_position: position cible
                           - delta: déplacement à effectuer
+            pier_watcher: AsiairPierWatcher (v6.24) — la coupole attend le
+                          retournement de la monture au lieu de basculer au
+                          transit, au plus `flip_max_wait_minutes`. None = inactif.
         """
         self.moteur = moteur
         self.calc = calc
@@ -110,6 +115,17 @@ class TrackingSession(
             from core.config.config_loader import MeridianAnticipationConfig
 
             meridian_anticipation_config = MeridianAnticipationConfig()
+        # v6.24 : la bascule suit le côté du pied ASIAIR, l'anticipation la contredirait.
+        self.pier_watcher = pier_watcher
+        self._flip_wait = None
+        if pier_watcher is not None:
+            from core.config.config_loader import MeridianAnticipationConfig
+            from core.tracking.dome_flip_wait import AttenteRetournement
+
+            self._flip_wait = AttenteRetournement(flip_max_wait_minutes * 60.0)
+            if meridian_anticipation_config.enabled:
+                self.logger.info("meridian_anticipation_disabled | reason=asiair_pierside")
+                meridian_anticipation_config = MeridianAnticipationConfig(enabled=False)
         self._init_anticipation(meridian_anticipation_config)
 
     # =========================================================================
@@ -412,6 +428,23 @@ class TrackingSession(
             "abaque_method": infos.get("method", "interpolation"),
             "in_bounds": infos.get("in_bounds", True),
             "encoder_offset": self.encoder_offset,
+            **self._flip_wait_status(),
+        }
+
+    def _flip_wait_status(self) -> dict:
+        """Côté du pied ASIAIR et attente du retournement en cours (v6.24)."""
+        if self._flip_wait is None:
+            return {"asiair_pier": None, "flip_wait": None}
+        etat = self.pier_watcher.etat_frais()
+        pier = etat.pier if etat is not None else None
+        ecoule = self._flip_wait.en_cours(datetime.now(timezone.utc).timestamp())
+        return {
+            "asiair_pier": {"pier_east": "east", "pier_west": "west"}.get(pier),
+            "flip_wait": (
+                None
+                if ecoule is None
+                else {"elapsed_s": round(ecoule), "max_s": round(self._flip_wait.max_wait_s)}
+            ),
         }
 
     # =========================================================================

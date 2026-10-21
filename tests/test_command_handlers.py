@@ -100,6 +100,15 @@ def mock_config():
     return MockConfig()
 
 
+@pytest.fixture(autouse=True)
+def _config_asiair_inactive():
+    """Le démarrage d'un suivi relit la section asiair : jamais le vrai config.json ici."""
+    from core.config.config_loader import AsiairConfig
+
+    with patch("services.command_handlers._lire_config_asiair", return_value=AsiairConfig()):
+        yield
+
+
 @pytest.fixture
 def status_callback():
     """Mock du callback de status."""
@@ -500,6 +509,70 @@ class TestTrackingHandler:
             session_cls.return_value.start.return_value = (False, "stop")
             handler.start("M 31", {"status": "idle"})
         handler.rotate_log.assert_called_once_with("M 31")
+
+    def test_watcher_cree_seulement_si_option_et_hote(self, handler):
+        from core.config.config_loader import AsiairConfig
+
+        handler.config = MagicMock()
+        cas = [
+            (AsiairConfig(host="10.0.0.5", dome_flip_on_pierside=False), False),
+            (AsiairConfig(host="", dome_flip_on_pierside=True), False),
+            (AsiairConfig(host="10.0.0.5", dome_flip_on_pierside=True, max_wait_minutes=12), True),
+        ]
+        for cfg, attendu in cas:
+            with (
+                patch("services.command_handlers._lire_config_asiair", return_value=cfg),
+                patch("services.command_handlers.AsiairPierWatcher") as watcher_cls,
+                patch("services.command_handlers.TrackingSession") as session_cls,
+                patch("services.command_handlers.TrackingLogger"),
+                patch("services.command_handlers.AstronomicalCalculations"),
+            ):
+                session_cls.return_value.start.return_value = (True, "ok")
+                session_cls.return_value.get_status.return_value = {}
+                handler.start("Cible", {"status": "idle"})
+                kwargs = session_cls.call_args.kwargs
+                assert watcher_cls.called is attendu
+                assert (kwargs["pier_watcher"] is not None) is attendu
+                assert kwargs["flip_max_wait_minutes"] == cfg.max_wait_minutes
+                watcher = handler.pier_watcher
+                handler.stop({"status": "tracking"})
+                if attendu:
+                    watcher.stop.assert_called_once()
+                assert handler.pier_watcher is None
+
+    def test_watcher_arrete_si_le_demarrage_echoue(self, handler):
+        from core.config.config_loader import AsiairConfig
+
+        handler.config = MagicMock()
+        cfg = AsiairConfig(host="10.0.0.5", dome_flip_on_pierside=True)
+        with (
+            patch("services.command_handlers._lire_config_asiair", return_value=cfg),
+            patch("services.command_handlers.AsiairPierWatcher") as watcher_cls,
+            patch("services.command_handlers.TrackingSession") as session_cls,
+            patch("services.command_handlers.TrackingLogger"),
+            patch("services.command_handlers.AstronomicalCalculations"),
+        ):
+            session_cls.return_value.start.return_value = (False, "objet introuvable")
+            handler.start("Cible", {"status": "idle"})
+        watcher_cls.return_value.start.return_value.stop.assert_called_once()
+        assert handler.pier_watcher is None
+
+    def test_update_transmet_l_etat_asiair(self, handler):
+        handler.active = True
+        handler.session = MagicMock()
+        handler.session.check_and_correct.return_value = (False, "dome_flip_wait")
+        handler.session.ra_deg = None
+        handler.session.get_status.return_value = {
+            "running": True,
+            "asiair_pier": "west",
+            "flip_wait": {"elapsed_s": 240, "max_s": 1800},
+        }
+        handler.session.get_session_data.return_value = {}
+        current_status = {"status": "tracking"}
+        handler.update(current_status)
+        info = current_status["tracking_info"]
+        assert info["asiair_pier"] == "west"
+        assert info["flip_wait"] == {"elapsed_s": 240, "max_s": 1800}
 
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
