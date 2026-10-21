@@ -58,3 +58,25 @@ def test_request_is_applied_once(daemon_module):
     daemon.handle_request("CALIB")
     daemon.apply_pending_forced_calibration(123.0)
     assert daemon.apply_pending_forced_calibration(200.0) == 200.0
+
+
+def test_daemon_survives_without_gpio(daemon_module, monkeypatch):
+    """Terrain 21/10 : contrôleur GPIO introuvable → le démon vit, encodeur seul.
+
+    Avant : l'exception tuait le démon, l'encodeur (SPI) était perdu avec le
+    microswitch et « Forcer à 45° » trouvait un démon injoignable.
+    """
+
+    def introuvable(_lgpio):
+        raise RuntimeError("contrôleur GPIO introuvable")
+
+    monkeypatch.setattr(daemon_module, "open_header_gpiochip", introuvable)
+
+    daemon = daemon_module.EMS22Daemon()
+
+    assert daemon.hchip is None
+    # Le microswitch est ignoré, l'angle passe tel quel.
+    assert daemon.process_switch(123.0) == 123.0
+    # Le recalage forcé reste possible.
+    daemon.handle_request("CALIB")
+    assert daemon.apply_pending_forced_calibration(123.0) == daemon_module.SWITCH_CALIB_ANGLE

@@ -27,6 +27,7 @@ from typing import Optional
 
 import lgpio
 
+from core.utils.gpio_chip import open_header_gpiochip
 from core.utils.log_paths import logs_subdir, ranger_anciens_logs
 
 try:
@@ -122,20 +123,33 @@ class EMS22Daemon:
         self.prev_raw = None
         self.total_counts = 0
 
-        # Gestion du switch
-        self.hchip = lgpio.gpiochip_open(0)
-        lgpio.gpio_claim_input(self.hchip, SWITCH_GPIO, lgpio.SET_PULL_UP)
-        # Lire l'état réel au démarrage (évite calibration fantôme si coupole sur switch)
-        self.switch_last_state = lgpio.gpio_read(self.hchip, SWITCH_GPIO)
+        # Gestion du switch. Sans GPIO, le démon continue avec l'encodeur seul
+        # (SPI) : avant, l'exception le tuait et l'encodeur était perdu avec
+        # le microswitch (terrain 21/10, contrôleurs GPIO renumérotés).
+        self.hchip = None
+        self.switch_last_state = 1
+        try:
+            chip, self.hchip = open_header_gpiochip(lgpio)
+            lgpio.gpio_claim_input(self.hchip, SWITCH_GPIO, lgpio.SET_PULL_UP)
+            # Lire l'état réel au démarrage (évite calibration fantôme si coupole sur switch)
+            self.switch_last_state = lgpio.gpio_read(self.hchip, SWITCH_GPIO)
+            logger.info(
+                f"Switch GPIO {SWITCH_GPIO} (gpiochip{chip}) configuré (pull-up) - "
+                f"état initial : {self.switch_last_state}"
+            )
+        except Exception as e:
+            if self.hchip is not None:
+                lgpio.gpiochip_close(self.hchip)
+                self.hchip = None
+            logger.error(
+                f"Microswitch indisponible ({e}) : encodeur seul, recalage par « Forcer à 45° »"
+            )
         self.last_calibration_time = 0  # Anti-rebond : timestamp dernière calibration
         self.calibrated = False  # Flag: true après premier passage sur switch
         self.last_calibration_at: Optional[str] = None  # ISO 8601 UTC, null tant que pas calibré
         # Calibration forcée (v6.20) : demandée par le thread TCP, appliquée par
         # la boucle principale (seule à écrire total_counts).
         self.force_calib_requested = False
-        logger.info(
-            f"Switch GPIO {SWITCH_GPIO} configuré (pull-up) - état initial : {self.switch_last_state}"
-        )
 
     # ------------------------------------------------
     # SPI
@@ -220,6 +234,8 @@ class EMS22Daemon:
 
         Front descendant (1→0) = coupole physiquement à 45°.
         """
+        if self.hchip is None:
+            return angle
         state = self.read_switch()
 
         # DEBUG: Log les transitions pour diagnostiquer
@@ -428,7 +444,8 @@ class EMS22Daemon:
                 time.sleep(rem)
 
         self.close_spi()
-        lgpio.gpiochip_close(self.hchip)
+        if self.hchip is not None:
+            lgpio.gpiochip_close(self.hchip)
         logger.info("Daemon arrêté proprement")
 
     def stop(self):

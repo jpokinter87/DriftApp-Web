@@ -84,8 +84,10 @@ class HardwareDetector:
         try:
             import lgpio
 
+            from core.utils.gpio_chip import open_header_gpiochip
+
             try:
-                h = lgpio.gpiochip_open(0)
+                _, h = open_header_gpiochip(lgpio)
                 lgpio.gpiochip_close(h)
                 return True, None
             except Exception as e:
