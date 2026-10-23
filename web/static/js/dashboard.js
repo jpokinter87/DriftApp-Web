@@ -1495,6 +1495,23 @@ function heaterStateClass() {
 }
 window.heaterStateClass = heaterStateClass;
 
+// Butées brutes du cimier (open_switch / closed_switch du Shelly Uni+, après
+// inversion) : allumée = butée atteinte, grise = au repos, ambre = pas encore lue.
+function switchPillClass(key) {
+    const value = Alpine.store('dashboard').cimier?.[key];
+    if (value === true) return 'rain-pill heater-pill-on';
+    if (value === false) return 'rain-pill heater-pill-off';
+    return 'rain-pill rain-pill-unknown';
+}
+window.switchPillClass = switchPillClass;
+
+function switchPillLabel(key, name) {
+    const value = Alpine.store('dashboard').cimier?.[key];
+    const state = value === true ? 'atteinte' : value === false ? 'repos' : '?';
+    return `Butée ${name} : ${state}`;
+}
+window.switchPillLabel = switchPillLabel;
+
 // Avertissement : décochée, la case n'empêche pas le scheduler d'ouvrir au
 // crépuscule. Une campagne d'observation sous orage se mène en manual ou semi.
 function rainModeWarning() {

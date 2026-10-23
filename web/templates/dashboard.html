@@ -456,6 +456,14 @@
 
                 <!-- Timeline notifications cimier (buffer 50 mémoire) — repliable. -->
                 <div x-show="timelineOpen" x-cloak class="mt-2">
+                    <!-- Butées brutes du Shelly Uni+ (diagnostic capteur), sans survol. -->
+                    <div id="cimier-switches" class="flex gap-2 mb-2 text-[0.7rem] font-mono"
+                         role="status" aria-label="Butées du cimier">
+                        <span :class="window.switchPillClass ? window.switchPillClass('open_switch') : ''"
+                              x-text="window.switchPillLabel ? window.switchPillLabel('open_switch', 'OUVERT') : ''"></span>
+                        <span :class="window.switchPillClass ? window.switchPillClass('closed_switch') : ''"
+                              x-text="window.switchPillLabel ? window.switchPillLabel('closed_switch', 'FERMÉ') : ''"></span>
+                    </div>
                     <div id="cimier-timeline-list"
                          class="bg-obs-dark border border-obs-border rounded-button p-2
                                 font-mono text-[0.65rem] h-24 overflow-y-auto leading-tight">
