@@ -185,7 +185,6 @@ logs/
 ├── diagnostics/
 │   ├── diagnostic_moteur_YYYYMMDD_HHMMSS.txt
 │   ├── calibration_vitesse_YYYYMMDD_HHMMSS.json
-│   ├── inclinometre_YYYYMMDD_HHMMSS.csv
 │   └── hardware_detection.txt
 ├── moteur/      motor_service_*.log (un par démarrage et par session de suivi)
 ├── encodeur/    ems22d_*.log

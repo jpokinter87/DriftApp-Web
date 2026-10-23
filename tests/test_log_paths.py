@@ -113,7 +113,7 @@ def test_fichiers_de_mise_a_jour_jamais_concernes(racine, motifs):
 
 def test_dossier_cree_sous_sudo_rendu_a_l_utilisateur(racine, monkeypatch):
     """`sudo python3 scripts/diagnostics/…` créerait logs/diagnostics/ en root :
-    les scripts lancés ensuite en slenk (inclinometre.sh) ne pourraient plus y
+    les scripts lancés ensuite en slenk ne pourraient plus y
     écrire avant la prochaine mise à jour (chown -R de l'OTA)."""
     import core.utils.log_paths as log_paths
 

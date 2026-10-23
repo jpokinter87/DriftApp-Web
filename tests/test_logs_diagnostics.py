@@ -3,10 +3,8 @@
 Spec : docs/superpowers/specs/2026-10-19-logs-sous-repertoires.md
 """
 
-import asyncio
 import importlib.util
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -42,24 +40,6 @@ def test_calibration_vitesse_encodeur(racine):
     calib._rapport([mesure], None, 5394.0)
 
     assert len(list((racine / "diagnostics").glob("calibration_vitesse_*.json"))) == 1
-
-
-def test_inclinometre_monture(racine, monkeypatch):
-    incl = _charger("inclinometre_monture.py", "diag_inclinometre")
-
-    class Arret(BaseException):
-        pass
-
-    async def _plus_de_capteur():
-        raise Arret
-
-    monkeypatch.setitem(sys.modules, "bleak", types.SimpleNamespace(BleakClient=None))
-    monkeypatch.setattr(incl, "_trouver_capteur", _plus_de_capteur)
-
-    with pytest.raises(Arret):
-        asyncio.run(incl._acquerir(None))
-
-    assert len(list((racine / "diagnostics").glob("inclinometre_*.csv"))) == 1
 
 
 @pytest.mark.parametrize(
