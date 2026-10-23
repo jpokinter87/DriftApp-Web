@@ -80,3 +80,38 @@ def test_daemon_survives_without_gpio(daemon_module, monkeypatch):
     # Le recalage forcé reste possible.
     daemon.handle_request("CALIB")
     assert daemon.apply_pending_forced_calibration(123.0) == daemon_module.SWITCH_CALIB_ANGLE
+
+
+def test_recalage_logs_angle_before_and_gap(daemon_module, caplog):
+    """Chantier dépassement (23/10) : chaque recalage dit de combien l'encodeur avait dérivé."""
+    daemon = daemon_module.EMS22Daemon()
+    daemon.handle_request("CALIB")
+
+    with caplog.at_level("INFO", logger=daemon_module.logger.name):
+        daemon.apply_pending_forced_calibration(47.5)
+
+    assert "recalage | source=force avant=47.50° ecart=-2.50°" in caplog.text
+
+
+def test_recalage_gap_is_shortest_across_zero(daemon_module, caplog):
+    """L'écart passe par le plus court : 300° → 45° = +105°, pas −255°."""
+    daemon = daemon_module.EMS22Daemon()
+    daemon.handle_request("CALIB")
+
+    with caplog.at_level("INFO", logger=daemon_module.logger.name):
+        daemon.apply_pending_forced_calibration(300.0)
+
+    assert "ecart=+105.00°" in caplog.text
+
+
+def test_switch_recalage_logs_source_switch(daemon_module, caplog, monkeypatch):
+    monkeypatch.setattr(daemon_module, "open_header_gpiochip", lambda _lgpio: (15, 7))
+    daemon = daemon_module.EMS22Daemon()
+    daemon.switch_last_state = 1
+    daemon_module.lgpio.gpio_read.return_value = 0  # front descendant
+
+    with caplog.at_level("INFO", logger=daemon_module.logger.name):
+        angle = daemon.process_switch(43.2)
+
+    assert angle == daemon_module.SWITCH_CALIB_ANGLE
+    assert "recalage | source=switch avant=43.20° ecart=+1.80°" in caplog.text

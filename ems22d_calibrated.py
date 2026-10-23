@@ -253,13 +253,19 @@ class EMS22Daemon:
                 )
             else:
                 logger.info(f"🔄 Microswitch activé → recalage à {SWITCH_CALIB_ANGLE}°")
-                angle = self._recaler(now)
+                angle = self._recaler(now, angle, "switch")
 
         self.switch_last_state = state
         return angle
 
-    def _recaler(self, now):
+    def _recaler(self, now, angle_avant, source):
         """Recale angle ET total_counts sur SWITCH_CALIB_ANGLE."""
+        # L'angle lu juste avant le recalage dit de combien l'encodeur avait
+        # dérivé depuis le précédent : le parking de fin de nuit franchit le
+        # microswitch, la dérive d'une nuit se lit donc dans ce log.
+        ecart = (SWITCH_CALIB_ANGLE - angle_avant + 180.0) % 360.0 - 180.0
+        logger.info(f"recalage | source={source} avant={angle_avant:.2f}° ecart={ecart:+.2f}°")
+
         # ✅ CORRECTION : Recalculer total_counts pour correspondre à SWITCH_CALIB_ANGLE
         # Formule inverse :
         # angle = (total_counts / 1024) * 360 * CALIBRATION_FACTOR * ROTATION_SIGN
@@ -294,7 +300,7 @@ class EMS22Daemon:
             return angle
         self.force_calib_requested = False
         logger.info(f"🔧 Calibration FORCÉE par l'opérateur → recalage à {SWITCH_CALIB_ANGLE}°")
-        return self._recaler(time.time())
+        return self._recaler(time.time(), angle, "force")
 
     # ------------------------------------------------
     # JSON
