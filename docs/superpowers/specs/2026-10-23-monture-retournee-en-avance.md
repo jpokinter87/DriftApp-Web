@@ -109,9 +109,11 @@ la coupole ») et à la fin de la tenue. Toujours visible, aucun survol.
 
 ## Hors périmètre
 
-- **Pourquoi la monture a retourné en avance** : à établir avec le journal
-  `asiair_monitor` (installé à la prochaine MAJ) et le réglage « Flip Timing after
-  Meridian » de l'ASIAIR, à demander à Serge.
+- **Pourquoi la monture a retourné en avance** : « Flip Timing after Meridian »
+  est réglé à 0 min (JP, 23/10), l'ASIAIR aurait donc dû retourner vers 21:29:22,
+  après la capture de 21:28:17 qui la montre déjà côté Est. À établir avec le
+  journal `asiair_monitor` (installé à la prochaine MAJ) : instant du changement
+  de côté, `delta_h` de l'ASIAIR à cet instant, événements `ScopeGoto`.
 - Décalage d'environ 82 s de l'angle horaire DriftApp (CIRS au lieu de TETE,
   relevé le 20/10, non corrigé) : sans effet sur cette règle, qui prend l'azimut
   DriftApp comme référence de bout en bout.
