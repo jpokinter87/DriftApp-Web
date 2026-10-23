@@ -14,13 +14,18 @@ meridian_catchup.
 
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Tuple
+from typing import Optional, Tuple
 
 from core.config.config import (
     SINGLE_SPEED_CHECK_INTERVAL_S,
     SINGLE_SPEED_CORRECTION_THRESHOLD_DEG,
     SINGLE_SPEED_MOTOR_DELAY,
     motor_delay_for,
+)
+from core.tracking.dome_flip_wait import (
+    COTE_AVANT_MERIDIEN,
+    instant_meridien,
+    monture_en_avance,
 )
 from core.utils.angle_utils import shortest_angular_distance
 
@@ -54,9 +59,17 @@ class TrackingCorrectionsMixin:
     # cadence de lecture de l'ASIAIR pour partir dès le changement de côté.
     FLIP_WAIT_POLL_S = 5.0
 
+    # v6.26 : monture retournée avant le méridien → abaque lue à cet instant après
+    # le méridien DriftApp, pour tomber franchement sur la branche « après ».
+    MARGE_APRES_MERIDIEN_S = 30.0
+
     # Attente du retournement (v6.24) — posés par TrackingSession, absents = inactif.
     pier_watcher = None
     _flip_wait = None
+    # Tenue après un retournement en avance (v6.26) : cible figée et début, ou None.
+    _cible_avance = None
+    _debut_avance = None
+    _avance_hors_fenetre = False
 
     def check_and_correct(self) -> Tuple[bool, str]:
         """
@@ -96,13 +109,19 @@ class TrackingCorrectionsMixin:
         # Calculer la position actuelle de l'objet (méthode centralisée)
         azimut, altitude = self._calculate_current_coords(now)
 
+        # v6.26 : monture retournée avant le méridien → la coupole la suit tout de suite.
+        cible_avance = self._cible_monture_en_avance(azimut, now)
+
         # v6.24 : monture pas encore retournée → la coupole ne bascule pas.
-        if self._attendre_retournement(azimut, now):
+        if cible_avance is None and self._attendre_retournement(azimut, now):
             self.next_correction_time = now + timedelta(seconds=self.FLIP_WAIT_POLL_S)
             return False, "dome_flip_wait"
 
         # Calculer la position cible (abaque)
-        position_cible, infos = self._calculate_target_position(azimut, altitude)
+        if cible_avance is not None:
+            position_cible = cible_avance
+        else:
+            position_cible, _ = self._calculate_target_position(azimut, altitude)
 
         # Chemin le plus court
         delta = shortest_angular_distance(self.position_relative, position_cible)
@@ -189,6 +208,55 @@ class TrackingCorrectionsMixin:
                 f"waited_s={decision.attente_s:.0f}"
             )
         return decision.attendre
+
+    def _cible_monture_en_avance(self, azimut: float, now: datetime) -> Optional[float]:
+        """Cible tenue tant que la monture, retournée avant le méridien, attend que
+        l'objet le passe (v6.26) ; None sinon."""
+        if self._flip_wait is None:
+            return None
+        etat = self.pier_watcher.etat_frais()
+
+        if self._cible_avance is not None:
+            # ASIAIR muet : la tenue continue, la monture ne revient pas seule.
+            if azimut % 360.0 >= 180.0:
+                raison = "transit"
+            elif etat is not None and etat.pier == COTE_AVANT_MERIDIEN:
+                raison = "pierside"
+            else:
+                return self._cible_avance
+            self.logger.info(
+                f"dome_flip_early_end | reason={raison} "
+                f"held_s={(now - self._debut_avance).total_seconds():.0f}"
+            )
+            self._cible_avance = None
+            return None
+
+        if not monture_en_avance(etat, azimut):
+            self._avance_hors_fenetre = False
+            return None
+        meridien = instant_meridien(
+            lambda t: self._calculate_current_coords(t)[0], now, self._flip_wait.max_wait_s
+        )
+        if meridien is None:
+            if not self._avance_hors_fenetre:
+                self.logger.warning(
+                    f"dome_flip_early_out_of_window | az={azimut:.1f} "
+                    f"max_min={self._flip_wait.max_wait_s / 60:.0f}"
+                )
+                self._avance_hors_fenetre = True
+            return None
+
+        az_m, alt_m = self._calculate_current_coords(
+            meridien + timedelta(seconds=self.MARGE_APRES_MERIDIEN_S)
+        )
+        self._cible_avance, _ = self._calculate_target_position(az_m, alt_m)
+        self._debut_avance = now
+        self.logger.info(
+            f"dome_flip_early_start | pier={etat.pier} delta_h={etat.delta_h:+.3f} "
+            f"az={azimut:.1f} meridien_dans_s={(meridien - now).total_seconds():.0f} "
+            f"cible={self._cible_avance:.1f}"
+        )
+        return self._cible_avance
 
     def _apply_correction(self, delta_deg: float, motor_delay: float = SINGLE_SPEED_MOTOR_DELAY):
         """

@@ -698,6 +698,7 @@ class TrackingHandler:
                     "dec_deg": getattr(self.session, "dec_deg", None),
                     "asiair_pier": status.get("asiair_pier"),
                     "flip_wait": status.get("flip_wait"),
+                    "flip_early": status.get("flip_early"),
                 }
 
                 if ra_deg is not None and self._calc is not None:

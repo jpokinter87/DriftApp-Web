@@ -1965,21 +1965,26 @@ function setManualControlsDisabled(disabled) {
 // v6.24 : côté du pied ASIAIR et attente du retournement de la monture
 // (option asiair.dome_flip_on_pierside). Rien d'affiché si l'option est inactive
 // ou l'ASIAIR muet. Journal aux transitions de l'attente.
+// v6.26 : monture retournée avant le méridien, coupole tenue côté « après ».
 let flipWaitShown = false;
+let flipEarlyShown = false;
 
 function updatePierDisplay(info) {
     const el = elements.trackingPier;
     if (!el) return;
     const wait = info.flip_wait;
+    const early = info.flip_early;
     if (wait) {
         const elapsedMin = Math.floor(wait.elapsed_s / 60);
         const maxMin = Math.round(wait.max_s / 60);
         el.textContent = `Attente retournement monture — ${elapsedMin} min / ${maxMin}`;
+    } else if (early) {
+        el.textContent = `Monture retournée en avance — coupole tenue à ${early.target.toFixed(1)}° jusqu'au méridien`;
     } else if (info.asiair_pier) {
         el.textContent = `Monture : côté ${info.asiair_pier === 'east' ? 'Est' : 'Ouest'}`;
     }
     el.classList.toggle('waiting', !!wait);
-    el.classList.toggle('hidden', !wait && !info.asiair_pier);
+    el.classList.toggle('hidden', !wait && !early && !info.asiair_pier);
 
     if (wait && !flipWaitShown) {
         log('Coupole en attente du retournement de la monture (ASIAIR)', 'warning');
@@ -1989,6 +1994,15 @@ function updatePierDisplay(info) {
             : 'Fin de l\'attente du retournement : bascule de la coupole', 'info');
     }
     flipWaitShown = !!wait;
+
+    if (early && !flipEarlyShown) {
+        log(`Monture retournée avant le méridien : bascule de la coupole vers ${early.target.toFixed(1)}°`, 'info');
+    } else if (!early && flipEarlyShown && Object.keys(info).length > 0) {
+        log(info.asiair_pier === 'west'
+            ? 'Monture revenue côté Ouest : fin de la tenue de la coupole'
+            : 'Méridien passé : reprise du suivi normal de la coupole', 'info');
+    }
+    flipEarlyShown = !!early;
 }
 
 function updateTrackingDisplay(motor) {

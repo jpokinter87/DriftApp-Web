@@ -383,6 +383,8 @@ class TrackingSession(
         now = datetime.now(timezone.utc)
         azimut, altitude = self._calculate_current_coords(now)
         position_cible, infos = self._calculate_target_position(azimut, altitude)
+        if self._cible_avance is not None:  # v6.26 : tenue après un retournement en avance
+            position_cible = self._cible_avance
 
         remaining = self._calculate_remaining_time(now)
 
@@ -432,9 +434,10 @@ class TrackingSession(
         }
 
     def _flip_wait_status(self) -> dict:
-        """Côté du pied ASIAIR et attente du retournement en cours (v6.24)."""
+        """Côté du pied ASIAIR, attente du retournement en cours (v6.24) et
+        cible tenue après un retournement en avance (v6.26)."""
         if self._flip_wait is None:
-            return {"asiair_pier": None, "flip_wait": None}
+            return {"asiair_pier": None, "flip_wait": None, "flip_early": None}
         etat = self.pier_watcher.etat_frais()
         pier = etat.pier if etat is not None else None
         ecoule = self._flip_wait.en_cours(datetime.now(timezone.utc).timestamp())
@@ -444,6 +447,9 @@ class TrackingSession(
                 None
                 if ecoule is None
                 else {"elapsed_s": round(ecoule), "max_s": round(self._flip_wait.max_wait_s)}
+            ),
+            "flip_early": (
+                None if self._cible_avance is None else {"target": round(self._cible_avance, 1)}
             ),
         }
 

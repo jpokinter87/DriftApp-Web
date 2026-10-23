@@ -1,22 +1,26 @@
-"""Attente du retournement de la monture avant la bascule de la coupole (v6.24).
+"""Attente du retournement de la monture avant la bascule de la coupole (v6.24),
+et bascule anticipée quand la monture retourne avant le méridien (v6.26).
 
 Tant que la monture est encore du côté d'avant le méridien (``pier_west`` sur
 l'ASIAIR), la coupole ne bascule pas ; elle part au changement de côté du pied.
 « Objet passé au méridien » est jugé avec l'azimut DriftApp, celui qui fait
 basculer l'abaque : comparer au méridien de l'ASIAIR laisserait une fenêtre où la
 coupole partirait avant le feu vert (les deux calculs ne tombent pas à la même
-seconde). Spec : ``docs/superpowers/specs/2026-10-21-bascule-coupole-signal-asiair.md``.
+seconde). Specs : ``docs/superpowers/specs/2026-10-21-bascule-coupole-signal-asiair.md``,
+``docs/superpowers/specs/2026-10-23-monture-retournee-en-avance.md``.
 
 Module pur : aucune I/O, l'heure (monotone, en secondes) est fournie par l'appelant.
 """
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from datetime import datetime, timedelta
+from typing import Callable, NamedTuple, Optional
 
 from core.hardware.asiair_client import EtatMonture
 
 COTE_AVANT_MERIDIEN = "pier_west"
+COTE_APRES_MERIDIEN = "pier_east"
 DELTA_H_MAX = 6.0  # au-delà, passage inférieur : la monture ne retourne pas
 
 
@@ -29,6 +33,46 @@ def monture_en_retard(etat: Optional[EtatMonture], azimut_objet: float) -> bool:
         and abs(etat.delta_h) < DELTA_H_MAX
         and azimut_objet % 360.0 >= 180.0
     )
+
+
+def monture_en_avance(etat: Optional[EtatMonture], azimut_objet: float) -> bool:
+    """Monture déjà retournée alors que l'objet n'a pas passé le méridien
+    (azimut dans [0°, 180°[) : cas inverse de ``monture_en_retard``."""
+    return (
+        etat is not None
+        and etat.pier == COTE_APRES_MERIDIEN
+        and abs(etat.delta_h) < DELTA_H_MAX
+        and azimut_objet % 360.0 < 180.0
+    )
+
+
+def instant_meridien(
+    azimut_a: Callable[[datetime], float], maintenant: datetime, fenetre_s: float
+) -> Optional[datetime]:
+    """Premier instant après ``maintenant`` où l'azimut entre dans [180°, 360°[,
+    à 5 s près, ou None s'il n'arrive pas dans ``fenetre_s``.
+
+    Pas de 60 s puis dichotomie : une trentaine de calculs pour 15 min.
+    """
+
+    def passe(t: datetime) -> bool:
+        return azimut_a(t) % 360.0 >= 180.0
+
+    avant = maintenant
+    pas = timedelta(seconds=60)
+    fin = maintenant + timedelta(seconds=fenetre_s)
+    while avant < fin:
+        apres = min(avant + pas, fin)
+        if passe(apres):
+            while (apres - avant).total_seconds() > 5.0:
+                milieu = avant + (apres - avant) / 2
+                if passe(milieu):
+                    apres = milieu
+                else:
+                    avant = milieu
+            return apres
+        avant = apres
+    return None
 
 
 class Decision(NamedTuple):

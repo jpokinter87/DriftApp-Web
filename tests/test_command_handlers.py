@@ -573,6 +573,23 @@ class TestTrackingHandler:
         info = current_status["tracking_info"]
         assert info["asiair_pier"] == "west"
         assert info["flip_wait"] == {"elapsed_s": 240, "max_s": 1800}
+        assert info["flip_early"] is None
+
+    def test_update_transmet_la_tenue_apres_retournement_en_avance(self, handler):
+        handler.active = True
+        handler.session = MagicMock()
+        handler.session.check_and_correct.return_value = (True, "correction")
+        handler.session.ra_deg = None
+        handler.session.get_status.return_value = {
+            "running": True,
+            "asiair_pier": "east",
+            "flip_wait": None,
+            "flip_early": {"target": 36.1},
+        }
+        handler.session.get_session_data.return_value = {}
+        current_status = {"status": "tracking"}
+        handler.update(current_status)
+        assert current_status["tracking_info"]["flip_early"] == {"target": 36.1}
 
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
