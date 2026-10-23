@@ -1,49 +1,37 @@
 #!/usr/bin/env bash
-# Surveillance de la monture via l'ASIAIR, à taper directement sur le Pi (depuis ~/DriftApp) :
-#   ./scripts/asiair_sonde.sh essai      dans le terminal, Ctrl+C pour arrêter
-#   ./scripts/asiair_sonde.sh demarrer   en tâche de fond pour la nuit (survit à la fermeture du terminal)
-#   ./scripts/asiair_sonde.sh etat       en cours ou non + dernières lignes
-#   ./scripts/asiair_sonde.sh arreter
+# Surveillance de la monture via l'ASIAIR, à taper directement sur le Pi (depuis ~/DriftApp).
+# Depuis la 6.25 elle tourne en permanence (service asiair_monitor) :
+#   ./scripts/asiair_sonde.sh etat       service actif ou non + dernières lignes du journal
+#   ./scripts/asiair_sonde.sh arreter    arrête une ancienne sonde lancée à la main avant la 6.25
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
-LANCER=(uv run python scripts/diagnostics/asiair_sonde.py)
-CONSOLE=logs/diagnostics/asiair_console.txt
-MOTIF=asiair_sonde.py
-
-en_cours() { pgrep -f "$MOTIF" >/dev/null; }
+JOURNAL=logs/asiair/asiair_monitor.log
+ANCIENNE=scripts/diagnostics/asiair_sonde.py
 
 case "${1:-}" in
-    essai)
-        "${LANCER[@]}" "${@:2}"
-        ;;
-    demarrer)
-        if en_cours; then
-            echo "La surveillance tourne déjà."
-            exit 0
-        fi
-        mkdir -p logs/diagnostics
-        nohup "${LANCER[@]}" "${@:2}" >"$CONSOLE" 2>&1 &
-        sleep 3
-        echo "Surveillance lancée en tâche de fond. Vérifier avec : ./scripts/asiair_sonde.sh etat"
-        ;;
     etat)
-        if en_cours; then echo "Surveillance EN COURS"; else echo "Surveillance ARRÊTÉE"; fi
-        if [ -f "$CONSOLE" ]; then
-            echo "--- dernières lignes de $CONSOLE ---"
-            tail -n 8 "$CONSOLE"
+        if systemctl is-active --quiet asiair_monitor.service; then
+            echo "Surveillance EN COURS (service asiair_monitor)"
+        else
+            echo "Surveillance ARRÊTÉE (service asiair_monitor) — « Redémarrer les services » sur la page Configuration"
+        fi
+        if [ -f "$JOURNAL" ]; then
+            echo "--- dernières lignes de $JOURNAL ---"
+            tail -n 8 "$JOURNAL"
         fi
         ;;
     arreter)
-        if en_cours; then
-            pkill -f "$MOTIF"
-            echo "Surveillance arrêtée."
+        if pgrep -f "$ANCIENNE" >/dev/null; then
+            pkill -f "$ANCIENNE"
+            echo "Ancienne sonde arrêtée. La surveillance permanente continue."
         else
-            echo "Aucune surveillance en cours."
+            echo "Aucune ancienne sonde en cours. La surveillance permanente n'est pas concernée."
         fi
         ;;
     *)
-        echo "Usage : ./scripts/asiair_sonde.sh essai | demarrer | etat | arreter"
+        echo "Usage : ./scripts/asiair_sonde.sh etat | arreter"
+        echo "(depuis la 6.25 la surveillance tourne en permanence : plus rien à démarrer)"
         exit 1
         ;;
 esac

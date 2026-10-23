@@ -112,6 +112,18 @@ Attendu : JSON quasi instantané. Timeout → Shelly injoignable → volet hardw
 (`references/hardware.md`). Les Shelly MOT/UPDN sont alimentés en aval du 24 V :
 injoignables tant que le 24 V est coupé (normal hors cycle).
 
+## Monture / ASIAIR : ce qu'a fait la monture pendant la nuit
+
+Depuis la 6.25, le service `asiair_monitor` journalise en permanence tout ce que dit
+l'ASIAIR (retournement, GOTO, messages INDI d'EQMod). À demander pour tout incident
+de bascule, de pointage ou de retournement :
+```bash
+./scripts/asiair_sonde.sh etat                   # service actif + dernières lignes
+tail -n 80 logs/asiair/asiair_monitor.log        # lisible : pied, suivi, INDI
+ls logs/asiair/                                   # AAAA-MM-JJ.jsonl brut, nuit midi → midi, 14 nuits
+```
+Le JSONL de la nuit (~8 Mo) est à faire copier tel quel pour analyse ici.
+
 ## Symptôme : calibration bloquée
 
 `calibration.status` reste `running` > 180 s :

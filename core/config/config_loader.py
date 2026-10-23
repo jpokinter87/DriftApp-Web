@@ -407,6 +407,9 @@ class AsiairConfig:
     monture (``scope_get_pierside``) au lieu de basculer au transit, au plus
     ``max_wait_minutes`` (v6.24).
 
+    ``monitor_enabled`` : surveillance permanente par ``asiair_monitor.service``,
+    qui journalise tout ce que dit la monture dans ``logs/asiair/`` (v6.25).
+
     IP réelle uniquement dans ``data/config.json`` — code neutre.
     """
 
@@ -415,6 +418,7 @@ class AsiairConfig:
     timeout_s: float = 3.0
     dome_flip_on_pierside: bool = False
     max_wait_minutes: float = 30.0
+    monitor_enabled: bool = True
 
 
 @dataclass
@@ -683,6 +687,7 @@ class ConfigLoader:
                 c.get("dome_flip_on_pierside", defaults.dome_flip_on_pierside)
             ),
             max_wait_minutes=float(c.get("max_wait_minutes", defaults.max_wait_minutes)),
+            monitor_enabled=bool(c.get("monitor_enabled", defaults.monitor_enabled)),
         )
 
     def _parse_meridian_anticipation(self) -> MeridianAnticipationConfig:

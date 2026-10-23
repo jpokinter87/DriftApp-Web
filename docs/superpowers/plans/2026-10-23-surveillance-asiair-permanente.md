@@ -13,7 +13,7 @@ Spec : `docs/superpowers/specs/2026-10-23-surveillance-asiair-permanente.md`
    → vérifier : `pytest tests/test_asiair_monitor.py`.
 3. **Unité et scripts** — `asiair_monitor.service` (User=slenk) ;
    `update_driftapp.sh` (arrêt, installation, démarrage),
-   `restart_services.sh`, `start_web.sh` (démarrage/arrêt/état) ;
+   `restart_services.sh`, `start_web.sh` (état seulement) ;
    `asiair_sonde.sh` réduit à `etat` ; sonde supprimée.
    → vérifier : `pytest tests/test_ota_restart.py tests/test_health_views.py`.
 4. **Vérification locale** — service lancé contre un faux ASIAIR, coupure puis

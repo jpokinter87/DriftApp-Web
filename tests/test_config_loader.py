@@ -1225,3 +1225,15 @@ class TestAsiairConfig:
         config = self._load(tmp_path, sample_config_dict, {"host": "10.0.0.5"})
         assert config.asiair.dome_flip_on_pierside is False
         assert config.asiair.max_wait_minutes == 30.0
+
+    def test_monitor_enabled_by_default(self, tmp_path, sample_config_dict):
+        # Surveillance permanente (6.25) : active dès que host est renseigné.
+        assert AsiairConfig().monitor_enabled is True
+        config = self._load(tmp_path, sample_config_dict, {"host": "10.0.0.5"})
+        assert config.asiair.monitor_enabled is True
+
+    def test_monitor_disabled_read(self, tmp_path, sample_config_dict):
+        config = self._load(
+            tmp_path, sample_config_dict, {"host": "10.0.0.5", "monitor_enabled": False}
+        )
+        assert config.asiair.monitor_enabled is False

@@ -286,6 +286,17 @@ status() {
         fi
     fi
 
+    # Surveillance ASIAIR : gérée par systemd seul, comme l'encodeur
+    if systemctl is-active --quiet asiair_monitor.service 2>/dev/null; then
+        echo -e "ASIAIR Monitor:   ${GREEN}EN COURS${NC} (systemd)"
+        echo "  Journal: logs/asiair/asiair_monitor.log"
+    else
+        echo -e "ASIAIR Monitor:   ${RED}ARRÊTÉ${NC}"
+        if systemctl list-unit-files asiair_monitor.service &>/dev/null; then
+            echo "  → sudo systemctl start asiair_monitor"
+        fi
+    fi
+
     # Status Django (systemd prioritaire)
     if systemctl is-active --quiet driftapp_web.service 2>/dev/null; then
         echo -e "Django Web:       ${GREEN}EN COURS${NC} (systemd)"

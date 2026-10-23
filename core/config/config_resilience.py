@@ -417,6 +417,11 @@ HELP_REGISTRY: dict[str, str] = {
         "Durée maximale (minutes) d'attente du retournement de la monture ; au-delà, la "
         "coupole bascule quand même (avertissement au journal)."
     ),
+    "asiair.monitor_enabled": (
+        "Surveillance permanente de la monture : tout ce que dit l'ASIAIR est journalisé "
+        "dans logs/asiair/ (un fichier par nuit, 14 nuits gardées). Appliqué par "
+        "« Redémarrer les services »."
+    ),
 }
 
 

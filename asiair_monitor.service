@@ -1,0 +1,22 @@
+[Unit]
+Description=DriftApp ASIAIR Monitor - journal permanent de la monture (lecture seule)
+Documentation=https://github.com/jpokinter87/DriftApp-Web
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/slenk/DriftApp
+ExecStart=/home/slenk/DriftApp/.venv/bin/python -m services.asiair_monitor
+
+Restart=on-failure
+RestartSec=10
+
+# Ne touche à aucun matériel du Pi : utilisateur non privilégié.
+User=slenk
+
+Environment=PYTHONUNBUFFERED=1
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

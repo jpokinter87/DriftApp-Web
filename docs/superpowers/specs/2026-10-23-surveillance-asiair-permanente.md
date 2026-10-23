@@ -53,11 +53,14 @@ connexion qui écrirait dans le même journal.
 ## Hors champ
 
 - Le watcher du suivi (6.24, `AsiairPierWatcher`) garde sa propre connexion.
-  Le faire lire l'état publié par ce service est une évolution possible, pas
-  nécessaire : l'ASIAIR accepte plusieurs clients (sonde et watcher ont tourné
-  ensemble le 22/10).
+  Le faire lire l'état publié par ce service est une évolution possible. Deux
+  connexions simultanées au port 4400 (option `dome_flip_on_pierside` cochée)
+  n'ont pas encore été observées sur le terrain : à surveiller à la première
+  nuit avec l'option.
 - Pas d'affichage sur le dashboard.
 - `start_dev.sh` ne lance pas ce service : en dev l'ASIAIR est injoignable.
+- `start_web.sh` ne le démarre ni ne l'arrête (géré par systemd, comme
+  l'encodeur) : il l'affiche seulement dans `status`.
 
 ## Critères de succès
 

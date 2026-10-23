@@ -50,8 +50,8 @@ class Protocole(Report):
 
 pdf = Protocole(
     title="Monture et bascule de la coupole",
-    subtitle="Position de départ et option ASIAIR — DriftApp 6.24.1",
-    header_text="Protocole monture et bascule — v6.24.1",
+    subtitle="Position de départ et option ASIAIR — DriftApp 6.25.0",
+    header_text="Protocole monture et bascule — v6.25.0",
 )
 
 pdf.title_page(
@@ -68,7 +68,7 @@ pdf.title_page(
         "Observatoire Ubik — DriftApp Web",
         "Destinataire : Serge, sur site",
         "Partie A de jour (environ 20 min), partie B pendant une nuit avec un passage au méridien",
-        "Prérequis : mise à jour 6.24.1 installée (bouton « Mettre à jour »)",
+        "Prérequis : mise à jour 6.25.0 installée (bouton « Mettre à jour »)",
         "Octobre 2026",
     ],
 )
@@ -263,23 +263,21 @@ pdf.body(
     "à 0 puis à 5 minutes. Avec la caméra du C14, regarder si la coupole est en place quand les "
     "poses reprennent."
 )
-pdf.h2("Facultatif : la sonde ASIAIR")
+pdf.h2("La surveillance ASIAIR")
 pdf.body(
-    "Elle enregistre tout ce que l'ASIAIR envoie pendant la nuit et donne la chronologie exacte "
-    "du retournement. Dans un terminal sur le Pi (Ctrl + Alt + T) :"
+    "Depuis la version 6.25, elle tourne en permanence : tout ce que l'ASIAIR envoie est "
+    "enregistré, un fichier par nuit, sans rien lancer. Pour vérifier qu'elle tourne, dans un "
+    "terminal sur le Pi (Ctrl + Alt + T) :"
 )
 pdf.code_block(
     [
         "cd ~/DriftApp",
-        "./scripts/asiair_sonde.sh demarrer     # en début de nuit",
-        "./scripts/asiair_sonde.sh etat         # de temps en temps",
-        "./scripts/asiair_sonde.sh arreter      # le matin",
+        "./scripts/asiair_sonde.sh etat",
     ]
 )
 pdf.warning_box(
-    "Avec l'option cochée, DriftApp et la sonde interrogent l'ASIAIR en même temps. Ça n'a "
-    "jamais été essayé : si l'ASIAIR se comporte bizarrement (déconnexion, alerte), arrêter la "
-    "sonde et noter l'heure."
+    "Avec l'option cochée, DriftApp interroge l'ASIAIR deux fois (suivi et surveillance). Si "
+    "l'ASIAIR se comporte bizarrement (déconnexion, alerte), noter l'heure."
 )
 
 pdf.h2("B3 — À noter et à me renvoyer")
@@ -288,7 +286,7 @@ pdf.bullet("L'heure approximative du retournement de la monture et celle du dép
 pdf.bullet("Toute anomalie de l'ASIAIR ou de la coupole, avec l'heure.")
 pdf.bullet(
     "Les fichiers de la nuit : logs/moteur/ (lignes « dome_flip_wait »), logs/cimier/"
-    "cimier_service.log, et logs/diagnostics/asiair_*.jsonl si la sonde a tourné."
+    "cimier_service.log, et le dossier logs/asiair/."
 )
 
 pdf.output(OUT)

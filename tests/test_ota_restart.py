@@ -71,6 +71,14 @@ class TestRestartScript:
         for unit in ("ems22d.service", "motor_service.service", "cimier_service.service"):
             assert unit in content, f"{unit} doit être redémarré"
 
+    def test_restarts_every_backend_unit_of_the_repo(self):
+        # Une unité ajoutée au dépôt doit pouvoir prendre une nouvelle config
+        # sans SSH (asiair_monitor, 6.25).
+        content = RESTART_SCRIPT.read_text()
+        for unit in sorted(p.name for p in PROJECT_ROOT.glob("*.service")):
+            if unit != "driftapp_web.service":
+                assert unit in content, f"{unit} doit être redémarré"
+
     def test_never_restarts_django(self):
         # Django porte la requête HTTP du bouton : le relancer la couperait, et
         # c'est inutile — la sauvegarde de config invalide déjà son cache.
@@ -132,7 +140,7 @@ class TestRestartScriptExecution:
         result = self._run(script, fake_bin)
         assert result.returncode == 0
         status = self._status(tmp_path)
-        assert [s["state"] for s in status["services"]] == ["active"] * 3
+        assert [s["state"] for s in status["services"]] == ["active"] * 4
 
     def test_a_dead_service_fails_the_run_and_is_named(self, tmp_path):
         script, fake_bin = self._sandbox(

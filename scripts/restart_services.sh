@@ -9,7 +9,7 @@
 # Sans ce script, appliquer un changement de configuration imposait un accès
 # SSH — impossible pour un observatoire piloté à distance.
 #
-# Redémarre l'encodeur, le moteur et le cimier. **Pas Django** : il porte la
+# Redémarre l'encodeur, le moteur, le cimier et la surveillance ASIAIR. **Pas Django** : il porte la
 # requête HTTP du bouton (la couper priverait l'utilisateur du résultat), et
 # c'est inutile — la sauvegarde de configuration invalide déjà son cache.
 #
@@ -27,7 +27,7 @@ LOG_DIR="$PROJECT_DIR/logs"
 STATUS_FILE="$LOG_DIR/restart_status.json"
 LOG_FILE="$LOG_DIR/restart.log"
 
-SERVICES=(ems22d.service motor_service.service cimier_service.service)
+SERVICES=(ems22d.service motor_service.service cimier_service.service asiair_monitor.service)
 
 mkdir -p "$LOG_DIR"
 

@@ -535,7 +535,7 @@ def update_status(request):
 @api_view(["POST"])
 def restart_services(request):
     """
-    Redémarre les services backend (encodeur, moteur, cimier) via sudo.
+    Redémarre les services backend (encodeur, moteur, cimier, surveillance ASIAIR) via sudo.
 
     Une modification enregistrée depuis /configuration/ n'a d'effet qu'après
     relance des services qui lisent data/config.json. Sans cet endpoint, la
