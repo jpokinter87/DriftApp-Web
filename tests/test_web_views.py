@@ -331,11 +331,11 @@ class TestCalibrateView:
 
     def test_calibrate_post_returns_503_when_motor_client_fails(self, api_client, mock_ipc):
         """Si motor_client.send_command échoue, retourne 503."""
-        import sys as _sys
+        # Patch sur le module effectivement routé par Django (hardware.views), pas
+        # web.hardware.views. Importé ici : le lire dans sys.modules supposait qu'un
+        # test précédent du même processus l'avait déjà chargé (échec selon xdist).
+        import hardware.views as routed
 
-        # Patch sur le module effectivement routé par Django (hardware.views) — voir
-        # SUMMARY Plan 01 : doublon sys.modules `hardware.views` vs `web.hardware.views`.
-        routed = _sys.modules["hardware.views"]
         with patch.object(routed.motor_client, "send_command", return_value=False):
             response = api_client.post("/api/hardware/calibrate/")
         assert response.status_code == 503
@@ -392,12 +392,19 @@ class TestTrackingStartView:
         assert response.status_code == 400
 
     def test_start_unknown_object(self, api_client, mock_ipc):
-        """Objet inconnu → 404 (si pas dans le cache et SIMBAD échoue)."""
-        response = api_client.post(
-            "/api/tracking/start/", {"object": "NONEXISTENT_OBJECT_XYZ"}, format="json"
-        )
-        # Peut être 404 ou 200 selon le cache
-        assert response.status_code in (200, 404)
+        """Objet introuvable au catalogue → 404, sans commande au moteur.
+
+        Catalogue simulé : le vrai interrogeait SIMBAD par le réseau."""
+        with (
+            patch("tracking.views.GestionnaireCatalogue") as cat,
+            patch("tracking.views.motor_client") as client,
+        ):
+            cat.return_value.rechercher.return_value = None
+            response = api_client.post(
+                "/api/tracking/start/", {"object": "NONEXISTENT_OBJECT_XYZ"}, format="json"
+            )
+        assert response.status_code == 404
+        client.send_command.assert_not_called()
 
 
 class TestTrackingStartManualCoords:
