@@ -17,7 +17,6 @@ from zoneinfo import ZoneInfo
 # Chemins (absolus depuis la racine du projet)
 _PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent.parent
 DATA_DIR: Path = _PROJECT_ROOT / "data"
-LOGS_DIR: Path = _PROJECT_ROOT / "logs"
 CONFIG_FILE: Path = DATA_DIR / "config.json"
 CACHE_FILE: Path = DATA_DIR / "objets_cache.json"
 

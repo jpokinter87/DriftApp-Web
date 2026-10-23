@@ -52,37 +52,21 @@ python3 tests/test_motor_service_seul.py
 
 ---
 
-### 3. `calibration_vitesse_max.py`
+### 3. `calibration_vitesse_encodeur.py`
 
-**Objectif** : Trouver la vitesse maximale atteignable sans saccades.
+**Objectif** : trouver la vitesse maximale du moteur en mesurant, à chaque palier,
+la vitesse réelle de la coupole lue sur l'encodeur (décrochage = la coupole ne suit
+plus la vitesse demandée).
 
-**Prérequis** :
-- Motor Service **patché** avec commande `test_speed`
-- Ou utiliser le Motor Service modifié (motor_service_with_test_speed.py)
-
-**Usage** :
+**Usage** (ne modifie ni la config ni les services) :
 ```bash
-# 1. Patcher le Motor Service (temporairement)
-cp services/motor_service.py services/motor_service.py.backup
-cp motor_service_with_test_speed.py services/motor_service.py
-sudo ./start_web.sh restart
-
-# 2. Lancer la calibration
-python3 tests/calibration_vitesse_max.py
-
-# 3. Restaurer le Motor Service original
-cp services/motor_service.py.backup services/motor_service.py
-sudo ./start_web.sh restart
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py --dry-run
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py
+python3 scripts/diagnostics/calibration_vitesse_encodeur.py --depuis 130
 ```
 
-**Ce qu'il teste** :
-- Vitesses de 0.55ms à 0.12ms
-- Observation utilisateur (1-5)
-- Identification vitesse max fluide
-
-**Résultat** :
-- Rapport dans `logs/diagnostics/calibration_vitesse_YYYYMMDD_HHMMSS.txt`
-- Recommandation pour config.json
+**Résultat** : rapport `logs/diagnostics/calibration_vitesse_YYYYMMDD_HHMMSS.json`
+avec la valeur recommandée pour `motor_driver.fast_delay_us`.
 
 ---
 
@@ -163,12 +147,9 @@ Si le résumé affiche une ligne `⚠ ... épisode(s) INJOIGNABLE`, c'est que la
 
 ### Calibration vitesse
 
-| Délai | Résultat typique |
-|-------|------------------|
-| 0.55 ms | ✅ Fluide |
-| 0.30 ms | ✅ Fluide |
-| 0.15 ms | ✅/⚠️ Limite |
-| 0.12 ms | ❌ Saccadé |
+Validé terrain le 27/09/2026 : tous les paliers tenus jusqu'à 124 µs/pas
+(~90°/min à l'encodeur). Le rapport JSON donne la limite mesurée et la valeur
+recommandée.
 
 ---
 

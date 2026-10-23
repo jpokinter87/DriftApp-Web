@@ -66,7 +66,6 @@ def test_inclinometre_monture(racine, monkeypatch):
     "fichier, prefixe",
     [
         ("diagnostic_moteur_complet.py", "diagnostic_moteur_"),
-        ("calibration_vitesse_max.py", "calibration_vitesse_"),
     ],
 )
 def test_rapports_fixes_a_l_import(racine, fichier, prefixe):

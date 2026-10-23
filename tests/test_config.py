@@ -260,14 +260,6 @@ class TestPathConstants:
         assert DATA_DIR.is_absolute()
         assert DATA_DIR.name == "data"
 
-    def test_logs_dir(self):
-        """LOGS_DIR est un Path absolu."""
-        from core.config.config import LOGS_DIR
-
-        assert isinstance(LOGS_DIR, Path)
-        assert LOGS_DIR.is_absolute()
-        assert LOGS_DIR.name == "logs"
-
     def test_config_file(self):
         """CONFIG_FILE pointe vers data/config.json."""
         from core.config.config import CONFIG_FILE
