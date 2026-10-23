@@ -11,16 +11,22 @@ Nuit du 23/10 (6.25.1, option `asiair.dome_flip_on_pierside` cochée,
 
 | Heure | Événement |
 |---|---|
-| ~21:24-21:25 | La monture se retourne (Serge) |
+| 21:28 | Retournement de la monture, à l'heure de bascule affichée par l'ASIAIR (« Flip Timing after Meridian » à 0 min) |
 | 21:28:17 | Dashboard : « Monture : côté Est », objet à Az 0,24°, coupole à 315° |
-| 21:29:05 | `meridian_transit` : coupole 315,1° → 36,1° (57 s) |
-| 21:29:22 | Méridien selon l'ASIAIR (temps sidéral de la monture 35 s en avance) |
+| ~21:28:54 | Méridien DriftApp : l'azimut passe 0° (2,7° à 21:21:56, 0,24° à 21:28:17, ~0,39°/min) |
+| 21:29:05 | Correction suivante : `meridian_transit`, coupole 315,1° → 36,1°, arrivée à 21:30:02 |
 | 21:29:57 | Méridien astronomique |
 
-La monture a retourné ~5 min **avant** le méridien ; la coupole est restée du
-mauvais côté jusqu'à ce que l'azimut DriftApp passe 0°. La cause de l'avance de la
-monture reste à établir (aucun journal ASIAIR cette nuit-là : `asiair_monitor` non
-installé par l'OTA) ; le 21/10 l'ASIAIR avait retourné à son méridien.
+L'heure de bascule de l'ASIAIR (21h28) a été confirmée par JP le 23/10 après
+coup ; le « depuis 3 min » de Serge à 21:27 ne la recoupe pas et n'est pas retenu.
+L'écart réel entre la monture et la coupole est donc d'environ **1 min au départ**
+(21:28 → 21:29:05) et 2 min jusqu'à l'arrivée, pas 4 min.
+
+Le méridien DriftApp tombe ~1 min avant le méridien astronomique : c'est le
+décalage d'angle horaire CIRS/TETE relevé le 20/10 (~82 s), qui se trouve aller
+dans le bon sens ici. **Le corriger retarderait la bascule de la coupole
+d'autant** : la règle ci-dessous rend ce correctif sans risque, puisque la
+coupole suit alors le côté du pied et non plus seulement le méridien.
 
 La règle de la 6.24 (`dome_flip_wait.monture_en_retard`) ne fait que **retenir** la
 coupole quand la monture est en retard. Une monture en avance n'est pas gérée :
@@ -109,14 +115,16 @@ la coupole ») et à la fin de la tenue. Toujours visible, aucun survol.
 
 ## Hors périmètre
 
-- **Pourquoi la monture a retourné en avance** : « Flip Timing after Meridian »
-  est réglé à 0 min (JP, 23/10), l'ASIAIR aurait donc dû retourner vers 21:29:22,
-  après la capture de 21:28:17 qui la montre déjà côté Est. À établir avec le
-  journal `asiair_monitor` (installé à la prochaine MAJ) : instant du changement
-  de côté, `delta_h` de l'ASIAIR à cet instant, événements `ScopeGoto`.
+- **Écart d'environ 1 min entre le méridien de l'ASIAIR (21h28 affiché) et le
+  méridien astronomique (21:29:57)** : coordonnées de la monture après son modèle
+  d'alignement, arrondi de l'affichage ? À confirmer avec le journal
+  `asiair_monitor` (installé à la prochaine MAJ) : instant du changement de côté,
+  `delta_h` de l'ASIAIR à cet instant, événements `ScopeGoto`.
 - Décalage d'environ 82 s de l'angle horaire DriftApp (CIRS au lieu de TETE,
-  relevé le 20/10, non corrigé) : sans effet sur cette règle, qui prend l'azimut
-  DriftApp comme référence de bout en bout.
+  relevé le 20/10, non corrigé) : la règle prend l'azimut DriftApp comme
+  référence de bout en bout et reste juste quel que soit ce décalage ; elle est
+  le préalable pour le corriger sans retarder la bascule de la coupole (voir
+  Besoin).
 - Anticipation méridien (`meridian_anticipation`) : reste neutralisée quand
   l'option est active.
 
