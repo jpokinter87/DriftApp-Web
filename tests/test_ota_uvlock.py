@@ -117,7 +117,7 @@ def test_normalizing_uvlock_unblocks_pull(repo_pair: Path):
 def test_update_script_uses_frozen_sync():
     """L'étape uv sync doit utiliser --frozen pour ne jamais réécrire uv.lock."""
     content = UPDATE_SCRIPT.read_text()
-    assert "uv sync --extra dev --frozen" in content, (
+    assert '"$UV_BIN" sync --extra dev --frozen' in content, (
         "update_driftapp.sh doit lancer `uv sync --extra dev --frozen`"
     )
 
@@ -183,3 +183,57 @@ def test_update_script_stash_invocation_is_valid():
         "silencieusement (bug terrain 2026-06-01) ; utiliser `git stash push` seul"
     )
     assert "git stash push" in content, "le script doit toujours stasher les modifs locales"
+
+
+# --------------------------------------------------------------------------
+# Bug terrain 2026-10-23 : « uv non installé — étape sautée ». Le script tourne
+# en root (sudo, PATH réduit) alors qu'uv est installé pour slenk dans
+# ~/.local/bin : `command -v uv` échouait, les dépendances n'étaient jamais
+# synchronisées par l'OTA.
+# --------------------------------------------------------------------------
+
+
+def _trouver_uv(home: Path, path_env: str) -> subprocess.CompletedProcess:
+    """Exécute la fonction `trouver_uv` du script avec un PATH donné."""
+    content = UPDATE_SCRIPT.read_text()
+    debut = content.find("trouver_uv() {")
+    assert debut != -1, "update_driftapp.sh doit définir trouver_uv()"
+    fonction = content[debut : content.index("\n}\n", debut) + 3]
+    return subprocess.run(
+        ["/bin/bash", "-c", f'{fonction}\ntrouver_uv "$1"', "_", str(home)],
+        capture_output=True,
+        text=True,
+        env={"PATH": path_env},
+    )
+
+
+def _faux_uv(dossier: Path) -> Path:
+    dossier.mkdir(parents=True)
+    uv = dossier / "uv"
+    uv.write_text("#!/bin/sh\n")
+    uv.chmod(0o755)
+    return uv
+
+
+def test_uv_trouve_chez_le_proprietaire_hors_du_path_de_sudo(tmp_path: Path):
+    uv = _faux_uv(tmp_path / "home" / ".local" / "bin")
+    res = _trouver_uv(tmp_path / "home", "/usr/bin:/bin")
+    assert res.returncode == 0
+    assert res.stdout.strip() == str(uv)
+
+
+def test_uv_du_path_prioritaire(tmp_path: Path):
+    _faux_uv(tmp_path / "home" / ".local" / "bin")
+    uv_path = _faux_uv(tmp_path / "bin")
+    res = _trouver_uv(tmp_path / "home", f"{tmp_path / 'bin'}:/usr/bin:/bin")
+    assert res.stdout.strip() == str(uv_path)
+
+
+def test_uv_introuvable(tmp_path: Path):
+    res = _trouver_uv(tmp_path / "home", "/usr/bin:/bin")
+    assert res.returncode != 0 and res.stdout.strip() == ""
+
+
+def test_update_script_sync_sans_retrait_de_paquets():
+    """--inexact : un paquet installé à la main dans le .venv du Pi n'est pas retiré."""
+    assert '"$UV_BIN" sync --extra dev --frozen --inexact' in UPDATE_SCRIPT.read_text()

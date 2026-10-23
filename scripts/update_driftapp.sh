@@ -10,7 +10,7 @@
 # Étapes (5 au total) :
 #   1. stop_services : stop motor_service, ems22d, cimier_service, asiair_monitor
 #   2. fetch         : stash + pull (préserve les modifs locales de l'utilisateur)
-#   3. deps          : uv sync --extra dev --frozen (n'altère jamais uv.lock)
+#   3. deps          : uv sync --extra dev --frozen --inexact (n'altère jamais uv.lock)
 #   4. services      : install .service + daemon-reload
 #   5. restart       : start ems22d, motor_service, cimier_service, asiair_monitor, driftapp_web
 #
@@ -255,16 +255,33 @@ fi
 write_status "deps" 3 "Synchronisation des dépendances Python (uv sync)..."
 log "--- Étape 3/5 : uv sync ---"
 
-if command -v uv &>/dev/null; then
+# Le script tourne en root (sudo, PATH réduit) : uv, installé pour l'utilisateur
+# du dépôt dans ~/.local/bin, n'y est pas. Sans cette recherche l'étape était
+# sautée à chaque MAJ (« uv non installé », terrain 23/10/2026).
+trouver_uv() {
+    local cand
+    for cand in "$(command -v uv 2>/dev/null)" "$1/.local/bin/uv" "$1/.cargo/bin/uv"; do
+        if [ -n "$cand" ] && [ -x "$cand" ]; then
+            echo "$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+
+OWNER_HOME="$(getent passwd "$REPO_OWNER" | cut -d: -f6)"
+if UV_BIN="$(trouver_uv "$OWNER_HOME")"; then
+    log "uv : $UV_BIN"
     # --frozen : installe strictement depuis uv.lock, sans jamais le réécrire ni
     # re-résoudre. Indispensable pour que uv.lock ne diverge plus localement.
-    if run_as_owner uv sync --extra dev --frozen >> "$LOG_FILE" 2>&1; then
+    # --inexact : ne retire rien du .venv (paquet installé à la main sur le Pi).
+    if run_as_owner "$UV_BIN" sync --extra dev --frozen --inexact >> "$LOG_FILE" 2>&1; then
         log "Dépendances synchronisées (--frozen, uv.lock inchangé)"
     else
         log "WARN : uv sync --frozen a échoué — uv.lock probablement incohérent avec pyproject (regénérer le lock côté dev)"
     fi
 else
-    log "uv non installé — étape sautée"
+    log "uv introuvable (ni dans le PATH ni dans ~$REPO_OWNER/.local/bin) — étape sautée"
 fi
 
 # =============================================================================
