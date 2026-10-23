@@ -122,6 +122,10 @@ DEFAULT_RUN_LOOP_INTERVAL_S = 0.5
 # Django et les tests importent ce module).
 LOG_SUBDIR = "cimier"
 LOG_FILE_NAME = "cimier_service.log"
+
+# Heure du dernier déclenchement de la fermeture de fin de nuit (6.24.1) :
+# survit aux redémarrages, cf. docstring de services/cimier_scheduler.py.
+SCHEDULER_STATE_FILE = Path(__file__).resolve().parents[1] / "data" / "cimier_scheduler_state.json"
 LOG_MAX_BYTES = 1_000_000
 LOG_BACKUP_COUNT = 3
 
@@ -209,6 +213,7 @@ class CimierService:
         scheduler: Optional[CimierScheduler] = None,
         motor_ipc: Optional[MotorIpcWriter] = None,
         config_path: Optional[Path] = None,
+        scheduler_state_file: Optional[Path] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         cycle_poll_interval_s: float = DEFAULT_CYCLE_POLL_INTERVAL_S,
@@ -284,6 +289,7 @@ class CimierService:
                     weather_provider=self._weather_provider,
                     cimier_ipc=self._ipc,
                     motor_ipc=motor_ipc,
+                    state_file=scheduler_state_file,
                 )
 
         # ---- Veille pluie (2026-08) ----
@@ -367,6 +373,13 @@ class CimierService:
             self._config.motor_shelly.host_motor or "(noop)",
             self._config.motor_shelly.host_dir or "(noop)",
         )
+        perimee = self._ipc.ignorer_commande_en_attente()
+        if perimee is not None:
+            logger.info(
+                "cimier_event=stale_command_ignored id=%s action=%s",
+                perimee.get("id"),
+                perimee.get("action"),
+            )
         if self._rain_enabled:
             # Le log `started` énumérait les 4 Shellys du cimier mais pas le
             # capteur de pluie : impossible, sur un log terrain, de vérifier
@@ -1397,6 +1410,7 @@ def _build_service_from_config(config_path=None) -> CimierService:
         rain_heater_switch=rain_heater_switch,
         site_config=cfg.site,
         config_path=config_path,
+        scheduler_state_file=SCHEDULER_STATE_FILE,
         cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,
     )
 

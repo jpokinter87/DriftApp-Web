@@ -154,6 +154,14 @@ class MotorIpcWriter:
             return False
         return abs(shortest_angular_distance(position, target_deg)) <= tolerance_deg
 
+    def tracking_active(self) -> bool:
+        """True si `motor_status.json` rapporte un suivi en cours (illisible → False)."""
+        try:
+            status = json.loads(self.status_file.read_text())
+        except (IOError, OSError, json.JSONDecodeError):
+            return False
+        return status.get("tracking_object") is not None
+
     def _tracking_is_stopped(self) -> bool:
         """True si `motor_status.json` ne rapporte plus de suivi en cours."""
         try:

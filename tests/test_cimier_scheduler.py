@@ -71,9 +71,14 @@ class FakeMotorIpc:
     calls: List[tuple] = field(default_factory=list)
     # Coupole immobile au parking (motor_status.json) ?
     parked: bool = True
+    # Suivi en cours (motor_status.json) ?
+    tracking: bool = False
 
     def is_parked(self, target_deg: float, tolerance_deg: float = 1.0) -> bool:
         return self.parked
+
+    def tracking_active(self) -> bool:
+        return self.tracking
 
     def send_goto(self, angle: float) -> bool:
         self.calls.append(("goto", angle))
@@ -979,4 +984,75 @@ class TestCloseAfterParking:
         sched.maybe_trigger("cooldown")
         assert sched._cimier_ipc.commands == []
         now[0] += timedelta(minutes=1)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"
+
+
+# ----------------------------------------------------------------------
+# Terrain 22/10/2026 (6.24.1) : essais de jour en mode semi. Le cimier ouvert
+# au lancement d'un suivi était refermé dans la minute (condition « soleil qui
+# monte » vraie jusqu'au midi solaire), de nouveau après un redémarrage des
+# services (mémoire perdue), et la fermeture différée tombait 4 min plus tard
+# en plein suivi relancé par Serge.
+# ----------------------------------------------------------------------
+
+
+class TestFermetureUneFoisParMatin:
+    def _sched(self, state_file, now, motor=None):
+        return CimierScheduler(
+            automation_config=_automation(mode="semi"),
+            site_config=_site(),
+            weather_provider=FakeWeatherProvider(),
+            cimier_ipc=FakeCimierIpc(),
+            motor_ipc=motor or FakeMotorIpc(parked=False),
+            clock=lambda: now[0],
+            sun_altitude_fn=lambda *a, **kw: 10.0,
+            sun_direction_fn=lambda *a, **kw: "rising",
+            state_file=state_file,
+        )
+
+    def test_declenchement_garde_apres_redemarrage(self, tmp_path):
+        etat = tmp_path / "cimier_scheduler_state.json"
+        now = [datetime(2026, 10, 22, 7, 7, tzinfo=timezone.utc)]
+        assert self._sched(etat, now).maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+        # Redémarrage des services 20 min plus tard, cimier rouvert pour un essai.
+        now[0] += timedelta(minutes=20)
+        relance = self._sched(etat, now)
+        assert relance.maybe_trigger(CIMIER_STATE_OPEN).trigger == "skip:cooldown"
+        assert relance._motor_ipc.calls == []
+
+    def test_matin_suivant_ferme_de_nouveau(self, tmp_path):
+        etat = tmp_path / "cimier_scheduler_state.json"
+        now = [datetime(2026, 10, 22, 7, 7, tzinfo=timezone.utc)]
+        self._sched(etat, now).maybe_trigger(CIMIER_STATE_OPEN)
+        now[0] += timedelta(hours=24)
+        assert self._sched(etat, now).maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+
+    def test_fichier_illisible_ne_bloque_pas(self, tmp_path):
+        etat = tmp_path / "cimier_scheduler_state.json"
+        etat.write_text("pas du json")
+        now = [datetime(2026, 10, 22, 7, 7, tzinfo=timezone.utc)]
+        assert self._sched(etat, now).maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+
+    def test_suivi_relance_annule_la_fermeture_differee(self, tmp_path):
+        motor = FakeMotorIpc(parked=False, tracking=False)
+        now = [datetime(2026, 10, 22, 7, 24, tzinfo=timezone.utc)]
+        sched = self._sched(None, now, motor)
+        assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close"
+        now[0] += timedelta(minutes=1)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)  # suivi arrêté constaté
+        motor.tracking = True  # Serge relance un suivi
+        now[0] += timedelta(minutes=1)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        now[0] += timedelta(seconds=PARKING_WAIT_TIMEOUT_S)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        assert sched._cimier_ipc.commands == []
+
+    def test_statut_moteur_perime_n_annule_pas(self, tmp_path):
+        """motor_service muet : le statut montre encore le suivi d'avant la
+        fermeture. Ce n'est pas une reprise en main, on ferme quand même."""
+        motor = FakeMotorIpc(parked=False, tracking=True)
+        now = [datetime(2026, 10, 22, 7, 24, tzinfo=timezone.utc)]
+        sched = self._sched(None, now, motor)
+        sched.maybe_trigger(CIMIER_STATE_OPEN)
+        now[0] += timedelta(seconds=PARKING_WAIT_TIMEOUT_S)
         assert sched.maybe_trigger(CIMIER_STATE_OPEN).trigger == "close_after_parking"

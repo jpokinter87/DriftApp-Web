@@ -132,6 +132,16 @@ class CimierIpcManager:
         except (IOError, OSError) as exc:
             logger.error("Erreur écriture status cimier: %s", exc)
 
+    def ignorer_commande_en_attente(self) -> Optional[Dict[str, Any]]:
+        """Marque comme déjà vue la commande présente dans le fichier, et la renvoie.
+
+        Appelée au démarrage du service : la dédup par id est en mémoire, un
+        service redémarré (MAJ, « Redémarrer les services ») rejouait donc la
+        dernière commande du précédent (terrain 22/10 : fermeture de 04:08
+        réexécutée à 08:47 — une ouverture aurait rouvert le cimier).
+        """
+        return self.read_command()
+
     def write_command(self, command: Dict[str, Any]) -> bool:
         """Écrit une commande dans le fichier IPC (utilitaire pour clients/tests).
 

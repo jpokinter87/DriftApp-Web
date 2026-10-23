@@ -60,14 +60,20 @@ def test_resync_conserve_l_offset_si_le_mouvement_est_inacheve(session):
     assert session.position_relative == pytest.approx(12.0)
 
 
-def test_resync_absorbe_une_petite_derive(session):
-    session.encoder_offset = -0.2
+def test_resync_n_absorbe_pas_un_depassement(session):
+    """Terrain 21/10/2026 20:56 : le slew d'anticipation (sans feedback) va 3,8°
+    trop loin ; l'écart absorbé (offset 0,4° → 4,2°) laisse la coupole décalée
+    toute la nuit (« ENC 107,71° (+4,2°) » sur le dashboard). Encodeur calibré :
+    l'offset ne bouge pas, la position atteinte est retenue et la correction
+    suivante, avec feedback, ramène la coupole sur la cible."""
+    session.encoder_offset = 0.4
     with patch(
-        "core.hardware.daemon_encoder_reader.get_daemon_reader", return_value=_encodeur_a(71.3)
+        "core.hardware.daemon_encoder_reader.get_daemon_reader", return_value=_encodeur_a(106.2)
     ):
-        session._resync_encoder_offset(70.0)
+        session._resync_encoder_offset(110.4)
 
-    assert session.encoder_offset == pytest.approx(-1.3)
+    assert session.encoder_offset == pytest.approx(0.4)
+    assert session.position_relative == pytest.approx(106.6)
 
 
 def test_goto_initial_inacheve_n_absorbe_pas_l_ecart(session):

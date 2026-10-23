@@ -40,8 +40,9 @@ class TrackingCorrectionsMixin:
     LARGE_MOVEMENT_THRESHOLD = 15.0
 
     # Écart maximal entre la position atteinte et la cible absorbé dans
-    # encoder_offset. Au-delà, le mouvement n'est pas allé au bout (firmware,
-    # timeout, blocage) : l'absorber dépointerait toute la suite du suivi.
+    # encoder_offset au GOTO initial (au-delà, le mouvement n'est pas allé au
+    # bout : firmware, timeout, blocage). Après un grand mouvement de suivi,
+    # plus rien n'est absorbé (6.24.1) ; ce seuil y fixe le niveau du log.
     MAX_OFFSET_ABSORBE_DEG = 5.0
 
     # Seuil d'erreur acceptable même avec timeout (en degrés)
@@ -388,34 +389,30 @@ class TrackingCorrectionsMixin:
 
     def _resync_encoder_offset(self, position_cible_logique: float):
         """
-        Re-synchronise l'offset encodeur après un grand mouvement.
+        Recale la position logique sur la position atteinte après un grand mouvement.
 
-        Après un transit méridien, l'offset peut dériver si la rotation
-        n'a pas atteint exactement la cible. La re-sync corrige cela.
+        L'offset encodeur n'est plus modifié (6.24.1) : encodeur calibré, il ne
+        doit bouger que de quelques dixièmes. L'absorber laissait la coupole
+        décalée du dépassement pour toute la nuit (terrain 21/10/2026 : slew
+        d'anticipation sans feedback 3,8° trop loin, offset 0,4° → 4,2°). La
+        position réellement atteinte est retenue : la correction suivante, avec
+        feedback, rattrape l'écart restant.
         """
         try:
             from core.hardware.daemon_encoder_reader import get_daemon_reader
 
             real_position = get_daemon_reader().read_angle()
-            old_offset = self.encoder_offset
-            new_offset = position_cible_logique - real_position
-            ecart = shortest_angular_distance(old_offset, new_offset)
-            if abs(ecart) > self.MAX_OFFSET_ABSORBE_DEG:
-                self.logger.error(
-                    f"resync_refused | mouvement inachevé : encodeur={real_position:.1f}° "
-                    f"logique={position_cible_logique:.1f}° ecart={ecart:+.1f}° "
-                    f"→ offset conservé {old_offset:.1f}°"
-                )
-                # Position réellement atteinte : la correction suivante rattrape
-                # l'écart restant (grand mouvement autorisé) au lieu de le croire fait.
-                self.position_relative = (real_position + old_offset) % 360
-                return
-            self.encoder_offset = new_offset
-            self.logger.info(
-                f"Re-sync encodeur post-méridien: "
-                f"offset {old_offset:.1f}° → {self.encoder_offset:.1f}° "
-                f"(encodeur={real_position:.1f}°, logique={position_cible_logique:.1f}°)"
+            atteinte = (real_position + self.encoder_offset) % 360
+            ecart = shortest_angular_distance(position_cible_logique, atteinte)
+            log = (
+                self.logger.error if abs(ecart) > self.MAX_OFFSET_ABSORBE_DEG else self.logger.info
             )
+            log(
+                f"resync | encodeur={real_position:.1f}° logique={position_cible_logique:.1f}° "
+                f"atteinte={atteinte:.1f}° ecart={ecart:+.1f}° offset conservé "
+                f"{self.encoder_offset:.1f}°"
+            )
+            self.position_relative = atteinte
         except Exception as e:
             self.logger.debug(f"Re-sync encodeur non critique: {e}")
 

@@ -357,6 +357,30 @@ class TestConfigurationAndInstantiation:
         service.run_forever()
         assert ps.on_count == 0
 
+    def test_run_forever_ne_rejoue_pas_la_commande_du_service_precedent(
+        self,
+        cimier_config_default: CimierConfig,
+        ipc_manager: RecordingIpcManager,
+    ) -> None:
+        """Une commande laissée dans /dev/shm par le service précédent (avant une
+        mise à jour ou « Redémarrer les services ») ne doit pas être exécutée."""
+        ipc_manager.write_command({"id": "avant-redemarrage", "action": "open"})
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cimier_config_default,
+            power_switch=ps,
+            switch_reader=FakeSwitchReader(),
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            run_loop_interval_s=0.01,
+        )
+        service.request_stop()
+        service.run_forever()
+        service.tick()
+        assert ps.on_count == 0
+
 
 # ======================================================================
 # Section 2 : Cycle complet via simulator — SUPPRIMÉ (Bloc 2 T4)
@@ -723,6 +747,24 @@ class TestIpcManager:
         assert not cmd_file.exists()
         CimierIpcManager(command_file=cmd_file, status_file=status_file)
         assert cmd_file.exists()
+
+    def test_commande_en_attente_ignoree(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        """Terrain 22/10 : la fermeture de 04:08 a été rejouée à 08:47 au
+        redémarrage du service (même id). Une ouverture aurait rouvert le cimier."""
+        cmd_file, status_file = tmp_ipc
+        CimierIpcManager(command_file=cmd_file, status_file=status_file).write_command(
+            {"id": "ancienne", "action": "open"}
+        )
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        assert ipc.ignorer_commande_en_attente() == {"id": "ancienne", "action": "open"}
+        assert ipc.read_command() is None
+        ipc.write_command({"id": "nouvelle", "action": "close"})
+        assert ipc.read_command()["id"] == "nouvelle"
+
+    def test_aucune_commande_en_attente(self, tmp_ipc: Tuple[Path, Path]) -> None:
+        cmd_file, status_file = tmp_ipc
+        ipc = CimierIpcManager(command_file=cmd_file, status_file=status_file)
+        assert ipc.ignorer_commande_en_attente() is None
 
     def test_ipc_command_without_id_ignored(self, tmp_ipc: Tuple[Path, Path]) -> None:
         cmd_file, status_file = tmp_ipc
@@ -3283,6 +3325,9 @@ class TestAutomationCloseRetryEndToEnd:
 
             def is_parked(self, target_deg, tolerance_deg=1.0):
                 return True
+
+            def tracking_active(self):
+                return False
 
         service._scheduler = CimierScheduler(
             automation_config=CimierAutomationConfig(mode="semi"),

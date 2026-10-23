@@ -29,8 +29,15 @@ de fermer, le cycle échoue et rien ne le relançait avant le lendemain. Tant qu
 le cimier n'est pas confirmé fermé, l'ordre ``close`` (cimier seul, la coupole
 est déjà au parking) est renvoyé toutes les ``close_retry_interval_minutes``,
 au plus pendant ``retrigger_cooldown_hours``. Le passage en mode manuel annule.
-État désiré (pas event-driven) : au reboot, mémoire perdue → re-trigger si
-conditions toujours remplies (volontaire — protection coupole).
+Une seule fermeture par matin (terrain 22/10/2026, 6.24.1) : la condition
+« soleil qui monte » reste vraie jusqu'au midi solaire, donc toute ouverture
+d'essai le matin était refermée dans la minute, de nouveau après chaque
+redémarrage des services (mémoire perdue). L'heure du dernier déclenchement
+est gardée sur disque (``state_file``) : la fenêtre ``retrigger_cooldown_hours``
+survit aux redémarrages. Sans trace de déclenchement (premier matin, fichier
+illisible), un Pi redémarré à l'aube ferme toujours. La fermeture différée est
+annulée si un suivi redémarre après l'arrêt constaté : l'opérateur a repris la
+main.
 
 Module logique pur, injectables (clock, sun_altitude_fn, weather_provider,
 cimier_ipc, motor_ipc) — testable offline.
@@ -99,6 +106,7 @@ class CimierScheduler:
         clock: Callable[[], datetime] = None,
         sun_altitude_fn: Callable[..., float] = compute_sun_altitude,
         sun_direction_fn: Callable[..., str] = sun_direction,
+        state_file: Optional[Path] = None,
     ):
         self._cfg = automation_config
         self._site = site_config
@@ -109,7 +117,10 @@ class CimierScheduler:
         self._sun_altitude_fn = sun_altitude_fn
         self._sun_direction_fn = sun_direction_fn
         self._last_open_trigger_ts: Optional[datetime] = None
-        self._last_close_trigger_ts: Optional[datetime] = None
+        self._state_file = Path(state_file) if state_file is not None else None
+        self._last_close_trigger_ts: Optional[datetime] = self._lire_dernier_declenchement()
+        # Suivi vu arrêté depuis le déclenchement : sa reprise annule la fermeture.
+        self._suivi_arrete_vu = False
         # Fermeture auto en attente de confirmation (retry, cf. docstring module).
         self._close_pending_since: Optional[datetime] = None
         self._last_close_attempt_ts: Optional[datetime] = None
@@ -250,6 +261,7 @@ class CimierScheduler:
                         return SchedulerDecision("skip:cooldown", alt_now, direction, now)
                     self._trigger_close()
                     self._last_close_trigger_ts = now
+                    self._ecrire_dernier_declenchement(now)
                     return SchedulerDecision("close", alt_now, direction, now)
 
         return SchedulerDecision("skip:state", alt_now, direction, now)
@@ -424,6 +436,7 @@ class CimierScheduler:
         self._last_close_attempt_ts = None
         self._close_retry_count = 0
         self._parked_seen_at = None
+        self._suivi_arrete_vu = False
 
     def _close_ready_reason(self, now: datetime) -> Optional[str]:
         """Motif d'émission de la fermeture différée, ou None s'il faut attendre."""
@@ -444,6 +457,14 @@ class CimierScheduler:
         None sinon.
         """
         if self._close_pending_since is None:
+            return None
+        # Un statut moteur périmé (suivi d'avant la fermeture) n'annule rien :
+        # seul un suivi relancé après un arrêt constaté vaut reprise en main.
+        if not self._motor_ipc.tracking_active():
+            self._suivi_arrete_vu = True
+        elif self._suivi_arrete_vu:
+            logger.info("cimier_event=automation_close_cancelled reason=tracking_restarted")
+            self._close_pending_since = None
             return None
         if current_cimier_state == CIMIER_STATE_CLOSED:
             logger.info(
@@ -496,6 +517,28 @@ class CimierScheduler:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _lire_dernier_declenchement(self) -> Optional[datetime]:
+        if self._state_file is None:
+            return None
+        try:
+            data = json.loads(self._state_file.read_text())
+            return datetime.fromisoformat(data["last_close_trigger_utc"])
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            logger.warning("scheduler_event=state_read_failed exc=%s", exc)
+            return None
+
+    def _ecrire_dernier_declenchement(self, ts: datetime) -> None:
+        if self._state_file is None:
+            return
+        try:
+            tmp = self._state_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"last_close_trigger_utc": ts.isoformat()}))
+            tmp.replace(self._state_file)
+        except OSError as exc:
+            logger.warning("scheduler_event=state_write_failed exc=%s", exc)
 
     def _is_in_cooldown(self, last_trigger_ts: Optional[datetime], now: datetime) -> bool:
         if last_trigger_ts is None:

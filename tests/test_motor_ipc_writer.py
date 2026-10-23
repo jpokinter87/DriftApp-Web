@@ -172,3 +172,22 @@ class TestIsParked:
 
     def test_status_unreadable(self, tmp_path):
         assert not self._writer(tmp_path, None).is_parked(45.0)
+
+
+class TestTrackingActive:
+    """Reprise en main par l'opérateur : la fermeture différée est annulée (6.24.1)."""
+
+    def _writer(self, tmp_path, status):
+        status_file = tmp_path / "motor_status.json"
+        if status is not None:
+            status_file.write_text(json.dumps(status))
+        return MotorIpcWriter(command_file=tmp_path / "motor_command.json", status_file=status_file)
+
+    def test_suivi_en_cours(self, tmp_path):
+        assert self._writer(tmp_path, {"tracking_object": "M31"}).tracking_active() is True
+
+    def test_pas_de_suivi(self, tmp_path):
+        assert self._writer(tmp_path, {"tracking_object": None}).tracking_active() is False
+
+    def test_statut_illisible(self, tmp_path):
+        assert self._writer(tmp_path, None).tracking_active() is False
