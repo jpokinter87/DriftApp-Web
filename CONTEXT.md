@@ -492,7 +492,6 @@ Ctrl+Shift+R (ou Cmd+Shift+R sur Mac)
 - **CLAUDE.md** : Guide developpeur complet
 - **TRACKING_LOGIC.md** : Logique complete du systeme de tracking
 - **CHANGELOG.md** : Historique des versions
-- **MODIFICATIONS_V4.4.md** : Details des corrections v4.4
 
 ---
 
