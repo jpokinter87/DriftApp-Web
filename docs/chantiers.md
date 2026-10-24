@@ -52,9 +52,12 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 ### Revue critique du 15/10 (6.21.3 → 6.21.7)
 - **État** : tout est livré : suivi en UTC (changement d'heure du 25/10), STOP pendant un
   GOTO, offset encodeur borné à 5°, GOTO raté visible, resynchronisation série et
-  accélération bornée (firmware, flash requis).
-- **Prochaine étape** : confirmer avec JP que le flash du Pico a bien été fait (prévu le 16/10).
-  Première nuit après le **25/10** : vérifier que les corrections continuent après 3 h → 2 h.
+  accélération bornée (firmware flashé sur le Pico le 16/10, confirmé par JP).
+- **Prochaine étape** : point avec JP le 25/10 sur la nuit du 24 au 25/10 (changement
+  d'heure). Il faut une session qui traverse 3 h → 2 h en suivi actif, selon la météo :
+  vérifier dans la chronologie que les corrections continuent sans trou d'une heure et
+  que l'azimut reste cohérent. Si la nuit n'est pas exploitable, ce point reste ouvert
+  (le prochain changement d'heure est en mars).
 
 ### Automatisation du cimier (modes semi et full)
 - **État** : code complet depuis la 6.3 (scheduler astropy, modes `manual` / `semi` /
