@@ -65,8 +65,7 @@ python3 scripts/diagnostics/chronologie_nuit.py logs/terrain/2026-10-23.zip > <s
 
 1. Pour JP, dans le terminal : verdict, chronologie courte des moments clés, et ce qui
    est validé terrain et ce qui reste à corriger, avec les preuves (heures et lignes de log).
-2. Si JP le demande, un compte rendu pour Serge au **format WhatsApp** : un `.txt` dans
-   le scratchpad, sans tableau, avec du *gras* et des puces, des phrases courtes et sans
-   jargon de code. Un PDF (`/pdf-report`) seulement pour un document important.
+2. Si JP le demande, un compte rendu pour Serge via `/message-user` (format WhatsApp
+   vérifié et copié, ou PDF pour un document important).
 3. Mettre à jour `docs/chantiers.md` via `/chantiers` (entrée validée et retirée, ou
    nouvel incident noté) et proposer les corrections, sans les lancer sans accord.

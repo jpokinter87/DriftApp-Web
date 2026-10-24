@@ -411,6 +411,7 @@ committer `data/config.template.json` depuis le Pi.
 | `/diag-terrain` | Protocole de diagnostic à transmettre à Serge pour un incident terrain, puis interprétation de ses retours |
 | `/analyse-nuit` | Relire une nuit terrain : zip de Serge rangé dans `logs/terrain/`, chronologie fusionnée (`scripts/diagnostics/chronologie_nuit.py`), tri logiciel/terrain/monture, compte rendu WhatsApp |
 | `/chantiers` | Registre des chantiers `docs/chantiers.md` : noter pour plus tard, reprendre après un /clear, faire le point, clore |
+| `/message-user` | Message à Serge (ou autre utilisateur terrain) : annonce de mise à jour, compte rendu, demande, au format WhatsApp vérifié et copié dans le presse-papiers ; PDF pour un document important |
 | `/pre-push` | Hygiène avant push : tests ciblés, ruff, valeurs en dur, bump, commit + push |
 
 Les anciennes commandes projet (`/diagnose`, `/logs`, `/calibrate`, `/deploy`…) ont été
