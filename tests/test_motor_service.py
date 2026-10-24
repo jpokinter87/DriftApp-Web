@@ -521,10 +521,9 @@ class TestLiveRecalibration:
         assert motor_service.current_status["calibration"]["status"] == "degraded"
 
     def test_first_observation_sets_baseline_without_flip(self, motor_service):
-        """Premier passage (baseline None) : on enregistre le ts hérité du boot,
-        sans considérer cela comme un franchissement → pas de bascule."""
+        """Premier passage (baseline pas encore lue) : on enregistre le ts hérité
+        du boot, sans considérer cela comme un franchissement → pas de bascule."""
         self._set_calib_status(motor_service, "degraded")
-        motor_service._last_seen_calibration_at = None
         with patch.object(
             motor_service.daemon_reader,
             "read_status",
@@ -533,6 +532,26 @@ class TestLiveRecalibration:
             motor_service._check_live_recalibration()
         assert motor_service.current_status["calibration"]["status"] == "degraded"
         assert motor_service._last_seen_calibration_at == "T-boot"
+
+    def test_first_crossing_after_uncalibrated_boot_flips_to_ok(self, motor_service):
+        """Terrain 24/10 : Pi redémarré, sweep raté → le démon n'a jamais publié
+        de timestamp. Le premier franchissement manuel du switch doit suffire."""
+        self._set_calib_status(motor_service, "degraded")
+        with patch.object(
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": None},
+        ):
+            motor_service._check_live_recalibration()
+        with patch.object(
+            motor_service.daemon_reader,
+            "read_status",
+            return_value={"last_calibration_at": "T1"},
+        ):
+            motor_service._check_live_recalibration()
+        cal = motor_service.current_status["calibration"]
+        assert cal["status"] == "ok"
+        assert cal["method"] == "live_switch"
 
     def test_does_not_downgrade_when_already_ok(self, motor_service):
         """Si déjà ok, un nouveau ts n'altère pas le sous-dict (baseline avance seulement)."""

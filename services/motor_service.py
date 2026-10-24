@@ -65,6 +65,9 @@ MAX_LOG_AGE_DAYS = 7
 # Fallback de sécurité : nombre max absolu de fichiers
 MAX_LOG_FILES_SAFETY = 200
 
+# Baseline de recalage live pas encore lue (distincte de None = démon jamais calibré)
+_CALIBRATION_NOT_SEEN = object()
+
 
 def cleanup_old_logs(prefix: str = "motor_service_"):
     """Supprime les fichiers de log plus anciens que MAX_LOG_AGE_DAYS."""
@@ -223,8 +226,8 @@ class MotorService:
 
         # v6.7.1 — baseline du timestamp de recalage encodeur, pour détecter un
         # franchissement manuel du microswitch 45° pendant le runtime (cf.
-        # _check_live_recalibration). None = pas encore observé.
-        self._last_seen_calibration_at = None
+        # _check_live_recalibration).
+        self._last_seen_calibration_at = _CALIBRATION_NOT_SEEN
 
         # Logs de suivi pour l'interface web (deque avec taille max automatique)
         self.recent_tracking_logs = deque(maxlen=20)
@@ -576,14 +579,15 @@ class MotorService:
         if not status_dict:
             return
         ts = status_dict.get("last_calibration_at")
-        if not ts or ts == self._last_seen_calibration_at:
+        if ts == self._last_seen_calibration_at:
             return
 
-        first_observation = self._last_seen_calibration_at is None
+        first_observation = self._last_seen_calibration_at is _CALIBRATION_NOT_SEEN
         self._last_seen_calibration_at = ts
-        if first_observation:
+        if first_observation or not ts:
             # Premier passage : on enregistre la baseline (timestamp hérité du
-            # boot), sans considérer cela comme un nouveau franchissement.
+            # boot, ou None si le démon n'a jamais calibré — terrain 24/10 :
+            # le premier franchissement manuel était alors avalé comme baseline).
             return
 
         with self.status_lock:
