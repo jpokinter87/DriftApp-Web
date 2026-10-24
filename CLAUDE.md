@@ -409,6 +409,7 @@ committer `data/config.template.json` depuis le Pi.
 | Skill | Description |
 |-------|-------------|
 | `/diag-terrain` | Protocole de diagnostic à transmettre à Serge pour un incident terrain, puis interprétation de ses retours |
+| `/analyse-nuit` | Relire une nuit terrain : zip de Serge rangé dans `logs/terrain/`, chronologie fusionnée (`scripts/diagnostics/chronologie_nuit.py`), tri logiciel/terrain/monture, compte rendu WhatsApp |
 | `/pre-push` | Hygiène avant push : tests ciblés, ruff, valeurs en dur, bump, commit + push |
 
 Les anciennes commandes projet (`/diagnose`, `/logs`, `/calibrate`, `/deploy`…) ont été
