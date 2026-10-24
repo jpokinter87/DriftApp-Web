@@ -309,21 +309,19 @@ class CimierService:
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
         self._motor_ipc = motor_ipc
 
-        # Résistance chauffante (2026-09) : appliquée une fois ici pour que
-        # l'état corresponde à l'armement dès le premier tick, y compris
-        # après un redémarrage (OTA) avec la case déjà cochée — sans cela,
-        # _refresh_rain_armed_from_config ne détecterait jamais de
-        # transition puisque provider.armed vaut déjà cette valeur.
+        # Résistance chauffante (2026-09) : allumée dès le démarrage, armée ou
+        # non. Depuis le 24/10/2026 elle ne suit plus l'armement : désarmer la
+        # coupait, et un capteur couvert de rosée ne séchait plus jamais.
         self._rain_heater_status: Dict[str, Any] = {}
         # Keepalive (2026-09, retour terrain arrêt électrique manuel post-6.15.6) :
-        # renvoie turn_on() périodiquement tant qu'armé, pour relancer l'auto_off
+        # renvoie turn_on() périodiquement, pour relancer l'auto_off
         # natif du Shelly (configuré côté app Shelly, hors DriftApp) — coupure du
         # Pi = plus de signal = le Shelly coupe la résistance seul après son délai.
         self._rain_heater_keepalive_interval_s = float(
             cimier_config.rain_heater_keepalive_interval_s
         )
         self._last_rain_heater_keepalive_ts: Optional[float] = None
-        self._apply_rain_heater_state(bool(getattr(self._weather_provider, "armed", False)))
+        self._turn_rain_heater_on()
 
         self._publish_status(
             state=STATE_IDLE,
@@ -422,17 +420,17 @@ class CimierService:
                 self._last_rain_watch_ts = now_mono
 
         # Keepalive résistance chauffante — renvoie turn_on() périodiquement
-        # tant qu'armé (cf. commentaire __init__). Placé avant les retours
-        # anticipés du tick (cooldown / cycle) pour continuer à tourner
-        # même quand le cimier lui-même est occupé.
-        if self._rain_heater_configured and getattr(self._weather_provider, "armed", False):
+        # (cf. commentaire __init__). Placé avant les retours anticipés du tick
+        # (cooldown / cycle) pour continuer à tourner même quand le cimier
+        # lui-même est occupé.
+        if self._rain_heater_configured:
             now_mono = self._clock()
             if (
                 self._last_rain_heater_keepalive_ts is not None
                 and (now_mono - self._last_rain_heater_keepalive_ts)
                 >= self._rain_heater_keepalive_interval_s
             ):
-                self._apply_rain_heater_state(True)
+                self._turn_rain_heater_on()
 
         # 0. Phase 3 : scheduler astropy (toutes les scheduler_interval_seconds,
         #    pas à chaque tick). Court-circuit si scheduler None (automation off).
@@ -1142,13 +1140,12 @@ class CimierService:
                 armed,
             )
             provider.armed = armed
-            self._apply_rain_heater_state(armed)
 
-    def _apply_rain_heater_state(self, armed: bool) -> None:
-        """Commande la résistance chauffante sur transition d'armement.
+    def _turn_rain_heater_on(self) -> None:
+        """Allume la résistance chauffante (démarrage et keepalive).
 
-        Une seule tentative : un échec ne doit jamais bloquer l'armement de la
-        protection pluie elle-même (fail-safe), et se voit dans le statut
+        Une seule tentative : un échec ne doit jamais bloquer la protection
+        pluie elle-même (fail-safe), et se voit dans le statut
         publié plutôt que de nécessiter une lecture de log. Rien n'est publié
         si aucun Shelly n'est configuré (`type=noop`) — appeler turn_on/off
         sur le NoopPowerSwitch reste inoffensif, mais un badge sans matériel
@@ -1156,19 +1153,14 @@ class CimierService:
         """
         if not self._rain_heater_configured:
             return
-        if armed:
-            # Repart du tick courant : le keepalive périodique ne doit pas
-            # renvoyer un ON quelques secondes après celui-ci (transition ou
-            # renvoi précédent), qu'il ait réussi ou non — un échec sera
-            # retenté au prochain passage périodique de toute façon.
-            self._last_rain_heater_keepalive_ts = self._clock()
+        # Repart du tick courant : le keepalive périodique ne doit pas renvoyer
+        # un ON quelques secondes après celui-ci, qu'il ait réussi ou non — un
+        # échec sera retenté au prochain passage périodique de toute façon.
+        self._last_rain_heater_keepalive_ts = self._clock()
         try:
-            if armed:
-                self._rain_heater_switch.turn_on()
-            else:
-                self._rain_heater_switch.turn_off()
+            self._rain_heater_switch.turn_on()
         except PowerSwitchError as exc:
-            logger.error("cimier_event=rain_heater_command_failed armed=%s exc=%s", armed, exc)
+            logger.error("cimier_event=rain_heater_command_failed exc=%s", exc)
             self._rain_heater_status = {
                 "configured": True,
                 "on": None,
@@ -1178,7 +1170,7 @@ class CimierService:
         else:
             self._rain_heater_status = {
                 "configured": True,
-                "on": armed,
+                "on": True,
                 "last_command_ok": True,
                 "error": None,
             }

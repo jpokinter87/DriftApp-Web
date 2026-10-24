@@ -352,7 +352,7 @@ class CimierConfig:
     )
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
     rain_heater_keepalive_interval_s: float = (
-        240.0  # renvoi périodique de turn_on() tant qu'armé (v6.15.8) — relance
+        240.0  # renvoi périodique de turn_on(), armé ou non (v6.15.8) — relance
         # l'auto_off du Shelly (à configurer à 300s côté app Shelly, hors DriftApp) :
         # une coupure du Pi arrête ce signal, le Shelly coupe alors la résistance seul.
     )
