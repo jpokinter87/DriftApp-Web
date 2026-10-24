@@ -231,14 +231,14 @@ Position = interpolation(P11, P12, P21, P22, Az, Alt)
 MICROSTEPS = 4                    # Doit correspondre au driver DM556T
 GEAR_RATIO = 2230                 # Réduction totale
 STEPS_PER_REVOLUTION = 200        # Moteur NEMA
-CORRECTION_FACTOR = 1.08849       # Ajustement empirique
+CORRECTION_FACTOR = 1.0546        # Mesuré sur tour complet (24/10/2026)
 
 # Calcul: steps par tour de coupole
-STEPS_PER_DOME = 200 × 4 × 2230 × 1.08849 ≈ 1,941,866 pas/360°
-                 ≈ 5,394 pas/degré
+STEPS_PER_DOME = 200 × 4 × 2230 × 1.0546 ≈ 1,881,406 pas/360°
+                 ≈ 5,226 pas/degré
 
 # Encodeur
-CALIBRATION_FACTOR = 0.010851     # Rapport roue encodeur / coupole
+CALIBRATION_FACTOR = 0.010947     # Rapport roue encodeur / coupole (24/10/2026)
 # La roue encodeur fait ~92 tours par tour de coupole
 ```
 

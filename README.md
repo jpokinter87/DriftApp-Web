@@ -273,7 +273,7 @@ Fichier : `data/config.json`
     "microsteps": 4,
     "steps_per_revolution": 200,
     "gear_ratio": 2230,
-    "steps_correction_factor": 1.08849
+    "steps_correction_factor": 1.0546
   },
   "adaptive_tracking": {
     "altitudes": { "critical": 68.0, "zenith": 75.0 },

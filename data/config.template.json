@@ -57,7 +57,7 @@
     "_microsteps_comment": "Valeurs possibles: 1, 2, 4, 8, 16, 32 (selon driver)",
     "gear_ratio": 2230,
     "_gear_ratio_comment": "Rapport de réduction mécanique",
-    "steps_correction_factor": 1.08849,
+    "steps_correction_factor": 1.0546,
     "_correction_comment": "Facteur de correction mesuré (1.0 = pas de correction)",
     "max_speed_steps_per_sec": 1000,
     "acceleration_steps_per_sec2": 500,
@@ -79,8 +79,8 @@
       "counts_per_rev": 1024,
       "_counts_comment": "Résolution 10 bits = 1024 positions"
     },
-    "calibration_factor": 0.010851,
-    "_calibration_comment": "Facteur corrigé le 5 décembre 2025 - Valeur = 0.01077/0.9925 (cohérent avec script direct SPI)"
+    "calibration_factor": 0.010947,
+    "_calibration_comment": "Affichage seul : la valeur utilisée est CALIBRATION_FACTOR dans ems22d_calibrated.py (0.010947, mesure tour complet du 24/10/2026)"
   },
   "logging": {
     "_comment": "Configuration des logs (optionnel)",

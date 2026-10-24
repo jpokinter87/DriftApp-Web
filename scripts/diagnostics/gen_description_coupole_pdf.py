@@ -22,7 +22,7 @@ pdf.title_page(
     extra_lines=[
         "Observatoire Ubik — 44,15° N, 5,23° E, 800 m",
         "Exploitation sur site : Serge",
-        "Logiciel : DriftApp Web 6.26.2",
+        "Logiciel : DriftApp Web 6.26.3",
     ],
 )
 
@@ -94,9 +94,12 @@ pdf.table(
     ["Grandeur", "Valeur"],
     [
         ["Réduction nominale", "2230:1 (≈ 50 × 44,6, établie par essais)"],
-        ["Facteur de correction des pas", "1,08849, soit une réduction effective ≈ 2 427:1"],
-        ["Pas par tour de coupole", "1 941 866"],
-        ["Résolution d'un pas", "≈ 0,000185° (≈ 0,67″)"],
+        [
+            "Facteur de correction des pas",
+            "1,0546 (mesuré le 24/10/2026), soit une réduction effective ≈ 2 352:1",
+        ],
+        ["Pas par tour de coupole", "1 881 406 (≈ 5 226 pas par degré)"],
+        ["Résolution d'un pas", "≈ 0,00019° (≈ 0,69″)"],
     ],
     col_widths=[60, 110],
 )
@@ -105,12 +108,12 @@ pdf.h2("3.3 Vitesses")
 pdf.table(
     ["Usage", "Délai", "Vitesse", "Tour complet"],
     [
-        ["Suivi et petits mouvements (< 3°)", "260 µs/pas", "≈ 43°/min", "≈ 8,4 min"],
+        ["Suivi et petits mouvements (< 3°)", "260 µs/pas", "≈ 44°/min", "≈ 8,2 min"],
         [
             "Grands mouvements (≥ 3°), fast_delay_us = 120 sur le Pi",
             "120 µs/pas",
-            "≈ 90°/min",
-            "≈ 4 min",
+            "≈ 96°/min",
+            "≈ 3,8 min",
         ],
         ["Limite mesurée le 27/09", "tenue à 104 µs, décroche à 100 µs", "", ""],
         ["Boîtier constructeur (référence)", "", "90°/min", ""],
@@ -122,11 +125,38 @@ pdf.bold_bullet(
     "accélération constante sur ≈ 2 s (ramp_time_s), pour tous les mouvements. STOP doux en "
     "vitesse rapide, immédiat à 260 µs et au-delà. Version 6.19.1, validée sur le terrain.",
 )
-pdf.warning_box(
-    "Défaut ouvert : les grands déplacements rapides dépassent toujours la cible de 2 à 3,4 %, "
-    "dans le sens du mouvement. Rapport degrés-pas / degrés-encodeur ≈ 1,022. On ne sait pas "
-    "encore lequel des deux facteurs est faux : mesure sur tour complet livrée en 6.25.1, rapport "
-    "de Serge attendu."
+pdf.body(
+    "Les vitesses sont des vitesses réelles, calculées avec le facteur de pas mesuré le 24/10/2026. "
+    "Avec l'ancien facteur, elles étaient sous-estimées d'environ 3 %."
+)
+
+pdf.h2("3.4 Échelles mesurées sur tour complet (24/10/2026)")
+pdf.body(
+    "Les grands déplacements dépassaient la cible de 2 à 3,4 %. Mesure de référence : "
+    "4 tours de 385° franchissant deux fois le microswitch 45° (360° réels entre les deux "
+    "passages), dans les deux sens et aux deux vitesses (mesure_tour_complet.py)."
+)
+pdf.table(
+    ["Tour", "Encodeur", "Pas"],
+    [
+        ["+ 260 µs", "−0,69 %", "+2,74 %"],
+        ["− 260 µs", "−1,03 %", "+3,81 %"],
+        ["+ 120 µs", "−0,70 %", "+2,65 %"],
+        ["− 120 µs", "−1,05 %", "+3,66 %"],
+    ],
+    col_widths=[50, 60, 60],
+)
+pdf.bullet("Les deux échelles étaient fausses : pas +3,2 % en moyenne, encodeur −0,9 %.")
+pdf.bullet("La vitesse ne joue pas (écarts < 0,15 % entre 260 et 120 µs).")
+pdf.bullet(
+    "Le sens joue, de façon reproductible : environ 1 % sur les pas et 0,35 % sur l'encodeur. "
+    "Jeu mécanique exclu. Hypothèse à vérifier : transmission par galet sur la couronne."
+)
+pdf.success_box(
+    "Corrigé en 6.26.3 avec les facteurs moyens : steps_correction_factor 1,08849 → 1,0546 "
+    "(config.json du Pi), CALIBRATION_FACTOR 0,010851 → 0,010947 (ems22d_calibrated.py). "
+    "Résidu attendu : ±0,5 % selon le sens sur les pas, ±0,17 % sur l'encodeur. "
+    "Des facteurs par sens restent possibles si ce résidu gêne."
 )
 
 # 4. Mesure de position
@@ -138,15 +168,15 @@ pdf.table(
         ["Type", "Magnétique, 10 bits (1 024 points/tour), SPI bus 0 device 0, 1 MHz"],
         ["Lecture", "50 Hz par le démon ems22d_calibrated.py → /dev/shm/ems22_position.json"],
         ["Montage", "Roue de 50 mm roulant sur la couronne de 2 303 mm"],
-        ["Facteur calibré", "0,010851 : un tour de roue = 3,91° de coupole"],
-        ["Résolution", "≈ 94 400 points par tour de coupole, soit ≈ 0,0038° par point"],
+        ["Facteur calibré", "0,010947 (mesuré le 24/10/2026) : un tour de roue = 3,94° de coupole"],
+        ["Résolution", "≈ 93 500 points par tour de coupole, soit ≈ 0,0039° par point"],
     ],
     col_widths=[40, 130],
 )
 pdf.warning_box(
     "Incohérence dans les données : le rapport géométrique 50/2303 donnerait un facteur de 0,0217. "
     "Le facteur calibré en vaut à peu près la moitié. Soit une cote mécanique est fausse, soit il "
-    "existe un renvoi non documenté. À rapprocher du défaut de 2,2 % (§ 3.3)."
+    "existe un renvoi non documenté."
 )
 pdf.h2("4.2 Microswitch de recalage")
 pdf.bullet("SS-5GL placé à 45°, GPIO 27 avec pull-up, lu par le démon de l'encodeur.")
@@ -260,7 +290,7 @@ pdf.bullet(
 )
 pdf.h3("Mise à jour")
 pdf.bold_bullet(
-    "OTA :", "depuis l'UI, sur comparaison de la version de pyproject.toml (actuelle : 6.26.2)."
+    "OTA :", "depuis l'UI, sur comparaison de la version de pyproject.toml (actuelle : 6.26.3)."
 )
 
 # 8. Lacunes
@@ -268,7 +298,7 @@ pdf.h1("8. Données manquantes ou contradictoires")
 pdf.bullet("Modèle de la monture et du tube.")
 pdf.bullet("Dimensions réelles de la coupole (hauteur, diamètre intérieur exact).")
 pdf.bullet("Facteur 2 inexpliqué sur le facteur de l'encodeur (§ 4.1).")
-pdf.bullet("Origine du rapport 1,022 entre pas et encodeur (§ 3.3).")
+pdf.bullet("Origine de l'effet du sens de rotation sur les échelles (§ 3.4).")
 
 pdf.output(OUT)
 print(OUT)

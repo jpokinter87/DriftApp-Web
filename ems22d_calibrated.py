@@ -56,7 +56,9 @@ SWITCH_CALIB_ANGLE = 45  # Angle auquel se recale la couronne
 SWITCH_DEBOUNCE_SEC = 2.0  # Délai minimum entre calibrations (anti-rebond)
 
 COUNTS_PER_REV = 1024
-CALIBRATION_FACTOR = 0.01077 / 0.9925  # ✅ CORRIGÉ : = 0.010851 (était 0.031354)
+# Mesuré sur 4 tours complets entre deux passages du microswitch (24/10/2026,
+# mesure_tour_complet.py) : l'ancienne valeur 0.010851 sous-comptait de 0,87 %.
+CALIBRATION_FACTOR = 0.010947
 ROTATION_SIGN = -1
 
 MAX_CONSECUTIVE_SPI_ERRORS = 5
