@@ -65,6 +65,20 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   `full` (ouverture au crépuscule) n'a jamais été validé.
 - **Prochaine étape** : une nuit en `full` quand Serge le voudra.
 
+### Journal de nuit dans `logs/nuits/`
+- **Ouvert le** 24/10/2026, livré en 6.26.12 (le journal pluie/décisions/cycles cimier
+  s'écrit dans `logs/nuits/AAAA-MM-JJ.jsonl`, donc dans le zip de `logs/` ; au démarrage,
+  `cimier_service` y déplace les anciens `data/nights/*.jsonl`, sans écraser).
+- **État** : migration essayée en dev (7 journaux déplacés, page Session les voit,
+  second passage sans effet). JP demande à Serge de mettre à jour en 6.26.12 le soir du
+  24/10, avant de démarrer la session.
+- **Prochaine étape** : dans le zip de la nuit du 24/10, vérifier : `update.log` montre
+  6.26.12 ; `logs/nuits/` présent avec la nuit du 24 et les nuits antérieures déplacées ;
+  la synthèse de `chronologie_nuit.py` n'affiche plus « Pas de journal de nuit ». Si
+  `logs/nuits/` manque : chercher `night_journal_event=move_failed` dans
+  `logs/cimier/cimier_service.log` (droits sur `logs/` ?).
+- **Réf.** : spec `docs/superpowers/specs/2026-10-24-journal-nuit-dans-logs.md`, commit 2261805.
+
 ## En attente d'un événement
 
 ### Remplacement du capteur de pluie par un Kemo M152K
