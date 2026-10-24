@@ -19,6 +19,13 @@ import pytest
 # settings Django ouvrent leur log (et purgent les anciens) dès l'import.
 os.environ["DRIFTAPP_LOGS_DIR"] = tempfile.mkdtemp(prefix="driftapp_test_logs_")
 
+# Les tests n'interrogent pas les serveurs IERS (pannes réseau = CI rouge, et
+# 12 min de délais d'attente) : ils calculent avec la table embarquée.
+from astropy.utils import iers  # noqa: E402
+
+iers.conf.auto_download = False
+iers.conf.auto_max_age = None
+
 
 # =============================================================================
 # FIXTURES CONFIGURATION
