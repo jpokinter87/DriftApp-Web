@@ -2,9 +2,10 @@
 name: analyse-nuit
 description: >-
   Analyse une nuit terrain du système DriftApp Web (coupole Observatoire Ubik) à
-  partir du zip de logs envoyé par Serge et de son récit : range le zip dans
-  logs/terrain/, construit la chronologie fusionnée (moteur, cimier, Django,
-  encodeur, ASIAIR, mises à jour, journal de nuit) avec
+  partir du zip de logs envoyé par Serge, de ses captures d'écran WhatsApp et de
+  son récit : range le zip et les captures dans logs/terrain/, construit la
+  chronologie fusionnée (moteur, cimier, Django, encodeur, ASIAIR, mises à jour,
+  journal de nuit) avec
   scripts/diagnostics/chronologie_nuit.py, confronte au récit, trie cause
   logicielle / terrain / monture, puis rédige le compte rendu au format WhatsApp.
   À utiliser dès qu'un retour de nuit arrive : « voici les logs de la nuit »,
@@ -18,11 +19,25 @@ La machine de dev est à 800 km du Pi : on ne lance **rien** sur le Pi, on ne li
 que Serge a envoyé. S'il faut une commande ou une mesure sur place, passer par
 `/diag-terrain`.
 
-## 1. Ranger le zip
+## 1. Ranger le zip et les captures
 
 Le zip va dans `logs/terrain/AAAA-MM-JJ.zip` (date du **soir** de la nuit ; dossier
 ignoré par git). S'il arrive ailleurs (`@logs.zip` à la racine, `~/Downloads/logs (N).zip`),
-le copier là sous ce nom, sans l'extraire. Les captures d'écran restent où elles sont.
+le copier là sous ce nom, sans l'extraire.
+
+Les captures d'écran de Serge arrivent par WhatsApp, enregistrées dans
+`~/Téléchargements` ou `~/Downloads` sous le nom `WhatsApp Image AAAA-MM-JJ at HH.MM.SS.jpeg`
+(parfois suivi de ` (1)`). Retenir celles reçues entre le soir de la nuit à midi et la fin
+du lendemain :
+
+```bash
+ls ~/Téléchargements/"WhatsApp Image 2026-10-24 at "* ~/Téléchargements/"WhatsApp Image 2026-10-25 at "* \
+   ~/Downloads/"WhatsApp Image 2026-10-24 at "* ~/Downloads/"WhatsApp Image 2026-10-25 at "* 2>/dev/null
+```
+
+Écarter celles du soir reçues avant 12.00, montrer la liste à JP, puis les **copier**
+(jamais déplacer) dans `logs/terrain/AAAA-MM-JJ/`, à côté du zip, sous leur nom d'origine.
+Si JP a déjà collé des captures dans la conversation, les lire sur place : rien à ranger.
 
 ## 2. Chronologie
 
@@ -47,6 +62,12 @@ python3 scripts/diagnostics/chronologie_nuit.py logs/terrain/2026-10-23.zip > <s
 - Mettre en regard **chaque affirmation de Serge** (heure, comportement observé) avec ce
   que disent les logs, à la minute près. Les heures du Pi et de WhatsApp sont toutes deux
   en heure locale.
+- Regarder **chaque capture** de `logs/terrain/AAAA-MM-JJ/` (outil Read). L'heure du nom
+  de fichier est celle de l'**envoi**, pas de la capture : dater l'image par l'heure
+  qu'elle affiche (horloge du dashboard, de l'ASIAIR, du bureau du Pi). Sans heure
+  visible, le dire et ne la situer que par son contenu, jamais par l'heure d'envoi.
+  Confronter ce qu'elle montre (position, état du cimier, message d'erreur, côté du pied)
+  aux logs de ce moment.
 - Vérifier la **version réellement en service** : une mise à jour dans la nuit, ou un
   service non redémarré, explique souvent un comportement « ancien ».
 - Pour chaque anomalie, trancher entre :
