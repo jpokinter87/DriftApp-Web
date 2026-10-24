@@ -8,7 +8,7 @@ Guide pour Claude Code (claude.ai/code) sur le projet DriftApp Web.
 
 **Materiel**: Raspberry Pi 4/5, moteur pas-a-pas NEMA (200 pas/rev), driver DM860T 36 V (4 microsteps), encodeur magnetique EMS22A (10-bit), reduction 2230:1.
 
-**Version actuelle**: 6.26.1 (Octobre 2026)
+**Version actuelle** : celle de `pyproject.toml` (voir « Versionnement » ; historique dans `CHANGELOG.md`)
 
 ---
 
