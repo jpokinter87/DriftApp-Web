@@ -74,7 +74,7 @@ exception légitime : `127.0.0.1` dans des tests/fixtures (déjà exclus du scan
 
 **Bump systématique** à chaque push : patch par défaut (ex. `6.4.0` → `6.4.1`),
 mineur pour un milestone complet. Sans bump, la MAJ OTA n'est jamais proposée sur
-le terrain. Ajouter la ligne correspondante au changelog de `CLAUDE.md`.
+le terrain. Ajouter la ligne correspondante en tête du tableau de `CHANGELOG.md`.
 
 ## Étape 5 — Message de commit
 
