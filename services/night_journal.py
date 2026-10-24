@@ -27,9 +27,14 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.utils.log_paths import logs_root
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_NIGHTS_DIR = Path(__file__).resolve().parents[1] / "data" / "nights"
+# Dans logs/ : le journal part avec le zip de logs envoyé après une nuit, sans
+# dossier à ajouter à la main (v6.26.12 ; avant, data/nights/).
+DEFAULT_NIGHTS_DIR = logs_root() / "nuits"
+OLD_NIGHTS_DIR = Path(__file__).resolve().parents[1] / "data" / "nights"
 
 # Heure locale à laquelle une nuit de journal commence.
 NIGHT_BOUNDARY_HOUR = 12
@@ -139,3 +144,39 @@ def purge_old(
         except OSError as exc:
             logger.warning("night_journal_event=purge_failed night=%s exc=%s", key, exc)
     return removed
+
+
+def ranger_ancien_journal(
+    ancien: Optional[Path] = None,
+    nouveau: Optional[Path] = None,
+) -> int:
+    """Déplace les journaux de l'ancien data/nights/ vers logs/nuits/.
+
+    Un fichier déjà présent à destination n'est pas écrasé : l'ancien reste en
+    place. Les erreurs sont avalées : ranger ne doit jamais empêcher le service
+    cimier de démarrer. Retourne le nombre de journaux déplacés.
+    """
+    ancien = Path(ancien) if ancien is not None else OLD_NIGHTS_DIR
+    nouveau = _resolve_dir(nouveau)
+    deplaces = 0
+    try:
+        fichiers = sorted(ancien.glob("*.jsonl"))
+        if fichiers:
+            nouveau.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return 0
+    for fichier in fichiers:
+        cible = nouveau / fichier.name
+        if cible.exists():
+            continue
+        try:
+            fichier.replace(cible)
+            deplaces += 1
+        except OSError as exc:
+            logger.warning("night_journal_event=move_failed night=%s exc=%s", fichier.stem, exc)
+    try:
+        (ancien / ".gitkeep").unlink(missing_ok=True)
+        ancien.rmdir()  # seulement s'il est vide
+    except OSError:
+        pass
+    return deplaces

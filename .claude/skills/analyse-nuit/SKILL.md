@@ -58,8 +58,9 @@ python3 scripts/diagnostics/chronologie_nuit.py logs/terrain/2026-10-23.zip > <s
 - Avant de conclure, relire la section « À valider sur le terrain » de
   `docs/chantiers.md` : elle dit ce que cette nuit pouvait valider, et quelle ligne de log
   le prouve.
-- S'il manque une source (journal de nuit `data/nights/AAAA-MM-JJ.jsonl`, `logs/asiair/`),
-  la demander à Serge plutôt que de supposer.
+- S'il manque une source (journal de nuit `logs/nuits/AAAA-MM-JJ.jsonl`, `logs/asiair/`),
+  la demander à Serge plutôt que de supposer. Avant la 6.26.12, le journal de nuit était
+  dans `data/nights/`, hors du zip.
 
 ## 4. Restitution
 

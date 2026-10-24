@@ -360,7 +360,7 @@ d'un Shelly dédié (.87) à la cadence `watch_interval_s`. Ce qu'on observe :
 ```bash
 python3 -c "import json;print(json.load(open('/dev/shm/cimier_status.json'))['rain'])"
 grep -E "rain_read|rain_transition|rain_emergency" logs/cimier/cimier_service.log
-tail data/nights/$(date +%Y-%m-%d).jsonl     # journal de nuit (dé-tracké)
+tail logs/nuits/$(date +%Y-%m-%d).jsonl      # journal de nuit (dans le zip de logs/)
 ```
 
 La protection doit être **armée** (case « Protection pluie » du dashboard, ou

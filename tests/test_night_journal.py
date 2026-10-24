@@ -154,3 +154,36 @@ class TestEventShapes:
         raw = (tmp_path / "2026-08-14.jsonl").read_text(encoding="utf-8")
         assert raw.endswith("\n")
         json.loads(raw.strip())
+
+
+class TestDossier:
+    def test_default_dir_is_under_logs(self, monkeypatch):
+        """Le journal part avec le zip de logs/ : plus de dossier à ajouter à la main."""
+        from core.utils.log_paths import logs_root
+
+        monkeypatch.undo()  # retire la redirection de conftest
+        assert night_journal.DEFAULT_NIGHTS_DIR == logs_root() / "nuits"
+
+    def test_ranger_ancien_journal_moves_old_nights(self, tmp_path):
+        ancien, nouveau = tmp_path / "data_nights", tmp_path / "nuits"
+        ancien.mkdir()
+        (ancien / "2026-10-20.jsonl").write_text('{"event": "rain"}\n', encoding="utf-8")
+        (ancien / ".gitkeep").write_text("", encoding="utf-8")
+
+        assert night_journal.ranger_ancien_journal(ancien, nouveau) == 1
+        assert night_journal.read_night("2026-10-20", nights_dir=nouveau) == [{"event": "rain"}]
+        assert not ancien.exists()
+
+    def test_ranger_ancien_journal_never_overwrites(self, tmp_path):
+        ancien, nouveau = tmp_path / "data_nights", tmp_path / "nuits"
+        ancien.mkdir()
+        nouveau.mkdir()
+        (ancien / "2026-10-20.jsonl").write_text('{"event": "old"}\n', encoding="utf-8")
+        (nouveau / "2026-10-20.jsonl").write_text('{"event": "new"}\n', encoding="utf-8")
+
+        assert night_journal.ranger_ancien_journal(ancien, nouveau) == 0
+        assert night_journal.read_night("2026-10-20", nights_dir=nouveau) == [{"event": "new"}]
+        assert (ancien / "2026-10-20.jsonl").exists()
+
+    def test_ranger_ancien_journal_without_old_dir(self, tmp_path):
+        assert night_journal.ranger_ancien_journal(tmp_path / "absent", tmp_path / "nuits") == 0

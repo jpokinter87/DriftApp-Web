@@ -183,7 +183,7 @@ def _synthese(evts: list[Evenement], sources: Counter) -> list[str]:
     ]
     lignes += [f"  {n} × {niv} [{src}] {msg}" for (niv, src, msg), n in alertes.most_common(25)]
     if "nuit" not in sources:
-        lignes.append("⚠ Pas de journal de nuit (data/nights/AAAA-MM-JJ.jsonl) dans les logs.")
+        lignes.append("⚠ Pas de journal de nuit (logs/nuits/AAAA-MM-JJ.jsonl) dans les logs.")
     return lignes
 
 

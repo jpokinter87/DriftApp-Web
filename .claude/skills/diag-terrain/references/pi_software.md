@@ -100,7 +100,7 @@ les fichiers d'avant la mise à jour y ont été déplacés au premier démarrag
 Sur une version antérieure, chercher `logs/cimier_service.log` à la racine :
 ```bash
 tail -n 60 logs/cimier/cimier_service.log
-tail data/nights/$(date +%Y-%m-%d).jsonl    # journal de nuit (pluie, fermetures)
+tail logs/nuits/$(date +%Y-%m-%d).jsonl     # journal de nuit (pluie, fermetures)
 ```
 Joignabilité des Shelly V3 (hosts lus en config) :
 ```bash

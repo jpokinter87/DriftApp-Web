@@ -196,7 +196,7 @@ def _isolate_night_journal(monkeypatch, tmp_path):
     """Redirige le journal de nuit vers ``tmp_path`` pour toute la suite.
 
     Sans cela, tout test qui déclenche un cycle cimier ou une veille pluie
-    écrit dans le ``data/nights/`` du dépôt : la trace d'une vraie nuit
+    écrit dans le ``logs/nuits/`` du dépôt : la trace d'une vraie nuit
     d'observation se retrouve mêlée à des centaines de lignes de test.
     """
     try:

@@ -1444,6 +1444,7 @@ def main() -> int:
     from core.config.config_status_writer import write_config_status
 
     write_config_status(ensure_config_ready(force=True))
+    night_journal.ranger_ancien_journal()
     night_journal.purge_old()
 
     # Niveau DEBUG si verbose_logging (ou dev mode) : sans ça, les lignes
