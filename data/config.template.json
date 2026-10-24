@@ -162,8 +162,8 @@
     }
   },
   "boot_calibration": {
-    "_comment": "v6.6.0 — routine calibration au boot du motor_service simplifiée : sweep court autour de la position courante (-fallback_sweep_deg puis +2×fallback_sweep_deg). fallback_sweep_deg=7° → séquence -7°/+14° ≈ 10s/20s à 40°/min single-speed. v6.16 — switch_overshoot_deg : poursuite de rotation après détection du microswitch (même sens que la branche en cours) pour ne pas laisser le ménisque reposer en continu sur la lamelle du rupteur (déformation durable constatée terrain). Ne pas dépasser 0,5° (contrainte alignement des contacts de charge batterie).",
-    "fallback_sweep_deg": 7.0,
+    "_comment": "v6.6.0 — routine calibration au boot du motor_service simplifiée : sweep court autour de la position courante (-fallback_sweep_deg puis +2×fallback_sweep_deg). fallback_sweep_deg=4° (6.26.5, 7° auparavant) → séquence -4°/+8° : switch toujours trouvé à moins de 1,5° du parking (logs 15-21/10), dérive encodeur < 1°/tour depuis 6.26.3. v6.16 — switch_overshoot_deg : poursuite de rotation après détection du microswitch (même sens que la branche en cours) pour ne pas laisser le ménisque reposer en continu sur la lamelle du rupteur (déformation durable constatée terrain). Ne pas dépasser 0,5° (contrainte alignement des contacts de charge batterie).",
+    "fallback_sweep_deg": 4.0,
     "timeout_sec": 180.0,
     "poll_interval_sec": 0.1,
     "switch_overshoot_deg": 0.5

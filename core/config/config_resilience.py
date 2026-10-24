@@ -383,7 +383,7 @@ HELP_REGISTRY: dict[str, str] = {
     # --- boot_calibration ---
     "boot_calibration.fallback_sweep_deg": (
         "Amplitude (degrés) du balayage de calibration au boot autour de la position "
-        "courante (séquence -sweep puis +2×sweep). Ex. 7."
+        "courante (séquence -sweep puis +2×sweep). Ex. 4."
     ),
     "boot_calibration.timeout_sec": (
         "Délai maximal (secondes) de la routine de calibration au boot avant passage "
