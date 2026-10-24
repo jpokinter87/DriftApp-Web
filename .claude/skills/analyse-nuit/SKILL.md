@@ -55,9 +55,9 @@ python3 scripts/diagnostics/chronologie_nuit.py logs/terrain/2026-10-23.zip > <s
   - **terrain/matériel** : Shelly injoignable, microswitch, encodeur, alimentation…
     → protocole via `/diag-terrain` ;
   - **monture/ASIAIR** : GOTO manuel, EQMod, réglage « Flip Timing after Meridian ».
-- Avant de conclure, relire les notes de mémoire `project_*` récentes sur le sujet
-  (bascule, cimier, pluie, dépassement) : elles disent ce qui est « non testé terrain »
-  et donc à valider cette nuit-là.
+- Avant de conclure, relire la section « À valider sur le terrain » de
+  `docs/chantiers.md` : elle dit ce que cette nuit pouvait valider, et quelle ligne de log
+  le prouve.
 - S'il manque une source (journal de nuit `data/nights/AAAA-MM-JJ.jsonl`, `logs/asiair/`),
   la demander à Serge plutôt que de supposer.
 
@@ -68,5 +68,5 @@ python3 scripts/diagnostics/chronologie_nuit.py logs/terrain/2026-10-23.zip > <s
 2. Si JP le demande, un compte rendu pour Serge au **format WhatsApp** : un `.txt` dans
    le scratchpad, sans tableau, avec du *gras* et des puces, des phrases courtes et sans
    jargon de code. Un PDF (`/pdf-report`) seulement pour un document important.
-3. Mettre à jour la note de mémoire du chantier concerné (validé terrain, ou nouvel
-   incident) et proposer les corrections, sans les lancer sans accord.
+3. Mettre à jour `docs/chantiers.md` via `/chantiers` (entrée validée et retirée, ou
+   nouvel incident noté) et proposer les corrections, sans les lancer sans accord.

@@ -1,0 +1,109 @@
+# Chantiers DriftApp
+
+Registre unique des chantiers ouverts, tenu par le skill `/chantiers`. Un chantier fini
+sort du registre : son histoire est dans `CHANGELOG.md`, les specs et plans
+(`docs/superpowers/`) et git. Dates au format JJ/MM/AAAA, versions = `pyproject.toml`.
+
+## À valider sur le terrain
+
+Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement).
+
+### Bascule de la coupole sur le côté du pied ASIAIR
+- **Ouvert le** 21/10/2026. Livré en 6.24.0 (monture en retard : la coupole attend le
+  feu vert de l'ASIAIR) et en 6.26.0 (monture retournée en avance : cible = abaque au
+  méridien DriftApp + 30 s, tenue jusqu'au transit).
+- **État** : la règle 6.24 a fonctionné le 23/10 à 23:17 (attente de 72 s, arrivée en
+  même temps que la monture). Le chemin 6.26 « monture en avance » n'a jamais été
+  exercé (aucune ligne `dome_flip_early_*`).
+- **Prochaine étape** : à chaque nuit avec retournement, chercher `dome_flip_*` dans la
+  chronologie (`/analyse-nuit`). Le méridien DriftApp tombe environ 55 s avant celui de
+  l'ASIAIR.
+- **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
+
+### Surveillance ASIAIR permanente (`asiair_monitor`)
+- **Ouvert le** 23/10/2026, livré en 6.25.0.
+- **État** : l'OTA 6.24.2 → 6.25 a été jouée par l'ancien script, le service était
+  « absent » le 23/10. Deux connexions simultanées au port 4400 (watcher du suivi et
+  service) n'ont posé aucun problème le 23/10.
+- **Prochaine étape** : vérifier la présence de `logs/asiair/` dans le prochain zip de Serge.
+  Évolution possible : faire lire au watcher l'état publié par le service.
+- **Réf.** : spec `2026-10-23-surveillance-asiair-permanente.md`.
+
+### Synchronisation des dépendances pendant l'OTA (`uv sync`)
+- **Ouvert le** 23/10/2026, corrigé en 6.26.1 (`uv` cherché dans `~slenk/.local/bin`).
+- **Prochaine étape** : la correction n'agit qu'à la mise à jour suivante (c'est l'ancien
+  script qui installe la 6.26.1). Vérifier dans `update.log` que l'étape `uv sync` a tourné.
+
+### Calibration au démarrage et au passage manuel
+- **Ouvert le** 24/10/2026. 6.26.4 : le premier passage manuel sur le switch 45° vaut
+  calibration. 6.26.5 : le balayage `boot_calibration.fallback_sweep_deg` passe de 7 à 4
+  dans le gabarit.
+- **Prochaine étape** : Serge saisit 4 sur la page Configuration (le Pi est à 8). Vérifier
+  `boot_calibration | status=ok` dans les logs.
+
+### Fermeture du cimier : relance et fin de nuit
+- **Ouvert le** 11/10/2026. 6.21.0 : relance de la fermeture automatique
+  (`close_retry_interval_minutes`). 6.21.2 : fermeture de fin de nuit différée jusqu'à
+  l'arrivée à 45°, droits du fichier de commande cimier. 6.24.1 : une seule fermeture par
+  matin, pas de rejeu de la commande au démarrage.
+- **Prochaine étape** : chercher `automation_close_*` et `cycle_end` dans les nuits à
+  venir. Limite connue : la relance est oubliée si `cimier_service` redémarre.
+
+### Revue critique du 15/10 (6.21.3 → 6.21.7)
+- **État** : tout est livré : suivi en UTC (changement d'heure du 25/10), STOP pendant un
+  GOTO, offset encodeur borné à 5°, GOTO raté visible, resynchronisation série et
+  accélération bornée (firmware, flash requis).
+- **Prochaine étape** : confirmer avec JP que le flash du Pico a bien été fait (prévu le 16/10).
+  Première nuit après le **25/10** : vérifier que les corrections continuent après 3 h → 2 h.
+
+### Automatisation du cimier (modes semi et full)
+- **État** : code complet depuis la 6.3 (scheduler astropy, modes `manual` / `semi` /
+  `full`). Serge tourne en `semi` : la fermeture de fin de nuit a déjà fonctionné. Le mode
+  `full` (ouverture au crépuscule) n'a jamais été validé.
+- **Prochaine étape** : une nuit en `full` quand Serge le voudra.
+
+## En attente d'un événement
+
+### Remplacement du capteur de pluie par un Kemo M152K
+- **Ouvert le** 24/10/2026. L'actuel MH-RD s'oxyde, rate la pluie fine et a vu
+  « wet » toute la soirée claire du 23/10 (3 fermetures à tort). Le M152K a été commandé
+  par Serge ; il est capacitif et chauffé, et se branche en contact sur l'entrée du
+  Shelly Plus Uni sans changer de code (contact fermé = pluie, `invert=false`).
+- **Attente** : la pose du capteur par Serge. **Ne rien préparer avant** (décision JP) : le
+  MH-RD a besoin du chauffage 6.26.2 (allumé en permanence) d'ici là.
+- **Ensuite** : retirer le chauffage du Shelly .78 du programme (config
+  `rain_heater_switch` et keepalive, pastille du dashboard, relais id=3 du simulateur,
+  `config_resilience`, tests), puis vérifier l'alimentation 12 V au toit et la fiabilité
+  de détection sous vraie pluie avant de clore.
+
+## Plus tard
+
+- **Angle horaire décalé de +82 s** (`convertir_j2000_vers_jnow` passe par CIRS, alors que
+  l'angle horaire attend TETE) : le méridien affiché est environ 82 s trop tôt et
+  l'azimut décalé de 0,2 à 0,35°. Corriger retarde d'autant la bascule de la coupole ;
+  la règle 6.26 en était le préalable. Décision JP en attente.
+- **Artefact de l'abaque vers 40° de hauteur** (passage inférieur, objets proches du pôle) :
+  saut d'environ 17° entre les lignes 30° et 45°. Tout correctif doit distinguer passage
+  inférieur et passage supérieur (le saut nord au-dessus de 53° est voulu).
+- **Cimier, résidus de la revue du 11/06** : erreur de preflight écrasée par `idle` au tick
+  suivant ; factoriser le HTTP Shelly (3 copies) puis ajouter des relances ; lecture des
+  deux butées non atomique ; mineurs (modales countdown dupliquées, `sleep` bloquant dans
+  `ParkingSessionView`, `boot_poll_timeout_s` legacy, XSS latent `renderConfigDiffPanel`).
+- **Cimier « INCONNU » dans l'UI après un redémarrage du service**, jusqu'au premier cycle
+  (le scheduler et la pluie relisent déjà les butées) : rafraîchir les butées au repos.
+- **Traçabilité des commandes Django** (incident GOTO 45° du 24/04) : middleware d'audit
+  des POST `/api/hardware/*` et `/api/tracking/*`, logs Django doublés vers journald.
+- **Calibration testable en dev** : le simulateur saute la routine (`status=simulated`) ;
+  ajouter un scénario réaliste (`running` puis `ok` / `degraded`).
+- **Filtre anti-saut de 30° d'`ems22d`** pouvant se figer (revue du 15/10) : jamais vu sur le
+  terrain, décision JP en attente.
+
+## Écartés (ne pas re-proposer)
+
+- Mode dégradé sans encodeur (JP, 21/10/2026).
+- Fenêtre fixe de ±10 min autour du méridien pour interroger l'ASIAIR (21/10) : la règle
+  sur le côté du pied la couvre déjà.
+- Modèle géométrique de la coupole façon NINA et remesure de l'abaque (17/10) : les
+  abaques sont bonnes, seul le moment du retournement posait problème.
+- Inclinomètre sur l'axe AD (retiré en 6.26.1, remplacé par le côté du pied ASIAIR).
+- Facteurs d'échelle séparés par sens de rotation (24/10) : la correction finale suffit.
