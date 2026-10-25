@@ -1,0 +1,630 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-25T16:32:36+01:00",
+  "title": "Design System: DriftApp",
+  "extensions": {
+    "colorMeta": {
+      "night-hearth": {
+        "role": "neutral",
+        "displayName": "Foyer de nuit",
+        "canonical": "#1a1612",
+        "oklch": "oklch(20.3% 0.010 67.2)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#282420",
+          "#45413e",
+          "#64615d",
+          "#84827f",
+          "#a6a5a3",
+          "#cac9c8",
+          "#efeeee"
+        ]
+      },
+      "walnut-panel": {
+        "role": "neutral",
+        "displayName": "Panneau de noyer",
+        "canonical": "#241e18",
+        "oklch": "oklch(24.0% 0.014 67.0)",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2a241e",
+          "#46413b",
+          "#65605c",
+          "#85817e",
+          "#a7a4a2",
+          "#cac9c7",
+          "#efeeee"
+        ]
+      },
+      "smoked-oak-input": {
+        "role": "neutral",
+        "displayName": "Chêne fumé",
+        "canonical": "#2d261e",
+        "oklch": "oklch(27.4% 0.018 70.7)",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2a241c",
+          "#474139",
+          "#66605a",
+          "#86817c",
+          "#a8a4a0",
+          "#cbc9c6",
+          "#efeeed"
+        ]
+      },
+      "oak-surface": {
+        "role": "neutral",
+        "displayName": "Chêne",
+        "canonical": "#342c22",
+        "oklch": "oklch(29.9% 0.021 73.1)",
+        "tonalRamp": [
+          "#0e0b07",
+          "#2b241b",
+          "#484137",
+          "#676058",
+          "#87817b",
+          "#a8a49f",
+          "#cbc9c6",
+          "#efeeed"
+        ]
+      },
+      "oak-hover": {
+        "role": "neutral",
+        "displayName": "Chêne clair",
+        "canonical": "#3d3428",
+        "oklch": "oklch(33.1% 0.024 74.8)",
+        "tonalRamp": [
+          "#0e0b07",
+          "#2b241b",
+          "#494035",
+          "#676056",
+          "#878179",
+          "#a9a49e",
+          "#cbc9c5",
+          "#efeeed"
+        ]
+      },
+      "bronze-seam": {
+        "role": "neutral",
+        "displayName": "Joint de bronze",
+        "canonical": "#4a3d2e",
+        "oklch": "oklch(36.9% 0.030 70.7)",
+        "tonalRamp": [
+          "#0f0a06",
+          "#2c2319",
+          "#4c3f31",
+          "#6a5f52",
+          "#8a8176",
+          "#aba49c",
+          "#ccc8c4",
+          "#efeeed"
+        ]
+      },
+      "bronze-seam-light": {
+        "role": "neutral",
+        "displayName": "Joint de bronze clair",
+        "canonical": "#5a4d3e",
+        "oklch": "oklch(42.9% 0.029 70.9)",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2b241b",
+          "#4b4033",
+          "#6b5f51",
+          "#8a8175",
+          "#aba49c",
+          "#cdc8c3",
+          "#efeeed"
+        ]
+      },
+      "parchment-text": {
+        "role": "neutral",
+        "displayName": "Parchemin",
+        "canonical": "#e8e4df",
+        "oklch": "oklch(92.1% 0.008 73.7)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262524",
+          "#434240",
+          "#63615f",
+          "#84827f",
+          "#a7a4a1",
+          "#ccc8c4",
+          "#f0eeeb"
+        ]
+      },
+      "dusk-taupe": {
+        "role": "neutral",
+        "displayName": "Taupe crépuscule",
+        "canonical": "#a09080",
+        "oklch": "oklch(66.3% 0.030 67.3)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#29241f",
+          "#484038",
+          "#6a5f54",
+          "#8e8071",
+          "#b0a295",
+          "#d0c8bf",
+          "#f0eeeb"
+        ]
+      },
+      "ember-ash": {
+        "role": "neutral",
+        "displayName": "Cendre",
+        "canonical": "#706050",
+        "oklch": "oklch(50.0% 0.032 67.0)",
+        "tonalRamp": [
+          "#0e0a07",
+          "#2b241c",
+          "#4b4034",
+          "#6e5e4e",
+          "#8d8073",
+          "#ada39a",
+          "#cec8c2",
+          "#f0eeec"
+        ]
+      },
+      "lantern-amber": {
+        "role": "primary",
+        "displayName": "Ambre de lanterne",
+        "canonical": "#d4a055",
+        "oklch": "oklch(74.0% 0.111 74.6)",
+        "tonalRamp": [
+          "#110a02",
+          "#30220d",
+          "#543d1d",
+          "#7a5b2e",
+          "#a37a3f",
+          "#cd9b52",
+          "#e5c396",
+          "#f7eddf"
+        ]
+      },
+      "lantern-amber-light": {
+        "role": "primary",
+        "displayName": "Ambre de lanterne clair",
+        "canonical": "#e8b870",
+        "oklch": "oklch(81.1% 0.106 76.5)",
+        "tonalRamp": [
+          "#100a03",
+          "#2f2311",
+          "#513e23",
+          "#765c36",
+          "#9d7c4a",
+          "#c79d5f",
+          "#ebc284",
+          "#f9ecda"
+        ]
+      },
+      "lantern-amber-dark": {
+        "role": "primary",
+        "displayName": "Ambre de lanterne sombre",
+        "canonical": "#b08040",
+        "oklch": "oklch(63.5% 0.100 72.1)",
+        "tonalRamp": [
+          "#110902",
+          "#32210c",
+          "#563c1b",
+          "#7d5a2b",
+          "#a6783c",
+          "#c39e6f",
+          "#dcc5aa",
+          "#f4ede5"
+        ]
+      },
+      "beacon-green": {
+        "role": "secondary",
+        "displayName": "Vert balise",
+        "canonical": "#00d26a",
+        "oklch": "oklch(75.6% 0.201 151.5)",
+        "tonalRamp": [
+          "#001004",
+          "#002e12",
+          "#005025",
+          "#007538",
+          "#009c4d",
+          "#00c563",
+          "#81e29c",
+          "#dbf7e1"
+        ]
+      },
+      "beacon-green-dim": {
+        "role": "secondary",
+        "displayName": "Vert balise atténué",
+        "canonical": "#00a855",
+        "oklch": "oklch(64.1% 0.169 151.9)",
+        "tonalRamp": [
+          "#001004",
+          "#002e13",
+          "#005025",
+          "#007539",
+          "#009c4f",
+          "#5ebc7b",
+          "#a4d8b1",
+          "#e4f3e7"
+        ]
+      },
+      "signal-orange": {
+        "role": "secondary",
+        "displayName": "Orange signal",
+        "canonical": "#ffa502",
+        "oklch": "oklch(79.3% 0.171 70.6)",
+        "tonalRamp": [
+          "#140800",
+          "#361f00",
+          "#5d3900",
+          "#865500",
+          "#b37201",
+          "#e19102",
+          "#ffb95e",
+          "#ffead1"
+        ]
+      },
+      "alarm-red": {
+        "role": "secondary",
+        "displayName": "Rouge alarme",
+        "canonical": "#ff4757",
+        "oklch": "oklch(66.9% 0.219 20.9)",
+        "tonalRamp": [
+          "#1b0204",
+          "#460d12",
+          "#761c24",
+          "#aa2c37",
+          "#e03d4b",
+          "#ff6c71",
+          "#ffadab",
+          "#ffe6e5"
+        ]
+      },
+      "alarm-red-dim": {
+        "role": "secondary",
+        "displayName": "Rouge alarme atténué",
+        "canonical": "#cc3a47",
+        "oklch": "oklch(56.9% 0.182 20.4)",
+        "tonalRamp": [
+          "#1b0304",
+          "#460e13",
+          "#751d25",
+          "#a82e39",
+          "#d35057",
+          "#e58686",
+          "#f3b8b6",
+          "#fde9e8"
+        ]
+      },
+      "correction-violet": {
+        "role": "tertiary",
+        "displayName": "Violet correction",
+        "canonical": "#a855f7",
+        "oklch": "oklch(62.7% 0.233 303.9)",
+        "tonalRamp": [
+          "#10041e",
+          "#30144b",
+          "#53277d",
+          "#793bb3",
+          "#a151ed",
+          "#bd86fc",
+          "#d7b9ff",
+          "#f3eaff"
+        ]
+      },
+      "status-info-blue": {
+        "role": "tertiary",
+        "displayName": "Bleu info",
+        "canonical": "#3b82f6",
+        "oklch": "oklch(62.3% 0.188 259.8)",
+        "tonalRamp": [
+          "#020a1e",
+          "#0b234b",
+          "#193f7d",
+          "#285db4",
+          "#397dee",
+          "#70a5fb",
+          "#aacbff",
+          "#e5efff"
+        ]
+      },
+      "sky-navy": {
+        "role": "tertiary",
+        "displayName": "Bleu nuit (boussole)",
+        "canonical": "#1a1a2e",
+        "oklch": "oklch(22.8% 0.038 282.9)",
+        "tonalRamp": [
+          "#0a0a15",
+          "#222336",
+          "#3f4052",
+          "#5f6070",
+          "#80818e",
+          "#a3a4ae",
+          "#c8c8ce",
+          "#eeeef0"
+        ]
+      },
+      "sky-graticule": {
+        "role": "tertiary",
+        "displayName": "Graticule (boussole)",
+        "canonical": "#4a6a8a",
+        "oklch": "oklch(51.3% 0.063 249.1)",
+        "tonalRamp": [
+          "#060c13",
+          "#182634",
+          "#2e445a",
+          "#466483",
+          "#6b85a0",
+          "#94a7bb",
+          "#bfcbd7",
+          "#ebeff3"
+        ]
+      },
+      "sky-star-blue": {
+        "role": "tertiary",
+        "displayName": "Étoile bleue (boussole)",
+        "canonical": "#5a8ab8",
+        "oklch": "oklch(61.8% 0.087 248.4)",
+        "tonalRamp": [
+          "#050c14",
+          "#162736",
+          "#2a445d",
+          "#406587",
+          "#5887b4",
+          "#86a9cc",
+          "#b7cce1",
+          "#e9eff6"
+        ]
+      },
+      "dome-green": {
+        "role": "tertiary",
+        "displayName": "Vert coupole (boussole)",
+        "canonical": "#4ade80",
+        "oklch": "oklch(80.0% 0.182 151.7)",
+        "tonalRamp": [
+          "#010f05",
+          "#082d16",
+          "#154f2a",
+          "#22733f",
+          "#309957",
+          "#3fc16f",
+          "#76e597",
+          "#d9f8e0"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Nom DriftApp dans l'en-tête, dégradé feu."
+      },
+      "headline": {
+        "displayName": "Titre de section",
+        "purpose": "Titres de panneaux en capitales, dégradé feu."
+      },
+      "title": {
+        "displayName": "Valeur de statistique",
+        "purpose": "Grandes valeurs ambre de la page Session."
+      },
+      "body": {
+        "displayName": "Texte courant",
+        "purpose": "Texte lu comme une phrase ; IBM Plex Sans."
+      },
+      "label": {
+        "displayName": "Libellé",
+        "purpose": "Libellés en capitales des cases d'information."
+      },
+      "mono": {
+        "displayName": "Donnée",
+        "purpose": "Journal, IPC, valeurs numériques."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-anchor",
+        "value": "0 2px 8px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.2)",
+        "purpose": "Ancrage de tous les panneaux."
+      },
+      {
+        "name": "glow-amber",
+        "value": "0 0 12px rgba(212,160,85,0.25)",
+        "purpose": "Focus et éléments de marque."
+      },
+      {
+        "name": "panel-astro-hover",
+        "value": "0 0 15px rgba(212,160,85,0.15), 0 0 30px rgba(212,160,85,0.05)",
+        "purpose": "Survol des panneaux constellés."
+      },
+      {
+        "name": "glow-green",
+        "value": "0 0 12px rgba(0,210,106,0.25)",
+        "purpose": "Voyant ok, suivi actif (pulsé 3 s)."
+      },
+      {
+        "name": "glow-red-stop",
+        "value": "0 0 8px rgba(255,71,87,0.4), 0 0 20px rgba(255,71,87,0.15)",
+        "purpose": "STOP et parking, permanent."
+      },
+      {
+        "name": "modal-goto",
+        "value": "0 0 30px rgba(255,165,2,0.3), 0 0 60px rgba(255,165,2,0.1)",
+        "purpose": "Modale GOTO."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-transition",
+        "value": "200ms",
+        "purpose": "Survol et focus des boutons et champs."
+      },
+      {
+        "name": "fade-in / slide-up / modal-appear",
+        "value": "300ms ease-out",
+        "purpose": "Apparition des modales et blocs."
+      },
+      {
+        "name": "pulse-status",
+        "value": "2s ease-in-out infinite",
+        "purpose": "Voyants et états en cours."
+      },
+      {
+        "name": "tracking-glow-pulse",
+        "value": "3s ease-in-out infinite",
+        "purpose": "Bordure du suivi actif."
+      },
+      {
+        "name": "cimier-cycle-shimmer",
+        "value": "1.8s linear infinite",
+        "purpose": "Texte du cimier en phase CYCLE."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce → 0.01ms",
+        "purpose": "Coupe globale des animations."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "max-width: 500px"
+      },
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px (grille 350px + 1fr)"
+      },
+      {
+        "name": "compact-height",
+        "value": "max-height: 760px (écran tactile 720p)"
+      },
+      {
+        "name": "compass-small",
+        "value": "max-height: 800px (boussole 200px)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Bouton principal",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Action principale d'un panneau (Ouvrir, Démarrer le suivi).",
+      "html": "<button class=\"ds-btn-primary\">Ouvrir</button>",
+      "css": ".ds-btn-primary{background:#d4a055;color:#1a1612;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:14px;font-weight:600;padding:8px 16px;border:none;border-radius:8px;cursor:pointer;transition:all .2s}.ds-btn-primary:hover{background:#e8b870}.ds-btn-primary:focus-visible{outline:2px solid #d4a055;outline-offset:2px}.ds-btn-primary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Bouton secondaire",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Bouton par défaut (Rechercher, Fermer, GOTO).",
+      "html": "<button class=\"ds-btn-secondary\">Rechercher</button>",
+      "css": ".ds-btn-secondary{background:#2d261e;color:#e8e4df;border:1px solid #4a3d2e;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:14px;font-weight:500;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all .2s}.ds-btn-secondary:hover{background:#3d3428}.ds-btn-secondary:focus-visible{outline:2px solid #d4a055;outline-offset:2px}"
+    },
+    {
+      "name": "Bouton STOP",
+      "kind": "button",
+      "refersTo": "button-stop",
+      "description": "Arrêt immédiat, halo rouge permanent ; même traitement pour le parking.",
+      "html": "<button class=\"ds-btn-stop\">STOP</button>",
+      "css": ".ds-btn-stop{background:rgba(255,71,87,.2);color:#ff4757;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:14px;font-weight:700;padding:12px 32px;border:none;border-radius:8px;cursor:pointer;box-shadow:0 0 8px rgba(255,71,87,.4),0 0 20px rgba(255,71,87,.15);transition:all .2s}.ds-btn-stop:hover{background:rgba(255,71,87,.3)}.ds-btn-stop:focus-visible{outline:2px solid #d4a055;outline-offset:2px}"
+    },
+    {
+      "name": "Rangée JOG",
+      "kind": "custom",
+      "refersTo": "button-jog",
+      "description": "Boutons de déplacement manuel, largeur égale, cibles tactiles.",
+      "html": "<div class=\"ds-jog-row\"><button class=\"ds-btn-jog\">&lt; CCW</button><button class=\"ds-btn-jog\">-10°</button><button class=\"ds-btn-jog\">-1°</button><button class=\"ds-btn-jog\">+1°</button><button class=\"ds-btn-jog\">+10°</button><button class=\"ds-btn-jog\">CW &gt;</button></div>",
+      "css": ".ds-jog-row{display:flex;gap:8px}.ds-btn-jog{flex:1;padding:12px 0;background:#2d261e;color:#e8e4df;border:1px solid #4a3d2e;border-radius:8px;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:14px;cursor:pointer;transition:all .2s}.ds-btn-jog:hover{background:#3d3428}.ds-btn-jog:focus-visible{outline:2px solid #d4a055;outline-offset:2px}"
+    },
+    {
+      "name": "Champ de saisie",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Recherche d'objet, azimut GOTO.",
+      "html": "<input class=\"ds-input\" placeholder=\"Ex: M31, Vega, Jupiter...\">",
+      "css": ".ds-input{width:100%;padding:8px 12px;background:#2d261e;border:1px solid #4a3d2e;border-radius:8px;color:#e8e4df;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:14px;outline:none;transition:border-color .2s}.ds-input::placeholder{color:#706050}.ds-input:focus{border-color:#d4a055}"
+    },
+    {
+      "name": "Navigation d'en-tête",
+      "kind": "nav",
+      "refersTo": "tab-item-active",
+      "description": "Onglets de pages dans l'en-tête collant.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-tab is-active\">Controle</a><a class=\"ds-nav-tab\">Systeme</a><a class=\"ds-nav-tab\">Session</a><a class=\"ds-nav-tab\">Configuration</a></nav>",
+      "css": ".ds-nav{display:flex;gap:4px;background:#241e18;padding:8px}.ds-nav-tab{padding:6px 12px;border-radius:8px;font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:14px;font-weight:500;color:#a09080;cursor:pointer;transition:color .2s,background .2s}.ds-nav-tab:hover{color:#e8e4df;background:#3d3428}.ds-nav-tab.is-active{background:rgba(212,160,85,.15);color:#d4a055}"
+    },
+    {
+      "name": "Badges d'état",
+      "kind": "chip",
+      "refersTo": "badge-amber",
+      "description": "État d'un service ou d'un capteur, couleur = sens.",
+      "html": "<span class=\"ds-badge ds-ok\">SEC</span> <span class=\"ds-badge ds-warn\">STALE</span> <span class=\"ds-badge ds-err\">UNAVAILABLE</span> <span class=\"ds-badge ds-amber\">FERMÉ</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:12px;font-weight:500}.ds-ok{background:rgba(0,210,106,.15);color:#00d26a}.ds-warn{background:rgba(255,165,2,.15);color:#ffa502}.ds-err{background:rgba(255,71,87,.15);color:#ff4757}.ds-amber{background:rgba(212,160,85,.15);color:#d4a055}"
+    },
+    {
+      "name": "Panneau constellé",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Panneau principal avec titre en dégradé feu et case d'information.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-title\">Position Coupole</h2><div class=\"ds-info\"><span class=\"ds-info-label\">ENC :</span><span class=\"ds-info-value\">0.00°</span></div></section>",
+      "css": ".ds-panel{background:#241e18;border:1px solid #4a3d2e;border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.3),0 1px 3px rgba(0,0,0,.2);transition:box-shadow .3s}.ds-panel:hover{box-shadow:0 0 15px rgba(212,160,85,.15),0 0 30px rgba(212,160,85,.05)}.ds-title{display:inline-block;width:fit-content;margin:0 0 12px;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;background:linear-gradient(90deg,#ff6b00 0%,#ff8c00 30%,#ffa500 50%,#d4a055 80%,#c09050 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}.ds-info{display:flex;justify-content:space-between;padding:8px;background:#2d261e;border-radius:8px;font-family:'JetBrains Mono','SF Mono',ui-monospace,monospace;font-size:12px}.ds-info-label{color:#706050;text-transform:uppercase;letter-spacing:.025em}.ds-info-value{color:#e8e4df;font-weight:700}"
+    }
+  ],
+  "narrative": {
+    "northStar": "La salle de veille",
+    "overview": "\n**Creative North Star: \"La salle de veille\"**\n\nDriftApp ressemble à un poste de contrôle de nuit. Les surfaces sont en bois sombre et en bronze. La seule lumière chaude est l'ambre d'une lanterne, et les voyants ne s'allument que lorsqu'ils ont quelque chose à dire. Tout est posé sur un fond brun presque noir, jamais sur du gris neutre ni du bleu d'application. Les panneaux, les champs et les survols sont de simples paliers de ce même bois, chacun un peu plus clair que le précédent. La couleur vive est réservée aux états : vert pour un suivi actif ou un service en marche, orange pour une attente ou un avertissement, rouge pour STOP et l'alarme, ambre pour l'action principale et la marque.\n\nL'écriture est celle d'un instrument. JetBrains Mono sert aux titres, aux boutons, aux valeurs et aux journaux ; IBM Plex Sans ne porte que le texte courant. Les titres de section sont en capitales, avec un dégradé « feu » qui va de l'orange vif à l'ambre. Un motif de constellations très discret tapisse les grands panneaux. La boussole est la seule zone froide : un disque bleu nuit qui figure le ciel au milieu du bois.\n\nL'écran est dense, mais chaque bloc répond à une seule question (où est la coupole, que suit-on, comment reprendre la main, dans quel état est le cimier, que s'est-il passé). Ce sont les halos et les pulsations qui signalent les états vivants, bien plus que la typographie.",
+    "keyCharacteristics": [
+      "Bois chaud presque noir, en couches tonales ; aucun gris froid dans le cadre de l'interface.",
+      "L'ambre de lanterne est l'unique couleur de marque et d'action principale.",
+      "Les couleurs vives sont réservées aux états (vert, orange, rouge) et aux halos.",
+      "Mono partout où il y a une donnée ou une commande ; sans-serif seulement pour le texte courant.",
+      "La boussole bleu nuit est une exception voulue : c'est le ciel."
+    ],
+    "rules": [
+      {
+        "name": "La règle de la lanterne unique",
+        "body": "L'ambre est la seule couleur de marque. On ne la dilue pas avec une deuxième couleur d'accent décorative ; toute autre couleur vive doit correspondre à un état.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle des signaux",
+        "body": "Le vert, l'orange et le rouge veulent toujours dire, dans cet ordre : actif ou ok, attention, arrêt ou danger. Jamais de décoration.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle du ciel enclos",
+        "body": "Le froid (bleu nuit, graticule) ne sort pas de la boussole.",
+        "section": "colors"
+      },
+      {
+        "name": "La règle de l'instrument",
+        "body": "Toute valeur mesurée, commande ou entrée de journal est en mono. Seul le texte que l'on lit comme une phrase passe en IBM Plex Sans.",
+        "section": "typography"
+      },
+      {
+        "name": "La règle du feu réservé",
+        "body": "Le dégradé feu (`#ff6b00` → `#c09050`) ne s'applique qu'au nom de l'application et aux titres de section. Il ne s'étire jamais sur une largeur plus grande que son texte (`width: fit-content`).",
+        "section": "typography"
+      },
+      {
+        "name": "La règle de la lumière qui parle",
+        "body": "Un halo ou une pulsation annonce un état vivant ou une commande critique. Un élément au repos n'a pas de halo.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** poser chaque nouvelle surface sur les paliers de bois existants (`night-hearth` → `walnut-panel` → `smoked-oak-input` → `oak-hover`), jamais sur un gris neutre.",
+      "**Do** réserver le vert, l'orange et le rouge aux états, avec le même sens partout (règle des signaux).",
+      "**Do** écrire en JetBrains Mono les valeurs, commandes et journaux.",
+      "**Do** garder STOP visible et lumineux (halo rouge) dans toutes les vues où quelque chose peut bouger.",
+      "**Do** prévoir des cibles tactiles d'au moins la hauteur d'un bouton JOG (≈ 44 px) et un mode compact pour l'écran 720p.",
+      "**Do** garder une aide toujours visible ou affichée au toucher ; le dashboard tourne sur un écran tactile.",
+      "**Do** respecter `prefers-reduced-motion`, que le système applique déjà globalement."
+    ],
+    "donts": [
+      "**Don't** sortir le bleu nuit ou le graticule de la boussole.",
+      "**Don't** utiliser le dégradé feu ailleurs que sur le nom de l'application et les titres de section.",
+      "**Don't** mettre un halo ou une pulsation sur un élément au repos.",
+      "**Don't** introduire une deuxième couleur de marque à côté de l'ambre.",
+      "**Don't** faire dépendre une information du survol (`title`, tooltip au hover)."
+    ]
+  }
+}
