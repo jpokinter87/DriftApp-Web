@@ -16,8 +16,10 @@ de veille : terne et peu lisible en pleine lumière.
   - `dusk` (« Crépuscule ») est le bois sombre actuel, **inchangé** : c'est le rendu par
     défaut des feuilles de style, aucune règle ne le cible.
   - `day` devient le nouveau thème clair.
-- **Auto, deux seuils.** Soleil ≥ 0° → `day` ; entre 0° et −6° → `dusk` ; sous −6° →
-  `night` (seuil inchangé, celui de la fermeture du cimier). Sans coordonnées du site :
+- **Auto, deux seuils.** Soleil ≥ +6° → `day` ; entre +6° et −6° → `dusk` ; sous −6° →
+  `night` (seuil inchangé, celui de la fermeture du cimier). Le seuil du jour, d'abord à
+  0° (6.28.0), passe à +6° en 6.28.1 à la demande de JP : le crépuscule ne durait
+  qu'environ 35 min ; il dure maintenant environ 1 h 10 matin et soir. Sans coordonnées du site :
   `dusk` (le rendu historique).
 - **Choix mémorisés.** La clé `driftapp-theme` est conservée. Un écran réglé sur « Jour »
   passe au thème clair : c'est le sens voulu du mot.
@@ -68,7 +70,7 @@ Pas de réglage de luminosité.
 3. **Jour lisible** : captures des 4 pages, de la modale GOTO et d'une modale de
    confirmation en `day` ; aucun reste de bois sombre ni de texte clair sur fond clair ;
    texte ≥ 4,5:1 (calcul sur les paires de tokens).
-4. **Auto** : `resolveTheme(altitude)` renvoie `day` à +0,1°, `dusk` à −0,1° et −5,9°,
-   `night` à −6,1° (test node) ; le sélecteur bascule immédiatement et le choix survit au
+4. **Auto** : `resolveTheme(altitude)` renvoie `day` à +6° et +6,1°, `dusk` à +5,9°, 0°
+   et −6°, `night` à −6,1° (test node) ; le sélecteur bascule immédiatement et le choix survit au
    rechargement.
 5. Ruff propre, pytest ciblé vert (context processor, gabarits).

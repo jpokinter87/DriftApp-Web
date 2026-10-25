@@ -14,7 +14,7 @@
 (function () {
     const STORAGE_KEY = 'driftapp-theme';
     const NIGHT_BELOW_DEG = -6;
-    const DAY_ABOVE_DEG = 0;
+    const DAY_ABOVE_DEG = 6;
     const CHOICES = ['night', 'dusk', 'day'];
     const RECHECK_MS = 60_000;
     const rad = Math.PI / 180;

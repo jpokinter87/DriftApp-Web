@@ -280,7 +280,7 @@ Un bloc creusé dans le foyer, en mono 12 px, une entrée par ligne séparée pa
 - **Don't** faire dépendre une information du survol (`title`, tooltip au hover).
 
 ### Trois thèmes
-Le bois sombre décrit plus haut est le thème **Crépuscule** : c'est le rendu par défaut des feuilles de style, aucune règle ne le cible. `web/static/css/theme.css` ajoute le thème **Jour** (clair) et le thème **Nuit** (rouge). `theme.js` pose `data-theme` (`day`, `dusk`, `night`) sur `<html>` d'après le sélecteur Auto/Nuit/Crép./Jour de l'en-tête. En Auto : jour quand le Soleil est au-dessus de 0°, crépuscule entre 0° et −6°, nuit en dessous. Un changement de thème émet l'événement `driftapp:themechange`.
+Le bois sombre décrit plus haut est le thème **Crépuscule** : c'est le rendu par défaut des feuilles de style, aucune règle ne le cible. `web/static/css/theme.css` ajoute le thème **Jour** (clair) et le thème **Nuit** (rouge). `theme.js` pose `data-theme` (`day`, `dusk`, `night`) sur `<html>` d'après le sélecteur Auto/Nuit/Crép./Jour de l'en-tête. En Auto : jour quand le Soleil est au-dessus de +6°, crépuscule entre +6° et −6°, nuit en dessous. Un changement de thème émet l'événement `driftapp:themechange`.
 
 Les dessins (canvas de la boussole, frise de nuit SVG, graphiques Chart.js) lisent leurs couleurs dans les variables `--sky-*`, `--frieze-*` et `--chart-*` de `theme.css`, définies pour chaque thème.
 - **Do** donner à toute nouvelle couleur une valeur dans chaque thème, ou la faire passer par un token ; une couleur écrite en dur reste sombre en Jour.
