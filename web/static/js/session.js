@@ -20,13 +20,8 @@ const CONFIG = {
     MOTOR_STATUS_URL: '/api/hardware/status/',
     REFRESH_INTERVAL: 5000,  // 5 secondes
 
-    // Couleurs par mode de tracking
-    MODE_COLORS: {
-        normal: '#00d26a',      // Vert
-        critical: '#ffa502',    // Orange
-        continuous: '#ff4757',  // Rouge
-        default: '#3498db'      // Bleu par défaut
-    },
+    // Couleur des courbes : ambre du suivi (vitesse unique v5.10, plus de modes).
+    LINE_COLOR: '#d4a055',
 
     CORRECTION_DOT_COLOR: '#ff4757',  // Rouge pour les points de correction
     CORRECTION_DOT_RADIUS: 3          // Petit rayon pour éviter l'encombrement
@@ -258,9 +253,6 @@ function updateSessionDisplay(data) {
     // Statistiques
     updateStats(data.summary || {});
 
-    // Mode distribution
-    updateModeDistribution(data.summary?.mode_distribution || {});
-
     // Graphiques
     updateCharts(data);
 
@@ -288,35 +280,11 @@ function updateStats(summary) {
         (summary.avg_correction_deg || 0).toFixed(2) + '°';
 }
 
-function updateModeDistribution(distribution) {
-    const normal = distribution.normal || 0;
-    const critical = distribution.critical || 0;
-    const continuous = distribution.continuous || 0;
-    const total = normal + critical + continuous;
-
-    if (total === 0) {
-        document.getElementById('mode-bar-normal').style.width = '0%';
-        document.getElementById('mode-bar-critical').style.width = '0%';
-        document.getElementById('mode-bar-continuous').style.width = '0%';
-        document.getElementById('mode-time-normal').textContent = '0s';
-        document.getElementById('mode-time-critical').textContent = '0s';
-        document.getElementById('mode-time-continuous').textContent = '0s';
-        return;
-    }
-
-    document.getElementById('mode-bar-normal').style.width = `${(normal / total) * 100}%`;
-    document.getElementById('mode-bar-critical').style.width = `${(critical / total) * 100}%`;
-    document.getElementById('mode-bar-continuous').style.width = `${(continuous / total) * 100}%`;
-
-    document.getElementById('mode-time-normal').textContent = formatDuration(normal);
-    document.getElementById('mode-time-critical').textContent = formatDuration(critical);
-    document.getElementById('mode-time-continuous').textContent = formatDuration(continuous);
-}
 
 function updateLastUpdateTime() {
     const now = new Date();
     document.getElementById('last-update').textContent =
-        `Derniere mise a jour: ${now.toLocaleTimeString('fr-FR')}`;
+        `Dernière mise à jour : ${now.toLocaleTimeString('fr-FR')}`;
 }
 
 // =============================================================================
@@ -363,9 +331,7 @@ function initCharts() {
                 borderWidth: 2,
                 pointRadius: 0,
                 tension: 0.1,
-                segment: {
-                    borderColor: ctx => getSegmentColor(ctx, 'altitude')
-                }
+                borderColor: CONFIG.LINE_COLOR
             }, {
                 // Dataset pour les points de correction
                 label: 'Corrections',
@@ -405,9 +371,7 @@ function initCharts() {
                 borderWidth: 2,
                 pointRadius: 0,
                 tension: 0.1,
-                segment: {
-                    borderColor: ctx => getSegmentColor(ctx, 'azimut')
-                }
+                borderColor: CONFIG.LINE_COLOR
             }, {
                 // Dataset pour les points de correction
                 label: 'Corrections',
@@ -439,20 +403,6 @@ function initCharts() {
     });
 }
 
-function getSegmentColor(ctx, chartType) {
-    // Récupérer le mode du point courant via les données raw
-    const data = ctx.chart.data.datasets[0].data;
-    const index = ctx.p0DataIndex;
-
-    if (index >= 0 && index < data.length) {
-        const point = data[index];
-        if (point && point.mode) {
-            return CONFIG.MODE_COLORS[point.mode.toLowerCase()] || CONFIG.MODE_COLORS.default;
-        }
-    }
-
-    return CONFIG.MODE_COLORS.default;
-}
 
 function updateCharts(sessionData) {
     const positionLog = sessionData.position_log || [];

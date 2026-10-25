@@ -322,7 +322,6 @@ const elements = {
     trackingAz: document.getElementById('tracking-az'),
     trackingAlt: document.getElementById('tracking-alt'),
     trackingPier: document.getElementById('tracking-pier'),
-    trackingMode: document.getElementById('tracking-mode'),
     trackingCorrections: document.getElementById('tracking-corrections'),
     trackingRemaining: document.getElementById('tracking-remaining'),
 
@@ -2127,13 +2126,6 @@ function updateTrackingDisplay(motor) {
         elements.trackingAz.textContent = info.azimut ? `${info.azimut.toFixed(2)}°` : '--';
         elements.trackingAlt.textContent = info.altitude ? `${info.altitude.toFixed(2)}°` : '--';
         updatePierDisplay(info);
-
-        const mode = motor.mode || 'normal';
-        const modeEmoji = { normal: '🟢', critical: '🟠', continuous: '🔴', fast_track: '🟣' };
-        elements.trackingMode.textContent = `${modeEmoji[mode] || ''} ${mode.toUpperCase()}`;
-        elements.trackingMode.className = `hidden mode-${mode}`;
-        // Cartouche MODE retiré du dashboard (vitesse unique v5.10) — le bloc
-        // hidden tracking-mode reste pour le bookkeeping JS interne uniquement.
 
         elements.trackingCorrections.textContent = info.total_corrections || '0';
 

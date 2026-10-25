@@ -135,8 +135,6 @@ function cacheElements() {
         thresholdLarge: document.getElementById('threshold-large'),
         thresholdProtection: document.getElementById('threshold-protection'),
         thresholdTolerance: document.getElementById('threshold-tolerance'),
-        thresholdGemDelay: document.getElementById('threshold-gem-delay'),
-        modesTbody: document.getElementById('modes-tbody'),
     };
 }
 
@@ -423,7 +421,7 @@ function updateUI(data) {
 
     // Timestamp
     const timestamp = new Date(data.timestamp);
-    elements.lastUpdate.textContent = `Derniere mise a jour: ${timestamp.toLocaleTimeString('fr-FR')}`;
+    elements.lastUpdate.textContent = `Dernière mise à jour : ${timestamp.toLocaleTimeString('fr-FR')}`;
 
     // Composants
     updateMotorService(data.components.motor_service);
@@ -607,24 +605,6 @@ function updateConfig(config) {
             ? config.thresholds.feedback_protection_deg + '°' : '--';
         elements.thresholdTolerance.textContent = config.thresholds.default_tolerance_deg
             ? config.thresholds.default_tolerance_deg + '°' : '--';
-    }
-    if (config.meridien) {
-        const delay = config.meridien.gem_delay_minutes;
-        elements.thresholdGemDelay.textContent = (delay !== undefined && delay !== null)
-            ? delay + ' min' : '0 min';
-    }
-
-    if (config.adaptive_modes) {
-        let html = '';
-        for (const [name, mode] of Object.entries(config.adaptive_modes)) {
-            html += `<tr class="border-b border-obs-border/50">
-                <td class="py-1 pr-2 text-obs-text">${name}</td>
-                <td class="py-1 pr-2">${mode.interval_sec}s</td>
-                <td class="py-1 pr-2">${mode.threshold_deg}°</td>
-                <td class="py-1">${(mode.motor_delay * 1000).toFixed(2)}ms</td>
-            </tr>`;
-        }
-        elements.modesTbody.innerHTML = html || '<tr><td colspan="4">--</td></tr>';
     }
 }
 
