@@ -349,20 +349,37 @@
         </div>
 
         <!-- Cimier — pilotage V3 tout-Shelly -->
-        <div x-data class="panel panel-astro">
+        <div x-data="{ timelineOpen: false }" class="panel panel-astro">
             <!-- Badge état dédié dans le titre (v6.11.1) : OUVERT vert / FERMÉ ambre /
                  mouvement clignotant / ERREUR rouge. Le gradient « fire » reste sur le
                  seul mot « Cimier » ; le badge porte sa propre couleur d'état. -->
             <div class="flex items-center justify-between mb-3">
                 <h3 class="section-title section-title-fire">Cimier</h3>
-                <span class="cimier-state-badge flex items-center gap-2 text-sm font-mono font-bold
-                             tracking-wider px-3 py-1 rounded-badge transition-colors duration-300"
-                      :class="$store.dashboard.cimierStateClass()"
-                      x-show="$store.dashboard.cimier" x-cloak
-                      role="status" aria-live="polite" aria-label="État du cimier">
-                    <span x-text="$store.dashboard.cimierStateDot()">○</span>
-                    <span x-text="$store.dashboard.cimierStateLabel()">--</span>
-                </span>
+                <div class="flex items-center gap-2">
+                    <!-- Toggle timeline repliable (fermée par défaut, v6.11). Tap, pas de survol.
+                     Dans la ligne de titre : la ligne « Mode auto » tient alors sur une seule
+                     ligne, et le panneau tient dans l'écran 720p du kiosque. -->
+                    <button type="button" @click="timelineOpen = !timelineOpen"
+                            class="flex items-center gap-1.5 text-xs font-mono text-obs-text-secondary
+                                   border border-obs-border rounded-button px-2.5 py-1
+                                   focus-visible:outline focus-visible:outline-2
+                                   focus-visible:outline-accent-amber focus-visible:outline-offset-2"
+                            :aria-expanded="timelineOpen"
+                            aria-controls="cimier-timeline-list">
+                        <span x-text="timelineOpen ? '▾' : '▸'"></span>
+                        <span>Activité cimier</span>
+                        <span class="text-accent-amber-light"
+                              x-text="$store.dashboard.cimierTimeline?.length || 0"></span>
+                    </button>
+                    <span class="cimier-state-badge flex items-center gap-2 text-sm font-mono font-bold
+                                 tracking-wider px-3 py-1 rounded-badge transition-colors duration-300"
+                          :class="$store.dashboard.cimierStateClass()"
+                          x-show="$store.dashboard.cimier" x-cloak
+                          role="status" aria-live="polite" aria-label="État du cimier">
+                        <span x-text="$store.dashboard.cimierStateDot()">○</span>
+                        <span x-text="$store.dashboard.cimierStateLabel()">--</span>
+                    </span>
+                </div>
             </div>
             <!-- Boutons contextuels (v6.11.1) : le bouton LUMINEUX = l'action disponible
                  (Ouvrir si fermé, Fermer si ouvert) ; l'autre est atténué mais cliquable. -->
@@ -382,7 +399,7 @@
 
             <!-- ─── Automatisation lifecycle session (v6.0 Phase 4 ; timeline repliable v6.11) ─── -->
             <div class="section-divider mt-2"></div>
-            <div x-data="{ timelineOpen: false }">
+            <div>
                 <div class="flex items-center gap-2 flex-wrap text-xs">
                     <label for="cimier-automation-mode"
                            class="text-obs-text-muted uppercase tracking-wider whitespace-nowrap">
@@ -431,19 +448,6 @@
                           x-show="$store.dashboard.cimier?.rain?.heater" x-cloak
                           role="status" aria-live="polite"
                           aria-label="État de la résistance chauffante du capteur de pluie"></span>
-                    <!-- Toggle timeline repliable (fermée par défaut, v6.11). Tap, pas de survol. -->
-                    <button type="button" @click="timelineOpen = !timelineOpen"
-                            class="ml-auto flex items-center gap-1.5 font-mono text-obs-text-secondary
-                                   border border-obs-border rounded-button px-2.5 py-1
-                                   focus-visible:outline focus-visible:outline-2
-                                   focus-visible:outline-accent-amber focus-visible:outline-offset-2"
-                            :aria-expanded="timelineOpen"
-                            aria-controls="cimier-timeline-list">
-                        <span x-text="timelineOpen ? '▾' : '▸'"></span>
-                        <span>Activité cimier</span>
-                        <span class="text-accent-amber-light"
-                              x-text="$store.dashboard.cimierTimeline?.length || 0"></span>
-                    </button>
                 </div>
                 <div id="cimier-automation-hint"
                      class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem] mt-1"

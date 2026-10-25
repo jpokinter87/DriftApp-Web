@@ -1287,3 +1287,19 @@ header h1 span {
 @media (max-width: 480px) {
     .coords-modal-content { width: 100%; padding: 1.25rem 1rem; }
 }
+
+/* =========================================================================
+   Panneau Cimier dans l'écran 720p du kiosque (impeccable layout, 25/10)
+   Les lignes de message ne réservent plus de place à vide ; la liste
+   d'activité retrouve sa hauteur fixe (h-24 absente du CSS compilé : sans
+   elle, la liste ouverte poussait les commandes hors de l'écran).
+   ========================================================================= */
+#cimier-detail:empty,
+#cimier-automation-hint:empty,
+#cimier-rain-warning:empty {
+    display: none;
+}
+
+#cimier-timeline-list {
+    height: 6rem;
+}
