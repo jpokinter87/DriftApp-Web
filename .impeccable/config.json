@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "web/templates/base.html"
+        ],
+        "createdAt": "2026-10-25T16:02:41.782Z",
+        "reason": "DESIGN.md (commité 100b200) : règle du feu réservé, dégradé feu voulu sur le nom de l'application ; neutralisé en mode nuit"
+      }
+    ]
+  }
+}

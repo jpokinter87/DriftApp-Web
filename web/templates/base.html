@@ -18,7 +18,8 @@
 
     {% block extra_css %}{% endblock %}
 
-    <!-- Thème (mode nuit rouge) : après les feuilles de page, posé avant le premier rendu -->
+    <!-- Cibles tactiles 44 px (kiosque tactile), puis thème (mode nuit rouge) posé avant le premier rendu -->
+    <link rel="stylesheet" href="/static/css/touch.css?v={{ APP_VERSION }}">
     <link rel="stylesheet" href="/static/css/theme.css?v={{ APP_VERSION }}">
     <script src="/static/js/theme.js?v={{ APP_VERSION }}"></script>
 

@@ -1,0 +1,51 @@
+/* DriftApp — cibles tactiles (audit impeccable P1-2).
+   Le kiosque de la coupole est un écran tactile utilisé dans le noir : toute
+   commande fait au moins 44 px (WCAG 2.5.5), case à cocher comprise via son
+   libellé. Feuille non compilée, chargée sur toutes les pages : la sortie
+   Tailwind n'a pas à être régénérée. */
+
+.nav-tab,
+.btn,
+.btn-jog,
+.btn-stop,
+.btn-continuous,
+.btn-update-check,
+.selector-tab,
+.cfg-save-btn,
+.cfg-restart-btn,
+.input-field,
+.search-input,
+select,
+[aria-controls="cimier-timeline-list"] {
+    min-height: 44px;
+}
+
+.nav-tab,
+.btn-update-check,
+[aria-controls="cimier-timeline-list"] {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Icônes cliquables : la zone de toucher grandit, pas le glyphe. */
+#calibration-header-badge,
+#btn-refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+}
+
+/* Case à cocher : 22 px visibles, et tout le libellé devient la cible. */
+input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+}
+
+label:has(> input[type="checkbox"]) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+}
