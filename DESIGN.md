@@ -279,5 +279,9 @@ Un bloc creusé dans le foyer, en mono 12 px, une entrée par ligne séparée pa
 - **Don't** introduire une deuxième couleur de marque à côté de l'ambre.
 - **Don't** faire dépendre une information du survol (`title`, tooltip au hover).
 
-### Écart connu : vision nocturne
-PRODUCT.md exige de préserver la vision nocturne, ce que le système actuel ne respecte pas encore. Le texte principal est presque blanc (`parchment-text`), le vert, l'orange et le rouge sont pleinement saturés, et plusieurs halos sont permanents (STOP, suivi actif). Ces valeurs sont documentées telles qu'elles sont, mais elles ne servent pas de modèle pour l'avenir : tout travail visuel doit tendre vers une interface à faible luminance la nuit, sans grandes surfaces claires ni signaux éblouissants. La manière d'y arriver (mode nuit, palette atténuée) reste à décider.
+### Thème nuit rouge
+La nuit, `web/static/css/theme.css` remplace tous les tokens par des rouges purs (G = B = 0) posés sur un fond presque noir. C'est `theme.js` qui l'active, depuis le sélecteur Auto/Nuit/Jour de l'en-tête ; en Auto, le passage se fait quand le Soleil descend sous −6°. Un filtre `feColorMatrix` posé sur `<html>` ne laisse passer que le canal rouge, ce qui couvre la boussole, la frise, les graphiques et les styles inline.
+- **Do** donner à toute nouvelle couleur une valeur nuit en rouge pur dans `theme.css` ; le filtre n'est qu'un filet de sécurité.
+- **Do** distinguer les états par la forme : aplat pour l'alarme et STOP, contour pour l'action principale, anneau pour un voyant ok, disque plein pour un voyant en panne.
+- **Don't** compter sur la teinte pour porter un sens : en nuit, le vert et l'orange deviennent rouges.
+- **Don't** descendre un texte sous #f00000 en nuit : c'est la limite des 4,5:1 en rouge pur. Pour baisser la luminance, on règle la luminosité de l'écran.

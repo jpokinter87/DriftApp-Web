@@ -51,7 +51,7 @@ l'interface (ce sera `/impeccable adapt`). Pas de mise en page nouvelle.
 
 1. En nuit, une capture des 4 pages et d'une modale ne contient aucun pixel avec
    G > 0 ou B > 0.
-2. Le thème de jour est identique, au pixel près, à celui d'avant le chantier.
+2. Le thème de jour est inchangé, à l'exception du sélecteur ajouté dans l'en-tête.
 3. Le calcul JS de l'altitude du Soleil est à moins de 0,5° d'astropy
    (`compute_sun_altitude`) sur un échantillon de dates et d'heures.
 4. Le sélecteur bascule immédiatement et le choix survit à un rechargement.

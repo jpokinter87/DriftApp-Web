@@ -1,0 +1,171 @@
+/* DriftApp — sélecteur de thème + mode nuit rouge.
+   Chargé après Tailwind et les feuilles de page : ces règles priment sans
+   recompilation. Le thème est posé par theme.js (data-theme sur <html>).
+   Spec : docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md */
+
+/* =========================================================================
+   Sélecteur Auto / Nuit / Jour (en-tête, toutes les pages)
+   Cibles de 44 px : l'écran du kiosque est tactile.
+   ========================================================================= */
+.theme-switch {
+    display: inline-flex;
+    padding: 2px;
+    gap: 2px;
+    background: var(--color-obs-dark);
+    border: 1px solid var(--color-obs-border);
+    border-radius: var(--radius-button);
+}
+
+.theme-switch button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 0.6rem;
+    border: none;
+    border-radius: var(--radius-badge);
+    background: transparent;
+    color: var(--color-obs-text-secondary);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.theme-switch button:hover {
+    color: var(--color-obs-text);
+}
+
+.theme-switch button[aria-pressed="true"] {
+    background: color-mix(in oklab, var(--color-accent-amber) 15%, transparent);
+    color: var(--color-accent-amber);
+}
+
+/* =========================================================================
+   Mode nuit rouge
+   Rouges purs (G = B = 0) : aucune lumière verte, bleue ou blanche.
+   Texte ≥ 4.5:1 → en rouge pur, seuls les niveaux ≥ #f00000 y parviennent ;
+   la hiérarchie passe par la taille, la graisse et les capitales.
+   ========================================================================= */
+html[data-theme="night"] {
+    color-scheme: dark;
+
+    --color-obs-dark: #070000;
+    --color-obs-panel: #0d0000;
+    --color-obs-input: #1e0000;
+    --color-obs-surface: #220000;
+    --color-obs-hover: #2a0000;
+    --color-obs-border: #4a0000;
+    --color-obs-border-light: #6a0000;
+
+    --color-obs-text: #ff0000;
+    --color-obs-text-secondary: #f80000;
+    --color-obs-text-muted: #f40000;
+
+    --color-accent-amber: #f60000;
+    --color-accent-amber-light: #ff0000;
+    --color-accent-amber-dark: #c00000;
+    --color-accent-green: #f00000;
+    --color-accent-green-dim: #c00000;
+    --color-accent-orange: #ff0000;
+    --color-accent-red: #ff0000;
+    --color-accent-red-dim: #d00000;
+    --color-accent-purple: #f60000;
+
+    --color-status-ok: #f00000;
+    --color-status-warn: #ff0000;
+    --color-status-error: #ff0000;
+    --color-status-info: #f00000;
+
+    --shadow-panel: none;
+    --shadow-glow-amber: none;
+    --shadow-glow-green: none;
+    --shadow-glow-red: none;
+
+    /* Filet de sécurité : canvas (boussole), SVG (frise), Chart.js, styles
+       inline, emoji. Ne garde que le canal rouge ; sans effet sur les tokens
+       ci-dessus, déjà rouges purs. */
+    filter: url(#night-red);
+}
+
+/* Pas de halo, pas de pulsation, pas de reflet : chaque photon compte. */
+html[data-theme="night"] *,
+html[data-theme="night"] *::before,
+html[data-theme="night"] *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+}
+
+/* Dégradés de texte (nom de l'application, titres, cimier en cycle) → aplat. */
+html[data-theme="night"] header h1 span,
+html[data-theme="night"] .section-title-fire,
+html[data-theme="night"] .cimier-cycle-shimmer {
+    background: none !important;
+    color: var(--color-accent-amber) !important;
+    -webkit-text-fill-color: var(--color-accent-amber) !important;
+}
+
+html[data-theme="night"] .panel-astro {
+    background-image: none;
+}
+
+/* Action principale : contour. Alarme et STOP : aplat, le plus lumineux. */
+html[data-theme="night"] .btn-primary,
+html[data-theme="night"] .cfg-save-btn {
+    background: transparent;
+    color: var(--color-accent-amber);
+    box-shadow: inset 0 0 0 1px var(--color-accent-amber) !important;
+}
+
+html[data-theme="night"] .btn-primary:hover:not(:disabled),
+html[data-theme="night"] .cfg-save-btn:hover:not(:disabled) {
+    background: var(--color-obs-hover);
+}
+
+html[data-theme="night"] .btn-stop,
+html[data-theme="night"] .btn-danger {
+    background: var(--color-accent-red);
+    color: #000;
+}
+
+html[data-theme="night"] .btn-stop:hover,
+html[data-theme="night"] .btn-danger:hover:not(:disabled) {
+    background: var(--color-accent-red-dim);
+}
+
+/* Un aplat éteint serait un pavé sombre illisible : désactivé = contour. */
+html[data-theme="night"] .btn-danger:disabled {
+    background: transparent;
+    color: var(--color-obs-text-muted);
+    box-shadow: inset 0 0 0 1px var(--color-obs-border-light) !important;
+}
+
+/* Sans la teinte, seule la bordure détache un bouton du panneau. */
+html[data-theme="night"] .btn-secondary,
+html[data-theme="night"] .btn-jog,
+html[data-theme="night"] .btn-continuous {
+    border: 1px solid var(--color-obs-border-light);
+}
+
+/* Voyants : anneau = ok, disque plein = panne. */
+html[data-theme="night"] .status-dot-ok,
+html[data-theme="night"] .status-dot.connected {
+    background: transparent;
+    border: 2px solid var(--color-accent-green);
+}
+
+/* Surfaces du navigateur. */
+html[data-theme="night"] ::selection {
+    background: var(--color-accent-amber);
+    color: #000;
+}
+
+html[data-theme="night"] input,
+html[data-theme="night"] textarea {
+    caret-color: var(--color-obs-text);
+}
+
+html[data-theme="night"] option {
+    background: var(--color-obs-input);
+    color: var(--color-obs-text);
+}

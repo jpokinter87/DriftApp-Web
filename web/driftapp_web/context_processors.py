@@ -27,3 +27,10 @@ def _get_version():
 def app_version(request):
     """Injecte APP_VERSION dans tous les templates."""
     return {"APP_VERSION": _get_version()}
+
+
+def site_coords(request):
+    """Injecte les coordonnées du site (calcul solaire du mode nuit, theme.js)."""
+    from core.config.config import SITE_LATITUDE, SITE_LONGITUDE
+
+    return {"SITE_LAT": SITE_LATITUDE, "SITE_LON": SITE_LONGITUDE}

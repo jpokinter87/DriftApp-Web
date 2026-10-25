@@ -10,10 +10,10 @@ Spec : `docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md`.
    branchement du sélecteur. → vérifier : comparaison node contre astropy sur 12 dates,
    écart inférieur à 0,5°.
 3. **`base.html`** : `data-site-lat` et `data-site-lon` sur `<html>`, `theme.js`
-   chargé de façon bloquante dans `<head>`, filtre SVG `night-red`, `night.css` chargé
+   chargé de façon bloquante dans `<head>`, filtre SVG `night-red`, `theme.css` chargé
    en dernier, sélecteur Auto/Nuit/Jour dans l'en-tête. → vérifier : rendu de jour
    identique.
-4. **`web/static/css/night.css`** : tokens rouges, filtre sur `html`, suppression des
+4. **`web/static/css/theme.css`** : tokens rouges, filtre sur `html`, suppression des
    halos, des animations, des dégradés et du fond constellé, distinction des états
    (aplat, contour, anneau), barre de défilement, sélection, curseur de saisie. →
    vérifier : captures des 4 pages et d'une modale en nuit, aucun pixel G/B, contraste

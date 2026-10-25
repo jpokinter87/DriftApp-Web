@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-25T16:32:36+01:00",
+  "generatedAt": "2026-10-25T16:52:43+01:00",
   "title": "Design System: DriftApp",
   "extensions": {
     "colorMeta": {
@@ -617,14 +617,18 @@
       "**Do** garder STOP visible et lumineux (halo rouge) dans toutes les vues où quelque chose peut bouger.",
       "**Do** prévoir des cibles tactiles d'au moins la hauteur d'un bouton JOG (≈ 44 px) et un mode compact pour l'écran 720p.",
       "**Do** garder une aide toujours visible ou affichée au toucher ; le dashboard tourne sur un écran tactile.",
-      "**Do** respecter `prefers-reduced-motion`, que le système applique déjà globalement."
+      "**Do** respecter `prefers-reduced-motion`, que le système applique déjà globalement.",
+      "**Do** donner à toute nouvelle couleur une valeur nuit en rouge pur dans `theme.css` ; le filtre n'est qu'un filet de sécurité.",
+      "**Do** distinguer les états par la forme : aplat pour l'alarme et STOP, contour pour l'action principale, anneau pour un voyant ok, disque plein pour un voyant en panne."
     ],
     "donts": [
       "**Don't** sortir le bleu nuit ou le graticule de la boussole.",
       "**Don't** utiliser le dégradé feu ailleurs que sur le nom de l'application et les titres de section.",
       "**Don't** mettre un halo ou une pulsation sur un élément au repos.",
       "**Don't** introduire une deuxième couleur de marque à côté de l'ambre.",
-      "**Don't** faire dépendre une information du survol (`title`, tooltip au hover)."
+      "**Don't** faire dépendre une information du survol (`title`, tooltip au hover).",
+      "**Don't** compter sur la teinte pour porter un sens : en nuit, le vert et l'orange deviennent rouges.",
+      "**Don't** descendre un texte sous #f00000 en nuit : c'est la limite des 4,5:1 en rouge pur. Pour baisser la luminance, on règle la luminosité de l'écran."
     ]
   }
 }

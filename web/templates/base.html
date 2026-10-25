@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="fr">
+{% load l10n %}<!DOCTYPE html>
+<html lang="fr" data-site-lat="{{ SITE_LAT|unlocalize }}" data-site-lon="{{ SITE_LON|unlocalize }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,12 +18,23 @@
 
     {% block extra_css %}{% endblock %}
 
+    <!-- Thème (mode nuit rouge) : après les feuilles de page, posé avant le premier rendu -->
+    <link rel="stylesheet" href="/static/css/theme.css?v={{ APP_VERSION }}">
+    <script src="/static/js/theme.js?v={{ APP_VERSION }}"></script>
+
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-obs-dark text-obs-text min-h-screen flex flex-col font-body antialiased">
+
+    <!-- Mode nuit : ne garde que le canal rouge (theme.css) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+        <filter id="night-red" color-interpolation-filters="sRGB">
+            <feColorMatrix type="matrix" values="1 0.6 0.2 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+        </filter>
+    </svg>
 
     <!-- ═══ Header ═══ -->
     <header class="sticky top-0 z-50 bg-obs-panel/95 backdrop-blur-sm border-b border-obs-border">
@@ -91,6 +102,11 @@
 
             <!-- Status Indicator -->
             <div class="flex items-center gap-2">
+                <div class="theme-switch" role="group" aria-label="Thème d'affichage">
+                    <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+                    <button type="button" data-theme-choice="night" aria-pressed="false">Nuit</button>
+                    <button type="button" data-theme-choice="day" aria-pressed="false">Jour</button>
+                </div>
                 {% block status_indicator %}
                 <div class="flex items-center gap-1.5 text-xs font-mono text-obs-text-muted">
                     <span class="status-dot status-dot-ok"></span>
