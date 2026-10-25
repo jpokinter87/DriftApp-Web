@@ -141,11 +141,20 @@ html[data-theme="night"] *::after {
 
 /* Dégradés de texte (nom de l'application, titres, cimier en cycle) → aplat. */
 html[data-theme="night"] header h1 span,
-html[data-theme="night"] .section-title-fire,
 html[data-theme="night"] .cimier-cycle-shimmer {
     background: none !important;
     color: var(--color-accent-amber) !important;
     -webkit-text-fill-color: var(--color-accent-amber) !important;
+}
+
+/* Titres : leur dégradé est en !important dans @layer components, qu'une
+   règle hors layer ne surcharge pas (voir le thème jour). */
+@layer base {
+    html[data-theme="night"] .section-title-fire {
+        background: none !important;
+        color: var(--color-accent-amber) !important;
+        -webkit-text-fill-color: var(--color-accent-amber) !important;
+    }
 }
 
 html[data-theme="night"] .panel-astro {

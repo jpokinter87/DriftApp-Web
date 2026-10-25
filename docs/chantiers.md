@@ -129,10 +129,6 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## Plus tard
 
-- **Titres de section en Nuit pas en aplat** : la surcharge de `.section-title-fire`
-  dans le bloc nuit de `theme.css` est hors layer, alors que le dégradé est en
-  `!important` dans `@layer components` : elle perd. Le filtre rouge rend les titres
-  lisibles quand même. Correctif : la poser dans `@layer base`, comme le thème jour.
 - **Sortie Tailwind compilée en retard sur les gabarits** (`tailwind-output.css`, date du
   03/05) : des classes écrites dans les gabarits n'y sont pas (`sr-only`,
   `border-accent-red`, `opacity-50`, `text-white`, `h-24`…), donc sans effet.
