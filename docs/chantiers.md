@@ -79,6 +79,22 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   `logs/cimier/cimier_service.log` (droits sur `logs/` ?).
 - **Réf.** : spec `docs/superpowers/specs/2026-10-24-journal-nuit-dans-logs.md`, commit 2261805.
 
+### Interface 6.27.0 : mode nuit rouge, STOP dans la fenêtre GOTO
+- **Ouvert le** 25/10/2026, livré en 6.27.0 (sélecteur Auto/Nuit/Jour par écran, nuit
+  sous −6° de hauteur solaire ; tout en rouge pur la nuit, filtre `feColorMatrix` sur
+  `<html>` ; bouton STOP dans la modale GOTO ; cibles tactiles 44 px ; dépendances
+  locales dans `web/static/vendor/`).
+- **État** : vérifié seulement en dev, dans Chrome headless 1280×720 (aucun pixel
+  vert ou bleu en nuit sur les 4 pages, calcul solaire JS à 0,007° d'astropy, Échap et
+  Tab dans les modales). Jamais vu dans Firefox ni sur le Pi. Annonce envoyée à Serge
+  le 25/10.
+- **Prochaine étape** : retour de Serge ou zip de nuit. À vérifier : bascule en rouge le
+  soir (heure), rien de blanc, vert ou bleu dans Firefox kiosque, fluidité (le filtre
+  plein écran coûte au GPU du Pi : s'il y a des saccades, appliquer le filtre aux seuls
+  canvas et SVG), STOP visible et efficace pendant un vrai GOTO initial, boutons au doigt.
+- **Réf.** : spec `docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md`, `DESIGN.md`,
+  `PRODUCT.md`, commits c929bcf → 4ccec06.
+
 ## En attente d'un événement
 
 ### Remplacement du capteur de pluie par un Kemo M152K
@@ -95,6 +111,14 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## Plus tard
 
+- **Test instable `TestEncoderHealth::test_healthy`** (`tests/test_health_views.py`) :
+  503 au lieu de 200 environ une fois sur douze, malgré la fixture `lenient_freshness`
+  (vu le 25/10, sans changement du code santé). Chercher ce que la fixture ne neutralise pas.
+- **Sortie Tailwind compilée en retard sur les gabarits** (`tailwind-output.css`, date du
+  03/05) : des classes écrites dans les gabarits n'y sont pas (`sr-only`,
+  `border-accent-red`, `opacity-50`, `text-white`, `h-24`…), donc sans effet.
+  Recompiler (`scripts/build_css.sh`) change le rendu à plusieurs endroits : à faire avec
+  captures avant/après.
 - **Angle horaire décalé de +82 s** (`convertir_j2000_vers_jnow` passe par CIRS, alors que
   l'angle horaire attend TETE) : le méridien affiché est environ 82 s trop tôt et
   l'azimut décalé de 0,2 à 0,35°. Corriger retarde d'autant la bascule de la coupole ;
