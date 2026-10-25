@@ -95,6 +95,23 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 - **Réf.** : spec `docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md`, `DESIGN.md`,
   `PRODUCT.md`, commits c929bcf → 4ccec06.
 
+### Thème de jour « carnet d'observation » (6.28.0)
+- **Ouvert le** 25/10/2026, livré en 6.28.0 (sélecteur Auto · Nuit · Crép. · Jour ; Jour =
+  thème clair papier/graphite, Crép. = l'ancien bois sombre ; en Auto : Jour au-dessus de
+  0°, Crépuscule jusqu'à −6°, Nuit en dessous).
+- **État** : vérifié seulement en dev, Chrome headless 1280×720 : Crépuscule identique à
+  6.27.0 (styles calculés des 4 pages, boussole au pixel), Nuit sans pixel vert ni bleu,
+  textes du Jour ≥ 4,5:1, bascule à chaud de la boussole et des graphiques Session.
+  Jamais vu dans Firefox ni sur le Pi. Annonce WhatsApp à Serge prête le 25/10.
+- **Prochaine étape** : retour de Serge. À vérifier : écran clair lisible en plein jour
+  dans la coupole (rien de pâle) ; en Auto, Jour → Crépuscule vers 17 h 35 et
+  Crépuscule → Nuit vers 18 h 10 (calcul pour le 26/10 à Ubik) ; thème clair sur le
+  portable ; aucune zone restée sombre en Jour (couleur écrite en dur oubliée → la
+  surcharger dans `theme.css`).
+- **Réf.** : spec `docs/superpowers/specs/2026-10-25-theme-jour-carnet.md`, plan du même
+  nom, prévisualisation https://claude.ai/artifact/GAVfYwm3wRuTDZpGgh7Az8, commits
+  0847dd4 → 7c52387.
+
 ## En attente d'un événement
 
 ### Remplacement du capteur de pluie par un Kemo M152K
@@ -111,6 +128,10 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## Plus tard
 
+- **Titres de section en Nuit pas en aplat** : la surcharge de `.section-title-fire`
+  dans le bloc nuit de `theme.css` est hors layer, alors que le dégradé est en
+  `!important` dans `@layer components` : elle perd. Le filtre rouge rend les titres
+  lisibles quand même. Correctif : la poser dans `@layer base`, comme le thème jour.
 - **Sortie Tailwind compilée en retard sur les gabarits** (`tailwind-output.css`, date du
   03/05) : des classes écrites dans les gabarits n'y sont pas (`sr-only`,
   `border-accent-red`, `opacity-50`, `text-white`, `h-24`…), donc sans effet.
