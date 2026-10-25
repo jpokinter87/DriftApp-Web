@@ -41,8 +41,14 @@ def api_client():
 
 
 @pytest.fixture
-def mock_ipc(tmp_path):
-    """Mock les fichiers IPC pour les tests."""
+def mock_ipc(tmp_path, monkeypatch):
+    """Mock les fichiers IPC pour les tests.
+
+    Redirige les chemins du singleton ``motor_client`` par monkeypatch (révoqué
+    en fin de test). Pas d'``importlib.reload`` : il remplaçait le singleton et
+    les vues importées avant gardaient l'ancien objet (503 aléatoires dans
+    test_health_views selon la répartition xdist).
+    """
     cmd_file = tmp_path / "motor_command.json"
     status_file = tmp_path / "motor_status.json"
     encoder_file = tmp_path / "ems22_position.json"
@@ -73,24 +79,19 @@ def mock_ipc(tmp_path):
         "ENCODER_FILE": str(encoder_file),
     }
 
-    with patch("django.conf.settings.MOTOR_SERVICE_IPC", ipc_settings):
-        # Re-importer les vues pour utiliser les nouveaux chemins
-        import importlib
-        import web.hardware.views as hw_views
-        import web.tracking.views as tr_views
+    from django.conf import settings
+    from web.common.ipc_client import motor_client
 
-        # Patcher les instances globales depuis le module partagé
-        import web.common.ipc_client as ipc_module
+    monkeypatch.setattr(settings, "MOTOR_SERVICE_IPC", ipc_settings)
+    monkeypatch.setattr(motor_client, "command_file", cmd_file)
+    monkeypatch.setattr(motor_client, "status_file", status_file)
+    monkeypatch.setattr(motor_client, "encoder_file", encoder_file)
 
-        importlib.reload(ipc_module)
-        hw_views.motor_client = ipc_module.motor_client
-        tr_views.motor_client = ipc_module.motor_client
-
-        yield {
-            "cmd_file": cmd_file,
-            "status_file": status_file,
-            "encoder_file": encoder_file,
-        }
+    return {
+        "cmd_file": cmd_file,
+        "status_file": status_file,
+        "encoder_file": encoder_file,
+    }
 
 
 # =============================================================================

@@ -111,9 +111,6 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## Plus tard
 
-- **Test instable `TestEncoderHealth::test_healthy`** (`tests/test_health_views.py`) :
-  503 au lieu de 200 environ une fois sur douze, malgré la fixture `lenient_freshness`
-  (vu le 25/10, sans changement du code santé). Chercher ce que la fixture ne neutralise pas.
 - **Sortie Tailwind compilée en retard sur les gabarits** (`tailwind-output.css`, date du
   03/05) : des classes écrites dans les gabarits n'y sont pas (`sr-only`,
   `border-accent-red`, `opacity-50`, `text-white`, `h-24`…), donc sans effet.

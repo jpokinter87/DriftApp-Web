@@ -123,10 +123,16 @@ def lenient_freshness(monkeypatch):
     isolément par ``TestCheckFileFreshness``. Sans cela, un runner CI sous
     charge peut dépasser 10 s entre l'écriture du fichier et la requête, et
     rendre un faux 503.
-    """
-    import web.health.views as health_views
 
-    monkeypatch.setattr(health_views, "STALE_THRESHOLD_SEC", 3600.0)
+    Les URL chargent ``health.views`` (``web/`` est dans sys.path), module
+    distinct de ``web.health.views`` : on patche les deux copies, sinon la vue
+    servie garde le seuil réel.
+    """
+    import health.views
+    import web.health.views
+
+    for health_views in (health.views, web.health.views):
+        monkeypatch.setattr(health_views, "STALE_THRESHOLD_SEC", 3600.0)
 
 
 # =============================================================================
@@ -242,6 +248,20 @@ class TestEncoderHealth:
         response = api_client.get("/api/health/encoder/")
         assert response.status_code == 200
         assert response.data["healthy"] is True
+
+    def test_lenient_freshness_atteint_la_vue_servie(
+        self, api_client, health_ipc, lenient_freshness
+    ):
+        """Fichier vieux de 60 s : la fixture doit lever le seuil de la vue servie.
+
+        Les URL chargent ``health.views`` (``web/`` est dans sys.path), un module
+        distinct de ``web.health.views`` : patcher le second laissait le seuil réel
+        de 10 s, d'où des 503 aléatoires sous charge.
+        """
+        old = time.time() - 60
+        os.utime(health_ipc["encoder_file"], (old, old))
+        response = api_client.get("/api/health/encoder/")
+        assert response.status_code == 200
 
     def test_missing_file(self, api_client, health_ipc):
         health_ipc["encoder_file"].unlink()
