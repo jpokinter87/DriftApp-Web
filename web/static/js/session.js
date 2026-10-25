@@ -215,7 +215,7 @@ function updateNoActiveSession() {
 
     // Vider les tables
     document.getElementById('corrections-tbody').innerHTML =
-        '<tr><td colspan="5" class="empty">Aucune correction</td></tr>';
+        '<tr><td colspan="4" class="empty">Aucune correction</td></tr>';
     document.getElementById('goto-tbody').innerHTML =
         '<tr><td colspan="5" class="empty">Aucun GOTO</td></tr>';
 }
@@ -510,7 +510,7 @@ function updateCorrectionsTable(corrections) {
     const tbody = document.getElementById('corrections-tbody');
 
     if (corrections.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="empty">Aucune correction</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">Aucune correction</td></tr>';
         return;
     }
 
@@ -519,7 +519,6 @@ function updateCorrectionsTable(corrections) {
 
     tbody.innerHTML = recentCorrections.map(corr => {
         const time = new Date(corr.timestamp).toLocaleTimeString('fr-FR');
-        const modeClass = (corr.mode || 'normal').toLowerCase();
 
         return `
             <tr>
@@ -529,7 +528,6 @@ function updateCorrectionsTable(corrections) {
                 <td class="correction-value ${corr.correction > 0 ? 'positive' : 'negative'}">
                     ${corr.correction > 0 ? '+' : ''}${corr.correction?.toFixed(2) || '--'}°
                 </td>
-                <td><span class="mode-badge ${modeClass}">${corr.mode || '--'}</span></td>
             </tr>
         `;
     }).join('');

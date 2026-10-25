@@ -115,19 +115,6 @@
 .correction-value.positive { color: var(--color-accent-green); }
 .correction-value.negative { color: var(--color-accent-red); }
 
-/* ── Mode badges (in correction table) ── */
-.mode-badge {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: var(--radius-badge);
-    font-size: 0.65rem;
-    font-weight: 600;
-    text-transform: uppercase;
-}
-.mode-badge.normal { background: rgba(0, 210, 106, 0.15); color: var(--color-accent-green); }
-.mode-badge.critical { background: rgba(255, 165, 2, 0.15); color: var(--color-accent-orange); }
-.mode-badge.continuous { background: rgba(255, 71, 87, 0.15); color: var(--color-accent-red); }
-
 /* ── History items ── */
 .history-item {
     padding: 0.5rem 0.75rem;
@@ -319,11 +306,10 @@
                     <th>Azimut</th>
                     <th>Altitude</th>
                     <th>Correction</th>
-                    <th>Mode</th>
                 </tr>
             </thead>
             <tbody id="corrections-tbody">
-                <tr><td colspan="5" class="empty">Aucune correction</td></tr>
+                <tr><td colspan="4" class="empty">Aucune correction</td></tr>
             </tbody>
         </table>
     </div>
