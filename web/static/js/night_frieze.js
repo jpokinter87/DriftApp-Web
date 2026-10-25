@@ -31,8 +31,20 @@ const FRIEZE = {
         text: '#9aa0a6',
         future: 'rgba(0,0,0,0.45)',
         nowLine: 'rgba(255,255,255,0.45)',
+        label: '#1b1b1b',
     },
 };
+
+// Couleurs du thème actif : variables --frieze-* de theme.css (nom en kebab-case),
+// relues à chaque rendu ; à défaut, les valeurs ci-dessus.
+function applyThemeColors() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const key of Object.keys(FRIEZE.colors)) {
+        const name = '--frieze-' + key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
+        const value = cs.getPropertyValue(name).trim();
+        if (value) FRIEZE.colors[key] = value;
+    }
+}
 
 const ROWS = [
     { key: 'rain', label: 'Pluie' },
@@ -77,6 +89,7 @@ function svgEl(name, attrs) {
  * @param {Object} data - payload de GET /api/session/night/
  */
 function renderNightFrieze(container, data) {
+    applyThemeColors();
     container.innerHTML = '';
     if (!data || !data.night) {
         const empty = document.createElement('div');
@@ -242,7 +255,7 @@ function renderNightFrieze(container, data) {
             const name = svgEl('text', {
                 x: x + 6,
                 y: yOf(2) + FRIEZE.rowHeight / 2 + 4,
-                fill: '#1b1b1b',
+                fill: FRIEZE.colors.label,
                 'font-size': 10,
                 'font-family': 'monospace',
             });

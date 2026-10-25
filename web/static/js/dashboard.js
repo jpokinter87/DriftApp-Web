@@ -2328,6 +2328,32 @@ function initCompass() {
     }
 }
 
+// Couleurs de la boussole : variables --sky-* du thème actif (theme.css), relues
+// seulement quand le thème change.
+let skyCache = { theme: undefined, colors: null };
+
+function skyColors() {
+    const theme = document.documentElement.dataset.theme;
+    if (skyCache.theme !== theme) {
+        const cs = getComputedStyle(document.documentElement);
+        const v = (name) => cs.getPropertyValue('--sky-' + name).trim();
+        skyCache = {
+            theme,
+            colors: {
+                bg: v('bg'), timerTrack: v('timer-track'), timerOk: v('timer-ok'),
+                timerMid: v('timer-mid'), timerLate: v('timer-late'), graticule: v('graticule'),
+                label: v('label'), ringOuter: v('ring-outer'), dome: v('dome'),
+                ringInner: v('ring-inner'), star: v('star'), parking: v('parking'),
+                parkingText: v('parking-text'), arrow: v('arrow'), center: v('center'),
+                countdown: v('countdown'),
+            },
+        };
+    }
+    return skyCache.colors;
+}
+
+document.addEventListener('driftapp:themechange', () => drawCompass());
+
 function drawCompass() {
     const canvas = elements.compass;
     if (!canvas || !compassCtx) return;
@@ -2341,6 +2367,7 @@ function drawCompass() {
     // Rayons - couronne extérieure au maximum, coupole agrandie
     const outerRadius = Math.min(cx, cy) - 4;   // Couronne extérieure (timer) - au max
     const domeRadius = 95;                       // Couronne de la coupole (agrandie pour marge télescope)
+    const sky = skyColors();
 
     // Clear
     ctx.clearRect(0, 0, width, height);
@@ -2348,7 +2375,7 @@ function drawCompass() {
     // =========================================================================
     // COUCHE 1: Fond général
     // =========================================================================
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = sky.bg;
     ctx.beginPath();
     ctx.arc(cx, cy, outerRadius + 2, 0, 2 * Math.PI);
     ctx.fill();
@@ -2360,24 +2387,24 @@ function drawCompass() {
     const timerLineWidth = 6;  // Épaisseur réduite
 
     // Fond de la couronne timer (cercle discret)
-    ctx.strokeStyle = '#1e2d42';
+    ctx.strokeStyle = sky.timerTrack;
     ctx.lineWidth = timerLineWidth;
     ctx.beginPath();
     ctx.arc(cx, cy, outerRadius - timerLineWidth / 2, 0, 2 * Math.PI);
     ctx.stroke();
 
     // Arc de progression du timer
-    let timerColor = '#2d8a5e';  // Couleur par défaut
+    let timerColor = sky.timerOk;  // Couleur par défaut
     if (isTracking && countdownValue !== null && timerTotal > 0) {
         const progress = Math.min(countdownValue / timerTotal, 1.0);
 
         // Couleurs atténuées pour observatoire
         if (progress > 0.5) {
-            timerColor = '#2d8a5e';  // Vert sombre
+            timerColor = sky.timerOk;
         } else if (progress > 0.25) {
-            timerColor = '#b8860b';  // Or sombre
+            timerColor = sky.timerMid;
         } else {
-            timerColor = '#8b3a3a';  // Rouge sombre
+            timerColor = sky.timerLate;
         }
 
         if (progress > 0) {
@@ -2396,7 +2423,7 @@ function drawCompass() {
     // =========================================================================
     // COUCHE 3: Graduations cardinales sur couronne extérieure
     // =========================================================================
-    ctx.strokeStyle = '#4a6a8a';
+    ctx.strokeStyle = sky.graticule;
     for (let deg = 0; deg < 360; deg += 90) {
         const rad = (deg - 90) * Math.PI / 180;
         const x1 = cx + (outerRadius - timerLineWidth - 2) * Math.cos(rad);
@@ -2414,7 +2441,7 @@ function drawCompass() {
     // =========================================================================
     // COUCHE 4: Ciel étoilé (entre couronne extérieure et coupole)
     // =========================================================================
-    drawStarField(ctx, cx, cy, outerRadius - timerLineWidth - 12, domeRadius + 10);
+    drawStarField(ctx, cx, cy, outerRadius - timerLineWidth - 12, domeRadius + 10, sky.star);
 
     // =========================================================================
     // COUCHE 5: Labels cardinaux (dans le ciel étoilé)
@@ -2422,7 +2449,7 @@ function drawCompass() {
     ctx.font = 'bold 13px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#5a8ab8';  // Bleu discret
+    ctx.fillStyle = sky.label;
 
     const labelRadius = outerRadius - 25;
     const labels = { 0: 'N', 90: 'E', 180: 'S', 270: 'O' };
@@ -2444,14 +2471,14 @@ function drawCompass() {
     const openingEnd = domeAngle + OPENING_ANGLE / 2;
 
     // Bordure extérieure de la coupole
-    ctx.strokeStyle = '#3d5068';
+    ctx.strokeStyle = sky.ringOuter;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(cx, cy, domeRadius + 7, 0, 2 * Math.PI);
     ctx.stroke();
 
     // Graduations cardinales sur la coupole
-    ctx.strokeStyle = '#4a6a8a';
+    ctx.strokeStyle = sky.graticule;
     for (let deg = 0; deg < 360; deg += 90) {
         const rad = (deg - 90) * Math.PI / 180;
         const x1 = cx + (domeRadius + 7) * Math.cos(rad);
@@ -2467,8 +2494,8 @@ function drawCompass() {
     }
 
     // Arc ambre = partie FERMÉE (de openingEnd à openingStart, en passant par l'opposé)
-    // Couleur alignée avec cartouche CIMIER (--accent-amber: #d4a055)
-    ctx.strokeStyle = 'rgba(212, 160, 85, 0.75)';
+    // Couleur alignée avec cartouche CIMIER (--accent-amber)
+    ctx.strokeStyle = sky.dome;
     ctx.lineWidth = 12;
     ctx.beginPath();
     const closedStartRad = (openingEnd - 90) * Math.PI / 180;
@@ -2477,7 +2504,7 @@ function drawCompass() {
     ctx.stroke();
 
     // Bordure intérieure de la coupole
-    ctx.strokeStyle = '#2d4059';
+    ctx.strokeStyle = sky.ringInner;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(cx, cy, domeRadius - 7, 0, 2 * Math.PI);
@@ -2488,21 +2515,21 @@ function drawCompass() {
     // window.Alpine?. : drawCompass est aussi appelé au DOMContentLoaded,
     // potentiellement avant l'init d'Alpine.
     const parkingDeg = window.Alpine?.store('dashboard')?.parkingTargetDeg ?? 45;
-    drawParkingMarker(ctx, cx, cy, domeRadius + 22, parkingDeg);
+    drawParkingMarker(ctx, cx, cy, domeRadius + 22, parkingDeg, sky);
 
     // =========================================================================
     // COUCHE 7: Télescope au centre avec timer
     // =========================================================================
     const telescopeAngle = state.trackingInfo?.position_cible;
-    drawTelescope(ctx, cx, cy, telescopeAngle, countdownValue, timerColor);
+    drawTelescope(ctx, cx, cy, telescopeAngle, countdownValue, timerColor, sky);
 }
 
 // Dessiner un champ d'étoiles dans une zone annulaire
-function drawStarField(ctx, cx, cy, outerR, innerR) {
+function drawStarField(ctx, cx, cy, outerR, innerR, color) {
     // Utiliser une seed basée sur les rayons pour avoir un pattern stable
     const starCount = 60;
 
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = color;
 
     for (let i = 0; i < starCount; i++) {
         // Pseudo-random basé sur l'index (pattern stable)
@@ -2531,7 +2558,7 @@ function drawStarField(ctx, cx, cy, outerR, innerR) {
 }
 
 // Marqueur parking : cadre ambre arrondi + "P" sombre, façon icône bouton 🅿 mais aux couleurs du thème.
-function drawParkingMarker(ctx, cx, cy, radius, deg) {
+function drawParkingMarker(ctx, cx, cy, radius, deg, sky) {
     const rad = (deg - 90) * Math.PI / 180;
     const px = cx + radius * Math.cos(rad);
     const py = cy + radius * Math.sin(rad);
@@ -2541,7 +2568,7 @@ function drawParkingMarker(ctx, cx, cy, radius, deg) {
     const x = px - boxSize / 2;
     const y = py - boxSize / 2;
 
-    ctx.fillStyle = '#d4a055';
+    ctx.fillStyle = sky.parking;
     ctx.beginPath();
     ctx.moveTo(x + corner, y);
     ctx.lineTo(x + boxSize - corner, y);
@@ -2558,12 +2585,12 @@ function drawParkingMarker(ctx, cx, cy, radius, deg) {
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#1a1a2e';
+    ctx.fillStyle = sky.parkingText;
     ctx.fillText('P', px, py + 0.5);
 }
 
 // Dessiner la flèche de direction calculée (🎯) avec décompte au-dessus du compass
-function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
+function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor, sky) {
     // Si pas d'angle de tracking, utiliser la position coupole
     const teleAngle = (angle !== undefined && angle !== null) ? angle : state.position;
     const teleRad = teleAngle * Math.PI / 180;
@@ -2582,7 +2609,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
 
     // === FLÈCHE ===
     // Tige de la flèche (du cercle central vers l'extérieur)
-    ctx.strokeStyle = '#4ade80';  // Vert clair
+    ctx.strokeStyle = sky.arrow;
     ctx.lineWidth = arrowWidth;
     ctx.lineCap = 'round';
     ctx.beginPath();
@@ -2591,7 +2618,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
     ctx.stroke();
 
     // Pointe de la flèche (triangle)
-    ctx.fillStyle = '#4ade80';
+    ctx.fillStyle = sky.arrow;
     ctx.beginPath();
     ctx.moveTo(0, -arrowLength - arrowHeadSize);  // Pointe
     ctx.lineTo(-arrowHeadSize/2, -arrowLength + 2);  // Coin gauche
@@ -2601,13 +2628,13 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
 
     // === CERCLE CENTRAL avec 🎯 ===
     // Cercle extérieur
-    ctx.fillStyle = '#1e3a5f';
+    ctx.fillStyle = sky.center;
     ctx.beginPath();
     ctx.arc(0, 0, centerRadius, 0, 2 * Math.PI);
     ctx.fill();
 
     // Bordure du cercle
-    ctx.strokeStyle = '#4ade80';
+    ctx.strokeStyle = sky.arrow;
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -2634,7 +2661,7 @@ function drawTelescope(ctx, cx, cy, angle, countdownValue, timerColor) {
                 timerText = String(countdownValue);
             }
             countdownEl.textContent = `⏱ ${timerText}`;
-            countdownEl.style.color = timerColor || '#4da6ff';
+            countdownEl.style.color = timerColor || sky.countdown;
         } else {
             countdownEl.textContent = '';
         }

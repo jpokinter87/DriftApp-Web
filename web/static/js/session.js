@@ -20,10 +20,6 @@ const CONFIG = {
     MOTOR_STATUS_URL: '/api/hardware/status/',
     REFRESH_INTERVAL: 5000,  // 5 secondes
 
-    // Couleur des courbes : ambre du suivi (vitesse unique v5.10, plus de modes).
-    LINE_COLOR: '#d4a055',
-
-    CORRECTION_DOT_COLOR: '#ff4757',  // Rouge pour les points de correction
     CORRECTION_DOT_RADIUS: 3          // Petit rayon pour éviter l'encombrement
 };
 
@@ -291,7 +287,35 @@ function updateLastUpdateTime() {
 // GRAPHIQUES CHART.JS
 // =============================================================================
 
+// Couleurs des graphiques : variables --chart-* du thème actif (theme.css).
+function chartColors() {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (name) => cs.getPropertyValue('--chart-' + name).trim();
+    return { line: v('line'), dot: v('dot'), text: v('text'), grid: v('grid') };
+}
+
+// Applique les couleurs du thème actif aux deux graphiques déjà créés.
+function applyChartTheme() {
+    const c = chartColors();
+    [state.altitudeChart, state.azimutChart].forEach((chart) => {
+        if (!chart) return;
+        const [line, dots] = chart.data.datasets;
+        line.borderColor = c.line;
+        dots.pointBackgroundColor = c.dot;
+        dots.pointBorderColor = c.dot;
+        Object.values(chart.options.scales).forEach((scale) => {
+            scale.ticks.color = c.text;
+            scale.grid.color = c.grid;
+            if (scale.title) scale.title.color = c.text;
+        });
+        chart.update('none');
+    });
+}
+
+document.addEventListener('driftapp:themechange', applyChartTheme);
+
 function initCharts() {
+    const c = chartColors();
     const altitudeCtx = document.getElementById('altitude-chart').getContext('2d');
     const azimutCtx = document.getElementById('azimut-chart').getContext('2d');
 
@@ -310,14 +334,14 @@ function initCharts() {
                 title: {
                     display: true,
                     text: 'Temps (minutes)',
-                    color: 'rgba(160, 144, 128, 1)'
+                    color: c.text
                 },
-                ticks: { color: 'rgba(160, 144, 128, 1)' },
-                grid: { color: 'rgba(74, 61, 46, 0.5)' }
+                ticks: { color: c.text },
+                grid: { color: c.grid }
             },
             y: {
-                ticks: { color: 'rgba(160, 144, 128, 1)' },
-                grid: { color: 'rgba(74, 61, 46, 0.5)' }
+                ticks: { color: c.text },
+                grid: { color: c.grid }
             }
         }
     };
@@ -331,15 +355,15 @@ function initCharts() {
                 borderWidth: 2,
                 pointRadius: 0,
                 tension: 0.1,
-                borderColor: CONFIG.LINE_COLOR
+                borderColor: c.line
             }, {
                 // Dataset pour les points de correction
                 label: 'Corrections',
                 data: [],
                 borderWidth: 0,
                 pointRadius: CONFIG.CORRECTION_DOT_RADIUS,
-                pointBackgroundColor: CONFIG.CORRECTION_DOT_COLOR,
-                pointBorderColor: CONFIG.CORRECTION_DOT_COLOR,
+                pointBackgroundColor: c.dot,
+                pointBorderColor: c.dot,
                 pointBorderWidth: 0,
                 showLine: false
             }]
@@ -355,7 +379,7 @@ function initCharts() {
                     title: {
                         display: true,
                         text: 'Altitude (°)',
-                        color: 'rgba(160, 144, 128, 1)'
+                        color: c.text
                     }
                 }
             }
@@ -371,15 +395,15 @@ function initCharts() {
                 borderWidth: 2,
                 pointRadius: 0,
                 tension: 0.1,
-                borderColor: CONFIG.LINE_COLOR
+                borderColor: c.line
             }, {
                 // Dataset pour les points de correction
                 label: 'Corrections',
                 data: [],
                 borderWidth: 0,
                 pointRadius: CONFIG.CORRECTION_DOT_RADIUS,
-                pointBackgroundColor: CONFIG.CORRECTION_DOT_COLOR,
-                pointBorderColor: CONFIG.CORRECTION_DOT_COLOR,
+                pointBackgroundColor: c.dot,
+                pointBorderColor: c.dot,
                 pointBorderWidth: 0,
                 showLine: false
             }]
@@ -395,7 +419,7 @@ function initCharts() {
                     title: {
                         display: true,
                         text: 'Position Coupole (°)',
-                        color: 'rgba(160, 144, 128, 1)'
+                        color: c.text
                     }
                 }
             }
@@ -771,9 +795,12 @@ document.addEventListener('DOMContentLoaded', () => {
     selector.addEventListener('change', (event) => loadNight(event.target.value));
     loadNight();
     setInterval(refreshCurrentNight, NIGHT_REFRESH_MS);
-    // Redessine à la volée : le SVG est calculé pour la largeur du conteneur.
-    window.addEventListener('resize', () => {
+    // Redessine à la volée : le SVG est calculé pour la largeur du conteneur
+    // et ses couleurs sont celles du thème actif.
+    const redraw = () => {
         const container = document.getElementById('night-frieze');
         if (container && lastNightPayload) window.renderNightFrieze(container, lastNightPayload);
-    });
+    };
+    window.addEventListener('resize', redraw);
+    document.addEventListener('driftapp:themechange', redraw);
 });

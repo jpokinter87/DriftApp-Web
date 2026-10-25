@@ -60,8 +60,10 @@ Pas de réglage de luminosité.
 
 ## Critères de succès
 
-1. **Crépuscule identique** : captures des 4 pages en `dusk` identiques au pixel près à
-   celles de `main` en « Jour » (hors sélecteur de l'en-tête, qui gagne un bouton).
+1. **Crépuscule identique** : sur les 4 pages, styles calculés de tous les éléments en
+   `dusk` identiques à ceux de `main` en « Jour » (hors sélecteur de l'en-tête, qui gagne
+   un bouton), et boussole identique au pixel près. Les données en direct (heures,
+   positions simulées) rendent une comparaison de captures entières instable.
 2. **Nuit intacte** : en `night`, aucune capture ne contient de pixel avec G > 0 ou B > 0.
 3. **Jour lisible** : captures des 4 pages, de la modale GOTO et d'une modale de
    confirmation en `day` ; aucun reste de bois sombre ni de texte clair sur fond clair ;

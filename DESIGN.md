@@ -279,8 +279,22 @@ Un bloc creusé dans le foyer, en mono 12 px, une entrée par ligne séparée pa
 - **Don't** introduire une deuxième couleur de marque à côté de l'ambre.
 - **Don't** faire dépendre une information du survol (`title`, tooltip au hover).
 
+### Trois thèmes
+Le bois sombre décrit plus haut est le thème **Crépuscule** : c'est le rendu par défaut des feuilles de style, aucune règle ne le cible. `web/static/css/theme.css` ajoute le thème **Jour** (clair) et le thème **Nuit** (rouge). `theme.js` pose `data-theme` (`day`, `dusk`, `night`) sur `<html>` d'après le sélecteur Auto/Nuit/Crép./Jour de l'en-tête. En Auto : jour quand le Soleil est au-dessus de 0°, crépuscule entre 0° et −6°, nuit en dessous. Un changement de thème émet l'événement `driftapp:themechange`.
+
+Les dessins (canvas de la boussole, frise de nuit SVG, graphiques Chart.js) lisent leurs couleurs dans les variables `--sky-*`, `--frieze-*` et `--chart-*` de `theme.css`, définies pour chaque thème.
+- **Do** donner à toute nouvelle couleur une valeur dans chaque thème, ou la faire passer par un token ; une couleur écrite en dur reste sombre en Jour.
+
+### Thème jour « carnet d'observation »
+Pour l'écran tactile en pleine lumière et le portable au bureau : papier presque blanc (`#fdfcf9` sur un fond `#efece6`), encre graphite (`#1f1d1a`), filets fins, ambre foncé en bronze (`#8c5a14`) pour rester lisible. Les états gardent leur sens, en versions foncées (vert `#0f6b3b`, orange `#985000`, rouge `#b0172f`).
+- Pas d'ombre, de halo, de pulsation néon ni de constellations : invisibles en pleine lumière. Un état vivant se lit au **contour** (STOP : fond rose pâle, texte et contour rouges ; suivi actif : contour vert).
+- Les titres de section perdent le dégradé feu : encre graphite soulignée d'un filet ambre de 2 px. Le nom de l'application reste en ambre, en aplat.
+- La boussole devient une carte du ciel imprimée : disque papier, graticule et étoiles graphite, anneau de la coupole en ambre. La règle du ciel enclos tient toujours.
+- Texte sur l'ambre : blanc (5,9:1). Tout texte ≥ 4,5:1 sur `obs-input`, la surface la plus foncée.
+- **Don't** surcharger une règle `!important` de `@layer components` depuis un fichier hors layer : un `!important` hors layer perd. Poser la surcharge dans `@layer base` (voir les titres dans `theme.css`).
+
 ### Thème nuit rouge
-La nuit, `web/static/css/theme.css` remplace tous les tokens par des rouges purs (G = B = 0) posés sur un fond presque noir. C'est `theme.js` qui l'active, depuis le sélecteur Auto/Nuit/Jour de l'en-tête ; en Auto, le passage se fait quand le Soleil descend sous −6°. Un filtre `feColorMatrix` posé sur `<html>` ne laisse passer que le canal rouge, ce qui couvre la boussole, la frise, les graphiques et les styles inline.
+La nuit, `web/static/css/theme.css` remplace tous les tokens par des rouges purs (G = B = 0) posés sur un fond presque noir. Un filtre `feColorMatrix` posé sur `<html>` ne laisse passer que le canal rouge, ce qui couvre la boussole, la frise, les graphiques et les styles inline.
 - **Do** donner à toute nouvelle couleur une valeur nuit en rouge pur dans `theme.css` ; le filtre n'est qu'un filet de sécurité.
 - **Do** distinguer les états par la forme : aplat pour l'alarme et STOP, contour pour l'action principale, anneau pour un voyant ok, disque plein pour un voyant en panne.
 - **Don't** compter sur la teinte pour porter un sens : en nuit, le vert et l'orange deviennent rouges.

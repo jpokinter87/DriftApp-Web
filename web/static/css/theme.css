@@ -1,10 +1,53 @@
-/* DriftApp — sélecteur de thème + mode nuit rouge.
+/* DriftApp — sélecteur de thème, mode nuit rouge, thème jour « carnet ».
    Chargé après Tailwind et les feuilles de page : ces règles priment sans
    recompilation. Le thème est posé par theme.js (data-theme sur <html>).
-   Spec : docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md */
+   Le crépuscule (bois sombre) est le rendu par défaut : aucune règle ne le cible.
+   Specs : docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md,
+           docs/superpowers/specs/2026-10-25-theme-jour-carnet.md */
 
 /* =========================================================================
-   Sélecteur Auto / Nuit / Jour (en-tête, toutes les pages)
+   Couleurs de dessin (canvas de la boussole, frise de nuit SVG, Chart.js)
+   Lues par le JS dans le thème actif ; valeurs par défaut = crépuscule.
+   ========================================================================= */
+:root {
+    --sky-bg: #1a1a2e;
+    --sky-timer-track: #1e2d42;
+    --sky-timer-ok: #2d8a5e;
+    --sky-timer-mid: #b8860b;
+    --sky-timer-late: #8b3a3a;
+    --sky-graticule: #4a6a8a;
+    --sky-label: #5a8ab8;
+    --sky-ring-outer: #3d5068;
+    --sky-dome: rgba(212, 160, 85, 0.75);
+    --sky-ring-inner: #2d4059;
+    --sky-star: #ffffff;
+    --sky-parking: #d4a055;
+    --sky-parking-text: #1a1a2e;
+    --sky-arrow: #4ade80;
+    --sky-center: #1e3a5f;
+    --sky-countdown: #4da6ff;
+
+    --frieze-wet: #4aa3ff;
+    --frieze-dry: rgba(255, 255, 255, 0.05);
+    --frieze-unreachable: #ffa502;
+    --frieze-cimier-open: #00d26a;
+    --frieze-tracking: #d4a055;
+    --frieze-close-marker: #ff4757;
+    --frieze-would-close-marker: #ffa502;
+    --frieze-axis: rgba(255, 255, 255, 0.25);
+    --frieze-text: #9aa0a6;
+    --frieze-future: rgba(0, 0, 0, 0.45);
+    --frieze-now-line: rgba(255, 255, 255, 0.45);
+    --frieze-label: #1b1b1b;
+
+    --chart-line: #d4a055;
+    --chart-dot: #ff4757;
+    --chart-text: rgba(160, 144, 128, 1);
+    --chart-grid: rgba(74, 61, 46, 0.5);
+}
+
+/* =========================================================================
+   Sélecteur Auto / Nuit / Crépuscule / Jour (en-tête, toutes les pages)
    Cibles de 44 px : l'écran du kiosque est tactile.
    ========================================================================= */
 .theme-switch {
@@ -183,4 +226,336 @@ html[data-theme="night"] .rain-pill-wet {
     color: #000;
     border-color: var(--color-accent-red);
     background: var(--color-accent-red);
+}
+
+/* =========================================================================
+   Thème jour « carnet d'observation »
+   Papier, encre graphite, filets fins ; l'ambre foncé en bronze pour rester
+   lisible. Pas d'ombre, de halo ni de constellations : invisibles en pleine
+   lumière. Un état vivant se lit au contour, plus à la lueur.
+   Texte ≥ 4.5:1 sur obs-input, la surface la plus foncée (spec).
+   ========================================================================= */
+html[data-theme="day"] {
+    color-scheme: light;
+
+    --color-obs-dark: #efece6;
+    --color-obs-panel: #fdfcf9;
+    --color-obs-input: #f3f0ea;
+    --color-obs-surface: #f7f5f0;
+    --color-obs-hover: #e9e5dc;
+    --color-obs-border: #d8d1c4;
+    --color-obs-border-light: #c9c1b2;
+
+    --color-obs-text: #1f1d1a;
+    --color-obs-text-secondary: #4f4a42;
+    --color-obs-text-muted: #625c52;
+
+    --color-accent-amber: #8c5a14;
+    --color-accent-amber-light: #7a4e10;
+    --color-accent-amber-dark: #6f470f;
+    --color-accent-green: #0f6b3b;
+    --color-accent-green-dim: #0b5a31;
+    --color-accent-orange: #985000;
+    --color-accent-red: #b0172f;
+    --color-accent-red-dim: #8f1226;
+    --color-accent-purple: #6a3d9a;
+
+    --color-status-ok: #0f6b3b;
+    --color-status-warn: #985000;
+    --color-status-error: #b0172f;
+    --color-status-info: #1d5a9e;
+
+    --shadow-panel: none;
+    --shadow-glow-amber: none;
+    --shadow-glow-green: none;
+    --shadow-glow-red: none;
+
+    /* Boussole : une carte du ciel imprimée. */
+    --sky-bg: #f7f5f0;
+    --sky-timer-track: #e4dfd5;
+    --sky-timer-ok: #0f6b3b;
+    --sky-timer-mid: #985000;
+    --sky-timer-late: #b0172f;
+    --sky-graticule: #8a8274;
+    --sky-label: #1f1d1a;
+    --sky-ring-outer: #9a9284;
+    --sky-dome: rgba(140, 90, 20, 0.8);
+    --sky-ring-inner: #b8b0a2;
+    --sky-star: #4f4a42;
+    --sky-parking: #8c5a14;
+    --sky-parking-text: #ffffff;
+    --sky-arrow: #0f6b3b;
+    --sky-center: #fdfcf9;
+    --sky-countdown: #1d5a9e;
+
+    --frieze-wet: #1d5a9e;
+    --frieze-dry: rgba(31, 29, 26, 0.05);
+    --frieze-unreachable: #985000;
+    --frieze-cimier-open: #0f6b3b;
+    --frieze-tracking: #8c5a14;
+    --frieze-close-marker: #b0172f;
+    --frieze-would-close-marker: #985000;
+    --frieze-axis: rgba(31, 29, 26, 0.35);
+    --frieze-text: #4f4a42;
+    --frieze-future: rgba(31, 29, 26, 0.06);
+    --frieze-now-line: rgba(31, 29, 26, 0.55);
+    --frieze-label: #1f1d1a;
+
+    --chart-line: #8c5a14;
+    --chart-dot: #b0172f;
+    --chart-text: #4f4a42;
+    --chart-grid: rgba(31, 29, 26, 0.12);
+}
+
+html[data-theme="day"] *,
+html[data-theme="day"] *::before,
+html[data-theme="day"] *::after {
+    text-shadow: none !important;
+}
+
+/* Titres : encre graphite soulignée d'un filet ambre, au lieu du dégradé feu.
+   Le dégradé est posé en !important dans @layer components ; un !important
+   hors layer ne l'emporte pas, un !important d'un layer déclaré avant
+   (base) si. */
+@layer base {
+    html[data-theme="day"] .section-title-fire {
+        background: none !important;
+        color: var(--color-obs-text) !important;
+        -webkit-text-fill-color: var(--color-obs-text) !important;
+    }
+}
+
+html[data-theme="day"] .section-title-fire {
+    border-bottom: 2px solid var(--color-accent-amber);
+    padding-bottom: 2px;
+}
+
+/* Le nom de l'application garde l'ambre, en aplat. */
+
+html[data-theme="day"] header h1 span {
+    background: none !important;
+    color: var(--color-accent-amber) !important;
+    -webkit-text-fill-color: var(--color-accent-amber) !important;
+}
+
+/* Cimier en cycle : le reflet balaie de l'ambre à l'orange (le blanc
+   disparaîtrait sur le papier). */
+html[data-theme="day"] .cimier-cycle-shimmer {
+    background-image: linear-gradient(90deg, var(--color-accent-amber) 0%,
+        var(--color-accent-orange) 50%, var(--color-accent-amber) 100%);
+}
+
+html[data-theme="day"] .panel-astro {
+    background-image: none;
+}
+
+/* Le relief vient des filets : pas d'ombre sous les panneaux (l'utilitaire
+   Tailwind écrit l'ombre en dur, le token ne suffit pas). */
+html[data-theme="day"] .panel,
+html[data-theme="day"] .stat-card {
+    box-shadow: none;
+}
+
+html[data-theme="day"] .panel-astro:hover {
+    box-shadow: none;
+    border-color: var(--color-obs-border-light);
+}
+
+/* Boutons. Le texte sur l'ambre passe en blanc (5.9:1). */
+html[data-theme="day"] .btn-primary,
+html[data-theme="day"] .cfg-save-btn {
+    color: #fff;
+}
+
+html[data-theme="day"] .btn-primary.flash-success {
+    animation: none !important;
+    background: var(--color-accent-amber) !important;
+    border: 3px solid var(--color-accent-orange) !important;
+}
+
+/* STOP : fond rose pâle, texte et contour rouges (6.0:1), sans lueur. */
+html[data-theme="day"] .btn-stop {
+    background: #fbe3e5;
+    box-shadow: inset 0 0 0 1px var(--color-accent-red);
+}
+
+html[data-theme="day"] .btn-stop:hover {
+    background: #f6d0d4;
+}
+
+html[data-theme="day"] .tracking-active-glow {
+    box-shadow: none;
+    animation: none;
+}
+
+html[data-theme="day"] .tracking-under-compass {
+    background: rgba(15, 107, 59, 0.06);
+}
+
+/* Encodeur et méridien : mêmes états, versions foncées. */
+html[data-theme="day"] .enc-item.enc-absent,
+html[data-theme="day"] .meridian-item.meridian-passed {
+    border-color: var(--color-obs-text-muted) !important;
+}
+
+html[data-theme="day"] .enc-item.enc-absent #encoder-calibrated,
+html[data-theme="day"] .meridian-item.meridian-passed #meridian-value {
+    color: var(--color-obs-text-muted) !important;
+}
+
+html[data-theme="day"] .enc-item.enc-uncalibrated,
+html[data-theme="day"] .meridian-item.meridian-warning {
+    border-color: var(--color-accent-orange) !important;
+}
+
+html[data-theme="day"] .enc-item.enc-uncalibrated #encoder-calibrated,
+html[data-theme="day"] .meridian-item.meridian-warning #meridian-value {
+    color: var(--color-accent-orange) !important;
+}
+
+html[data-theme="day"] .meridian-item.meridian-danger {
+    border-color: var(--color-accent-red) !important;
+}
+
+html[data-theme="day"] .meridian-item.meridian-danger #meridian-value {
+    color: var(--color-accent-red) !important;
+}
+
+/* Encodeur figé, méridien critique : aplat rose et contour rouge ; seul le
+   texte clignote (la pulsation néon serait invisible). */
+html[data-theme="day"] .enc-item.enc-frozen,
+html[data-theme="day"] .meridian-item.meridian-critical {
+    border-color: var(--color-accent-red) !important;
+    background: #fbe3e5 !important;
+    animation: none !important;
+}
+
+html[data-theme="day"] .enc-item.enc-frozen label,
+html[data-theme="day"] .enc-item.enc-frozen #encoder-calibrated,
+html[data-theme="day"] .meridian-item.meridian-critical #meridian-value {
+    color: var(--color-accent-red) !important;
+}
+
+/* Pastilles pluie et chauffage (couleurs écrites en dur dans dashboard.css). */
+html[data-theme="day"] .rain-pill-dry,
+html[data-theme="day"] .heater-pill-on {
+    color: var(--color-accent-green);
+    border-color: rgba(15, 107, 59, 0.4);
+    background: #e1f1e6;
+}
+
+html[data-theme="day"] .rain-pill-wet {
+    color: var(--color-status-info);
+    border-color: rgba(29, 90, 158, 0.5);
+    background: #e2ebf6;
+}
+
+html[data-theme="day"] .rain-pill-unknown,
+html[data-theme="day"] .heater-pill-error {
+    color: var(--color-accent-orange);
+    border-color: rgba(152, 80, 0, 0.4);
+    background: #f9e9d4;
+}
+
+html[data-theme="day"] .heater-pill-off {
+    color: var(--color-obs-text-muted);
+    border-color: var(--color-obs-border-light);
+    background: transparent;
+}
+
+/* Modales : voile graphite léger, contour au lieu de la lueur. */
+html[data-theme="day"] .goto-modal,
+html[data-theme="day"] .update-modal,
+html[data-theme="day"] .cfg-modal-backdrop {
+    background-color: rgba(31, 29, 26, 0.45);
+}
+
+html[data-theme="day"] .goto-modal-content,
+html[data-theme="day"] .update-modal-content {
+    background: var(--color-obs-panel);
+    box-shadow: 0 8px 24px rgba(31, 29, 26, 0.18);
+}
+
+html[data-theme="day"] .update-progress .progress-bar {
+    background-color: var(--color-obs-input);
+}
+
+html[data-theme="day"] .update-config-warning code,
+html[data-theme="day"] .update-details {
+    background-color: rgba(31, 29, 26, 0.05);
+}
+
+html[data-theme="day"] .update-details li {
+    border-bottom-color: var(--color-obs-border);
+}
+
+html[data-theme="day"] .config-banner-close:focus-visible {
+    background-color: rgba(31, 29, 26, 0.08);
+}
+
+/* Page Système : en-têtes des fichiers IPC (bg-black/30). */
+html[data-theme="day"] .bg-black\/30 {
+    background-color: var(--color-obs-input);
+}
+
+/* Page Session : en-tête du tableau. */
+html[data-theme="day"] .session-table thead th {
+    background: var(--color-obs-input);
+}
+
+/* Page Configuration : ses styles retombent sur des valeurs sombres écrites
+   en dur (variables absentes du thème). */
+html[data-theme="day"] .cfg-section {
+    border-color: var(--color-obs-border);
+}
+
+html[data-theme="day"] .cfg-head {
+    background: var(--color-obs-panel);
+}
+
+html[data-theme="day"] .cfg-head:hover {
+    background: var(--color-obs-hover);
+}
+
+html[data-theme="day"] .cfg-group,
+html[data-theme="day"] .cfg-help-text,
+html[data-theme="day"] .cfg-restart-state {
+    color: var(--color-obs-text-muted);
+}
+
+html[data-theme="day"] .cfg-label,
+html[data-theme="day"] .cfg-restart-line,
+html[data-theme="day"] .cfg-modal-text,
+html[data-theme="day"] .cfg-modal-cancel {
+    color: var(--color-obs-text-secondary);
+}
+
+html[data-theme="day"] .cfg-input {
+    background: var(--color-obs-input);
+    border-color: var(--color-obs-border-light);
+    color: var(--color-obs-text);
+}
+
+html[data-theme="day"] .cfg-savebar {
+    background: var(--color-obs-dark);
+    border-top-color: var(--color-obs-border);
+}
+
+html[data-theme="day"] .cfg-modal {
+    background: var(--color-obs-panel);
+    border-color: var(--color-obs-border);
+}
+
+html[data-theme="day"] .cfg-modal-cancel {
+    border-color: var(--color-obs-border-light);
+}
+
+html[data-theme="day"] .cfg-dot-absent {
+    background: var(--color-obs-text-muted);
+}
+
+/* Surfaces du navigateur. */
+html[data-theme="day"] ::selection {
+    background: #f3e7d2;
+    color: var(--color-obs-text);
 }

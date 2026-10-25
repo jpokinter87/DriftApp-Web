@@ -1,16 +1,21 @@
 /**
- * Mode nuit rouge — choix du thème (Auto / Nuit / Jour), un réglage par écran.
+ * Choix du thème (Auto / Nuit / Crépuscule / Jour), un réglage par écran.
  *
  * Chargé de façon bloquante dans <head> : data-theme est posé sur <html> avant
  * le premier rendu, sans flash de jour au chargement d'une page la nuit.
- * En Auto, nuit quand le Soleil est sous NIGHT_BELOW_DEG (fin du crépuscule
- * civil, même seuil que la fermeture du cimier), réévalué chaque minute.
+ * En Auto, réévalué chaque minute : jour (clair) quand le Soleil est au-dessus de
+ * DAY_ABOVE_DEG, crépuscule (bois sombre) jusqu'à NIGHT_BELOW_DEG (fin du crépuscule
+ * civil, même seuil que la fermeture du cimier), nuit (rouge) en dessous.
+ * Specs : docs/superpowers/specs/2026-10-25-mode-nuit-rouge.md,
+ *         docs/superpowers/specs/2026-10-25-theme-jour-carnet.md
  * Coordonnées du site : attributs data-site-lat / data-site-lon de <html>,
  * injectés depuis data/config.json (context processor site_coords).
  */
 (function () {
     const STORAGE_KEY = 'driftapp-theme';
     const NIGHT_BELOW_DEG = -6;
+    const DAY_ABOVE_DEG = 0;
+    const CHOICES = ['night', 'dusk', 'day'];
     const RECHECK_MS = 60_000;
     const rad = Math.PI / 180;
 
@@ -33,8 +38,14 @@
         return Math.asin(sinAlt) / rad;
     }
 
+    /** Thème d'après l'altitude du Soleil (degrés). */
+    function resolveTheme(alt) {
+        if (alt >= DAY_ABOVE_DEG) return 'day';
+        return alt < NIGHT_BELOW_DEG ? 'night' : 'dusk';
+    }
+
     if (typeof document === 'undefined') {
-        module.exports = { sunAltitude };  // vérification node contre astropy
+        module.exports = { sunAltitude, resolveTheme };  // vérification node
         return;
     }
 
@@ -49,16 +60,23 @@
     }
 
     function resolve(choice) {
-        if (choice === 'night' || choice === 'day') return choice;
+        if (CHOICES.includes(choice)) return choice;
         const lat = parseFloat(root.dataset.siteLat);
         const lon = parseFloat(root.dataset.siteLon);
-        if (Number.isNaN(lat) || Number.isNaN(lon)) return 'day';
-        return sunAltitude(new Date(), lat, lon) < NIGHT_BELOW_DEG ? 'night' : 'day';
+        if (Number.isNaN(lat) || Number.isNaN(lon)) return 'dusk';
+        return resolveTheme(sunAltitude(new Date(), lat, lon));
+    }
+
+    /** Pose le thème ; prévient les dessins (boussole, frise, graphiques) s'il change. */
+    function setTheme(theme) {
+        if (root.dataset.theme === theme) return;
+        root.dataset.theme = theme;
+        document.dispatchEvent(new CustomEvent('driftapp:themechange', { detail: { theme } }));
     }
 
     function apply() {
         const choice = readChoice();
-        root.dataset.theme = resolve(choice);
+        setTheme(resolve(choice));
         document.querySelectorAll('[data-theme-choice]').forEach((btn) => {
             btn.setAttribute('aria-pressed', String(btn.dataset.themeChoice === choice));
         });
@@ -74,7 +92,7 @@
             localStorage.setItem(STORAGE_KEY, btn.dataset.themeChoice);
         } catch (e) {
             // Stockage indisponible : le choix vaut pour cette page seulement.
-            root.dataset.theme = resolve(btn.dataset.themeChoice);
+            setTheme(resolve(btn.dataset.themeChoice));
             btn.parentElement.querySelectorAll('[data-theme-choice]').forEach((b) => {
                 b.setAttribute('aria-pressed', String(b === btn));
             });
