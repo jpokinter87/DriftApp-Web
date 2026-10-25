@@ -335,6 +335,12 @@ header h1 span {
     display: none;
 }
 
+/* STOP pendant le GOTO : pleine largeur, le geste de reprise en main. */
+.goto-modal-stop {
+    width: 100%;
+    margin-top: 1.25rem;
+}
+
 .goto-modal-content {
     background: linear-gradient(135deg, var(--color-obs-panel) 0%, var(--color-obs-dark) 100%);
     border: 2px solid var(--color-accent-orange);

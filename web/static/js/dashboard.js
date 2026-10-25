@@ -330,6 +330,7 @@ const elements = {
     btnJogCCW10: document.getElementById('btn-jog-ccw-10'),
     btnJogCCW1: document.getElementById('btn-jog-ccw-1'),
     btnStop: document.getElementById('btn-stop'),
+    btnGotoStop: document.getElementById('btn-goto-stop'),
     btnJogCW1: document.getElementById('btn-jog-cw-1'),
     btnJogCW10: document.getElementById('btn-jog-cw-10'),
     btnContCCW: document.getElementById('btn-cont-ccw'),
@@ -459,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         initElements();
         initEventListeners();
+        watchModalFocus();
         initCompass();
         startPolling();
         refreshConfigBanner();
@@ -492,6 +494,7 @@ function initEventListeners() {
     elements.btnJogCCW10.addEventListener('click', () => jog(-10));
     elements.btnJogCCW1.addEventListener('click', () => jog(-1));
     elements.btnStop.addEventListener('click', stopMotor);
+    elements.btnGotoStop.addEventListener('click', stopMotor);
     elements.btnJogCW1.addEventListener('click', () => jog(1));
     elements.btnJogCW10.addEventListener('click', () => jog(10));
     elements.btnGoto.addEventListener('click', gotoPosition);
@@ -962,6 +965,61 @@ function showGotoModal(objectName, startPos, targetPos, currentPos, delta) {
     // Afficher la modal via Alpine.js store
     Alpine.store('dashboard').gotoModalVisible = true;
     gotoModalVisible = true;
+}
+
+// =========================================================================
+// Modales au clavier (accès à distance) : Échap déclenche l'annulation
+// ([data-modal-cancel] : STOP pour le GOTO), Tab reste dans la modale,
+// le focus revient à l'élément d'origine à la fermeture.
+// =========================================================================
+
+const MODAL_FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]';
+let modalReturnFocus = null;
+
+function visibleModal() {
+    return [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')]
+        .find((m) => getComputedStyle(m).display !== 'none');
+}
+
+function watchModalFocus() {
+    const observer = new MutationObserver(() => {
+        const modal = visibleModal();
+        if (modal && !modal.contains(document.activeElement)) {
+            modalReturnFocus = document.activeElement;
+            (modal.querySelector('[data-modal-cancel]') || modal.querySelector(MODAL_FOCUSABLE))?.focus();
+        } else if (!modal && modalReturnFocus) {
+            modalReturnFocus.focus();
+            modalReturnFocus = null;
+        }
+    });
+    document.querySelectorAll('[role="dialog"][aria-modal="true"]').forEach((m) => {
+        observer.observe(m, { attributes: true, attributeFilter: ['style'] });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        const modal = visibleModal();
+        if (!modal) return;
+        if (event.key === 'Escape') {
+            const cancel = modal.querySelector('[data-modal-cancel]');
+            if (cancel) {
+                event.preventDefault();
+                cancel.click();
+            }
+        } else if (event.key === 'Tab') {
+            const items = [...modal.querySelectorAll(MODAL_FOCUSABLE)]
+                .filter((el) => el.offsetWidth || el.offsetHeight);
+            if (!items.length) return;
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    });
 }
 
 function hideGotoModal() {

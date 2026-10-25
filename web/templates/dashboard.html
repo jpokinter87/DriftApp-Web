@@ -216,6 +216,7 @@
             <h3 class="section-title section-title-fire mb-3">Suivi d'Objet</h3>
             <div class="input-group mb-1">
                 <input type="text" id="object-name" class="input-field flex-1"
+                       aria-label="Objet à suivre (nom ou catalogue)"
                        placeholder="Ex: M31, Vega, Jupiter...">
                 <button id="btn-search" class="btn btn-secondary">Rechercher</button>
                 <!-- v6.17 — cibles faibles absentes des bases : saisie manuelle AD/Déc J2000. -->
@@ -275,6 +276,7 @@
                  la destination la plus fréquente. -->
             <div x-data class="flex gap-2">
                 <input type="text" inputmode="decimal" id="goto-angle" class="input-field flex-1"
+                       aria-label="Azimut cible du GOTO, en degrés"
                        value="45" placeholder="Angle (0-360)">
                 <button id="btn-goto" class="btn btn-secondary"
                         :disabled="$store.dashboard.calibrationBlocked()"
@@ -545,6 +547,9 @@
         <div class="goto-modal-delta">
             D&eacute;placement: <span id="goto-modal-delta">--&deg;</span>
         </div>
+        <!-- La modale couvre tout l'écran pendant le GOTO : sans ce bouton, aucun
+             STOP n'est atteignable au doigt sur le kiosque. -->
+        <button id="btn-goto-stop" class="btn btn-stop goto-modal-stop" data-modal-cancel>STOP</button>
     </div>
 </div>
 
@@ -619,7 +624,7 @@
         <div class="update-modal-footer" id="update-buttons">
             <button id="btn-update-details" class="btn btn-tertiary"
                     :disabled="$store.dashboard.updateButtonsDisabled">Voir les détails</button>
-            <button id="btn-update-later" class="btn btn-secondary"
+            <button id="btn-update-later" class="btn btn-secondary" data-modal-cancel
                     :disabled="$store.dashboard.updateButtonsDisabled">Plus tard</button>
             <button id="btn-update-now" class="btn btn-primary"
                     :disabled="$store.dashboard.updateButtonsDisabled">Mettre a jour</button>
@@ -713,7 +718,7 @@
             (Stop tracking &rsaquo; GOTO 45° &rsaquo; fermeture cimier seront enchaînés automatiquement).
         </div>
         <div class="button-group">
-            <button id="btn-parking-cancel" class="btn btn-secondary"
+            <button id="btn-parking-cancel" class="btn btn-secondary" data-modal-cancel
                     x-init="$watch('$store.dashboard.parkingConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
                 Annuler
             </button>
@@ -749,7 +754,7 @@
             <strong class="text-obs-text">interrompra la session</strong>.
         </div>
         <div class="button-group">
-            <button id="btn-cimier-close-cancel" class="btn btn-secondary"
+            <button id="btn-cimier-close-cancel" class="btn btn-secondary" data-modal-cancel
                     x-init="$watch('$store.dashboard.cimierCloseConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
                 Annuler
             </button>
@@ -784,7 +789,7 @@
             une erreur de position d&eacute;calera tous les GOTO et le suivi d'autant.
         </div>
         <div class="button-group">
-            <button id="btn-force-calib-cancel" class="btn btn-secondary"
+            <button id="btn-force-calib-cancel" class="btn btn-secondary" data-modal-cancel
                     @click="$store.dashboard.forceCalibConfirmVisible = false"
                     x-init="$watch('$store.dashboard.forceCalibConfirmVisible', v => v && setTimeout(() => $el.focus(), 50))">
                 Annuler
