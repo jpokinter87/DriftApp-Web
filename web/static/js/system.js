@@ -549,7 +549,7 @@ function updateIpcCard(freshEl, contentEl, content, freshness) {
     if (!freshness.exists) {
         freshEl.className = 'ipc-fresh ipc-fresh-missing';
         freshEl.textContent = 'Non trouvé';
-        contentEl.textContent = '(fichier non trouve)';
+        contentEl.textContent = '(fichier non trouvé)';
     } else if (!freshness.fresh) {
         freshEl.className = 'ipc-fresh ipc-fresh-stale';
         freshEl.textContent = formatAge(freshness.age_sec);

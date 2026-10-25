@@ -22,7 +22,7 @@
   /* ── Text ── */
   --color-obs-text: #e8e4df;
   --color-obs-text-secondary: #a09080;
-  --color-obs-text-muted: #706050;
+  --color-obs-text-muted: #9e8b77;  /* 4.5:1 sur obs-input (audit impeccable P1-3) */
 
   /* ── Accent colors ── */
   --color-accent-amber: #d4a055;
@@ -33,7 +33,7 @@
   --color-accent-orange: #ffa502;
   --color-accent-red: #ff4757;
   --color-accent-red-dim: #cc3a47;
-  --color-accent-purple: #a855f7;
+  --color-accent-purple: #b46cf8;  /* 4.5:1 sur obs-input */
 
   /* ── Functional status ── */
   --color-status-ok: #00d26a;

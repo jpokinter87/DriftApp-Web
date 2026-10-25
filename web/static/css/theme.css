@@ -169,3 +169,18 @@ html[data-theme="night"] option {
     background: var(--color-obs-input);
     color: var(--color-obs-text);
 }
+
+/* Pastilles pluie / chauffage : couleurs écrites en dur dans dashboard.css,
+   que le filtre rendrait illisibles. Pluie = alarme (aplat), le reste = texte. */
+html[data-theme="night"] [class*="rain-pill-"],
+html[data-theme="night"] [class*="heater-pill-"] {
+    color: var(--color-obs-text-muted);
+    border-color: var(--color-obs-border-light);
+    background: transparent;
+}
+
+html[data-theme="night"] .rain-pill-wet {
+    color: #000;
+    border-color: var(--color-accent-red);
+    background: var(--color-accent-red);
+}
