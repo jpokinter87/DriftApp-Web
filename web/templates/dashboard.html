@@ -12,7 +12,6 @@
       class="text-base font-mono mr-1 leading-none transition-colors duration-300 cursor-pointer"
       :class="$store.dashboard.calibrationBadgeClass()"
       x-text="$store.dashboard.calibrationBadgeIcon()"
-      :title="'Calibration — ' + ($store.dashboard.calibration?.status ?? 'unknown')"
       @click="window.scrollTo({top: 0, behavior: 'smooth'})"
       aria-label="État de la calibration coupole — cliquer pour scroller vers la bannière"></span>
 <span x-data id="cimier-header-icon" class="text-base font-mono mr-1 leading-none transition-colors duration-300"
@@ -24,14 +23,13 @@
         'text-obs-text-muted': !$store.dashboard.displayedCimierState() || ['idle','disabled','unknown','cooldown'].includes($store.dashboard.displayedCimierState())
       }"
       x-text="$store.dashboard.cimierStateDot()"
-      :title="'Cimier — ' + ($store.dashboard.displayedCimierState() ?? 'unknown')"
       aria-label="État du cimier"></span>
 <!-- Libellé état cimier en clair pour le pilotage à distance (v6.11.1). -->
 <span x-data id="cimier-header-state"
       class="hidden sm:inline text-xs font-mono font-bold tracking-wider mr-3 leading-none transition-colors duration-300"
       :class="$store.dashboard.cimierStateClass()"
       x-text="$store.dashboard.cimier ? $store.dashboard.cimierStateLabel() : ''"></span>
-<button id="btn-check-update" class="btn-update-check" title="Verifier les mises a jour">
+<button id="btn-check-update" class="btn-update-check" aria-label="Vérifier les mises à jour">
     <span class="update-check-icon">&#x21BB;</span>
     <span class="update-check-text">MAJ</span>
     <span class="update-badge hidden" id="update-badge">!</span>
@@ -112,7 +110,7 @@
 <div id="config-banner" class="config-banner" style="display:none;" role="status" aria-live="polite">
   <span id="config-banner-msg"></span>
   <button id="config-banner-close" type="button" class="config-banner-close"
-          aria-label="Fermer ce message" title="Fermer">&times;</button>
+          aria-label="Fermer ce message">&times;</button>
 </div>
 
 <!-- ═══ Main 2-Column Grid ═══ -->
@@ -233,7 +231,7 @@
             <div x-data class="button-group">
                 <button id="btn-start-tracking" class="btn btn-primary" disabled
                         :class="{ 'pointer-events-none opacity-50': $store.dashboard.calibrationBlocked() }"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">
+                        >
                     D&eacute;marrer le Suivi
                 </button>
                 <button id="btn-stop-tracking" class="btn btn-danger" disabled>
@@ -280,7 +278,7 @@
                        value="45" placeholder="Angle (0-360)">
                 <button id="btn-goto" class="btn btn-secondary"
                         :disabled="$store.dashboard.calibrationBlocked()"
-                        :title="$store.dashboard.calibrationBlocked() ? 'Calibration requise' : ''">GOTO</button>
+                        >GOTO</button>
             </div>
         </div>
 
@@ -392,8 +390,7 @@
                 <button id="btn-cimier-close" class="btn"
                         :class="$store.dashboard.cimierCloseBtnClass()">Fermer</button>
                 <button id="btn-cimier-parking" class="btn btn-stop whitespace-nowrap"
-                        title="Stop tracking + GOTO 45° + close cimier"
-                        aria-label="Lancer la séquence parking session">
+                        aria-label="Parking : arrêt du suivi, GOTO 45°, fermeture du cimier">
                     &#x1F17F;&nbsp;Parking
                 </button>
             </div>
@@ -510,7 +507,7 @@
 <!-- ═══ Modal GOTO Initial (Alpine.js controlled) ═══ -->
 <div id="goto-modal" x-data class="goto-modal"
      x-show="$store.dashboard.gotoModalVisible" x-cloak
-     role="dialog" aria-modal="true" aria-label="Deplacement GOTO">
+     role="dialog" aria-modal="true" aria-label="Déplacement GOTO">
     <div class="goto-modal-content">
         <div class="goto-modal-header">
             <span class="goto-icon">&#x1F3AF;</span>
@@ -556,11 +553,11 @@
 <!-- ═══ Modal Mise a jour (Alpine.js controlled) ═══ -->
 <div id="update-modal" x-data class="update-modal"
      x-show="$store.dashboard.updateModalVisible" x-cloak
-     role="dialog" aria-modal="true" aria-label="Mise a jour disponible">
+     role="dialog" aria-modal="true" aria-label="Mise à jour disponible">
     <div class="update-modal-content">
         <div class="update-modal-header">
             <span class="update-icon">&#x1F504;</span>
-            <h3>Mise a jour disponible</h3>
+            <h3>Mise à jour disponible</h3>
         </div>
         <div class="update-modal-body">
             <div class="update-version-info">
@@ -627,7 +624,7 @@
             <button id="btn-update-later" class="btn btn-secondary" data-modal-cancel
                     :disabled="$store.dashboard.updateButtonsDisabled">Plus tard</button>
             <button id="btn-update-now" class="btn btn-primary"
-                    :disabled="$store.dashboard.updateButtonsDisabled">Mettre a jour</button>
+                    :disabled="$store.dashboard.updateButtonsDisabled">Mettre à jour</button>
         </div>
     </div>
 </div>

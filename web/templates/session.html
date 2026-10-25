@@ -243,7 +243,7 @@
                 <div class="font-mono text-sm text-obs-text mt-0.5" id="session-object">--</div>
             </div>
             <div class="bg-obs-dark rounded-button border border-obs-border p-3">
-                <span class="text-xs text-obs-text-secondary">Duree</span>
+                <span class="text-xs text-obs-text-secondary">Durée</span>
                 <div class="font-mono text-sm text-obs-text mt-0.5" id="session-duration">--</div>
             </div>
             <div class="bg-obs-dark rounded-button border border-obs-border p-3">
@@ -263,7 +263,7 @@
 
 <!-- ═══ Section Graphiques ═══ -->
 <section class="panel panel-astro mb-4">
-    <h2 class="section-title section-title-fire mb-3">Evolution Altitude / Azimut</h2>
+    <h2 class="section-title section-title-fire mb-3">Évolution altitude / azimut</h2>
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div class="chart-wrapper">
             <canvas id="altitude-chart" aria-label="Graphique altitude"></canvas>
@@ -336,7 +336,7 @@
         </div>
         <div class="stat-card">
             <div class="font-mono text-lg font-bold text-obs-text" id="stat-total-movement">0.00</div>
-            <div class="text-xs text-obs-text-secondary mt-0.5">Deplacement total</div>
+            <div class="text-xs text-obs-text-secondary mt-0.5">Déplacement total</div>
         </div>
         <div class="stat-card clockwise">
             <div class="font-mono text-lg font-bold text-accent-green" id="stat-cw">0.00</div>
@@ -404,7 +404,7 @@
             <thead>
                 <tr>
                     <th>Heure</th>
-                    <th>Depart</th>
+                    <th>Départ</th>
                     <th>Cible</th>
                     <th>Delta</th>
                     <th>Raison</th>
@@ -420,7 +420,7 @@
 
 {% block footer_extra %}
 <div class="flex items-center gap-3">
-    <span id="last-update" class="text-obs-text-muted">Derniere mise a jour: --</span>
+    <span id="last-update" class="text-obs-text-muted">Dernière mise à jour : --</span>
     <label class="flex items-center gap-1.5 text-obs-text-muted cursor-pointer">
         <input type="checkbox" id="auto-refresh-toggle" x-data x-model="$store.session.autoRefresh" checked class="cursor-pointer accent-accent-amber">
         Auto-refresh (5s)

@@ -124,7 +124,7 @@
             </div>
             <div class="flex flex-col gap-1">
                 <div class="flex justify-between text-xs">
-                    <span class="text-obs-text-secondary">Status:</span>
+                    <span class="text-obs-text-secondary">État :</span>
                     <span class="font-mono text-obs-text" id="motor-status">--</span>
                 </div>
                 <div class="flex justify-between text-xs">
@@ -140,7 +140,7 @@
                     <span class="font-mono text-obs-text" id="motor-simulation">--</span>
                 </div>
                 <div class="flex justify-between text-xs">
-                    <span class="text-obs-text-secondary">Fichier age:</span>
+                    <span class="text-obs-text-secondary">Âge du fichier :</span>
                     <span class="font-mono text-obs-text" id="motor-file-age">--</span>
                 </div>
             </div>
@@ -158,7 +158,7 @@
             </div>
             <div class="flex flex-col gap-1">
                 <div class="flex justify-between text-xs">
-                    <span class="text-obs-text-secondary">Status:</span>
+                    <span class="text-obs-text-secondary">État :</span>
                     <span class="font-mono text-obs-text" id="encoder-status">--</span>
                 </div>
                 <div class="flex justify-between text-xs">
@@ -166,11 +166,11 @@
                     <span class="font-mono text-obs-text" id="encoder-angle">--</span>
                 </div>
                 <div class="flex justify-between text-xs">
-                    <span class="text-obs-text-secondary">Calibre:</span>
+                    <span class="text-obs-text-secondary">Calibré :</span>
                     <span class="font-mono text-obs-text" id="encoder-calibrated">--</span>
                 </div>
                 <div class="flex justify-between text-xs">
-                    <span class="text-obs-text-secondary">Fichier age:</span>
+                    <span class="text-obs-text-secondary">Âge du fichier :</span>
                     <span class="font-mono text-obs-text" id="encoder-file-age">--</span>
                 </div>
             </div>
@@ -180,7 +180,7 @@
 
 <!-- ═══ Section Fichiers IPC ═══ -->
 <section class="panel panel-astro mb-4">
-    <h2 class="section-title section-title-fire mb-3">Fichiers IPC (temps reel)</h2>
+    <h2 class="section-title section-title-fire mb-3">Fichiers IPC (temps réel)</h2>
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
 
         <!-- motor_status.json -->
@@ -459,8 +459,8 @@
 
 {% block footer_extra %}
 <div class="flex items-center gap-3">
-    <span id="last-update" class="text-obs-text-muted">Derniere mise a jour: --</span>
-    <button id="btn-refresh" class="text-obs-text-secondary hover:text-accent-amber transition-colors text-base cursor-pointer" title="Rafraichir">&#x21bb;</button>
+    <span id="last-update" class="text-obs-text-muted">Dernière mise à jour : --</span>
+    <button id="btn-refresh" class="text-obs-text-secondary hover:text-accent-amber transition-colors text-base cursor-pointer" aria-label="Rafraîchir">&#x21bb;</button>
     <label class="flex items-center gap-1.5 text-obs-text-muted cursor-pointer">
         <input type="checkbox" id="auto-refresh-toggle" x-data x-model="$store.system.autoRefresh" class="cursor-pointer accent-accent-amber">
         Auto-refresh (2s)

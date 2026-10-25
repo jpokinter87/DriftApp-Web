@@ -419,7 +419,7 @@ function formatTriggerLabel(isoUtc) {
  */
 function updateUI(data) {
     // Status global (Alpine store)
-    updateGlobalStatus(data.overall_healthy, data.overall_healthy ? 'Systeme OK' : 'Probleme detecte');
+    updateGlobalStatus(data.overall_healthy, data.overall_healthy ? 'Système OK' : 'Problème détecté');
 
     // Timestamp
     const timestamp = new Date(data.timestamp);
@@ -445,6 +445,13 @@ function updateGlobalStatus(healthy, text) {
     store.globalStatusText = text;
 }
 
+// Statuts de l'API santé → libellés de badge en français.
+const STATUS_LABELS = { stale: 'PÉRIMÉ', unavailable: 'INDISPONIBLE', error: 'ERREUR' };
+
+function statusLabel(status) {
+    return STATUS_LABELS[status] || String(status).toUpperCase();
+}
+
 /**
  * Met a jour la section Motor Service
  */
@@ -454,7 +461,7 @@ function updateMotorService(motor) {
     const badgeClass = motor.healthy ? 'sys-badge-ok' : (motor.status === 'stale' ? 'sys-badge-stale' : 'sys-badge-error');
     const cardClass = motor.healthy ? 'sys-card-healthy' : (motor.status === 'stale' ? 'sys-card-stale' : 'sys-card-unhealthy');
     store.motor = {
-        badgeText: motor.healthy ? 'OK' : motor.status.toUpperCase(),
+        badgeText: motor.healthy ? 'OK' : statusLabel(motor.status),
         badgeClass: badgeClass,
         cardClass: cardClass
     };
@@ -488,7 +495,7 @@ function updateEncoderDaemon(encoder) {
     const badgeClass = encoder.healthy ? 'sys-badge-ok' : (encoder.status === 'stale' ? 'sys-badge-stale' : 'sys-badge-error');
     const cardClass = encoder.healthy ? 'sys-card-healthy' : (encoder.status === 'stale' ? 'sys-card-stale' : 'sys-card-unhealthy');
     store.encoder = {
-        badgeText: encoder.healthy ? 'OK' : encoder.status.toUpperCase(),
+        badgeText: encoder.healthy ? 'OK' : statusLabel(encoder.status),
         badgeClass: badgeClass,
         cardClass: cardClass
     };
@@ -543,7 +550,7 @@ function updateIpcFiles(ipc) {
 function updateIpcCard(freshEl, contentEl, content, freshness) {
     if (!freshness.exists) {
         freshEl.className = 'ipc-fresh ipc-fresh-missing';
-        freshEl.textContent = 'Non trouve';
+        freshEl.textContent = 'Non trouvé';
         contentEl.textContent = '(fichier non trouve)';
     } else if (!freshness.fresh) {
         freshEl.className = 'ipc-fresh ipc-fresh-stale';
