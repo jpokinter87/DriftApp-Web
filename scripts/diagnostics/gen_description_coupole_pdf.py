@@ -22,7 +22,7 @@ pdf.title_page(
     extra_lines=[
         "Observatoire Ubik — 44,15° N, 5,23° E, 800 m",
         "Exploitation sur site : Serge",
-        "Logiciel : DriftApp Web 6.26.3",
+        "Logiciel : DriftApp Web 6.28.4",
     ],
 )
 
@@ -242,9 +242,14 @@ pdf.bullet("Fermeture visée quand le Soleil remonte à −6°, avec 10 min d'av
 pdf.bullet("Parking à 45° avant la fermeture ; nouvelle tentative de fermeture toutes les 5 min.")
 pdf.warning_box("Automatisation prête dans le code mais jamais validée sur le terrain.")
 pdf.h3("Capteur de pluie")
-pdf.bullet("Actuel : MH-RD (sortie D0) sur un Shelly Plus Uni dédié (.87, id 0).")
 pdf.bullet(
-    "Résistance chauffante sur un Shelly .78 : keepalive 4 min, arrêt automatique du Shelly à 300 s."
+    "Kemo M152K (capacitif, sortie relais), posé le 26/10 à la place du MH-RD. "
+    "Contact lu par un Shelly Plus Uni dédié (.87, id 0), toujours sous tension."
+)
+pdf.bullet(
+    "Capteur alimenté par le Shelly 1 .78 (ex-chauffage du MH-RD) : allumé au démarrage de "
+    "cimier_service, keepalive 4 min, arrêt automatique du Shelly à 300 s (coupure de la coupole "
+    "→ capteur éteint 5 min après)."
 )
 pdf.bullet(
     "Une lecture mouillée suffit pour passer en « pluie » ; N lectures sèches pour en sortir."
@@ -253,8 +258,9 @@ pdf.bullet(
     "Pas de réouverture après une fermeture pour pluie. Shelly muet : refus d'ouvrir, jamais de fermeture."
 )
 pdf.info_box(
-    "En cours : le MH-RD est peu fiable et s'oxyde. Remplacement par un Kemo M152K (capacitif, "
-    "chauffage intégré), commandé le 24/10."
+    "Plus de résistance anti-rosée : le boîtier du M152K est moulé dans la résine et ne chauffe "
+    "qu'une fois mouillé. À valider : détection sous vraie pluie (et pluie fine), pas de fausse "
+    "alerte par rosée. Si cimier_service est arrêté, le capteur n'est plus alimenté et lit « sec »."
 )
 
 # 7. Informatique
@@ -290,7 +296,7 @@ pdf.bullet(
 )
 pdf.h3("Mise à jour")
 pdf.bold_bullet(
-    "OTA :", "depuis l'UI, sur comparaison de la version de pyproject.toml (actuelle : 6.26.3)."
+    "OTA :", "depuis l'UI, sur comparaison de la version de pyproject.toml (actuelle : 6.28.4)."
 )
 
 # 8. Lacunes
