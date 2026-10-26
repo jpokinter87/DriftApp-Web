@@ -1531,14 +1531,15 @@ function rainStateClass() {
 }
 window.rainStateClass = rainStateClass;
 
-// Badge résistance chauffante anti-rosée (2026-09). Source : cimier_status.json,
+// Badge alimentation du capteur de pluie (Shelly .78 : résistance chauffante du
+// MH-RD en 2026-09, alimentation du Kemo M152K depuis le 26/10). Source : cimier_status.json,
 // clé `rain.heater` — absente si aucun Shelly n'est configuré (type=noop).
 function heaterStateLabel() {
     const heater = Alpine.store('dashboard').cimier?.rain?.heater;
     if (!heater) return '';
-    if (heater.last_command_ok === false) return '⚠ Chauffage injoignable';
-    if (heater.on === true) return 'Chauffage : ON';
-    if (heater.on === false) return 'Chauffage : OFF';
+    if (heater.last_command_ok === false) return '⚠ Capteur de pluie : Shelly injoignable';
+    if (heater.on === true) return 'Capteur de pluie : ON';
+    if (heater.on === false) return 'Capteur de pluie : OFF';
     return '';
 }
 window.heaterStateLabel = heaterStateLabel;

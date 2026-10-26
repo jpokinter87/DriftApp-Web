@@ -264,17 +264,17 @@ HELP_REGISTRY: dict[str, str] = {
     "cimier.power_switch.switch_id": (
         "Index du relais d'alimentation 24V sur le Shelly power : 0 ou 1."
     ),
-    # cimier.rain_heater_switch (résistance chauffante anti-rosée du capteur de pluie)
+    # cimier.rain_heater_switch (alimentation du capteur de pluie Kemo M152K, ex-chauffage MH-RD)
     "cimier.rain_heater_switch.type": (
-        "Type du Shelly pilotant la résistance chauffante du capteur de pluie. "
+        "Type du Shelly alimentant le capteur de pluie. "
         "« shelly_gen1 » (legacy /relay), « shelly_gen2 » (RPC) ou « noop » (factice)."
     ),
     "cimier.rain_heater_switch.host": (
-        "Hôte/IP du Shelly de la résistance chauffante. ON quand la protection "
-        "pluie est armée, OFF sinon."
+        "Hôte/IP du Shelly alimentant le capteur de pluie. Allumé au démarrage "
+        "puis entretenu par le keepalive, protection armée ou non."
     ),
     "cimier.rain_heater_switch.switch_id": (
-        "Index du relais de la résistance chauffante sur son Shelly : 0 ou 1."
+        "Index du relais d'alimentation du capteur de pluie sur son Shelly : 0 ou 1."
     ),
     # cimier.weather_provider (capteur de pluie MH-RD sur Shelly Plus Uni)
     "cimier.weather_provider.type": (

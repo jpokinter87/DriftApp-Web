@@ -120,12 +120,16 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   « wet » toute la soirée claire du 23/10 (3 fermetures à tort). Le M152K a été commandé
   par Serge ; il est capacitif et chauffé, et se branche en contact sur l'entrée du
   Shelly Plus Uni sans changer de code (contact fermé = pluie, `invert=false`).
-- **Attente** : la pose du capteur par Serge. **Ne rien préparer avant** (décision JP) : le
-  MH-RD a besoin du chauffage 6.26.2 (allumé en permanence) d'ici là.
-- **Ensuite** : retirer le chauffage du Shelly .78 du programme (config
-  `rain_heater_switch` et keepalive, pastille du dashboard, relais id=3 du simulateur,
-  `config_resilience`, tests), puis vérifier l'alimentation 12 V au toit et la fiabilité
-  de détection sous vraie pluie avant de clore.
+- **Posé le 26/10/2026** par Serge. La résistance chauffante est retirée (le boîtier du
+  M152K est moulé dans la résine, elle n'y loge pas). Le capteur est alimenté par le
+  Shelly 1 .78 (ex-chauffage) ; le Shelly Uni+ .87 reste sous tension. Serge a
+  remis l'auto_off de 5 min sur le .78. Essai positif : une goutte → relais + LED.
+- **Conséquence** : **garder** `rain_heater_switch` et le keepalive (le plan de retrait
+  est abandonné). Le .78 alimente le capteur : `cimier_service` arrêté depuis plus
+  de 5 min → capteur hors tension → lu « sec ». 6.28.3 : la pastille dit
+  « Capteur de pluie : ON » au lieu de « Chauffage : ON » (clés de config inchangées).
+- **Reste à valider** : détection sous vraie pluie (et pluie fine), aucune fausse
+  alerte par rosée sans chauffage, puis clore.
 
 ## Plus tard
 
