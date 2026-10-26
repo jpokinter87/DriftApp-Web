@@ -18,6 +18,11 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 - **Prochaine étape** : à chaque nuit avec retournement, chercher `dome_flip_*` dans la
   chronologie (`/analyse-nuit`). Le méridien DriftApp tombe environ 55 s avant celui de
   l'ASIAIR.
+- **En cours** : à partir du 26/10/2026, Serge profite de la pleine lune (pas de photo
+  possible) pour enchaîner des passages au méridien. Les zips de ces nuits serviront à
+  juger l'algorithme de bascule : retard entre la coupole et la monture à chaque passage,
+  cas `dome_flip_early_*` éventuels, décalage DriftApp/ASIAIR (55 s, à rapprocher de
+  l'angle horaire décalé de +82 s noté dans « Plus tard »).
 - **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
 
 ### Surveillance ASIAIR permanente (`asiair_monitor`)
