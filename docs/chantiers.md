@@ -43,11 +43,13 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 - **État** : tout est livré : suivi en UTC (changement d'heure du 25/10), STOP pendant un
   GOTO, offset encodeur borné à 5°, GOTO raté visible, resynchronisation série et
   accélération bornée (firmware flashé sur le Pico le 16/10, confirmé par JP).
-- **Prochaine étape** : point avec JP le 25/10 sur la nuit du 24 au 25/10 (changement
-  d'heure). Il faut une session qui traverse 3 h → 2 h en suivi actif, selon la météo :
-  vérifier dans la chronologie que les corrections continuent sans trou d'une heure et
-  que l'azimut reste cohérent. Si la nuit n'est pas exploitable, ce point reste ouvert
-  (le prochain changement d'heure est en mars).
+- **Changement d'heure du 25/10** : pas vérifié sur le terrain, il pleuvait (JP, 27/10 ;
+  aucun suivi dans les logs de la nuit du 24 au 25). Les deux sens sont couverts par
+  `tests/test_tracking_dst.py` (horloge fictive) : recul du 25/10/2026 sur M31, avance
+  du 28/03/2027 sur M13 (une heure d'erreur y décalerait l'azimut de 14,6°).
+- **Prochaine étape** : nuit du 27 au 28/03/2027 (2 h → 3 h), si Serge suit un objet à
+  ce moment-là, selon la météo : vérifier dans la chronologie que les corrections
+  continuent sans trou et que l'azimut reste cohérent.
 
 ### Automatisation du cimier (modes semi et full)
 - **État** : code complet depuis la 6.3 (scheduler astropy, modes `manual` / `semi` /
@@ -153,7 +155,8 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 - **Ligne 75° de l'abaque** : le saut du retournement y tombe entre 165° et 180° (valeur
   à 180° déjà « après », 124°) au lieu de 180°–182° comme aux autres hauteurs. Entre 75°
   et 80° de hauteur, peu avant le méridien, la cible mélange donc encore les deux
-  branches. À faire remesurer ou confirmer par Serge.
+  branches. Question posée à Serge le 27/10 : remesurer, monture pas encore
+  retournée, ou à défaut mettre ~230° (entre 226° à 72,5° et 235° à 77,5°).
 - **Artefact de l'abaque vers 40° de hauteur** (passage inférieur, objets proches du pôle) :
   saut d'environ 17° entre les lignes 30° et 45°. Tout correctif doit distinguer passage
   inférieur et passage supérieur (le saut nord au-dessus de 53° est voulu).
