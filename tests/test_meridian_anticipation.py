@@ -284,10 +284,12 @@ REAL_OBJECTS = [
     # La direction vient du SIGNE de l'amplitude unwrappée, pas d'une règle
     # géométrique universelle. Objets dont le dome wrap par 0° (IC 445, M 101,
     # Capella : pre ~300° → post ~40-77°) donnent signed>0 → direction=+1.
+    # Durée 20 s = un échantillon : depuis la 6.28.5, l'abaque saute d'une branche à
+    # l'autre entre 180° et 182° (46 LMi et M 13 donnaient 110 et 100 s de rampe).
     ("IC 445", 99.3384942483, 67.85992306669, 76.2, 20, +1),
     ("M 101", 210.8024, 54.349, 97.1, 20, +1),
-    ("46 LMi", 163.32787152823542, 34.214892133082735, 134.7, 110, -1),
-    ("M 13", 250.4235, 36.461, 149.0, 100, -1),
+    ("46 LMi", 163.32787152823542, 34.214892133082735, 134.7, 20, -1),
+    ("M 13", 250.4235, 36.461, 149.0, 20, -1),
     ("Capella", 79.1723, 45.998, 156.4, 20, +1),
 ]
 

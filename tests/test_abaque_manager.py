@@ -370,3 +370,52 @@ class TestAbaqueManagerComputeStatistics:
         assert manager.n_azimuths == 8
         assert manager.altitude_range == (30.0, 75.0)
         assert manager.azimuth_range == (0, 315)
+
+
+class TestAbaqueManagerColonneRetournement:
+    """Entre 180° et 182°, l'abaque passe d'une branche à l'autre (retournement de
+    la monture) : aucune position intermédiaire n'existe, on prend la branche d'après.
+
+    Nuit du 26/10/2026 : à 80,1° de hauteur et 181,4° d'azimut, l'interpolation
+    donnait 151° ; la coupole y est allée (−97°), puis a dû repartir de −38°.
+    """
+
+    @pytest.fixture
+    def manager_retournement(self):
+        from core.tracking.abaque_manager import AbaqueManager
+
+        data = {
+            75.0: {"az_astre": [165, 180, 182, 195], "az_coupole": [238, 246, 111, 109]},
+            85.0: {"az_astre": [165, 180, 182, 195], "az_coupole": [257, 257, 91, 88]},
+        }
+        manager = AbaqueManager()
+        manager.data_by_altitude = data
+        manager.is_loaded = True
+        manager._alt_grid = np.array([75.0, 85.0])
+        manager._az_grid = np.array([165, 180, 182, 195])
+        manager._data_dict = data
+        return manager
+
+    def test_juste_apres_180_prend_la_branche_d_apres(self, manager_retournement):
+        apres, _ = manager_retournement.get_dome_position(75.0, 181.4)
+        assert apres == pytest.approx(111.0)
+
+    def test_180_reste_sur_la_branche_d_avant(self, manager_retournement):
+        avant, _ = manager_retournement.get_dome_position(75.0, 180.0)
+        assert avant == pytest.approx(246.0)
+
+    def test_hauteur_toujours_interpolee(self, manager_retournement):
+        milieu, _ = manager_retournement.get_dome_position(80.0, 181.0)
+        assert milieu == pytest.approx(101.0)
+
+    def test_nuit_du_26_10_abaque_reelle(self):
+        from core.tracking.abaque_manager import AbaqueManager
+
+        if not Path("data/Loi_coupole.xlsx").exists():
+            pytest.skip("Fichier abaque non disponible")
+        manager = AbaqueManager()
+        manager.load_abaque()
+
+        cible_181, _ = manager.get_dome_position(80.1, 181.4)
+        cible_182, _ = manager.get_dome_position(80.1, 182.8)
+        assert abs(cible_181 - cible_182) < 1.0

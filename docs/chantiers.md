@@ -23,28 +23,13 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   juger l'algorithme de bascule : retard entre la coupole et la monture à chaque passage,
   cas `dome_flip_early_*` éventuels, décalage DriftApp/ASIAIR (55 s, à rapprocher de
   l'angle horaire décalé de +82 s noté dans « Plus tard »).
+- **Nuit du 26/10** : un seul passage (cible ASIAIR à 80° de hauteur). La règle 6.24 a
+  encore fonctionné (`dome_flip_wait_end reason=pierside waited_s=66` à 19:36:33). Mais
+  la bascule s'est faite en deux temps, −97,3° puis −38,4° : l'abaque interpolait entre
+  les colonnes 180° et 182°, de part et d'autre du saut. Corrigé en 6.28.5 : passé 180°,
+  la branche d'après est prise. À vérifier au prochain passage : une seule ligne
+  `meridian_transit` par retournement.
 - **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
-
-### Surveillance ASIAIR permanente (`asiair_monitor`)
-- **Ouvert le** 23/10/2026, livré en 6.25.0.
-- **État** : l'OTA 6.24.2 → 6.25 a été jouée par l'ancien script, le service était
-  « absent » le 23/10. Deux connexions simultanées au port 4400 (watcher du suivi et
-  service) n'ont posé aucun problème le 23/10.
-- **Prochaine étape** : vérifier la présence de `logs/asiair/` dans le prochain zip de Serge.
-  Évolution possible : faire lire au watcher l'état publié par le service.
-- **Réf.** : spec `2026-10-23-surveillance-asiair-permanente.md`.
-
-### Synchronisation des dépendances pendant l'OTA (`uv sync`)
-- **Ouvert le** 23/10/2026, corrigé en 6.26.1 (`uv` cherché dans `~slenk/.local/bin`).
-- **Prochaine étape** : la correction n'agit qu'à la mise à jour suivante (c'est l'ancien
-  script qui installe la 6.26.1). Vérifier dans `update.log` que l'étape `uv sync` a tourné.
-
-### Calibration au démarrage et au passage manuel
-- **Ouvert le** 24/10/2026. 6.26.4 : le premier passage manuel sur le switch 45° vaut
-  calibration. 6.26.5 : le balayage `boot_calibration.fallback_sweep_deg` passe de 7 à 4
-  dans le gabarit.
-- **Prochaine étape** : Serge saisit 4 sur la page Configuration (le Pi est à 8). Vérifier
-  `boot_calibration | status=ok` dans les logs.
 
 ### Fermeture du cimier : relance et fin de nuit
 - **Ouvert le** 11/10/2026. 6.21.0 : relance de la fermeture automatique
@@ -69,20 +54,6 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   `full`). Serge tourne en `semi` : la fermeture de fin de nuit a déjà fonctionné. Le mode
   `full` (ouverture au crépuscule) n'a jamais été validé.
 - **Prochaine étape** : une nuit en `full` quand Serge le voudra.
-
-### Journal de nuit dans `logs/nuits/`
-- **Ouvert le** 24/10/2026, livré en 6.26.12 (le journal pluie/décisions/cycles cimier
-  s'écrit dans `logs/nuits/AAAA-MM-JJ.jsonl`, donc dans le zip de `logs/` ; au démarrage,
-  `cimier_service` y déplace les anciens `data/nights/*.jsonl`, sans écraser).
-- **État** : migration essayée en dev (7 journaux déplacés, page Session les voit,
-  second passage sans effet). JP demande à Serge de mettre à jour en 6.26.12 le soir du
-  24/10, avant de démarrer la session.
-- **Prochaine étape** : dans le zip de la nuit du 24/10, vérifier : `update.log` montre
-  6.26.12 ; `logs/nuits/` présent avec la nuit du 24 et les nuits antérieures déplacées ;
-  la synthèse de `chronologie_nuit.py` n'affiche plus « Pas de journal de nuit ». Si
-  `logs/nuits/` manque : chercher `night_journal_event=move_failed` dans
-  `logs/cimier/cimier_service.log` (droits sur `logs/` ?).
-- **Réf.** : spec `docs/superpowers/specs/2026-10-24-journal-nuit-dans-logs.md`, commit 2261805.
 
 ### Interface 6.27.0 : mode nuit rouge, STOP dans la fenêtre GOTO
 - **Ouvert le** 25/10/2026, livré en 6.27.0 (sélecteur Auto/Nuit/Jour par écran, nuit
@@ -147,6 +118,17 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   l'angle horaire attend TETE) : le méridien affiché est environ 82 s trop tôt et
   l'azimut décalé de 0,2 à 0,35°. Corriger retarde d'autant la bascule de la coupole ;
   la règle 6.26 en était le préalable. Décision JP en attente.
+- **Horloge du Pi fausse au démarrage** (nuit du 26/10) : le Pi est éteint en coupant le
+  courant (octets nuls en fin de logs) et redémarre à l'heure du dernier enregistrement,
+  jusqu'à la synchronisation réseau : saut de +89,6 min le soir (d'où `encoder_stale
+  age_ms=5376579` à 18:15:55, sans vrai défaut), de 08:34 à 11:57 le matin. Sans
+  conséquence cette nuit-là ; en mode `full`, le planificateur du cimier déciderait sur
+  une heure fausse avant la synchronisation. Pistes : attendre `timedatectl` synchronisé
+  avant les décisions automatiques, et demander à Serge d'éteindre proprement le Pi.
+- **Ligne 75° de l'abaque** : le saut du retournement y tombe entre 165° et 180° (valeur
+  à 180° déjà « après », 124°) au lieu de 180°–182° comme aux autres hauteurs. Entre 75°
+  et 80° de hauteur, peu avant le méridien, la cible mélange donc encore les deux
+  branches. À faire remesurer ou confirmer par Serge.
 - **Artefact de l'abaque vers 40° de hauteur** (passage inférieur, objets proches du pôle) :
   saut d'environ 17° entre les lignes 30° et 45°. Tout correctif doit distinguer passage
   inférieur et passage supérieur (le saut nord au-dessus de 53° est voulu).

@@ -32,6 +32,10 @@ class AbaqueManager:
     des données empiriques mesurées sur le terrain.
     """
 
+    # Colonne du retournement de la monture : 180° est mesuré avant, 182° après.
+    # Rien n'existe entre les deux branches, on n'interpole pas en azimut.
+    COLONNE_RETOURNEMENT = (180.0, 182.0)
+
     def __init__(self, abaque_file: str = "data/Loi_coupole.xlsx"):
         """
         Initialise le gestionnaire d'abaque.
@@ -207,6 +211,8 @@ class AbaqueManager:
 
         # Interpolation azimut
         frac_az = (az - az1) / (az2 - az1)
+        if (az1, az2) == self.COLONNE_RETOURNEMENT and az > az1:
+            frac_az = 1.0
         v1 = interp_angle(v11, v12, frac_az)
         v2 = interp_angle(v21, v22, frac_az)
 
