@@ -301,6 +301,28 @@ for svc in ems22d.service motor_service.service cimier_service.service asiair_mo
         log "WARN : $PROJECT_DIR/$svc non trouvé"
     fi
 done
+
+# v6.28.6 : les services attendent time-sync.target (heure remise par NTP après une
+# coupure de courant), au plus 90 s. systemd-time-wait-sync ne voit que timesyncd.
+WAIT_SYNC_DIR="$SERVICE_DIR/systemd-time-wait-sync.service.d"
+if systemctl is-active --quiet systemd-timesyncd; then
+    mkdir -p "$WAIT_SYNC_DIR"
+    if cmp -s "$PROJECT_DIR/setup/time-wait-sync-timeout.conf" "$WAIT_SYNC_DIR/driftapp.conf" 2>/dev/null; then
+        log "Attente de l'heure : inchangée"
+    else
+        cp "$PROJECT_DIR/setup/time-wait-sync-timeout.conf" "$WAIT_SYNC_DIR/driftapp.conf" \
+            && log "Attente de l'heure : délai installé"
+    fi
+    # Sans le délai, l'attente serait infinie pour un Pi sans internet.
+    if [ -f "$WAIT_SYNC_DIR/driftapp.conf" ]; then
+        systemctl enable systemd-time-wait-sync.service 2>/dev/null \
+            || log "WARN : impossible d'activer systemd-time-wait-sync"
+    else
+        log "WARN : délai d'attente de l'heure absent, attente non activée"
+    fi
+else
+    log "WARN : systemd-timesyncd inactif, attente de l'heure non activée"
+fi
 systemctl daemon-reload
 log "daemon-reload OK"
 

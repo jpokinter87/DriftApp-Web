@@ -1,8 +1,8 @@
 [Unit]
 Description=DriftApp Motor Service - Dome Control
 Documentation=https://github.com/jpokinter87/DriftApp-Web
-After=network.target ems22d.service
-Wants=ems22d.service
+After=network.target time-sync.target ems22d.service
+Wants=time-sync.target ems22d.service
 
 [Service]
 Type=notify

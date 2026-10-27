@@ -89,6 +89,24 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   nom, prévisualisation https://claude.ai/artifact/GAVfYwm3wRuTDZpGgh7Az8, commits
   0847dd4 → 7c52387, puis 6.28.1.
 
+### Services démarrés à l'heure juste (`time-sync.target`)
+- **Ouvert le** 27/10/2026, livré en 6.28.6 (les 5 services attendent la mise à l'heure
+  NTP, au plus 90 s, via `systemd-time-wait-sync` et le délai
+  `setup/time-wait-sync-timeout.conf`).
+- **État** : nuit du 26/10, Pi éteint en coupant le courant (octets nuls en fin de logs),
+  redémarré à l'heure du dernier enregistrement puis recalé par NTP environ 25 s après le
+  démarrage des services (saut de +89,6 min le soir, d'où `encoder_stale
+  age_ms=5376579` à 18:15:55 ; de 08:34 à 11:57 le matin). L'ancien script installe la
+  6.28.6 : les unités sont copiées, mais le délai et l'activation n'arrivent qu'à la mise
+  à jour suivante (sans eux, `time-sync.target` passe tout de suite, comportement
+  inchangé). Vérifié en dev : `sysinit.target` a `DefaultDependencies=no`, l'attente ne
+  retarde donc que nos services ; sans le délai, `TimeoutStartSec=infinity`.
+- **Prochaine étape** : après la mise à jour suivant la 6.28.6, `update.log` doit montrer
+  « Attente de l'heure : délai installé » (et aucun WARN timesyncd). Au démarrage
+  suivant, plus de saut d'heure dans les logs des services. Modèle du Pi demandé à Serge
+  le 27/10 : si c'est un Pi 5, une pile sur le connecteur BAT garde l'heure même sans
+  internet.
+
 ## En attente d'un événement
 
 ### Remplacement du capteur de pluie par un Kemo M152K
@@ -118,13 +136,6 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   l'angle horaire attend TETE) : le méridien affiché est environ 82 s trop tôt et
   l'azimut décalé de 0,2 à 0,35°. Corriger retarde d'autant la bascule de la coupole ;
   la règle 6.26 en était le préalable. Décision JP en attente.
-- **Horloge du Pi fausse au démarrage** (nuit du 26/10) : le Pi est éteint en coupant le
-  courant (octets nuls en fin de logs) et redémarre à l'heure du dernier enregistrement,
-  jusqu'à la synchronisation réseau : saut de +89,6 min le soir (d'où `encoder_stale
-  age_ms=5376579` à 18:15:55, sans vrai défaut), de 08:34 à 11:57 le matin. Sans
-  conséquence cette nuit-là ; en mode `full`, le planificateur du cimier déciderait sur
-  une heure fausse avant la synchronisation. Pistes : attendre `timedatectl` synchronisé
-  avant les décisions automatiques, et demander à Serge d'éteindre proprement le Pi.
 - **Ligne 75° de l'abaque** : le saut du retournement y tombe entre 165° et 180° (valeur
   à 180° déjà « après », 124°) au lieu de 180°–182° comme aux autres hauteurs. Entre 75°
   et 80° de hauteur, peu avant le méridien, la cible mélange donc encore les deux

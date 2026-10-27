@@ -1,8 +1,8 @@
 [Unit]
 Description=DriftApp Cimier Service - Pico W cimier control via Shelly cascade
 Documentation=https://github.com/jpokinter87/DriftApp-Web
-After=network.target
-Wants=network-online.target
+After=network.target time-sync.target
+Wants=network-online.target time-sync.target
 
 [Service]
 Type=simple

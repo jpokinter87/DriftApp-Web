@@ -1,8 +1,8 @@
 [Unit]
 Description=DriftApp Web Interface - Django Server
 Documentation=https://github.com/jpokinter87/DriftApp-Web
-After=network.target motor_service.service
-Wants=motor_service.service
+After=network.target time-sync.target motor_service.service
+Wants=time-sync.target motor_service.service
 
 [Service]
 Type=simple
