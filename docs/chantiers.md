@@ -27,8 +27,13 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   encore fonctionné (`dome_flip_wait_end reason=pierside waited_s=66` à 19:36:33). Mais
   la bascule s'est faite en deux temps, −97,3° puis −38,4° : l'abaque interpolait entre
   les colonnes 180° et 182°, de part et d'autre du saut. Corrigé en 6.28.5 : passé 180°,
-  la branche d'après est prise. À vérifier au prochain passage : une seule ligne
-  `meridian_transit` par retournement.
+  la branche d'après est prise.
+- **Nuit du 27/10** (NGC 7354, Déc +61°, 72,6° de hauteur) : 6.28.5 **validé**, une seule
+  ligne `meridian_transit delta=+83.2` (313,4° → 36,6°). Règle 6.24 OK une 3e fois :
+  `dome_flip_wait_start` 20:54:51, retournement ASIAIR 21:07:51, côté du pied changé
+  21:08:04 (`dome_flip_wait_end reason=pierside waited_s=793`), coupole arrivée 21:09:00
+  (`resync` écart +0,4°), monture de nouveau en suivi 21:09:09. Attente longue due au
+  site faux de la monture (voir « Alerte méridien de l'ASIAIR décalé »).
 - **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
 
 ### Fermeture du cimier : relance et fin de nuit
@@ -103,6 +108,10 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   à jour suivante (sans eux, `time-sync.target` passe tout de suite, comportement
   inchangé). Vérifié en dev : `sysinit.target` a `DefaultDependencies=no`, l'attente ne
   retarde donc que nos services ; sans le délai, `TimeoutStartSec=infinity`.
+- **27/10** : mise à jour 6.28.4 → 6.29.0 à 14:31 par l'ancien script, donc pas de ligne
+  « Attente de l'heure » dans `update.log` (attendu). Saut d'heure encore vu au
+  redémarrage : services lancés à 14:38 (horloge restaurée), `encoder_stale
+  age_ms=16464186` à 19:12:54 (+4 h 34 min). Le délai arrivera à la prochaine mise à jour.
 - **Prochaine étape** : après la mise à jour suivant la 6.28.6, `update.log` doit montrer
   « Attente de l'heure : délai installé » (et aucun WARN timesyncd). Au démarrage
   suivant, plus de saut d'heure dans les logs des services. Modèle du Pi demandé à Serge
@@ -117,10 +126,10 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   En dev, la confirmation échoue proprement : pas de sudoers, et le script refuse hors
   Raspberry Pi. L'OTA copie le sudoers depuis le dépôt tiré : le bouton marche dès la
   mise à jour en 6.29.0.
-- **Prochaine étape** : premier essai de Serge, coupole rangée et cimier fermé. À
-  vérifier : le Pi s'éteint (LED verte), `logs/shutdown.log` contient « Extinction du Pi
-  demandée », et les logs suivants ne se terminent plus par des octets nuls. Essayer aussi
-  pendant un suivi : la fenêtre doit refuser.
+- **27/10, extinction validée** : deux essais (14:31:58 et 14:37:40 dans `shutdown.log`),
+  services arrêtés par signal 15 proprement, logs Django terminés sans octets nuls.
+- **Prochaine étape** : essayer pendant un suivi ou cimier ouvert : la fenêtre doit
+  refuser. Puis clore.
 - **Réf.** : spec et plan `2026-10-27-bouton-eteindre-le-pi.md`.
 
 ## En attente d'un événement
@@ -142,13 +151,16 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   `/api/tracking/asiair/`, même AD des deux côtés) ; `data/config.json` (lu par DriftApp
   seul, l'ASIAIR a son propre site). Le méridien ASIAIR = AD monture − `sidereal_time`
   de `scope_get_info` : seul le temps sidéral de la monture peut porter l'écart.
-- **Prochaine étape** : zip de la nuit du 27/10. Dans `logs/asiair/2026-10-27.jsonl`,
-  vérifier que `sidereal_time` de la monture retarde d'environ 12,25 min sur le temps
-  sidéral vrai au site (calibre l'alerte). Vérifier aussi l'heure du changement de côté
-  du pied et `dome_flip_wait_end` (attente attendue d'environ 12 min, sous
-  `max_wait_minutes` = 30). Côté ASIAIR : consignes envoyées à Serge le 27/10 (voir
+- **Chiffré sur le zip du 27/10** : à 22:15:36, temps sidéral de la monture 23h49m10s
+  (`asiair_monitor.log`) ; astropy donne 23h49m15s à la longitude E 2°10'02" et 0h01m30s
+  au site : la monture retarde de **12 min 20 s**, à 5 s près celui de Paris. Même
+  écart dans les `Align Sync lst=` d'INDI. Retournement ASIAIR à 21:07:51, coupole
+  basculée 21:09:00 après 793 s d'attente (sous `max_wait_minutes`). Seuil d'alerte :
+  1 min laisse une marge large.
+- **Prochaine étape** : côté ASIAIR, consignes envoyées à Serge le 27/10 (voir
   ci-dessous) ; à confirmer sur le terrain que la localisation refusée fait bien
-  demander une saisie manuelle, sans retomber sur la dernière position connue.
+  demander une saisie manuelle, sans retomber sur la dernière position connue (la capture
+  de 21:35 montrait encore le site du téléphone, consignes envoyées après).
 - **Recherche du 27/10 (forum ZWO, rien d'officiel)** : aucun réglage ASIAIR ne verrouille
   le site ni ne coupe l'envoi de la position du téléphone. Le site circule de l'appli
   vers la monture seulement (« Sync to Mount », et d'après un relevé USB aussi
@@ -188,6 +200,15 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## Plus tard
 
+- **Une correction de suivi sur deux ne bouge pas la coupole** (nuit du 27/10 : 52 sur
+  106 en `0 iter`) : le seuil de correction est 0,3° (`SINGLE_SPEED_CORRECTION_THRESHOLD_DEG`),
+  mais la rotation avec feedback a une tolérance de 0,5° (`tolerance=0.5`,
+  `core/tracking/tracking_corrections_mixin.py:350`). Un écart de 0,33 à 0,41° déclenche
+  donc une correction qui se déclare réussie sans bouger ; elle est quand même comptée et
+  `position_relative` avance. La coupole traîne de 0,3 à 0,8° (capture du 27/10 à 20:43 :
+  ENC 314,46°, cible 314,11°). Sans effet sur la photo (fente large), mais les stats de
+  corrections sont fausses. Piste : aligner la tolérance sous le seuil. Décision JP en
+  attente.
 - **Sortie Tailwind compilée en retard sur les gabarits** (`tailwind-output.css`, date du
   03/05) : des classes écrites dans les gabarits n'y sont pas (`sr-only`,
   `border-accent-red`, `opacity-50`, `text-white`, `h-24`…), donc sans effet.
