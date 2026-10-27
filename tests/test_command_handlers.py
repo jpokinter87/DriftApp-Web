@@ -591,6 +591,23 @@ class TestTrackingHandler:
         handler.update(current_status)
         assert current_status["tracking_info"]["flip_early"] == {"target": 36.1}
 
+    def test_update_transmet_l_alerte_site_asiair(self, handler):
+        handler.active = True
+        handler.session = MagicMock()
+        handler.session.check_and_correct.return_value = (False, "")
+        handler.session.ra_deg = None
+        handler.session.get_status.return_value = {
+            "running": True,
+            "asiair_site_alert": {"offset_min": -12.3, "lon_deg": 2.15},
+        }
+        handler.session.get_session_data.return_value = {}
+        current_status = {"status": "tracking"}
+        handler.update(current_status)
+        assert current_status["tracking_info"]["asiair_site_alert"] == {
+            "offset_min": -12.3,
+            "lon_deg": 2.15,
+        }
+
     def test_update_includes_meridian_data(self, handler):
         """update() ajoute meridian_seconds et meridian_time dans tracking_info."""
         from core.observatoire import AstronomicalCalculations

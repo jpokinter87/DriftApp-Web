@@ -132,6 +132,19 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   refuser. Puis clore.
 - **Réf.** : spec et plan `2026-10-27-bouton-eteindre-le-pi.md`.
 
+### Alerte site ASIAIR sur le dashboard
+- **Ouvert le** 27/10/2026, livré en 6.30.0 (pendant le suivi, temps sidéral de la monture
+  comparé à celui du site de `config.json` ; au-delà de 2 min, ligne rouge dans « Suivi
+  actif » avec la longitude que croit avoir la monture).
+- **État** : vérifié en dev seulement, faux ASIAIR à la longitude du 27/10 : alerte
+  « −12,2 min, ≈ 2,17° E » en Nuit, Crépuscule et Jour, `asiair_site_mismatch` écrit une
+  fois. Ne marche qu'avec `asiair.dome_flip_on_pierside` (le watcher du pied). Latitude
+  fausse seule invisible (l'ASIAIR ne donne pas son site).
+- **Prochaine étape** : nuit avec site correct → aucune alerte, aucun
+  `asiair_site_mismatch` (écart attendu d'environ +30 s). Si le site du téléphone revient
+  dans l'ASIAIR → ligne rouge dès le début du suivi.
+- **Réf.** : spec et plan `2026-10-27-alerte-site-asiair.md`.
+
 ## En attente d'un événement
 
 ### Alerte « méridien de l'ASIAIR décalé » (site ou heure de la monture faux)
@@ -173,14 +186,9 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   « Sync to Mount » à distance. L'alerte DriftApp (ci-dessous) est donc le seul garde-fou
   automatique possible. Le paquet ASIAIR décompilé le 20/10 n'est plus dans le dépôt :
   pas de vérification côté firmware.
-- **Ensuite (code)** : `services/asiair_monitor.py` lit déjà `RA` et `sidereal_time`
-  (`_info`) ; le comparer au temps sidéral que DriftApp calcule pour le site
-  (`calculer_temps_sideral`, `core/observatoire/calculations.py`) et lever une alerte
-  sur le dashboard au-delà d'environ 1 min d'écart (« position ou heure de l'ASIAIR
-  incorrecte : méridien décalé de N min »), journalisée dans `asiair_monitor.log`.
-  Lecture seule : ne rien écrire vers l'ASIAIR (port 4700 authentifié, ne pas
-  contourner). Tenir compte du biais connu de DriftApp (+82 s, « Plus tard ») dans le
-  seuil, ou le corriger d'abord.
+- **Code** : alerte livrée en 6.30.0, voir « Alerte site ASIAIR sur le dashboard » dans
+  « À valider ». Le biais +82 s ne joue pas : il touche le méridien affiché, pas le
+  temps sidéral comparé.
 
 ### Remplacement du capteur de pluie par un Kemo M152K
 - **Ouvert le** 24/10/2026. L'actuel MH-RD s'oxyde, rate la pluie fine et a vu

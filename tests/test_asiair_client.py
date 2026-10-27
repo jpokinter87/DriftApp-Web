@@ -7,6 +7,7 @@ une ligne JSON par message, terminée par CRLF.
 import json
 import socket
 import threading
+import time
 
 import pytest
 
@@ -172,7 +173,24 @@ def test_etat_monture_apres_meridien_et_evenements_intercales():
         {"RA": 17.6236, "Dec": 68.75, "sidereal_time": 17.6539}, "pier_east", evenement_avant=True
     )
     etat = lire_etat_monture("127.0.0.1", port, 2.0)
-    assert etat == EtatMonture("pier_east", pytest.approx(-0.0303))
+    assert (etat.pier, etat.delta_h) == ("pier_east", pytest.approx(-0.0303))
+
+
+def test_etat_monture_rend_le_temps_sideral_et_l_heure_de_lecture():
+    # Sert à comparer le temps sidéral de la monture à celui du site (alerte 6.30).
+    port = _faux_asiair_monture(
+        {"RA": 22.68749, "Dec": 61.4353, "sidereal_time": 23.834735}, "pier_east"
+    )
+    avant = time.time()
+    etat = lire_etat_monture("127.0.0.1", port, 2.0)
+    assert etat.lst_h == pytest.approx(23.834735)
+    assert avant <= etat.lu_a <= time.time()
+
+
+def test_etat_monture_construit_sans_temps_sideral():
+    # Les faux watchers des tests de bascule ne donnent que le pied et l'écart.
+    etat = EtatMonture("pier_west", 0.3)
+    assert etat.lst_h is None and etat.lu_a is None
 
 
 @pytest.mark.parametrize(

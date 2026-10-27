@@ -35,6 +35,10 @@ from core.tracking.tracking_meridian_anticipation_mixin import (
     TrackingMeridianAnticipationMixin,
 )
 
+# v6.30 : écart de temps sidéral ASIAIR / site au-delà duquel le dashboard alerte.
+# Site correct : environ +30 s (23 et 26/10) ; site du téléphone : −12 min (27/10).
+ASIAIR_SITE_ALERT_MIN = 2.0
+
 
 class TrackingSession(
     TrackingStateMixin,
@@ -118,6 +122,7 @@ class TrackingSession(
         # v6.24 : la bascule suit le côté du pied ASIAIR, l'anticipation la contredirait.
         self.pier_watcher = pier_watcher
         self._flip_wait = None
+        self._alerte_site_vue = False  # v6.30 : asiair_site_mismatch déjà journalisé
         if pier_watcher is not None:
             from core.config.config_loader import MeridianAnticipationConfig
             from core.tracking.dome_flip_wait import AttenteRetournement
@@ -437,11 +442,17 @@ class TrackingSession(
         """Côté du pied ASIAIR, attente du retournement en cours (v6.24) et
         cible tenue après un retournement en avance (v6.26)."""
         if self._flip_wait is None:
-            return {"asiair_pier": None, "flip_wait": None, "flip_early": None}
+            return {
+                "asiair_pier": None,
+                "flip_wait": None,
+                "flip_early": None,
+                "asiair_site_alert": None,
+            }
         etat = self.pier_watcher.etat_frais()
         pier = etat.pier if etat is not None else None
         ecoule = self._flip_wait.en_cours(datetime.now(timezone.utc).timestamp())
         return {
+            "asiair_site_alert": self._alerte_site_asiair(etat),
             "asiair_pier": {"pier_east": "east", "pier_west": "west"}.get(pier),
             "flip_wait": (
                 None
@@ -452,6 +463,31 @@ class TrackingSession(
                 None if self._cible_avance is None else {"target": round(self._cible_avance, 1)}
             ),
         }
+
+    def _alerte_site_asiair(self, etat) -> Optional[dict]:
+        """Temps sidéral de la monture comparé à celui du site, à l'heure de la lecture
+        (v6.30). Un écart signale un site (ou une heure) faux dans l'ASIAIR : son
+        retournement est décalé d'autant. Spec 2026-10-27-alerte-site-asiair.md."""
+        if etat is None or etat.lst_h is None or etat.lu_a is None:
+            return None
+        lu = datetime.fromtimestamp(etat.lu_a, timezone.utc)
+        lst_site_h = self.calc.calculer_temps_sideral(lu) / 15.0
+        ecart_min = ((etat.lst_h - lst_site_h + 12.0) % 24.0 - 12.0) * 60.0
+        if abs(ecart_min) < ASIAIR_SITE_ALERT_MIN:
+            if self._alerte_site_vue:
+                self.logger.info(f"asiair_site_ok | offset_min={ecart_min:+.1f}")
+            self._alerte_site_vue = False
+            return None
+        # 1 min de temps sidéral = 0,25° de longitude.
+        lon_monture = (self.calc.longitude + ecart_min / 4.0 + 180.0) % 360.0 - 180.0
+        alerte = {"offset_min": round(ecart_min, 1), "lon_deg": round(lon_monture, 2)}
+        if not self._alerte_site_vue:
+            self.logger.warning(
+                f"asiair_site_mismatch | offset_min={ecart_min:+.1f} "
+                f"lon_monture={lon_monture:.2f} lon_site={self.calc.longitude:.2f}"
+            )
+        self._alerte_site_vue = True
+        return alerte
 
     # =========================================================================
     # ARRÊT DU SUIVI

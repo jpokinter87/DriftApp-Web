@@ -27,10 +27,14 @@ class AsiairError(Exception):
 
 class EtatMonture(NamedTuple):
     """Côté du pied (``"pier_east"``, ``"pier_west"`` ou ``None`` si inconnu) et
-    écart au méridien selon l'ASIAIR, en heures : > 0 avant le passage, < 0 après."""
+    écart au méridien selon l'ASIAIR, en heures : > 0 avant le passage, < 0 après.
+    v6.30 : temps sidéral de la monture (heures) et heure de la lecture (epoch), pour
+    le comparer à celui du site."""
 
     pier: Optional[str]
     delta_h: float
+    lst_h: Optional[float] = None
+    lu_a: Optional[float] = None
 
 
 def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, float]:
@@ -66,7 +70,7 @@ def lire_etat_monture(host: str, port: int, timeout_s: float) -> EtatMonture:
     except (KeyError, TypeError, ValueError):
         raise AsiairError("réponse sans temps sidéral (monture connectée ?)") from None
     delta_h = (ra_h - lst_h + 12.0) % 24.0 - 12.0
-    return EtatMonture(pier if pier in COTES_PIED else None, delta_h)
+    return EtatMonture(pier if pier in COTES_PIED else None, delta_h, lst_h, time.time())
 
 
 def _requetes(host: str, port: int, timeout_s: float, methods: List[str]) -> list:

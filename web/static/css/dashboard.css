@@ -1177,6 +1177,18 @@ header h1 span {
     color: var(--color-accent-amber);
     font-weight: 700;
 }
+.tracking-site-alert {
+    margin-top: 0.4rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-accent-red);
+    border-radius: 6px;
+    background: rgba(255, 71, 87, 0.14);
+    color: var(--color-accent-red);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-align: center;
+}
 
 /* =========================================================================
    Mode compact « écran bas » (≤ 760px de haut) — v6.11

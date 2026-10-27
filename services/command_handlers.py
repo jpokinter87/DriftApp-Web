@@ -699,6 +699,7 @@ class TrackingHandler:
                     "asiair_pier": status.get("asiair_pier"),
                     "flip_wait": status.get("flip_wait"),
                     "flip_early": status.get("flip_early"),
+                    "asiair_site_alert": status.get("asiair_site_alert"),
                 }
 
                 if ra_deg is not None and self._calc is not None:

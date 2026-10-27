@@ -326,6 +326,7 @@ const elements = {
     trackingAz: document.getElementById('tracking-az'),
     trackingAlt: document.getElementById('tracking-alt'),
     trackingPier: document.getElementById('tracking-pier'),
+    trackingSiteAlert: document.getElementById('tracking-site-alert'),
     trackingCorrections: document.getElementById('tracking-corrections'),
     trackingRemaining: document.getElementById('tracking-remaining'),
 
@@ -2127,6 +2128,26 @@ function updatePierDisplay(info) {
             : 'Méridien passé : reprise du suivi normal de la coupole', 'info');
     }
     flipEarlyShown = !!early;
+    updateSiteAlert(info.asiair_site_alert);
+}
+
+// v6.30 : temps sidéral de l'ASIAIR ≠ celui du site de config.json → son
+// retournement est décalé d'autant (nuit du 27/10 : site du téléphone, −12 min).
+let siteAlertShown = false;
+
+function updateSiteAlert(alert) {
+    const el = elements.trackingSiteAlert;
+    if (!el) return;
+    if (alert) {
+        const fmt = (v, d) => v.toFixed(d).replace('.', ',');
+        const lon = alert.lon_deg;
+        el.textContent = `ASIAIR : méridien décalé de ${alert.offset_min > 0 ? '+' : ''}`
+            + `${fmt(alert.offset_min, 1)} min (longitude monture ≈ ${fmt(Math.abs(lon), 2)}° `
+            + `${lon >= 0 ? 'E' : 'O'}). Vérifier le site dans l'ASIAIR.`;
+        if (!siteAlertShown) log(el.textContent, 'warning');
+    }
+    el.classList.toggle('hidden', !alert);
+    siteAlertShown = !!alert;
 }
 
 function updateTrackingDisplay(motor) {
