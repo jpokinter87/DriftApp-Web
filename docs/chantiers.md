@@ -146,10 +146,21 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   vérifier que `sidereal_time` de la monture retarde d'environ 12,25 min sur le temps
   sidéral vrai au site (calibre l'alerte). Vérifier aussi l'heure du changement de côté
   du pied et `dome_flip_wait_end` (attente attendue d'environ 12 min, sous
-  `max_wait_minutes` = 30). Côté ASIAIR : remettre le site de l'observatoire
-  (44,15° N, 5,23° E) **en début de nuit, avant tout plate-solve**, et trouver comment
-  empêcher l'appli de repousser la position du téléphone (saisie manuelle du site,
-  localisation refusée à l'appli, ou ne jamais toucher « Sync to Mount » à distance).
+  `max_wait_minutes` = 30). Côté ASIAIR : consignes envoyées à Serge le 27/10 (voir
+  ci-dessous) ; à confirmer sur le terrain que la localisation refusée fait bien
+  demander une saisie manuelle, sans retomber sur la dernière position connue.
+- **Recherche du 27/10 (forum ZWO, rien d'officiel)** : aucun réglage ASIAIR ne verrouille
+  le site ni ne coupe l'envoi de la position du téléphone. Le site circule de l'appli
+  vers la monture seulement (« Sync to Mount », et d'après un relevé USB aussi
+  automatiquement à la connexion). La saisie manuelle existe (depuis 1.0.8) mais ne
+  survit pas à un redémarrage selon plusieurs utilisateurs. Cas identique sans réponse de
+  ZWO : observatoire distant au Texas piloté depuis l'Utah
+  (bbs.zwoastro.com/d/22077). Parade retenue : retirer la permission de localisation à
+  l'appli sur le téléphone de pilotage, saisir le site à la main, contrôler Mount →
+  Mount information **en début de nuit avant tout plate-solve**, ne jamais toucher
+  « Sync to Mount » à distance. L'alerte DriftApp (ci-dessous) est donc le seul garde-fou
+  automatique possible. Le paquet ASIAIR décompilé le 20/10 n'est plus dans le dépôt :
+  pas de vérification côté firmware.
 - **Ensuite (code)** : `services/asiair_monitor.py` lit déjà `RA` et `sidereal_time`
   (`_info`) ; le comparer au temps sidéral que DriftApp calcule pour le site
   (`calculer_temps_sideral`, `core/observatoire/calculations.py`) et lever une alerte
