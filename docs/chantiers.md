@@ -107,6 +107,20 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   le 27/10 : si c'est un Pi 5, une pile sur le connecteur BAT garde l'heure même sans
   internet.
 
+### Bouton « Éteindre » du dashboard
+- **Ouvert le** 27/10/2026, livré en 6.29.0 (extinction propre du Pi depuis l'en-tête du
+  dashboard, refusée tant que le suivi tourne ou que le cimier est ouvert).
+- **État** : vérifié en dev seulement. Les fenêtres de confirmation, de refus et
+  d'« Arrêt en cours » s'affichent en Crépuscule, Jour et Nuit, et Échap ferme la fenêtre.
+  En dev, la confirmation échoue proprement : pas de sudoers, et le script refuse hors
+  Raspberry Pi. L'OTA copie le sudoers depuis le dépôt tiré : le bouton marche dès la
+  mise à jour en 6.29.0.
+- **Prochaine étape** : premier essai de Serge, coupole rangée et cimier fermé. À
+  vérifier : le Pi s'éteint (LED verte), `logs/shutdown.log` contient « Extinction du Pi
+  demandée », et les logs suivants ne se terminent plus par des octets nuls. Essayer aussi
+  pendant un suivi : la fenêtre doit refuser.
+- **Réf.** : spec et plan `2026-10-27-bouton-eteindre-le-pi.md`.
+
 ## En attente d'un événement
 
 ### Remplacement du capteur de pluie par un Kemo M152K

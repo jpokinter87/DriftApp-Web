@@ -185,6 +185,18 @@ html[data-theme="night"] .btn-danger:hover:not(:disabled) {
     background: var(--color-accent-red-dim);
 }
 
+/* Éteindre le Pi : toujours affiché, donc contour (un aplat éblouirait, et le
+   filtre rendrait son texte blanc rouge sur rouge). */
+html[data-theme="night"] .btn-shutdown {
+    background: transparent;
+    color: var(--color-accent-red);
+    box-shadow: inset 0 0 0 1px var(--color-accent-red);
+}
+
+html[data-theme="night"] .btn-shutdown:hover {
+    background: var(--color-obs-hover);
+}
+
 /* Un aplat éteint serait un pavé sombre illisible : désactivé = contour. */
 html[data-theme="night"] .btn-danger:disabled {
     background: transparent;

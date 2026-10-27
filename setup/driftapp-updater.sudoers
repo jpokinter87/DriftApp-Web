@@ -23,3 +23,6 @@ slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/update_driftapp.sh --det
 # sans argument plutôt que systemctl générique, pour conserver la propriété de
 # sécurité ci-dessus.
 slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/restart_services.sh
+# 2026-10 (6.29.0) — bouton « Éteindre le Pi » du dashboard : arrêt propre au
+# lieu de couper le courant. Même principe : script dédié, sans argument.
+slenk ALL=(root) NOPASSWD: /home/slenk/DriftApp/scripts/shutdown_pi.sh

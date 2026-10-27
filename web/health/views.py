@@ -27,6 +27,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from web.common.cimier_client import cimier_client
 from web.common.ipc_client import motor_client
 
 logger = logging.getLogger(__name__)
@@ -347,6 +348,10 @@ UPDATE_LOG_FILE = PROJECT_ROOT / "logs" / "update.log"
 RESTART_SCRIPT = PROJECT_ROOT / "scripts" / "restart_services.sh"
 RESTART_STATUS_FILE = PROJECT_ROOT / "logs" / "restart_status.json"
 
+# Extinction du Pi (6.29.0) : bouton du dashboard, au lieu de couper le courant.
+SHUTDOWN_SCRIPT = PROJECT_ROOT / "scripts" / "shutdown_pi.sh"
+MOTEUR_EN_ACTIVITE = ("tracking", "moving", "initializing", "calibrating")
+
 # Rapport de résilience config (chantier A) écrit par les entry points dans l'IPC.
 CONFIG_STATUS_FILE = Path("/dev/shm/config_status.json")
 
@@ -620,3 +625,55 @@ def restart_services(request):
         },
         status=500,
     )
+
+
+def _raison_refus_extinction() -> str:
+    """Raison de refuser l'extinction, ou "" si la session est rangée.
+
+    Un service muet (état « unknown ») ne bloque pas : on ne doit jamais
+    enfermer l'utilisateur, et le bouton du Pi reste disponible.
+    """
+    if motor_client.get_motor_status().get("status") in MOTEUR_EN_ACTIVITE:
+        return "La coupole suit un objet ou se déplace : arrêtez d'abord le suivi."
+    cimier = cimier_client.get_status()
+    if cimier.get("state") != "disabled" and (
+        cimier.get("state") == "cycle" or cimier.get("open_switch") is True
+    ):
+        return "Le cimier est ouvert ou en mouvement : fermez-le d'abord."
+    return ""
+
+
+@api_view(["GET", "POST"])
+def shutdown_pi(request):
+    """Éteint proprement le Raspberry Pi (bouton du dashboard, 6.29.0).
+
+    GET : dit si l'extinction est permise, et sinon pourquoi.
+    POST : revérifie, puis lance scripts/shutdown_pi.sh via sudo ; le script
+    programme l'arrêt 3 s plus tard pour que cette réponse parte avant.
+    """
+    raison = _raison_refus_extinction()
+    if request.method == "GET":
+        return Response({"allowed": not raison, "reason": raison})
+
+    if raison:
+        return Response({"success": False, "error": raison}, status=409)
+
+    logger.info("Extinction du Pi demandée depuis le dashboard")
+    try:
+        result = subprocess.run(
+            ["sudo", "-n", str(SHUTDOWN_SCRIPT)],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        logger.exception("Erreur au lancement de l'extinction")
+        return Response({"success": False, "error": str(e)}, status=500)
+
+    if result.returncode == 0:
+        return Response({"success": True, "message": "Extinction en cours"})
+
+    err = (result.stderr or "").strip() or (result.stdout or "").strip() or "Erreur inconnue"
+    logger.error("Extinction échouée (rc=%s) : %s", result.returncode, err)
+    return Response({"success": False, "error": err}, status=500)

@@ -102,6 +102,10 @@ document.addEventListener('alpine:init', () => {
         cimierCloseConfirmVisible: false,
         cimierCloseConfirmObject: null,
         cimierCloseConfirmCountdown: 0,
+        // Extinction du Pi (6.29.0) — 'check' | 'refused' | 'confirm' | 'sending' | 'done' | 'error'
+        shutdownVisible: false,
+        shutdownPhase: 'check',
+        shutdownMessage: '',
         // Cimier automation lifecycle (v6.0 Phase 4 sub-plan 04-02)
         automationMode: 'manual',                  // 'manual' | 'semi' | 'full'
         automationRestartHint: '',                 // hint affiché 8s après POST mode
@@ -373,6 +377,10 @@ const elements = {
     // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
     btnCimierCloseCancel: document.getElementById('btn-cimier-close-cancel'),
     btnCimierCloseConfirm: document.getElementById('btn-cimier-close-confirm'),
+    // Extinction du Pi (6.29.0)
+    btnShutdown: document.getElementById('btn-shutdown'),
+    btnShutdownCancel: document.getElementById('btn-shutdown-cancel'),
+    btnShutdownConfirm: document.getElementById('btn-shutdown-confirm'),
     // Cimier automation + parking session (v6.0 Phase 4 sub-plan 04-02)
     selectAutomationMode: document.getElementById('cimier-automation-mode'),
     btnCimierParking: document.getElementById('btn-cimier-parking'),
@@ -540,6 +548,15 @@ function initEventListeners() {
             await stopTracking();
             sendCimierAction('close');
         });
+    }
+
+    // Extinction du Pi (6.29.0)
+    if (elements.btnShutdown) {
+        elements.btnShutdown.addEventListener('click', openShutdownModal);
+        elements.btnShutdownCancel.addEventListener('click', () => {
+            Alpine.store('dashboard').shutdownVisible = false;
+        });
+        elements.btnShutdownConfirm.addEventListener('click', confirmShutdown);
     }
 
     // Bouton Parking session (v6.0 Phase 4 sub-plan 04-02) — séquence
@@ -1261,6 +1278,38 @@ async function sendCimierAction(action) {
         pushCimierTimeline('ERROR', `${labels[action]} échouée : ${result.error}`);
     }
     // Le polling 1s rafraîchit l'état affiché ; pas besoin de poll immédiat.
+}
+
+// Extinction du Pi (6.29.0) : le serveur dit si la session est rangée (suivi
+// arrêté, cimier fermé) ; sinon la fenêtre affiche la raison du refus.
+async function openShutdownModal() {
+    const store = Alpine.store('dashboard');
+    store.shutdownPhase = 'check';
+    store.shutdownMessage = '';
+    store.shutdownVisible = true;
+    const result = await apiCall('/api/health/shutdown/');
+    if (result.error) {
+        store.shutdownPhase = 'error';
+        store.shutdownMessage = `Impossible de vérifier l'état : ${result.error}`;
+    } else if (result.allowed) {
+        store.shutdownPhase = 'confirm';
+    } else {
+        store.shutdownPhase = 'refused';
+        store.shutdownMessage = result.reason;
+    }
+}
+
+async function confirmShutdown() {
+    const store = Alpine.store('dashboard');
+    store.shutdownPhase = 'sending';
+    const result = await apiCall('/api/health/shutdown/', 'POST');
+    if (result.success) {
+        store.shutdownPhase = 'done';
+        log('Extinction du Pi en cours', 'warning');
+    } else {
+        store.shutdownPhase = 'error';
+        store.shutdownMessage = result.error || 'Erreur inconnue';
+    }
 }
 
 // Ferme la modale de confirmation et nettoie le compteur (v6.0 Phase 2 sub-plan 01).

@@ -38,6 +38,11 @@
     <span class="status-dot"></span>
     <span class="status-text text-obs-text-muted">Connexion...</span>
 </div>
+<!-- Extinction propre du Pi (6.29.0) : au lieu de couper le courant. -->
+<button id="btn-shutdown" class="btn-shutdown" aria-label="Éteindre le Pi">
+    <span aria-hidden="true">&#x23FB;</span>
+    <span>Éteindre</span>
+</button>
 {% endblock %}
 
 {% block content %}
@@ -761,6 +766,55 @@
                             ? `Confirmer (${$store.dashboard.cimierCloseConfirmCountdown})`
                             : 'Confirmer la fermeture'">
                 Confirmer la fermeture
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ Modal Extinction du Pi (6.29.0) ═══ -->
+<div id="shutdown-modal" x-data class="goto-modal"
+     x-show="$store.dashboard.shutdownVisible" x-cloak
+     role="dialog" aria-modal="true"
+     aria-labelledby="shutdown-title"
+     aria-describedby="shutdown-body">
+    <div class="goto-modal-content">
+        <div class="goto-modal-header">
+            <span class="goto-icon">&#x23FB;</span>
+            <h3 id="shutdown-title"
+                x-text="({
+                    check: 'Éteindre le Pi…',
+                    refused: 'Extinction impossible pour l\'instant',
+                    confirm: 'Éteindre le Pi maintenant\u00a0?',
+                    sending: 'Éteindre le Pi…',
+                    done: 'Arrêt en cours',
+                    error: 'Extinction échouée',
+                })[$store.dashboard.shutdownPhase]">Éteindre le Pi</h3>
+        </div>
+        <div id="shutdown-body"
+             class="text-sm text-obs-text-secondary mb-5 px-2 leading-relaxed text-center">
+            <p x-show="$store.dashboard.shutdownPhase === 'check' || $store.dashboard.shutdownPhase === 'sending'">
+                Un instant…
+            </p>
+            <p x-show="$store.dashboard.shutdownPhase === 'refused' || $store.dashboard.shutdownPhase === 'error'"
+               x-text="$store.dashboard.shutdownMessage"></p>
+            <p x-show="$store.dashboard.shutdownPhase === 'confirm'">
+                Le Pi va s'arrêter proprement, et l'écran s'éteindra avec lui.
+                Pour le rallumer, il faudra appuyer sur le bouton du Pi.
+            </p>
+            <p x-show="$store.dashboard.shutdownPhase === 'done'">
+                Attendez que la LED verte du Pi ne clignote plus (une vingtaine de
+                secondes) : vous pourrez alors couper le courant.
+                Pour rallumer : bouton du Pi.
+            </p>
+        </div>
+        <div class="button-group" x-show="$store.dashboard.shutdownPhase !== 'done'">
+            <button id="btn-shutdown-cancel" class="btn btn-secondary" data-modal-cancel
+                    x-text="$store.dashboard.shutdownPhase === 'confirm' ? 'Annuler' : 'Fermer'">
+                Annuler
+            </button>
+            <button id="btn-shutdown-confirm" class="btn btn-danger"
+                    x-show="$store.dashboard.shutdownPhase === 'confirm'">
+                Éteindre le Pi
             </button>
         </div>
     </div>

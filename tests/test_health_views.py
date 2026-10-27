@@ -552,3 +552,99 @@ class TestRestartServices:
         assert response.status_code == 500
         assert response.data["services"] == []
         assert not status_file.exists()
+
+
+class TestShutdownPi:
+    """GET/POST /api/health/shutdown/ — bouton « Éteindre le Pi » du dashboard.
+
+    Refus tant que la session n'est pas rangée (suivi ou cimier) ; un service muet
+    ne bloque pas. Patcher `health.views` (cf. TestApplyUpdate).
+    """
+
+    RANGE_MOTEUR = {"status": "idle"}
+    RANGE_CIMIER = {"state": "idle", "open_switch": False, "closed_switch": True}
+
+    def _etats(self, moteur=None, cimier=None):
+        from unittest.mock import MagicMock
+
+        motor = MagicMock()
+        motor.get_motor_status.return_value = moteur or self.RANGE_MOTEUR
+        cim = MagicMock()
+        cim.get_status.return_value = cimier or self.RANGE_CIMIER
+        return (
+            patch("health.views.motor_client", motor),
+            patch("health.views.cimier_client", cim),
+        )
+
+    def _get(self, api_client, **etats):
+        p1, p2 = self._etats(**etats)
+        with p1, p2:
+            return api_client.get("/api/health/shutdown/")
+
+    def test_autorise_quand_tout_est_range(self, api_client):
+        response = self._get(api_client)
+        assert response.status_code == 200
+        assert response.data["allowed"] is True
+
+    def test_refuse_pendant_le_suivi(self, api_client):
+        response = self._get(api_client, moteur={"status": "tracking"})
+        assert response.data["allowed"] is False
+        assert "suivi" in response.data["reason"].lower()
+
+    def test_refuse_pendant_un_deplacement(self, api_client):
+        for status in ("moving", "initializing", "calibrating"):
+            response = self._get(api_client, moteur={"status": status})
+            assert response.data["allowed"] is False, status
+
+    def test_refuse_cimier_ouvert(self, api_client):
+        response = self._get(
+            api_client, cimier={"state": "idle", "open_switch": True, "closed_switch": False}
+        )
+        assert response.data["allowed"] is False
+        assert "cimier" in response.data["reason"].lower()
+
+    def test_refuse_cimier_en_mouvement(self, api_client):
+        response = self._get(api_client, cimier={"state": "cycle", "open_switch": False})
+        assert response.data["allowed"] is False
+
+    def test_cimier_desactive_ne_bloque_pas(self, api_client):
+        response = self._get(api_client, cimier={"state": "disabled", "open_switch": True})
+        assert response.data["allowed"] is True
+
+    def test_services_muets_ne_bloquent_pas(self, api_client):
+        response = self._get(api_client, moteur={"status": "unknown"}, cimier={"state": "unknown"})
+        assert response.data["allowed"] is True
+
+    def test_post_refuse_sans_lancer_le_script(self, api_client):
+        p1, p2 = self._etats(moteur={"status": "tracking"})
+        with p1, p2, patch("health.views.subprocess.run") as run:
+            response = api_client.post("/api/health/shutdown/")
+        assert response.status_code == 409
+        assert response.data["success"] is False
+        run.assert_not_called()
+
+    def test_post_lance_le_script_via_sudo(self, api_client):
+        from unittest.mock import MagicMock
+
+        p1, p2 = self._etats()
+        resultat = MagicMock(returncode=0, stdout="SHUTDOWN_SCHEDULED\n", stderr="")
+        with p1, p2, patch("health.views.subprocess.run", return_value=resultat) as run:
+            response = api_client.post("/api/health/shutdown/")
+        assert response.status_code == 200
+        assert response.data["success"] is True
+        commande = run.call_args[0][0]
+        assert commande[:2] == ["sudo", "-n"]
+        assert commande[2].endswith("scripts/shutdown_pi.sh")
+
+    def test_post_echec_du_script_remonte(self, api_client):
+        from unittest.mock import MagicMock
+
+        p1, p2 = self._etats()
+        resultat = MagicMock(
+            returncode=1, stdout="SHUTDOWN_REFUSED not a Raspberry Pi\n", stderr=""
+        )
+        with p1, p2, patch("health.views.subprocess.run", return_value=resultat):
+            response = api_client.post("/api/health/shutdown/")
+        assert response.status_code == 500
+        assert response.data["success"] is False
+        assert "Raspberry Pi" in response.data["error"]

@@ -21,6 +21,7 @@ urlpatterns = [
     path("update/status/", views.update_status, name="update_status"),
     # Redémarrage des services backend (applique un changement de config)
     path("restart/", views.restart_services, name="restart_services"),
+    path("shutdown/", views.shutdown_pi, name="shutdown_pi"),
     # Page HTML de diagnostic système
     path(
         "system/",
