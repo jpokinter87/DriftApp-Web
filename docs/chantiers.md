@@ -125,6 +125,40 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 
 ## En attente d'un événement
 
+### Alerte « méridien de l'ASIAIR décalé » (site ou heure de la monture faux)
+- **Ouvert le** 27/10/2026. Nuit du 27/10, NGC 7354 (Céphée, Déc +61°, culmine au nord
+  vers 73°) : l'ASIAIR annonce le retournement à 21h07, DriftApp le méridien à 20h54
+  (astropy : 20h55m40s au site). Réglage ASIAIR « Flip Timing after Meridian » = 0 (JP).
+  Les nuits précédentes, l'écart n'était que d'environ 55 s (voir « Bascule de la
+  coupole ») : le décalage est nouveau.
+- **Cause confirmée** (capture ASIAIR de Serge, 27/10 à 21:35, Mount → Mount information) :
+  la monture a pour site **E 02°10'02", N 48°48'21"**, la position GPS du téléphone de
+  l'utilisateur en région parisienne, et non celle de l'observatoire. L'appli ASIAIR
+  pousse la position du téléphone vers la monture (section « Location info », bouton
+  « Sync to Mount »). Écart de longitude 3,06° × 4 min = 12,25 min : 20h55m40s + 12 min
+  = 21h07, l'heure annoncée. La latitude est aussi fausse de 4,7° (48,8° au lieu de
+  44,15°). Tout usage à distance de l'observatoire expose au même piège.
+- **Exclu** : les coordonnées de l'objet (DriftApp lit l'AD/Déc de la monture via
+  `/api/tracking/asiair/`, même AD des deux côtés) ; `data/config.json` (lu par DriftApp
+  seul, l'ASIAIR a son propre site). Le méridien ASIAIR = AD monture − `sidereal_time`
+  de `scope_get_info` : seul le temps sidéral de la monture peut porter l'écart.
+- **Prochaine étape** : zip de la nuit du 27/10. Dans `logs/asiair/2026-10-27.jsonl`,
+  vérifier que `sidereal_time` de la monture retarde d'environ 12,25 min sur le temps
+  sidéral vrai au site (calibre l'alerte). Vérifier aussi l'heure du changement de côté
+  du pied et `dome_flip_wait_end` (attente attendue d'environ 12 min, sous
+  `max_wait_minutes` = 30). Côté ASIAIR : remettre le site de l'observatoire
+  (44,15° N, 5,23° E) **en début de nuit, avant tout plate-solve**, et trouver comment
+  empêcher l'appli de repousser la position du téléphone (saisie manuelle du site,
+  localisation refusée à l'appli, ou ne jamais toucher « Sync to Mount » à distance).
+- **Ensuite (code)** : `services/asiair_monitor.py` lit déjà `RA` et `sidereal_time`
+  (`_info`) ; le comparer au temps sidéral que DriftApp calcule pour le site
+  (`calculer_temps_sideral`, `core/observatoire/calculations.py`) et lever une alerte
+  sur le dashboard au-delà d'environ 1 min d'écart (« position ou heure de l'ASIAIR
+  incorrecte : méridien décalé de N min »), journalisée dans `asiair_monitor.log`.
+  Lecture seule : ne rien écrire vers l'ASIAIR (port 4700 authentifié, ne pas
+  contourner). Tenir compte du biais connu de DriftApp (+82 s, « Plus tard ») dans le
+  seuil, ou le corriger d'abord.
+
 ### Remplacement du capteur de pluie par un Kemo M152K
 - **Ouvert le** 24/10/2026. L'actuel MH-RD s'oxyde, rate la pluie fine et a vu
   « wet » toute la soirée claire du 23/10 (3 fermetures à tort). Le M152K a été commandé
