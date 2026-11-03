@@ -2429,6 +2429,56 @@ class TestRainWatch:
             service.tick()
         assert "rain_would_close" in caplog.text
 
+    def _rain_with_unreachable_switches(self, tmp_path):
+        """Terrain 31/10 : pluie armée, Shelly Uni+ injoignable (répéteur
+        tombé), donc cimier « unknown » à chaque tour de veille."""
+        rain = StubRainProtection(state="wet", armed=True)
+        service = make_rain_service(
+            tmp_path,
+            rain,
+            switch_reader=FakeSwitchReader(raise_error=SwitchReaderError("timed out")),
+            last_switches=(False, False),
+        )
+        closer = RecordingCloser()
+        service._close_session_fn = closer
+        return rain, service, closer
+
+    def test_unconfirmed_close_parks_the_dome_only_once(self, tmp_path):
+        """Terrain 31/10, 08:03 → 08:37 : 221 GOTO de parking, un toutes les
+        5 s, qui écrasaient les GOTO manuels de Serge. Le manuel ne doit jamais
+        être verrouillé par un automatisme."""
+        _, service, closer = self._rain_with_unreachable_switches(tmp_path)
+        for _ in range(3):
+            service._rain_watch_tick()
+        assert closer.calls == ["rain"]
+
+    def test_unconfirmed_close_keeps_retrying_the_cimier(self, tmp_path):
+        _, service, _ = self._rain_with_unreachable_switches(tmp_path)
+        service._rain_watch_tick()
+        service._ipc.read_command()  # consommée par le cycle de fermeture
+        service._rain_watch_tick()
+        command = service._ipc.read_command()
+        assert command is not None and command["action"] == "close"
+
+    def test_dry_spell_ends_the_episode_and_parks_again(self, tmp_path):
+        rain, service, closer = self._rain_with_unreachable_switches(tmp_path)
+        service._rain_watch_tick()
+        rain.state = "dry"
+        service._rain_watch_tick()
+        rain.state = "wet"
+        service._rain_watch_tick()
+        assert closer.calls == ["rain", "rain"]
+
+    def test_sensor_flicker_is_not_a_new_episode(self, tmp_path):
+        """31/10 08:37 : le capteur lui-même passe wet → unreachable → wet."""
+        rain, service, closer = self._rain_with_unreachable_switches(tmp_path)
+        service._rain_watch_tick()
+        rain.state = "unreachable"
+        service._rain_watch_tick()
+        rain.state = "wet"
+        service._rain_watch_tick()
+        assert closer.calls == ["rain"]
+
     def test_closed_cimier_is_not_closed_again(self, tmp_path):
         rain = StubRainProtection(state="wet", armed=True)
         service = make_rain_service(tmp_path, rain, cimier_open=False)
@@ -2553,7 +2603,8 @@ class TestRainWatch:
 
     def test_an_unclosed_cimier_is_retried(self, tmp_path):
         """La fermeture est best-effort : si le cimier n'est pas confirmé fermé
-        et qu'il pleut toujours, la veille réessaie."""
+        et qu'il pleut toujours, la veille réessaie (la fermeture seule : la
+        coupole est déjà garée, cf. test_unconfirmed_close_parks_the_dome_only_once)."""
         rain = StubRainProtection(state="wet", armed=True)
         service = make_rain_service(
             tmp_path,
@@ -2563,9 +2614,13 @@ class TestRainWatch:
         )
         closer = RecordingCloser()
         service._close_session_fn = closer
+        sent = []
+        write_command = service._ipc.write_command
+        service._ipc.write_command = lambda cmd: sent.append(cmd) or write_command(cmd)
         service.tick()
         service.tick()
-        assert closer.calls == ["rain", "rain"]
+        assert closer.calls == ["rain"]
+        assert [cmd["action"] for cmd in sent] == ["close"]
 
     def test_rain_that_commands_nothing_is_logged(self, tmp_path, caplog):
         """L'angle mort du 20/08 : la veille a vu la pluie, n'a rien fermé, et

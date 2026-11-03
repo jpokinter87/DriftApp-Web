@@ -65,6 +65,7 @@ from core.hardware.shelly_switch_reader import (
     SwitchReaderError,
 )
 from core.hardware.weather_provider import (
+    RAIN_DRY,
     RAIN_WET,
     NoopWeatherProvider,
     WeatherProvider,
@@ -308,6 +309,10 @@ class CimierService:
         # première utilisation (elle a besoin des writers IPC).
         self._close_session_fn: Optional[Callable[[str], Dict[str, Any]]] = None
         self._motor_ipc = motor_ipc
+        # Coupole garée pour l'épisode de pluie en cours : tant que le cimier
+        # n'est pas confirmé fermé, on ne relance que sa fermeture. Terrain
+        # 31/10 : un parking toutes les 5 s écrasait les GOTO manuels.
+        self._rain_parked = False
 
         # Résistance chauffante (2026-09) : allumée dès le démarrage, armée ou
         # non. Depuis le 24/10/2026 elle ne suit plus l'armement : désarmer la
@@ -1245,6 +1250,10 @@ class CimierService:
             # Nouvel épisode : la décision à blanc redevient signalable.
             self._rain_would_close_notified = False
             self._rain_skip_reason = None
+            # Seul le retour au sec clôt l'épisode : un trou de lecture du
+            # capteur (wet → unreachable → wet) ne regare pas la coupole.
+            if state == RAIN_DRY:
+                self._rain_parked = False
 
         # On interroge la mesure, pas ``is_safe_to_keep_open()`` : cette
         # dernière est bridée par l'armement (elle répond toujours True quand
@@ -1291,8 +1300,13 @@ class CimierService:
             "cimier_event=rain_emergency_close state=%s cimier_state=%s", state, cimier_state
         )
         night_journal.append_event("decision", action="close", reason="rain")
-        closer = self._close_session_fn or self._close_session_for_rain
-        closer("rain")
+        if self._rain_parked:
+            # Coupole déjà garée : le manuel reste libre, seul le cimier est relancé.
+            self._ipc.write_command({"id": str(uuid.uuid4()), "action": "close"})
+        else:
+            closer = self._close_session_fn or self._close_session_for_rain
+            closer("rain")
+            self._rain_parked = True
         if hasattr(provider, "latch"):
             provider.latch()
 

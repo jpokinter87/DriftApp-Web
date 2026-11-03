@@ -19,11 +19,12 @@ from core.hardware.asiair_client import (
 )
 
 
-def _faux_asiair(reponses):
-    """Démarre un serveur qui lit une requête puis envoie `reponses(requete)`.
+def _faux_asiair(reponses, suivi=True):
+    """Démarre un serveur qui imite l'ASIAIR et retourne son port.
 
-    `reponses` reçoit la requête décodée et renvoie la liste des lignes brutes
-    à envoyer (ou None pour ne rien répondre). Retourne le port.
+    `reponses` reçoit chaque requête décodée (sauf ``scope_get_track_state``,
+    à laquelle le serveur répond `suivi`) et renvoie la liste des lignes brutes
+    à envoyer : None pour ne rien répondre, [] pour fermer la connexion.
     """
     serveur = socket.socket()
     serveur.bind(("127.0.0.1", 0))
@@ -32,13 +33,20 @@ def _faux_asiair(reponses):
     def servir():
         conn, _ = serveur.accept()
         with conn:
-            requete = json.loads(conn.makefile().readline())
-            lignes = reponses(requete)
-            if lignes is None:
-                conn.recv(1)  # attend que le client abandonne
-                return
-            for ligne in lignes:
-                conn.sendall((ligne + "\r\n").encode())
+            for brute in conn.makefile():
+                requete = json.loads(brute)
+                if requete["method"] == "scope_get_track_state":
+                    lignes = [_resultat(requete, suivi)]
+                else:
+                    lignes = reponses(requete)
+                if lignes is None:
+                    while conn.recv(1024):  # attend que le client abandonne
+                        pass
+                    return
+                if not lignes:
+                    return
+                for ligne in lignes:
+                    conn.sendall((ligne + "\r\n").encode())
         serveur.close()
 
     threading.Thread(target=servir, daemon=True).start()
@@ -74,11 +82,18 @@ def test_evenements_non_sollicites_ignores():
         return [
             json.dumps({"Event": "PiStatus", "temp": 41.2}),
             "pas du json",
-            json.dumps({"jsonrpc": "2.0", "id": requete["id"] + 1, "result": {"RA": 9, "Dec": 9}}),
+            json.dumps({"jsonrpc": "2.0", "id": requete["id"] + 10, "result": {"RA": 9, "Dec": 9}}),
             _resultat(requete, {"RA": 12.0, "Dec": -30.5}),
         ]
 
     assert lire_coordonnees("127.0.0.1", _faux_asiair(reponses), 2.0) == (180.0, -30.5)
+
+
+def test_monture_en_goto_refusee():
+    # Terrain 02/11 19:39:04 : lu en plein GOTO, DEC arrivée mais AD encore en route.
+    port = _faux_asiair(lambda r: [_resultat(r, {"RA": 17.746, "Dec": 36.804})], suivi=False)
+    with pytest.raises(AsiairError, match="ne suit pas"):
+        lire_coordonnees("127.0.0.1", port, 2.0)
 
 
 def test_ra_ramenee_dans_0_360():

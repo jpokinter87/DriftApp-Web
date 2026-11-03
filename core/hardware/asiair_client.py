@@ -40,16 +40,23 @@ class EtatMonture(NamedTuple):
 def lire_coordonnees(host: str, port: int, timeout_s: float) -> Tuple[float, float]:
     """Interroge l'ASIAIR et renvoie ``(ra_deg, dec_deg)`` telles que l'ASIAIR
     les donne, c'est-à-dire en **JNow** (vérifié par Serge, 20/10/2026). La
-    conversion en J2000 appartient à l'appelant.
+    conversion en J2000 appartient à l'appelant. Refuse une monture qui ne
+    suit pas (GOTO en cours) : sa position n'est pas encore celle de l'objet.
 
     Raises:
         AsiairError: message lisible par l'opérateur.
     """
-    (result,) = _requetes(host, port, timeout_s, ["scope_get_info"])
+    result, suivi = _requetes(host, port, timeout_s, ["scope_get_info", "scope_get_track_state"])
     try:
         ra_h, dec_deg = float(result["RA"]), float(result["Dec"])
     except (KeyError, TypeError, ValueError):
         raise AsiairError("réponse sans coordonnées (monture connectée ?)") from None
+    # Terrain 02/11 : lue en plein GOTO, la DEC était arrivée mais pas l'AD.
+    # Pendant un GOTO, l'ASIAIR coupe le suivi : on attend qu'il le reprenne.
+    if suivi is not True:
+        raise AsiairError(
+            "la monture ne suit pas l'objet (GOTO en cours ?) : réessayer à la fin du GOTO"
+        )
     if not -90.0 <= dec_deg <= 90.0:
         raise AsiairError(f"déclinaison hors bornes ({dec_deg})")
     return (ra_h * 15.0) % 360.0, dec_deg

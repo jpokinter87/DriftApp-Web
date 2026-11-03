@@ -263,6 +263,7 @@ let state = {
     trackingObject: null,
     searchedObject: null,
     searchedCoords: null,  // {ra_deg, dec_deg} si saisie manuelle (v6.17), sinon null
+    lastObjectName: null,  // dernier objet suivi : resté dans le champ, ce n'est pas un nom tapé
     lastUpdate: null,
     trackingInfo: {},  // Pour position_cible, etc.
     gotoInfo: null,    // Pour la modal GOTO
@@ -763,7 +764,7 @@ async function importAsiair() {
             return;
         }
         const typed = elements.objectName.value.trim();
-        const name = typed && typed !== state.searchedObject
+        const name = typed && typed !== state.searchedObject && typed !== state.lastObjectName
             ? typed
             : `ASIAIR RA ${formatHMS(result.ra_jnow, 1)} DEC ${formatDMS(result.dec_jnow)}`;
         armCoords(name, result.ra_deg, result.dec_deg, result, 'ASIAIR');
@@ -812,6 +813,7 @@ async function startTracking(skipGoto = false) {
         log('Aucun objet sélectionné', 'warning');
         return;
     }
+    state.lastObjectName = name;
 
     // Cascade auto cimier (v6.0 Phase 2 sub-plan 01) — ouvre le cimier si fermé,
     // attend state="open" (timeout 30 s). Abort propre sur cycle/cooldown/error.
@@ -2160,6 +2162,7 @@ function updateTrackingDisplay(motor) {
         // Si un suivi est en cours et qu'on vient de se connecter, synchroniser l'état
         if (!initialSyncDone && motor.tracking_object) {
             state.searchedObject = motor.tracking_object;
+            state.lastObjectName = motor.tracking_object;
             elements.objectName.value = motor.tracking_object;
 
             // Log informatif pour l'utilisateur
