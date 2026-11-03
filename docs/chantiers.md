@@ -34,6 +34,11 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   21:08:04 (`dome_flip_wait_end reason=pierside waited_s=793`), coupole arrivée 21:09:00
   (`resync` écart +0,4°), monture de nouveau en suivi 21:09:09. Attente longue due au
   site faux de la monture (voir « Alerte méridien de l'ASIAIR décalé »).
+- **Nuits du 31/10 et du 2/11** (zip `logs/terrain/2026-11-02.zip`) : règle 6.24 OK deux
+  fois de plus, attentes revenues à la normale : `dome_flip_wait_end reason=pierside
+  waited_s=56` le 31/10 à 22:19:30, `waited_s=36` le 3/11 à 02:50:40, puis
+  `meridian_transit delta=+62.8` (336,0° → 38,8°) en un seul mouvement et `resync` écart
+  +0,1°. Toujours aucun `dome_flip_early_*`.
 - **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
 
 ### Fermeture du cimier : relance et fin de nuit
@@ -112,8 +117,10 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   « Attente de l'heure » dans `update.log` (attendu). Saut d'heure encore vu au
   redémarrage : services lancés à 14:38 (horloge restaurée), `encoder_stale
   age_ms=16464186` à 19:12:54 (+4 h 34 min). Le délai arrivera à la prochaine mise à jour.
-- **Prochaine étape** : après la mise à jour suivant la 6.28.6, `update.log` doit montrer
-  « Attente de l'heure : délai installé » (et aucun WARN timesyncd). Au démarrage
+- **29/10** : mise à jour en 6.30.0, `update.log` montre « Attente de l'heure : délai
+  installé » à 20:07:49. Possible effet de bord : voir « Navigateur au démarrage du Pi ».
+- **Prochaine étape** : vérifier sur un zip qu'il n'y a plus de saut d'heure dans les logs
+  des services au démarrage, et aucun WARN timesyncd. Au démarrage
   suivant, plus de saut d'heure dans les logs des services. Modèle du Pi demandé à Serge
   le 27/10 : si c'est un Pi 5, une pile sur le connecteur BAT garde l'heure même sans
   internet.
@@ -140,12 +147,46 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   « −12,2 min, ≈ 2,17° E » en Nuit, Crépuscule et Jour, `asiair_site_mismatch` écrit une
   fois. Ne marche qu'avec `asiair.dome_flip_on_pierside` (le watcher du pied). Latitude
   fausse seule invisible (l'ASIAIR ne donne pas son site).
-- **Prochaine étape** : nuit avec site correct → aucune alerte, aucun
-  `asiair_site_mismatch` (écart attendu d'environ +30 s). Si le site du téléphone revient
-  dans l'ASIAIR → ligne rouge dès le début du suivi.
+- **Nuit du 2/11 (site correct)** : aucun `asiair_site_mismatch` sur quatre suivis, la
+  moitié « pas de fausse alerte » est validée.
+- **Prochaine étape** : reste le cas site faux. Si le site du téléphone revient dans
+  l'ASIAIR → ligne rouge dès le début du suivi, puis clore.
 - **Réf.** : spec et plan `2026-10-27-alerte-site-asiair.md`.
 
+### Corrections 6.30.1 (nuits du 31/10 et du 2/11)
+- **Ouvert le** 03/11/2026, livré en 6.30.1 (commit `1b31a2a`).
+- **Import ASIAIR refusé pendant un GOTO** : le 2/11 à 19:39:04, lecture en plein GOTO
+  (début 19:38:28, `ScopeGoto complete` 19:39:21) → RA 17h44 au lieu de 21h03, DEC déjà
+  arrivée, coupole au mauvais azimut. `lire_coordonnees` demande aussi
+  `scope_get_track_state` (False pendant tout le GOTO) et refuse.
+- **Nom d'objet périmé** : le 2/11 à 23:03, IC 391 importé avec les bonnes coordonnées
+  mais le nom de la cible précédente (« ASIAIR RA 4h09m23.6s… »). L'ancien nom resté dans
+  le champ après l'arrêt passait pour un nom tapé (`state.lastObjectName`, `dashboard.js`).
+- **Parking pluie unique** : le 31/10 de 08:03 à 08:37, pluie armée et Shelly Uni+
+  injoignable (répéteur tombé) → cimier « unknown », 221 GOTO 45° (un toutes les 5 s)
+  qui écrasaient les GOTO manuels de Serge, jusqu'au désarmement. Désormais un seul
+  parking par épisode (clos au retour au sec, pas par un trou de lecture du capteur),
+  ensuite seule la fermeture du cimier est relancée.
+- **Prochaine étape** : import ASIAIR cliqué pendant un GOTO → message « la monture ne
+  suit pas l'objet » dans les logs du dashboard ; deux objets ASIAIR enchaînés → noms
+  distincts dans `ipc_command | type=tracking_start` ; à la prochaine pluie armée avec
+  Uni+ injoignable, un seul `session_close reason=rain` par épisode. Puis clore.
+
 ## En attente d'un événement
+
+### Navigateur au démarrage du Pi : « Try Again » systématique
+- **Ouvert le** 03/11/2026. Serge (3/11) doit cliquer « Try Again » à chaque démarrage
+  pour que la page s'affiche.
+- **Hypothèse** : depuis la 6.30.0 (29/10), les services attendent l'heure NTP (jusqu'à
+  90 s, toute la durée sans internet, cf. « Services démarrés à l'heure juste ») ; le
+  navigateur, lancé en autostart hors dépôt, s'ouvre avant que Django écoute.
+- **Questions envoyées à Serge le 03/11** : depuis quand (avant ou après le 29/10), photo
+  de l'écran d'erreur (Chromium ou Firefox), contenu des fichiers d'autostart
+  (`~/.config/autostart/*.desktop`, `~/.config/labwc/autostart`, `~/.config/wayfire.ini`,
+  `~/.config/lxsession/LXDE-pi/autostart`).
+- **Prochaine étape** : avec ses réponses, un lanceur versionné qui attend que
+  `localhost:8000` réponde avant d'ouvrir le navigateur, installé à la place de la
+  commande actuelle.
 
 ### Alerte « méridien de l'ASIAIR décalé » (site ou heure de la monture faux)
 - **Ouvert le** 27/10/2026. Nuit du 27/10, NGC 7354 (Céphée, Déc +61°, culmine au nord
@@ -186,6 +227,8 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   « Sync to Mount » à distance. L'alerte DriftApp (ci-dessous) est donc le seul garde-fou
   automatique possible. Le paquet ASIAIR décompilé le 20/10 n'est plus dans le dépôt :
   pas de vérification côté firmware.
+- **31/10 et 2/11** : attentes au méridien de 56 s et 36 s (contre 793 s le 27/10) : le
+  site de la monture est redevenu juste, la parade tient pour l'instant.
 - **Code** : alerte livrée en 6.30.0, voir « Alerte site ASIAIR sur le dashboard » dans
   « À valider ». Le biais +82 s ne joue pas : il touche le méridien affiché, pas le
   temps sidéral comparé.
@@ -203,8 +246,16 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   est abandonné). Le .78 alimente le capteur : `cimier_service` arrêté depuis plus
   de 5 min → capteur hors tension → lu « sec ». 6.28.3 : la pastille dit
   « Capteur de pluie : ON » au lieu de « Chauffage : ON » (clés de config inchangées).
-- **Reste à valider** : détection sous vraie pluie (et pluie fine), aucune fausse
-  alerte par rosée sans chauffage, puis clore.
+- **31/10 – 3/11 : « wet » au démarrage du Pi, jamais Pi allumé.** Les matins du 31/10
+  (`rain_transition from=unreachable to=wet` à 08:03:38, sec à 08:45:04) et du 1/11
+  (08:17:02), le Pi avait été éteint la nuit (`shutdown.log` : 30/10 18:58, 1/11 00:44).
+  Le .78 coupe alors le capteur (auto_off 5 min) : sans courant, pas de chauffage, le
+  capteur se couvre de rosée et il est mouillé dès qu'il est rallumé. On ne peut pas dater la
+  mouillure (capteur hors tension, lu « sec »). Nuit du 2 au 3/11, Pi allumé : sec de
+  bout en bout (dernière lecture avant le trou de 10:24). Serge a collé l'ancienne plaque
+  chauffante contre le réseau de détection (3/11).
+- **Reste à valider** : détection sous vraie pluie (et pluie fine), plus de « wet » au
+  démarrage du matin avec la plaque chauffante, puis clore.
 
 ## Plus tard
 
