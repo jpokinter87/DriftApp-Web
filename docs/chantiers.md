@@ -172,21 +172,23 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   distincts dans `ipc_command | type=tracking_start` ; à la prochaine pluie armée avec
   Uni+ injoignable, un seul `session_close reason=rain` par épisode. Puis clore.
 
-## En attente d'un événement
-
 ### Navigateur au démarrage du Pi : « Try Again » systématique
-- **Ouvert le** 03/11/2026. Serge (3/11) doit cliquer « Try Again » à chaque démarrage
-  pour que la page s'affiche.
-- **Hypothèse** : depuis la 6.30.0 (29/10), les services attendent l'heure NTP (jusqu'à
-  90 s, toute la durée sans internet, cf. « Services démarrés à l'heure juste ») ; le
-  navigateur, lancé en autostart hors dépôt, s'ouvre avant que Django écoute.
-- **Questions envoyées à Serge le 03/11** : depuis quand (avant ou après le 29/10), photo
-  de l'écran d'erreur (Chromium ou Firefox), contenu des fichiers d'autostart
-  (`~/.config/autostart/*.desktop`, `~/.config/labwc/autostart`, `~/.config/wayfire.ini`,
-  `~/.config/lxsession/LXDE-pi/autostart`).
-- **Prochaine étape** : avec ses réponses, un lanceur versionné qui attend que
-  `localhost:8000` réponde avant d'ouvrir le navigateur, installé à la place de la
-  commande actuelle.
+- **Ouvert le** 03/11/2026, livré en 6.30.2 (`scripts/kiosk.sh` attend Django 5 min au
+  plus avant d'ouvrir Firefox ; `scripts/install_kiosk.sh` le branche au démarrage).
+- **État** : Serge (3/11) doit cliquer « Try Again » à chaque démarrage. Cause : depuis la
+  6.30.0 (29/10), les services attendent l'heure NTP jusqu'à 90 s ; le lanceur de juin
+  (`~/kiosk.sh` d'après `rasp_kiosk.txt`, relu le 17/10) n'attendait Django que 60 s. JP
+  (4/11) : `~/kiosk.sh` n'existe plus sur le Pi, ni de copie sur la machine de dev ; le
+  plein écran marche pourtant, par un lanceur inconnu. `install_kiosk.sh` le cherche dans
+  `~/.config/autostart/*.desktop`, `~/.config/labwc/autostart`, `~/.config/wayfire.ini` et
+  `~/.config/lxsession/LXDE-pi/autostart` et y remplace la commande firefox/chromium.
+- **Prochaine étape** : Serge met à jour en 6.30.2, tape `cd ~/DriftApp` puis
+  `./scripts/install_kiosk.sh`, photographie la sortie, redémarre : la page doit s'ouvrir
+  seule. Si le script dit « Aucun ancien lancement trouvé » et que deux fenêtres s'ouvrent
+  ou que l'erreur revient, le lanceur est ailleurs (service utilisateur systemd,
+  `/etc/xdg/…`) : lui demander `grep -rl firefox ~/.config /etc/xdg 2>/dev/null`.
+
+## En attente d'un événement
 
 ### Alerte « méridien de l'ASIAIR décalé » (site ou heure de la monture faux)
 - **Ouvert le** 27/10/2026. Nuit du 27/10, NGC 7354 (Céphée, Déc +61°, culmine au nord
