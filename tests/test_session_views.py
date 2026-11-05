@@ -255,6 +255,25 @@ class TestNightView:
         data = api_client.get("/api/session/night/?date=2026-08-14").json()
         assert datetime.fromisoformat(data["now"])
 
+    def test_payload_carries_battery_thresholds(
+        self, api_client, mock_nights, mock_sessions, tmp_path, monkeypatch
+    ):
+        # Ligne « Batteries » de la frise (6.31.0) : les seuils de couleur
+        # viennent de cimier.voltages, comme sur le dashboard.
+        import json
+        from datetime import datetime
+
+        from django.conf import settings
+
+        config = tmp_path / "config.json"
+        config.write_text(
+            json.dumps({"cimier": {"voltages": {"battery_good_v": 12.5, "battery_low_v": 11.9}}})
+        )
+        monkeypatch.setattr(settings, "DRIFTAPP_CONFIG", str(config))
+        write_night_event(mock_nights, datetime(2026, 8, 14, 22, 0), "voltages", battery=12.6)
+        data = api_client.get("/api/session/night/?date=2026-08-14").json()
+        assert data["battery_thresholds"] == {"good_v": 12.5, "low_v": 11.9}
+
     def test_includes_tracking_sessions_of_the_night(self, api_client, mock_nights, mock_sessions):
         # 3e ligne de la frise : lue des sessions déjà persistées, sans
         # coupler cimier_service et motor_service.

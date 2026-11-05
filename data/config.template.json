@@ -92,7 +92,8 @@
   "cimier": {
     "_comment": "Archi V3 tout-Shelly. Opt-in (enabled=false). IPs terrain : 24V=.83, Uni+=.84, MOT=.85, UPDN=.86. Conventions validées terrain 17-18/06 (motor_on_relay_state=false, open_dir_state=true, switch_reader.invert=true).",
     "enabled": false,
-    "cycle_timeout_s": 90.0,
+    "cycle_timeout_s": 26.0,
+    "_cycle_timeout_s_comment": "Arrêt logiciel du moteur cimier s'il n'a pas atteint la butée, compté depuis le démarrage du moteur. 26 s (Serge, 05/11/2026) : la course prend ~22,5 s de moteur (fermetures de 24,6 à 25,3 s au total, logs 15/10–01/11), assez court pour limiter la casse si une butée ne répond pas. À rallonger si des cycles finissent en cycle_timeout (batteries faibles = moteur plus lent).",
     "post_off_quiet_s": 10.0,
     "shelly_settle_s": 2.0,
     "dir_settle_s": 0.3,
@@ -162,7 +163,8 @@
       "open_dir_state": true,
       "motor_on_relay_state": false,
       "api": "legacy",
-      "timer_safety_sec": 90.0
+      "timer_safety_sec": 28.0,
+      "_timer_safety_sec_comment": "Minuterie du Shelly MOT : coupe le moteur même si le Pi ne le fait pas. 2 s au-dessus de cycle_timeout_s, pour que l'arrêt logiciel passe en premier (05/11/2026)."
     },
     "voltages": {
       "_comment": "6.31.0 — cartouche « Tensions » du dashboard + relevé toutes les journal_interval_s dans le journal de nuit. Batteries : voltmètre du Shelly Uni+ des butées (.84, alimenté seulement coupole sous tension). Chargeur : voltmètre du Shelly Plus Uni du capteur de pluie (.87, toujours sous tension). Hôte vide = mesure non lue. Pastilles : vert ≥ battery_good_v, ambre entre les deux seuils, rouge < battery_low_v (pleine charge 12,6 V).",

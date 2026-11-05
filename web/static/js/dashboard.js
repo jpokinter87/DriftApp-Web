@@ -1621,7 +1621,9 @@ function updateReadiness(motor, encoder) {
         encoder.frozen !== true && encoder.status !== 'FROZEN';
 }
 
-// Liste de ce qui ne répond pas ; null tant que rien n'a encore été vérifié.
+// Liste de ce qui ne répond pas et bloque l'ouverture ; null tant que rien
+// n'a encore été vérifié. Le capteur de pluie n'en fait pas partie : muet, il
+// n'empêche pas d'ouvrir (Serge, 05/11) — voir rainSensorSilent().
 function readinessProblems() {
     const store = Alpine.store('dashboard');
     const cimier = store.cimier;
@@ -1636,22 +1638,26 @@ function readinessProblems() {
     if (!health) return problems.length ? problems : null;
     if (health.switches === false) problems.push('Butées (Shelly Uni+)');
     if (health.power === false) problems.push('Alim 24 V');
-    if (health.rain === false) problems.push('Capteur de pluie');
     return problems;
+}
+
+function rainSensorSilent() {
+    return Alpine.store('dashboard').cimier?.health?.rain === false;
 }
 
 function readinessLabel() {
     const problems = readinessProblems();
     if (problems === null) return '… vérification';
-    if (problems.length === 0) return '✓ PRÊT — tout répond';
-    return '✗ Injoignable : ' + problems.join(', ');
+    if (problems.length > 0) return '✗ Injoignable : ' + problems.join(', ');
+    return rainSensorSilent() ? '✓ PRÊT — capteur de pluie muet' : '✓ PRÊT — tout répond';
 }
 window.readinessLabel = readinessLabel;
 
 function readinessClass() {
     const problems = readinessProblems();
     if (problems === null) return 'level-warn';
-    return problems.length === 0 ? 'level-ok' : 'level-bad';
+    if (problems.length > 0) return 'level-bad';
+    return rainSensorSilent() ? 'level-warn' : 'level-ok';
 }
 window.readinessClass = readinessClass;
 
@@ -1659,26 +1665,22 @@ function voltageReading(key) {
     return Alpine.store('dashboard').cimier?.voltages?.[key] || null;
 }
 
-function voltageLabel(key, name) {
+// Seules les batteries sont affichées : le chargeur est par construction
+// toujours à ~12,6 V (Serge, 05/11). Sa tension reste au journal de nuit.
+function voltageLabel(key) {
     const reading = voltageReading(key);
     if (!reading) return '';
-    if (typeof reading.voltage !== 'number') {
-        return key === 'battery' ? `${name} : hors tension` : `${name} : injoignable`;
-    }
-    return `${name} ${reading.voltage.toFixed(2).replace('.', ',')} V`;
+    if (typeof reading.voltage !== 'number') return 'hors tension';
+    return `${reading.voltage.toFixed(2).replace('.', ',')} V`;
 }
 window.voltageLabel = voltageLabel;
 
-// Mêmes seuils pour les deux mesures : une sortie chargeur sous le seuil
-// « bon » est aussi anormale qu'une batterie faible.
 function voltageClass(key) {
     const voltages = Alpine.store('dashboard').cimier?.voltages;
     const reading = voltageReading(key);
     if (!reading) return '';
-    if (typeof reading.voltage !== 'number') {
-        // Batteries muettes = boîtier hors tension (normal) ; chargeur muet = anomalie.
-        return key === 'battery' ? 'level-off' : 'level-warn';
-    }
+    // Batteries muettes = boîtier cimier hors tension : normal, pas une alarme.
+    if (typeof reading.voltage !== 'number') return 'level-off';
     if (reading.voltage >= voltages.battery_good_v) return 'level-ok';
     if (reading.voltage >= voltages.battery_low_v) return 'level-warn';
     return 'level-bad';

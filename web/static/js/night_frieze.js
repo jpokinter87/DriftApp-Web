@@ -1,17 +1,18 @@
 /**
  * Frise de nuit — restitution graphique d'une nuit d'observation.
  *
- * Trois lignes sur un axe horaire commun (midi → midi) :
- *   1. Pluie  — bande = pluie, hachures = capteur injoignable
- *   2. Cimier — bande = ouvert, marqueurs verticaux aux décisions
- *   3. Suivi  — bandes des sessions, étiquetées du nom d'objet
+ * Quatre lignes sur un axe horaire commun (midi → midi) :
+ *   1. Pluie     — bande = pluie, hachures = capteur injoignable
+ *   2. Cimier    — bande = ouvert, marqueurs verticaux aux décisions
+ *   3. Suivi     — bandes des sessions, étiquetées du nom d'objet
+ *   4. Batteries — tension relevée toutes les 5 min (6.31.0), fonds ambre et
+ *      rouge sous les seuils, trait coupé quand le boîtier est hors tension
  *
  * SVG inline, sans dépendance. Aucune information ne dépend d'un survol :
  * l'écran de l'observatoire est tactile.
  */
 
 const FRIEZE = {
-    height: 196,
     rowHeight: 30,
     rowGap: 14,
     marginLeft: 74,
@@ -32,6 +33,9 @@ const FRIEZE = {
         future: 'rgba(0,0,0,0.45)',
         nowLine: 'rgba(255,255,255,0.45)',
         label: '#1b1b1b',
+        voltLine: '#e8e6e3',
+        voltWarnBand: 'rgba(255,165,2,0.16)',
+        voltBadBand: 'rgba(255,71,87,0.20)',
     },
 };
 
@@ -50,7 +54,15 @@ const ROWS = [
     { key: 'rain', label: 'Pluie' },
     { key: 'cimier', label: 'Cimier' },
     { key: 'tracking', label: 'Suivi' },
+    // Plus haute : une tension se lit sur un axe, pas sur une bande.
+    { key: 'battery', label: 'Batteries', height: 64 },
 ];
+
+const rowHeightOf = (index) => ROWS[index].height || FRIEZE.rowHeight;
+
+// Deux relevés séparés de plus que ça = trou (boîtier hors tension, service
+// arrêté) : le trait est coupé plutôt que d'inventer une droite.
+const VOLT_GAP_MS = 15 * 60 * 1000;
 
 function parseIso(value) {
     const ms = Date.parse(value);
@@ -117,12 +129,18 @@ function renderNightFrieze(container, data) {
     const xOf = (ms) =>
         FRIEZE.marginLeft +
         ((Math.min(Math.max(ms, startMs), endMs) - startMs) / (endMs - startMs)) * plotWidth;
-    const yOf = (rowIndex) => FRIEZE.marginTop + rowIndex * (FRIEZE.rowHeight + FRIEZE.rowGap);
+    const yOf = (rowIndex) => {
+        let y = FRIEZE.marginTop;
+        for (let i = 0; i < rowIndex; i += 1) y += rowHeightOf(i) + FRIEZE.rowGap;
+        return y;
+    };
+    const axisY = yOf(ROWS.length);
+    const height = axisY + FRIEZE.axisHeight;
 
     const svg = svgEl('svg', {
         width: '100%',
-        height: FRIEZE.height,
-        viewBox: `0 0 ${width} ${FRIEZE.height}`,
+        height,
+        viewBox: `0 0 ${width} ${height}`,
         role: 'img',
         'aria-label': `Frise de la nuit du ${data.night}`,
     });
@@ -149,14 +167,14 @@ function renderNightFrieze(container, data) {
                 x: FRIEZE.marginLeft,
                 y,
                 width: plotWidth,
-                height: FRIEZE.rowHeight,
+                height: rowHeightOf(index),
                 fill: FRIEZE.colors.dry,
                 rx: 3,
             })
         );
         const label = svgEl('text', {
             x: FRIEZE.marginLeft - 10,
-            y: y + FRIEZE.rowHeight / 2 + 4,
+            y: y + rowHeightOf(index) / 2 + 4,
             'text-anchor': 'end',
             fill: FRIEZE.colors.text,
             'font-size': 11,
@@ -264,13 +282,24 @@ function renderNightFrieze(container, data) {
         }
     });
 
+    // Ligne 4 — tension des batteries.
+    drawBatteryRow(svg, events, data.battery_thresholds, {
+        top: yOf(3),
+        height: rowHeightOf(3),
+        left: FRIEZE.marginLeft,
+        width: plotWidth,
+        xOf,
+        startMs,
+        knownEnd,
+    });
+
     // Nuit en cours : voiler ce qui n'a pas encore eu lieu et marquer
     // l'instant présent. Le repère est étiqueté en clair — l'écran de
     // l'observatoire est tactile, rien ne doit dépendre d'un survol.
     if (nightInProgress) {
         const nowX = xOf(knownEnd);
         const rowsTop = yOf(0);
-        const rowsBottom = yOf(ROWS.length - 1) + FRIEZE.rowHeight;
+        const rowsBottom = yOf(ROWS.length - 1) + rowHeightOf(ROWS.length - 1);
         svg.appendChild(
             svgEl('rect', {
                 x: nowX,
@@ -306,7 +335,6 @@ function renderNightFrieze(container, data) {
     }
 
     // Axe horaire : une graduation toutes les 2 h.
-    const axisY = FRIEZE.marginTop + ROWS.length * (FRIEZE.rowHeight + FRIEZE.rowGap);
     svg.appendChild(
         svgEl('line', {
             x1: FRIEZE.marginLeft,
@@ -336,6 +364,104 @@ function renderNightFrieze(container, data) {
     }
 
     container.appendChild(svg);
+}
+
+function formatVolts(v) {
+    return v.toFixed(2).replace('.', ',') + ' V';
+}
+
+/**
+ * Ligne « Batteries » : tension sur une échelle verticale propre à la ligne.
+ * Fonds ambre / rouge sous les seuils (le niveau se lit sans légende), trait
+ * coupé sur les trous, dernière valeur et minimum de la nuit écrits en clair.
+ */
+function drawBatteryRow(svg, events, thresholds, box) {
+    const goodV = thresholds?.good_v ?? 12.4;
+    const lowV = thresholds?.low_v ?? 12.0;
+    const points = events
+        .filter((e) => e.event === 'voltages')
+        .map((e) => ({ ts: parseIso(e.ts), v: typeof e.battery === 'number' ? e.battery : null }))
+        .filter((p) => p.ts !== null && p.ts >= box.startMs && p.ts <= box.knownEnd)
+        .sort((a, b) => a.ts - b.ts);
+    const values = points.filter((p) => p.v !== null).map((p) => p.v);
+
+    const text = (x, y, content, anchor, size = 10) => {
+        const el = svgEl('text', {
+            x,
+            y,
+            'text-anchor': anchor,
+            fill: FRIEZE.colors.text,
+            'font-size': size,
+            'font-family': 'monospace',
+        });
+        el.textContent = content;
+        svg.appendChild(el);
+    };
+
+    if (values.length === 0) {
+        text(box.left + 8, box.top + box.height / 2 + 4, 'aucun relevé', 'start');
+        return;
+    }
+
+    // Échelle : englobe les seuils et les mesures, avec un peu d'air.
+    const vMin = Math.min(lowV - 0.3, ...values) - 0.05;
+    const vMax = Math.max(goodV + 0.4, ...values) + 0.05;
+    const pad = 4;
+    const yOfV = (v) =>
+        box.top + pad + ((vMax - v) / (vMax - vMin)) * (box.height - 2 * pad);
+    const band = (from, to, fill) => {
+        const y1 = yOfV(Math.min(to, vMax));
+        const y2 = yOfV(Math.max(from, vMin));
+        if (y2 > y1) {
+            svg.appendChild(svgEl('rect', { x: box.left, y: y1, width: box.width, height: y2 - y1, fill }));
+        }
+    };
+    band(lowV, goodV, FRIEZE.colors.voltWarnBand);
+    band(vMin, lowV, FRIEZE.colors.voltBadBand);
+
+    // Trait coupé aux trous (mesure absente ou relevés trop espacés).
+    let path = '';
+    let prev = null;
+    points.forEach((p) => {
+        if (p.v === null) {
+            prev = null;
+            return;
+        }
+        const cmd = prev && p.ts - prev.ts <= VOLT_GAP_MS ? 'L' : 'M';
+        path += `${cmd}${box.xOf(p.ts).toFixed(1)},${yOfV(p.v).toFixed(1)} `;
+        prev = p;
+    });
+    svg.appendChild(
+        svgEl('path', {
+            d: path.trim(),
+            fill: 'none',
+            stroke: FRIEZE.colors.voltLine,
+            'stroke-width': 2,
+            'stroke-linejoin': 'round',
+            'stroke-linecap': 'round',
+        })
+    );
+
+    // Relevé isolé (entouré de trous) : un point, sinon il serait invisible.
+    points.forEach((p, i) => {
+        if (p.v === null) return;
+        const near = (q) => q && q.v !== null && Math.abs(q.ts - p.ts) <= VOLT_GAP_MS;
+        if (!near(points[i - 1]) && !near(points[i + 1])) {
+            svg.appendChild(
+                svgEl('circle', { cx: box.xOf(p.ts), cy: yOfV(p.v), r: 2.5, fill: FRIEZE.colors.voltLine })
+            );
+        }
+    });
+
+    // Valeurs des seuils au bord gauche des bandes, puis dernière valeur et
+    // minimum de la nuit en haut à gauche : à droite, le voile « maintenant »
+    // de la nuit en cours les masquerait.
+    const fmt = (v) => v.toFixed(1).replace('.', ',');
+    text(box.left + 4, yOfV(goodV) + 9, fmt(goodV), 'start', 9);
+    text(box.left + 4, yOfV(lowV) + 9, fmt(lowV), 'start', 9);
+    const last = [...points].reverse().find((p) => p.v !== null);
+    const minV = Math.min(...values);
+    text(box.left + 6, box.top + 12, `dernière ${formatVolts(last.v)} · min ${formatVolts(minV)}`, 'start');
 }
 
 window.renderNightFrieze = renderNightFrieze;

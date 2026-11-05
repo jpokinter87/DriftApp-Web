@@ -196,21 +196,16 @@
                       x-text="window.readinessLabel ? window.readinessLabel() : ''"
                       role="status" aria-live="polite" aria-label="État des capteurs"></span>
             </div>
-            <!-- TENSIONS (6.31.0) : batteries du cimier (Uni+ .84) et chargeur
-                 (Plus Uni .87). Fond coloré selon les seuils de config.json. -->
+            <!-- BATTERIES (6.31.0) : voltmètre du Uni+ des butées, dans le boîtier
+                 cimier. Fond coloré selon les seuils de config.json ; gris « hors
+                 tension » coupole éteinte. Le chargeur n'est pas affiché (toujours
+                 ~12,6 V) mais reste au journal de nuit. -->
             <div class="col-span-2 flex justify-between items-center gap-2 p-2 bg-obs-input rounded-button"
-                 x-show="$store.dashboard.cimier?.voltages" x-cloak>
-                <label class="font-bold text-obs-text-secondary">TENSIONS:</label>
-                <span class="flex gap-2 flex-wrap justify-end" role="status" aria-label="Tensions">
-                    <span id="voltage-battery" class="level-pill"
-                          x-show="$store.dashboard.cimier?.voltages?.battery"
-                          :class="window.voltageClass ? window.voltageClass('battery') : ''"
-                          x-text="window.voltageLabel ? window.voltageLabel('battery', 'Batteries') : ''"></span>
-                    <span id="voltage-charger" class="level-pill"
-                          x-show="$store.dashboard.cimier?.voltages?.charger"
-                          :class="window.voltageClass ? window.voltageClass('charger') : ''"
-                          x-text="window.voltageLabel ? window.voltageLabel('charger', 'Chargeur') : ''"></span>
-                </span>
+                 x-show="$store.dashboard.cimier?.voltages?.battery" x-cloak>
+                <label class="font-bold text-obs-text-secondary">BATTERIES:</label>
+                <span id="voltage-battery" class="level-pill" role="status" aria-label="Tension des batteries"
+                      :class="window.voltageClass ? window.voltageClass('battery') : ''"
+                      x-text="window.voltageLabel ? window.voltageLabel('battery') : ''"></span>
             </div>
         </div>
 

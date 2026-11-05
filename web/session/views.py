@@ -168,6 +168,21 @@ def delete_session(request, session_id):
         )
 
 
+def _battery_thresholds() -> dict:
+    """Seuils de couleur de la ligne « Batteries » (cimier.voltages, 6.31.0)."""
+    from pathlib import Path
+
+    from django.conf import settings
+
+    from core.config.config_loader import VoltagesConfig, load_config
+
+    try:
+        voltages = load_config(Path(settings.DRIFTAPP_CONFIG)).cimier.voltages
+    except (OSError, ValueError):
+        voltages = VoltagesConfig()
+    return {"good_v": voltages.battery_good_v, "low_v": voltages.battery_low_v}
+
+
 @api_view(["GET"])
 def night_report(request):
     """
@@ -241,6 +256,7 @@ def night_report(request):
             "now": datetime.now().isoformat(timespec="seconds"),
             "events": night_journal.read_night(requested),
             "tracking": tracking,
+            "battery_thresholds": _battery_thresholds(),
             "available_nights": available,
         }
     )

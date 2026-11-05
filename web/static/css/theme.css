@@ -39,6 +39,9 @@
     --frieze-future: rgba(0, 0, 0, 0.45);
     --frieze-now-line: rgba(255, 255, 255, 0.45);
     --frieze-label: #1b1b1b;
+    --frieze-volt-line: #e8e6e3;
+    --frieze-volt-warn-band: rgba(255, 165, 2, 0.16);
+    --frieze-volt-bad-band: rgba(255, 71, 87, 0.2);
 
     --chart-line: #d4a055;
     --chart-dot: #ff4757;
@@ -342,6 +345,9 @@ html[data-theme="day"] {
     --frieze-future: rgba(31, 29, 26, 0.06);
     --frieze-now-line: rgba(31, 29, 26, 0.55);
     --frieze-label: #1f1d1a;
+    --frieze-volt-line: #1f1d1a;
+    --frieze-volt-warn-band: rgba(152, 80, 0, 0.14);
+    --frieze-volt-bad-band: rgba(176, 23, 47, 0.14);
 
     --chart-line: #8c5a14;
     --chart-dot: #b0172f;
