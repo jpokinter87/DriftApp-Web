@@ -185,34 +185,6 @@
                     Total: <span id="corrections-total" class="corrections-total text-accent-purple font-bold">0.00&deg;</span>
                 </span>
             </div>
-            <!-- CAPTEURS (6.31.0) : pastille « prêt » — tout ce qui est vérifiable au
-                 repos répond (butées Uni+, alim 24 V, capteur de pluie, moteur,
-                 encodeur, service cimier). Rouge = ce qui manque, en clair. -->
-            <div class="col-span-2 flex justify-between items-center gap-2 p-2 bg-obs-input rounded-button"
-                 x-show="$store.dashboard.cimier" x-cloak>
-                <label class="font-bold text-obs-text-secondary">CAPTEURS:</label>
-                <span id="readiness-pill" class="level-pill text-right"
-                      :class="window.readinessClass ? window.readinessClass() : ''"
-                      x-text="window.readinessLabel ? window.readinessLabel() : ''"
-                      role="status" aria-live="polite" aria-label="État des capteurs"></span>
-            </div>
-            <!-- TENSIONS (6.31.0) : batteries (voltmètre du Uni+ des butées, boîtier
-                 cimier) et chargeur (Plus Uni du capteur de pluie). Une seule ligne,
-                 sans libellé, pour que « Suivi actif » tienne dans l'écran 720p. Les
-                 libellés longs (hors tension, injoignable) passent à la ligne : coupole
-                 éteinte, il n'y a pas de suivi à loger. Fond coloré selon config.json. -->
-            <div class="col-span-2 flex flex-wrap justify-between items-center gap-2 p-2 bg-obs-input rounded-button"
-                 x-show="$store.dashboard.cimier?.voltages" x-cloak
-                 role="status" aria-label="Tensions batteries et chargeur">
-                <span id="voltage-battery" class="level-pill"
-                      x-show="$store.dashboard.cimier?.voltages?.battery"
-                      :class="window.voltageClass ? window.voltageClass('battery') : ''"
-                      x-text="window.voltageLabel ? window.voltageLabel('battery', 'Batteries') : ''"></span>
-                <span id="voltage-charger" class="level-pill"
-                      x-show="$store.dashboard.cimier?.voltages?.charger"
-                      :class="window.voltageClass ? window.voltageClass('charger') : ''"
-                      x-text="window.voltageLabel ? window.voltageLabel('charger', 'Chargeur') : ''"></span>
-            </div>
         </div>
 
         <!-- ══ Suivi actif sous la boussole (v6.11, piste 3) ══
@@ -469,18 +441,6 @@
                                aria-label="Armer la protection pluie">
                         <span class="text-obs-text-muted uppercase tracking-wider">Protection pluie</span>
                     </label>
-                    <span id="cimier-rain-state" class="font-mono"
-                          :class="window.rainStateClass ? window.rainStateClass() : ''"
-                          x-text="window.rainStateLabel ? window.rainStateLabel() : ''"
-                          x-show="$store.dashboard.cimier?.rain" x-cloak
-                          role="status" aria-live="polite"
-                          aria-label="État du capteur de pluie"></span>
-                    <span id="cimier-heater-state" class="font-mono"
-                          :class="window.heaterStateClass ? window.heaterStateClass() : ''"
-                          x-text="window.heaterStateLabel ? window.heaterStateLabel() : ''"
-                          x-show="$store.dashboard.cimier?.rain?.heater" x-cloak
-                          role="status" aria-live="polite"
-                          aria-label="Alimentation du capteur de pluie"></span>
                 </div>
                 <div id="cimier-automation-hint"
                      class="text-[0.7rem] font-mono text-accent-amber-light min-h-[1rem] mt-1"
@@ -522,6 +482,43 @@
                              class="text-obs-text-muted italic">Aucun événement enregistré.</div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Supervision (6.31.3, idée de Serge) : tout ce qui surveille la coupole,
+             regroupé sous le panneau Cimier — pastille « prêt » dans la ligne de
+             titre (comme l'état du cimier), puis tensions et capteur de pluie. La
+             colonne gauche ne garde que la position de la coupole. La case
+             « Protection pluie » reste dans Cimier : c'est une commande, pas une
+             mesure. Tout est lisible sans survol (écran tactile). -->
+        <div class="panel panel-astro" x-data x-show="$store.dashboard.cimier" x-cloak>
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-2">
+                <h2 class="section-title section-title-fire">Supervision</h2>
+                <span id="readiness-pill" class="level-pill text-right"
+                      :class="window.readinessClass ? window.readinessClass() : ''"
+                      x-text="window.readinessLabel ? window.readinessLabel() : ''"
+                      role="status" aria-live="polite" aria-label="État des capteurs"></span>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 text-xs font-mono"
+                 role="status" aria-label="Tensions et capteur de pluie">
+                <span id="voltage-battery" class="level-pill"
+                      x-show="$store.dashboard.cimier?.voltages?.battery"
+                      :class="window.voltageClass ? window.voltageClass('battery') : ''"
+                      x-text="window.voltageLabel ? window.voltageLabel('battery', 'Batteries') : ''"></span>
+                <span id="voltage-charger" class="level-pill"
+                      x-show="$store.dashboard.cimier?.voltages?.charger"
+                      :class="window.voltageClass ? window.voltageClass('charger') : ''"
+                      x-text="window.voltageLabel ? window.voltageLabel('charger', 'Chargeur') : ''"></span>
+                <span id="cimier-rain-state"
+                      :class="window.rainStateClass ? window.rainStateClass() : ''"
+                      x-text="window.rainStateLabel ? window.rainStateLabel() : ''"
+                      x-show="$store.dashboard.cimier?.rain" x-cloak
+                      aria-live="polite" aria-label="État du capteur de pluie"></span>
+                <span id="cimier-heater-state"
+                      :class="window.heaterStateClass ? window.heaterStateClass() : ''"
+                      x-text="window.heaterStateLabel ? window.heaterStateLabel() : ''"
+                      x-show="$store.dashboard.cimier?.rain?.heater" x-cloak
+                      aria-live="polite" aria-label="Alimentation du capteur de pluie"></span>
             </div>
         </div>
     </section>

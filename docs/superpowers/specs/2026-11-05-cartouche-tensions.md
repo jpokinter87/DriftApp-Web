@@ -72,6 +72,16 @@ s'arrête : moteur et 24 V coupés (cleanup existant), erreur
 `switches_unreachable`. Avec un délai de lecture de 3 s, une seule lecture en
 timeout suffit à couper ; un refus de connexion rapide laisse quelques essais.
 
+## Ajout du 05/11 (6.31.3) : panneau SUPERVISION
+
+Idée de Serge : la colonne gauche ne garde que la position de la coupole ; tout
+ce qui surveille la coupole passe dans un panneau « Supervision » sous le
+panneau Cimier (même modèle). Ligne de titre : pastille « prêt » à droite,
+comme l'état du cimier. Corps : pastilles Batteries, Chargeur, état du capteur
+de pluie (libellés autonomes « Pas de pluie » / « PLUIE » / « Pluie : capteur ? »)
+et alimentation du capteur. La case « Protection pluie » reste dans Cimier :
+c'est une commande (armement de la fermeture), pas une mesure.
+
 ## Hors périmètre
 
 Graphique de tension sur la page Session, alertes, tension pendant un cycle

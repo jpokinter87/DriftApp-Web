@@ -1572,9 +1572,11 @@ window.updateAutomationMode = updateAutomationMode;
 function rainStateLabel() {
     const rain = Alpine.store('dashboard').cimier?.rain;
     if (!rain) return '';
+    // Libellés autonomes : hors de la ligne « Protection pluie », un « SEC »
+    // seul ne disait plus de quoi il parlait (panneau Supervision, 6.31.3).
     if (rain.state === 'wet') return 'PLUIE';
-    if (rain.state === 'dry') return 'SEC';
-    return 'CAPTEUR ?';
+    if (rain.state === 'dry') return 'Pas de pluie';
+    return 'Pluie : capteur ?';
 }
 window.rainStateLabel = rainStateLabel;
 
