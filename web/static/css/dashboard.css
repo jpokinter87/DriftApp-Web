@@ -1269,6 +1269,44 @@ header h1 span {
     background: rgba(255, 165, 2, 0.08);
 }
 
+/* ── Pastilles de niveau (6.31.0) : tensions et « prêt » ────────────────
+   Fond franc, lisible d'un coup d'œil (les pastilles pluie sont teintées). */
+.level-pill {
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+/* Pastille « prêt » : la liste de pannes peut être longue, elle passe à la
+   ligne au lieu de déborder de la colonne. */
+#readiness-pill {
+    white-space: normal;
+    border-radius: 0.6rem;
+    min-width: 0;
+}
+.level-ok {
+    color: #eafff3;
+    background: #0f8a4a;
+    border-color: #00d26a;
+}
+.level-warn {
+    color: #1a1000;
+    background: #ffa502;
+    border-color: #ffc04d;
+}
+.level-bad {
+    color: #fff;
+    background: #c0392b;
+    border-color: #ff6b5b;
+}
+.level-off {
+    color: #9aa4b2;
+    background: transparent;
+    border-color: rgba(154, 164, 178, 0.4);
+}
+
 /* =========================================================================
    Modale coordonnées manuelles (v6.17) — cibles absentes des bases.
    Réutilise .goto-modal / .goto-modal-content ; seul le formulaire est ici.

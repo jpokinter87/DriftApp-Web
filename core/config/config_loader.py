@@ -261,6 +261,29 @@ class WeatherProviderConfig:
     confirm_reads: int = 4
 
 
+@dataclass
+class VoltagesConfig:
+    """Tensions des batteries du cimier et du chargeur (cartouche « Tensions », 6.31.0).
+
+    Lues en RPC ``Voltmeter.GetStatus`` sur des Shelly Uni déjà en place : le
+    Uni+ des butées (batteries, alimenté seulement coupole sous tension) et le
+    Plus Uni du capteur de pluie (chargeur, toujours sous tension). Hôte vide =
+    mesure non lue. ``battery_good_v`` / ``battery_low_v`` colorent les
+    pastilles du dashboard (vert / ambre / rouge). IP réelle uniquement dans
+    ``data/config.json``.
+    """
+
+    battery_host: str = ""
+    battery_id: int = 100
+    charger_host: str = ""
+    charger_id: int = 100
+    timeout_s: float = 2.0
+    read_interval_s: float = 60.0
+    journal_interval_s: float = 300.0
+    battery_good_v: float = 12.4
+    battery_low_v: float = 12.0
+
+
 VALID_AUTOMATION_MODES = ("manual", "semi", "full")
 
 
@@ -351,6 +374,10 @@ class CimierConfig:
         0.5  # cadence lecture butées pendant un cycle (0.1 = debug 100ms)
     )
     verbose_logging: bool = False  # true → logs DEBUG par itération (debug à distance)
+    switch_lost_timeout_s: float = (
+        3.0  # butées injoignables en plein cycle depuis ce délai → moteur coupé (6.31.0)
+    )
+    health_check_interval_s: float = 60.0  # pastille « prêt » : sondage des Shelly (6.31.0)
     rain_heater_keepalive_interval_s: float = (
         240.0  # renvoi périodique de turn_on(), armé ou non (v6.15.8) — relance
         # l'auto_off du Shelly (à configurer à 300s côté app Shelly, hors DriftApp) :
@@ -362,6 +389,7 @@ class CimierConfig:
     weather_provider: WeatherProviderConfig = field(default_factory=WeatherProviderConfig)
     automation: CimierAutomationConfig = field(default_factory=CimierAutomationConfig)
     motor_shelly: MotorShellyConfig = field(default_factory=MotorShellyConfig)
+    voltages: VoltagesConfig = field(default_factory=VoltagesConfig)
 
     def __post_init__(self) -> None:
         if self.cycle_timeout_s <= 0:
@@ -695,6 +723,23 @@ class ConfigLoader:
         c = self.cfg.get("meridian_anticipation", {})
         return MeridianAnticipationConfig(enabled=bool(c.get("enabled", True)))
 
+    @staticmethod
+    def _parse_voltages(v) -> VoltagesConfig:
+        if not isinstance(v, dict):
+            v = {}
+        d = VoltagesConfig()
+        return VoltagesConfig(
+            battery_host=str(v.get("battery_host", d.battery_host)),
+            battery_id=int(v.get("battery_id", d.battery_id)),
+            charger_host=str(v.get("charger_host", d.charger_host)),
+            charger_id=int(v.get("charger_id", d.charger_id)),
+            timeout_s=float(v.get("timeout_s", d.timeout_s)),
+            read_interval_s=float(v.get("read_interval_s", d.read_interval_s)),
+            journal_interval_s=float(v.get("journal_interval_s", d.journal_interval_s)),
+            battery_good_v=float(v.get("battery_good_v", d.battery_good_v)),
+            battery_low_v=float(v.get("battery_low_v", d.battery_low_v)),
+        )
+
     def _parse_cimier(self) -> CimierConfig:
         """Parse la section cimier (v6.0 Phase 1, opt-in : enabled=False par défaut)."""
         c = self.cfg.get("cimier", {})
@@ -727,6 +772,13 @@ class ConfigLoader:
                 c.get("cycle_poll_interval_s", defaults.cycle_poll_interval_s)
             ),
             verbose_logging=bool(c.get("verbose_logging", defaults.verbose_logging)),
+            switch_lost_timeout_s=float(
+                c.get("switch_lost_timeout_s", defaults.switch_lost_timeout_s)
+            ),
+            health_check_interval_s=float(
+                c.get("health_check_interval_s", defaults.health_check_interval_s)
+            ),
+            voltages=self._parse_voltages(c.get("voltages", {}) if isinstance(c, dict) else {}),
             rain_heater_keepalive_interval_s=float(
                 c.get(
                     "rain_heater_keepalive_interval_s",

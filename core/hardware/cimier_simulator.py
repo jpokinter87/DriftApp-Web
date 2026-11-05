@@ -14,6 +14,11 @@
   - capteur de pluie : entrée ``id=2`` du même Uni+ simulé, basculée par
     ``GET /dev/rain?on=0|1`` → ``{"raining": <bool>}``. Convention terrain
     (14/08/2026) : ``state=True`` = pluie.
+  - voltmètres (6.31.0) : ``GET /rpc/Voltmeter.GetStatus?id=100|101`` →
+    ``{"id": n, "voltage": <V>}`` (100 batteries, 101 chargeur), modifiables
+    par ``GET /dev/voltage?id=<n>&v=<V>``.
+  - ``GET /relay/<n>`` sans ``turn`` : état du relais, sans le commuter
+    (comme un vrai Gen 1 ; c'est la sonde de la pastille « prêt »).
 
 Un thread animateur fait progresser la position tant que 24V ET MOT sont ON
 (course complète en ``full_travel_s``). Conventions naturelles (relais ON =
@@ -51,6 +56,12 @@ INPUT_HAUT = 1
 # la divergence est absorbée par les overrides de dev-mode.
 INPUT_RAIN = 2
 
+# Voltmètres (6.31.0) : sur le terrain, id=100 sur deux Shelly distincts (.84
+# batteries, .87 chargeur) ; ici deux id sur le même, absorbés par les
+# overrides de dev-mode. Valeurs modifiables par GET /dev/voltage?id=&v=.
+VOLTMETER_BATTERY = 100
+VOLTMETER_CHARGER = 101
+
 
 class _SilentHandler(BaseHTTPRequestHandler):
     server_version = "CimierSimulator/1.0"
@@ -82,6 +93,24 @@ class _SilentHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "unknown_input", "id": input_id})
                 return
             self._send_json(200, {"id": input_id, "state": state})
+            return
+
+        if parsed.path in ("/rpc/Voltmeter.GetStatus", "/dev/voltage"):
+            try:
+                vm_id = int(qs.get("id", ["-1"])[0])
+            except (TypeError, ValueError):
+                vm_id = -1
+            if parsed.path == "/dev/voltage":
+                try:
+                    volts = sim.set_voltage(vm_id, float(qs.get("v", [""])[0]))
+                except ValueError:
+                    volts = None
+            else:
+                volts = sim.voltage(vm_id)
+            if volts is None:
+                self._send_json(404, {"error": "unknown_voltmeter", "id": vm_id})
+                return
+            self._send_json(200, {"id": vm_id, "voltage": volts})
             return
 
         if parsed.path.startswith("/relay/"):
@@ -147,6 +176,7 @@ class CimierSimulator:
         self._power_on = False  # relais 24V
         self._heater_on = False  # relais résistance chauffante (id=3)
         self._raining = False  # entrée pluie simulée (bascule via /dev/rain)
+        self._voltages = {VOLTMETER_BATTERY: 12.55, VOLTMETER_CHARGER: 13.6}
         self._last_advance_ts = None
 
     # --- lifecycle -----------------------------------------------------
@@ -231,10 +261,20 @@ class CimierSimulator:
             return None
 
     def set_relay(self, relay_id, turn):
-        """Pilote un relais simulé. Retourne l'état (ison) ou None si inconnu."""
+        """Pilote un relais simulé. Retourne l'état (ison) ou None si inconnu.
+
+        ``turn`` vide : lecture seule, comme ``GET /relay/<n>`` sur un Gen 1.
+        """
         on = turn == "on"
         with self._lock:
             self._advance_locked()
+            if not turn:
+                return {
+                    RELAY_24V: self._power_on,
+                    RELAY_MOT: self._mechanism.motor_on,
+                    RELAY_UPDN: self._mechanism.opening,
+                    RELAY_HEATER: self._heater_on,
+                }.get(relay_id)
             if relay_id == RELAY_24V:
                 self._power_on = on
                 return on
@@ -248,6 +288,19 @@ class CimierSimulator:
                 self._heater_on = on
                 return on
             return None
+
+    def voltage(self, vm_id):
+        """Tension d'un voltmètre simulé (None si id inconnu)."""
+        with self._lock:
+            return self._voltages.get(vm_id)
+
+    def set_voltage(self, vm_id, volts):
+        """Fixe la tension d'un voltmètre simulé. None si id inconnu."""
+        with self._lock:
+            if vm_id not in self._voltages:
+                return None
+            self._voltages[vm_id] = round(float(volts), 2)
+            return self._voltages[vm_id]
 
     def set_rain(self, raining):
         """Bascule l'averse simulée. Retourne l'état courant."""

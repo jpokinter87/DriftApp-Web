@@ -1353,6 +1353,15 @@ class TestDevModeOverrides:
 # ======================================================================
 
 
+def test_dev_mode_points_voltmeters_at_simulator():
+    from services.cimier_service import _apply_dev_mode_overrides
+
+    cfg = CimierConfig(enabled=False)
+    _apply_dev_mode_overrides(cfg)
+    assert (cfg.voltages.battery_host, cfg.voltages.battery_id) == ("127.0.0.1:8001", 100)
+    assert (cfg.voltages.charger_host, cfg.voltages.charger_id) == ("127.0.0.1:8001", 101)
+
+
 class TestPreflightGuard:
     """Garde-fou « déjà en butée » : 0 action électrique si fin de course cible atteinte."""
 
@@ -3390,8 +3399,216 @@ class TestAutomationCloseRetryEndToEnd:
         assert mech.closed_switch is True
 
         # Confirmé fermé : plus aucun renvoi.
-        # Une seule lecture des butées par passage du scheduler, aucun cycle.
+        # Par passage : une lecture des butées pour le scheduler, une pour la
+        # pastille « prêt » (6.31.0) — et aucun cycle.
         reads_before = reader.read_count
         tick_after(5)
         tick_after(5)
-        assert reader.read_count == reads_before + 2
+        assert reader.read_count == reads_before + 4
+
+
+# ======================================================================
+# Butées perdues pendant un cycle (6.31.0)
+# ======================================================================
+
+
+class _ReaderLostAfterPreflight:
+    """Répond au preflight, puis plus jamais (Shelly Uni+ décroché en cycle)."""
+
+    def __init__(self, ok_reads: int = 1, recover_after: int | None = None) -> None:
+        self._ok_reads = ok_reads
+        self._recover_after = recover_after
+        self.read_count = 0
+
+    def read(self) -> SwitchState:
+        self.read_count += 1
+        lost = self.read_count > self._ok_reads and (
+            self._recover_after is None or self.read_count <= self._recover_after
+        )
+        if lost:
+            raise SwitchReaderError("Shelly Uni+ : timed out")
+        reached = self._recover_after is not None and self.read_count > self._recover_after
+        return SwitchState(open_switch=reached, closed_switch=False, both_switches=False, raw={})
+
+
+class TestSwitchesLostDuringCycle:
+    """Uni+ injoignable en plein cycle : le moteur ne doit pas tourner à l'aveugle."""
+
+    def _service(self, ipc_manager, reader, lost_timeout_s=3.0):
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=90.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            switch_lost_timeout_s=lost_timeout_s,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            switch_reader=reader,
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.5,
+        )
+        return service, ps, clock
+
+    def test_cycle_aborts_quickly_when_switches_lost(self, ipc_manager) -> None:
+        service, ps, clock = self._service(ipc_manager, _ReaderLostAfterPreflight())
+        service.execute_command({"id": "lost", "action": "open"})
+        # Coupé après ~3 s de lectures ratées, pas au timeout de 90 s.
+        assert clock.t < 10.0
+        assert ps.off_count == 1
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "switches_unreachable"
+
+    def test_short_glitch_does_not_abort(self, ipc_manager) -> None:
+        # 2 lectures ratées (1 s) puis butée atteinte : le cycle se termine normalement.
+        reader = _ReaderLostAfterPreflight(ok_reads=1, recover_after=3)
+        service, ps, clock = self._service(ipc_manager, reader)
+        service.execute_command({"id": "glitch", "action": "open"})
+        assert ipc_manager.history[-1]["error_message"] == ""
+
+
+# ======================================================================
+# Tensions et état des capteurs publiés (6.31.0)
+# ======================================================================
+
+
+class _StubVoltageMonitor:
+    enabled = True
+
+    def __init__(self):
+        self.ticks = []
+
+    def tick(self, now_mono):
+        self.ticks.append(now_mono)
+
+    def describe(self):
+        return {"battery": {"voltage": 12.5, "read_at": "x", "error": ""}}
+
+
+class _ProbedPowerSwitch(CountingPowerSwitch):
+    def __init__(self, reachable=True):
+        super().__init__()
+        self.reachable = reachable
+        self.probe_count = 0
+
+    def probe(self):
+        self.probe_count += 1
+        if not self.reachable:
+            raise PowerSwitchError("Shelly unreachable: timed out")
+
+
+class TestVoltagesAndHealth:
+    def _service(self, ipc_manager, reader=None, power=None, voltage_monitor=None):
+        cfg = CimierConfig(
+            enabled=True,
+            post_off_quiet_s=0.0,
+            health_check_interval_s=60.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=power or _ProbedPowerSwitch(),
+            switch_reader=reader or FakeSwitchReader(script=[(False, True)]),
+            ipc_manager=ipc_manager,
+            voltage_monitor=voltage_monitor,
+            clock=clock,
+            sleep=clock.sleep,
+        )
+        return service, clock
+
+    def test_voltages_published_and_ticked(self, ipc_manager) -> None:
+        monitor = _StubVoltageMonitor()
+        service, _ = self._service(ipc_manager, voltage_monitor=monitor)
+        service.tick()
+        assert monitor.ticks == [0.0]
+        assert ipc_manager.history[-1]["voltages"]["battery"]["voltage"] == 12.5
+
+    def test_no_voltages_key_when_not_configured(self, ipc_manager) -> None:
+        service, _ = self._service(ipc_manager)
+        service.tick()
+        assert "voltages" not in ipc_manager.history[-1]
+
+    def test_health_all_reachable(self, ipc_manager) -> None:
+        service, _ = self._service(ipc_manager)
+        service.tick()
+        health = ipc_manager.history[-1]["health"]
+        assert health["switches"] is True
+        assert health["power"] is True
+        assert "rain" not in health  # pas de capteur de pluie configuré
+        assert health["checked_at"]
+
+    def test_health_reports_unreachable_switches_and_power(self, ipc_manager) -> None:
+        service, _ = self._service(
+            ipc_manager,
+            reader=FakeSwitchReader(raise_error=SwitchReaderError("timed out")),
+            power=_ProbedPowerSwitch(reachable=False),
+        )
+        service.tick()
+        health = ipc_manager.history[-1]["health"]
+        assert health["switches"] is False
+        assert health["power"] is False
+
+    def test_health_checked_at_interval(self, ipc_manager) -> None:
+        power = _ProbedPowerSwitch()
+        service, clock = self._service(ipc_manager, power=power)
+        service.tick()
+        clock.advance(30.0)
+        service.tick()
+        assert power.probe_count == 1
+        clock.advance(30.0)
+        service.tick()
+        assert power.probe_count == 2
+
+    def test_health_change_is_journaled(self, ipc_manager, monkeypatch) -> None:
+        lines = []
+        monkeypatch.setattr(
+            "services.cimier_service.night_journal.append_event",
+            lambda event, **f: lines.append((event, f)),
+        )
+        power = _ProbedPowerSwitch()
+        service, clock = self._service(ipc_manager, power=power)
+        service.tick()
+        clock.advance(60.0)
+        service.tick()  # inchangé : pas de nouvelle ligne
+        power.reachable = False
+        clock.advance(60.0)
+        service.tick()
+        health_lines = [f for e, f in lines if e == "health"]
+        assert health_lines == [
+            {"switches": True, "power": True},
+            {"switches": True, "power": False},
+        ]
+
+
+def test_health_rain_follows_last_read_not_debounced_state(ipc_manager) -> None:
+    """Au démarrage, une lecture réussie suffit : l'anti-rebond retarde
+    l'état confirmé, pas la joignabilité (vu en dev le 05/11)."""
+    from core.hardware.weather_provider import RainProtection, ShellyRainWeatherProvider
+
+    def urlopen(url, timeout=None):
+        return _FakeRainResp(b'{"id":0,"state":false}')
+
+    provider = RainProtection(
+        ShellyRainWeatherProvider("h", confirm_reads=2, urlopen=urlopen), armed=False
+    )
+    clock = MockClock()
+    service = CimierService(
+        cimier_config=CimierConfig(enabled=True, power_switch=PowerSwitchConfig(type="noop")),
+        power_switch=CountingPowerSwitch(),
+        switch_reader=FakeSwitchReader(script=[(False, True)]),
+        weather_provider=provider,
+        ipc_manager=ipc_manager,
+        clock=clock,
+        sleep=clock.sleep,
+    )
+    service.tick()
+    assert provider.state == "unreachable"  # pas encore confirmé
+    assert ipc_manager.history[-1]["health"]["rain"] is True

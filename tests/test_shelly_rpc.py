@@ -96,3 +96,38 @@ def test_raises_on_non_boolean_state():
         read_input_state(
             "1.2.3.4", 0, urlopen=make_urlopen(json.dumps({"id": 0, "state": 1}).encode())
         )
+
+
+# --- Voltmeter.GetStatus (cartouche Tensions, 6.31.0) ---
+
+from core.hardware.shelly_rpc import read_voltage  # noqa: E402
+
+
+def test_read_voltage_returns_volts_and_builds_url():
+    captured = []
+    volts = read_voltage(
+        "1.2.3.4",
+        100,
+        timeout_s=2.0,
+        urlopen=make_urlopen(b'{"id":100,"voltage":12.43}', captured=captured),
+    )
+    assert volts == pytest.approx(12.43)
+    assert captured == [("http://1.2.3.4/rpc/Voltmeter.GetStatus?id=100", 2.0)]
+
+
+def test_read_voltage_accepts_integer():
+    assert read_voltage("h", 100, urlopen=make_urlopen(b'{"voltage":13}')) == 13.0
+
+
+@pytest.mark.parametrize("body", [b'{"id":100}', b'{"voltage":null}', b'{"voltage":"x"}', b"[]"])
+def test_read_voltage_rejects_payload_without_number(body):
+    with pytest.raises(ShellyRpcError):
+        read_voltage("h", 100, urlopen=make_urlopen(body))
+
+
+def test_read_voltage_raises_on_network_error():
+    def _urlopen(url, timeout=None):
+        raise urllib.error.URLError("boom")
+
+    with pytest.raises(ShellyRpcError):
+        read_voltage("h", 100, urlopen=_urlopen)

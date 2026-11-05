@@ -64,6 +64,7 @@ from core.hardware.shelly_switch_reader import (
     ShellySwitchReader,
     SwitchReaderError,
 )
+from core.hardware.voltage_monitor import VoltageMonitor
 from core.hardware.weather_provider import (
     RAIN_DRY,
     RAIN_WET,
@@ -215,6 +216,7 @@ class CimierService:
         motor_ipc: Optional[MotorIpcWriter] = None,
         config_path: Optional[Path] = None,
         scheduler_state_file: Optional[Path] = None,
+        voltage_monitor: Optional[VoltageMonitor] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         cycle_poll_interval_s: float = DEFAULT_CYCLE_POLL_INTERVAL_S,
@@ -327,6 +329,17 @@ class CimierService:
         )
         self._last_rain_heater_keepalive_ts: Optional[float] = None
         self._turn_rain_heater_on()
+
+        # ---- Cartouche « Tensions » et pastille « prêt » (6.31.0) ----
+        self._voltage_monitor = (
+            voltage_monitor
+            if voltage_monitor is not None
+            else VoltageMonitor(cimier_config.voltages)
+        )
+        # Joignabilité des capteurs vérifiables au repos (MOT/UPDN ne sont
+        # alimentés qu'une fois le 24 V allumé) : publiée sous « health ».
+        self._health: Dict[str, Any] = {}
+        self._last_health_ts: Optional[float] = None
 
         self._publish_status(
             state=STATE_IDLE,
@@ -507,6 +520,16 @@ class CimierService:
         # 2. Cooldown terminé : traiter une commande fraîche (mode drop, pas de rejeu).
         cmd = self._ipc.read_command()
         if cmd is None:
+            # Pastille « prêt » et tensions : lectures lentes (une par minute),
+            # seulement au repos — elles ne retardent jamais une commande.
+            now_mono = self._clock()
+            if (
+                self._last_health_ts is None
+                or (now_mono - self._last_health_ts) >= self._config.health_check_interval_s
+            ):
+                self._health_check()
+                self._last_health_ts = now_mono
+            self._voltage_monitor.tick(now_mono)
             self._publish_status(
                 state=STATE_IDLE,
                 phase=PHASE_IDLE,
@@ -854,6 +877,9 @@ class CimierService:
             if outcome == "error":
                 error_message = "both_switches_triggered"
                 return
+            if outcome == "lost":
+                error_message = "switches_unreachable"
+                return
             if outcome == "stopped":
                 error_message = ""  # stop = OK (cleanup garanti)
                 return
@@ -925,9 +951,14 @@ class CimierService:
             "timeout"  : cycle_timeout_s dépassé.
             "stopped"  : commande stop reçue.
             "error"    : both_switches au cours du polling.
+            "lost"     : butées injoignables depuis ``switch_lost_timeout_s``.
         """
         target_key = "open_switch" if action == ACTION_OPEN else "closed_switch"
         deadline = self._clock() + self._config.cycle_timeout_s
+        # Le moteur tourne : sans butées, rien ne l'arrête avant le timeout du
+        # cycle (90 s) et le cimier va en butée mécanique. Quelques lectures
+        # ratées sont un trou Wi-Fi ; au-delà de ce délai on coupe.
+        last_good_read = self._clock()
 
         while self._clock() < deadline:
             if self._stop_requested:
@@ -946,8 +977,18 @@ class CimierService:
                 latency_ms = int((self._clock() - t0) * 1000)
             except SwitchReaderError as exc:
                 logger.debug("cimier_event=poll_exception id=%s exc=%s", cmd_id, exc)
+                blind_s = self._clock() - last_good_read
+                if blind_s >= self._config.switch_lost_timeout_s:
+                    logger.error(
+                        "cimier_event=poll_switches_lost id=%s blind_s=%.1f exc=%s",
+                        cmd_id,
+                        blind_s,
+                        exc,
+                    )
+                    return "lost"
                 self._sleep(self._cycle_poll_interval_s)
                 continue
+            last_good_read = self._clock()
 
             self._last_open_switch = state.open_switch
             self._last_closed_switch = state.closed_switch
@@ -1069,6 +1110,10 @@ class CimierService:
             # sans capteur de pluie réel (_rain_enabled=False, ex. NoopWeatherProvider
             # en bring-up matériel partiel) — "rain" n'existe alors pas encore.
             payload.setdefault("rain", {})["heater"] = self._rain_heater_status
+        if self._voltage_monitor.enabled:
+            payload["voltages"] = self._voltage_monitor.describe()
+        if self._health:
+            payload["health"] = self._health
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
         self._ipc.write_status(payload)
@@ -1218,6 +1263,46 @@ class CimierService:
             self._last_closed_switch = switches.closed_switch
         return self._derive_current_cimier_state()
 
+    def _health_check(self) -> None:
+        """Sonde les Shelly vérifiables au repos (pastille « prêt » du dashboard).
+
+        Butées : vraie lecture des entrées (c'est d'elles que dépend l'arrêt du
+        moteur). 24 V : lecture d'état, sans commuter. Pluie : dernière lecture
+        de la veille, qui interroge déjà le capteur toutes les quelques secondes.
+        Journalise chaque changement (log et journal de nuit).
+        """
+        flags: Dict[str, bool] = {}
+        try:
+            switches = self._switch_reader.read()
+        except SwitchReaderError as exc:
+            logger.debug("cimier_event=health_switches_failed exc=%s", exc)
+            flags["switches"] = False
+        else:
+            self._last_open_switch = switches.open_switch
+            self._last_closed_switch = switches.closed_switch
+            flags["switches"] = True
+        probe = getattr(self._power_switch, "probe", None)
+        if probe is not None:
+            try:
+                probe()
+                flags["power"] = True
+            except PowerSwitchError as exc:
+                logger.debug("cimier_event=health_power_failed exc=%s", exc)
+                flags["power"] = False
+        if self._rain_enabled:
+            # Dernière lecture aboutie, pas l'état confirmé : l'anti-rebond
+            # laisse ce dernier à « unreachable » pendant les premières lectures.
+            flags["rain"] = self._weather_provider.describe().get("shelly_state") is not None
+
+        previous = {k: v for k, v in self._health.items() if k != "checked_at"}
+        if flags != previous:
+            logger.info(
+                "cimier_event=health %s",
+                " ".join(f"{k}={str(v).lower()}" for k, v in flags.items()),
+            )
+            night_journal.append_event("health", **flags)
+        self._health = dict(flags, checked_at=datetime.now().isoformat(timespec="seconds"))
+
     def _log_rain_skip_once(self, reason: str) -> None:
         """Trace, une fois par motif et par épisode, une pluie qui ne commande rien.
 
@@ -1356,7 +1441,9 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
     Le simulateur (`core.hardware.cimier_simulator`) émule sur 127.0.0.1:8001 :
       - les butées Shelly Uni+ (RPC Input.GetStatus id=0 BAS / id=1 HAUT),
       - 3 relais legacy : id=0 → 24V, id=1 → MOT, id=2 → UPDN,
-      - le capteur de pluie sur l'entrée id=2 (GET /dev/rain?on=0|1).
+      - le capteur de pluie sur l'entrée id=2 (GET /dev/rain?on=0|1),
+      - les voltmètres batteries (id=100) et chargeur (id=101), modifiables
+        par GET /dev/voltage?id=<n>&v=<V>.
     Conventions naturelles côté sim (relais ON = actif) ; les conventions
     terrain potentiellement inversées sont validées au banc, pas en dev.
     Ne touche jamais data/config.json sur disque (patch mémoire seulement).
@@ -1392,6 +1479,11 @@ def _apply_dev_mode_overrides(cimier_cfg) -> None:
     cimier_cfg.motor_shelly.motor_on_relay_state = True
     cimier_cfg.motor_shelly.open_dir_state = True
     cimier_cfg.motor_shelly.timer_safety_sec = 0.0
+    # Voltmètres simulés (6.31.0) : id 100 batteries, id 101 chargeur.
+    cimier_cfg.voltages.battery_host = "127.0.0.1:8001"
+    cimier_cfg.voltages.battery_id = 100
+    cimier_cfg.voltages.charger_host = "127.0.0.1:8001"
+    cimier_cfg.voltages.charger_id = 101
 
 
 def _build_service_from_config(config_path=None) -> CimierService:

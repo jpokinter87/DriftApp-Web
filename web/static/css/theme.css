@@ -249,6 +249,27 @@ html[data-theme="night"] .rain-pill-wet {
     background: var(--color-accent-red);
 }
 
+/* Pastilles de niveau (6.31.0) : seul le rouge passe le filtre. Ce qui va
+   bien reste discret ; ce qui demande l'attention passe en aplat. */
+html[data-theme="night"] .level-ok,
+html[data-theme="night"] .level-off {
+    color: var(--color-obs-text-muted);
+    border-color: var(--color-obs-border-light);
+    background: transparent;
+}
+
+html[data-theme="night"] .level-warn {
+    color: var(--color-accent-red);
+    border-color: var(--color-accent-red);
+    background: transparent;
+}
+
+html[data-theme="night"] .level-bad {
+    color: #000;
+    border-color: var(--color-accent-red);
+    background: var(--color-accent-red);
+}
+
 /* =========================================================================
    Thème jour « carnet d'observation »
    Papier, encre graphite, filets fins ; l'ambre foncé en bronze pour rester
@@ -479,6 +500,31 @@ html[data-theme="day"] .heater-pill-error {
 }
 
 html[data-theme="day"] .heater-pill-off {
+    color: var(--color-obs-text-muted);
+    border-color: var(--color-obs-border-light);
+    background: transparent;
+}
+
+/* Pastilles de niveau (6.31.0). */
+html[data-theme="day"] .level-ok {
+    color: #fff;
+    background: var(--color-accent-green);
+    border-color: var(--color-accent-green);
+}
+
+html[data-theme="day"] .level-warn {
+    color: #fff;
+    background: var(--color-accent-orange);
+    border-color: var(--color-accent-orange);
+}
+
+html[data-theme="day"] .level-bad {
+    color: #fff;
+    background: var(--color-accent-red);
+    border-color: var(--color-accent-red);
+}
+
+html[data-theme="day"] .level-off {
     color: var(--color-obs-text-muted);
     border-color: var(--color-obs-border-light);
     background: transparent;

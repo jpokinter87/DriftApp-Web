@@ -98,6 +98,10 @@
     "dir_settle_s": 0.3,
     "cycle_poll_interval_s": 0.5,
     "verbose_logging": false,
+    "switch_lost_timeout_s": 3.0,
+    "_switch_lost_timeout_s_comment": "6.31.0 — butées (Shelly Uni+) injoignables depuis ce délai en plein cycle → moteur et 24 V coupés, cycle en erreur switches_unreachable. Avant, le moteur tournait à l'aveugle jusqu'à cycle_timeout_s.",
+    "health_check_interval_s": 60.0,
+    "_health_check_interval_s_comment": "6.31.0 — cadence (s) du sondage des Shelly joignables au repos (butées, 24 V, capteur de pluie) pour la pastille « prêt » du dashboard.",
     "rain_heater_keepalive_interval_s": 240.0,
     "_rain_heater_keepalive_interval_s_comment": "Renvoi périodique de turn_on() sur rain_heater_switch, que la protection pluie soit armée ou non (le chauffage ne suit plus l'armement depuis la 6.26.2). Configurer côté app Shelly (hors DriftApp) l'auto_off natif du relais à 300s : chaque turn_on relance ce minuteur. Si le Pi est coupé (plus de signal), le Shelly coupe la résistance seul au bout de 5 min au lieu de rester sous tension indéfiniment (retour terrain 13/09/2026, arrêt électrique manuel après le bug switch_overshoot_deg 6.15.6).",
     "switch_reader": {
@@ -159,6 +163,18 @@
       "motor_on_relay_state": false,
       "api": "legacy",
       "timer_safety_sec": 90.0
+    },
+    "voltages": {
+      "_comment": "6.31.0 — cartouche « Tensions » du dashboard + relevé toutes les journal_interval_s dans le journal de nuit. Batteries : voltmètre du Shelly Uni+ des butées (.84, alimenté seulement coupole sous tension). Chargeur : voltmètre du Shelly Plus Uni du capteur de pluie (.87, toujours sous tension). Hôte vide = mesure non lue. Pastilles : vert ≥ battery_good_v, ambre entre les deux seuils, rouge < battery_low_v (pleine charge 12,6 V).",
+      "battery_host": "192.168.1.84",
+      "battery_id": 100,
+      "charger_host": "192.168.1.87",
+      "charger_id": 100,
+      "timeout_s": 2.0,
+      "read_interval_s": 60.0,
+      "journal_interval_s": 300.0,
+      "battery_good_v": 12.4,
+      "battery_low_v": 12.0
     }
   },
   "boot_calibration": {

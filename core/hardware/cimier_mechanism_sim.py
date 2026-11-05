@@ -68,3 +68,8 @@ class CimierMechanismSim:
     @property
     def motor_on(self) -> bool:
         return self._motor_on
+
+    @property
+    def opening(self) -> bool:
+        """Sens courant : True = ouverture."""
+        return self._opening

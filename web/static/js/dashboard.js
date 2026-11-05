@@ -130,6 +130,10 @@ document.addEventListener('alpine:init', () => {
         parkingStepCimier: 'pending',    // 'pending' | 'cycle' | 'closed' | 'failed'
         parkingStartedAt: null,          // epoch ms
         cimierTimeline: [],                        // FIFO buffer max 50 entrées
+        // Pastille « prêt » (6.31.0) : vivacité moteur et encodeur, tenue à jour
+        // par la boucle de status (le reste vient de cimier.health).
+        motorReady: null,
+        encoderReady: null,
         // Calibration coupole (v6.4 Phase 3 Plan 02) — surface IPC motor_status.calibration
         calibration: {
             status: 'unknown',          // 'unknown' | 'running' | 'ok' | 'degraded' | 'simulated' | 'exception'
@@ -1605,6 +1609,82 @@ function heaterStateClass() {
 }
 window.heaterStateClass = heaterStateClass;
 
+// ── Pastille « prêt » et cartouche Tensions (6.31.0) ──────────────────────
+
+// Moteur : status présent et sans erreur. Pas de critère de fraîcheur :
+// au repos, motor_service ne réécrit son status que sur événement (vu en dev
+// le 05/11 — un seuil de 30 s criait au loup pendant des minutes).
+function updateReadiness(motor, encoder) {
+    const store = Alpine.store('dashboard');
+    store.motorReady = Boolean(motor) && motor.status !== 'unknown' && motor.status !== 'error';
+    store.encoderReady = Boolean(encoder) && !encoder.error && encoder.status !== 'absent' &&
+        encoder.frozen !== true && encoder.status !== 'FROZEN';
+}
+
+// Liste de ce qui ne répond pas ; null tant que rien n'a encore été vérifié.
+function readinessProblems() {
+    const store = Alpine.store('dashboard');
+    const cimier = store.cimier;
+    const problems = [];
+    if (store.motorReady === false) problems.push('Moteur');
+    if (store.encoderReady === false) problems.push('Encodeur');
+    if (!cimier || isCimierStale(cimier.last_update)) {
+        problems.push('Service cimier');
+        return problems;
+    }
+    const health = cimier.health;
+    if (!health) return problems.length ? problems : null;
+    if (health.switches === false) problems.push('Butées (Shelly Uni+)');
+    if (health.power === false) problems.push('Alim 24 V');
+    if (health.rain === false) problems.push('Capteur de pluie');
+    return problems;
+}
+
+function readinessLabel() {
+    const problems = readinessProblems();
+    if (problems === null) return '… vérification';
+    if (problems.length === 0) return '✓ PRÊT — tout répond';
+    return '✗ Injoignable : ' + problems.join(', ');
+}
+window.readinessLabel = readinessLabel;
+
+function readinessClass() {
+    const problems = readinessProblems();
+    if (problems === null) return 'level-warn';
+    return problems.length === 0 ? 'level-ok' : 'level-bad';
+}
+window.readinessClass = readinessClass;
+
+function voltageReading(key) {
+    return Alpine.store('dashboard').cimier?.voltages?.[key] || null;
+}
+
+function voltageLabel(key, name) {
+    const reading = voltageReading(key);
+    if (!reading) return '';
+    if (typeof reading.voltage !== 'number') {
+        return key === 'battery' ? `${name} : hors tension` : `${name} : injoignable`;
+    }
+    return `${name} ${reading.voltage.toFixed(2).replace('.', ',')} V`;
+}
+window.voltageLabel = voltageLabel;
+
+// Mêmes seuils pour les deux mesures : une sortie chargeur sous le seuil
+// « bon » est aussi anormale qu'une batterie faible.
+function voltageClass(key) {
+    const voltages = Alpine.store('dashboard').cimier?.voltages;
+    const reading = voltageReading(key);
+    if (!reading) return '';
+    if (typeof reading.voltage !== 'number') {
+        // Batteries muettes = boîtier hors tension (normal) ; chargeur muet = anomalie.
+        return key === 'battery' ? 'level-off' : 'level-warn';
+    }
+    if (reading.voltage >= voltages.battery_good_v) return 'level-ok';
+    if (reading.voltage >= voltages.battery_low_v) return 'level-warn';
+    return 'level-bad';
+}
+window.voltageClass = voltageClass;
+
 // Butées brutes du cimier (open_switch / closed_switch du Shelly Uni+, après
 // inversion) : allumée = butée atteinte, grise = au repos, ambre = pas encore lue.
 function switchPillClass(key) {
@@ -1905,6 +1985,7 @@ async function updateStatus() {
     }
 
     // Mettre à jour l'interface
+    updateReadiness(motor, encoder);
     updateServiceStatus(motor, encoder);
     updatePositionDisplay(encoder, motor);
     updateTrackingDisplay(motor);

@@ -173,3 +173,28 @@ def test_api_property_default_rpc():
 def test_api_property_legacy():
     sw = ShellyPowerSwitch("192.168.1.51", api="legacy", urlopen=make_mock_urlopen())
     assert sw.api == "legacy"
+
+
+# ----------------------------------------------------------------------
+# probe() — joignabilité sans commuter le relais (pastille « prêt », 6.31.0)
+# ----------------------------------------------------------------------
+
+
+class TestProbe:
+    def test_noop_probe_is_silent(self):
+        NoopPowerSwitch().probe()
+
+    def test_rpc_probe_reads_status_without_switching(self):
+        mock = make_mock_urlopen()
+        ShellyPowerSwitch("h", switch_id=0, api="rpc", urlopen=mock).probe()
+        assert mock.call_args[0][0] == "http://h/rpc/Switch.GetStatus?id=0"
+
+    def test_legacy_probe_reads_status_without_turn(self):
+        mock = make_mock_urlopen()
+        ShellyPowerSwitch("h", switch_id=0, api="legacy", urlopen=mock).probe()
+        assert mock.call_args[0][0] == "http://h/relay/0"
+
+    def test_probe_raises_when_unreachable(self):
+        mock = MagicMock(side_effect=urllib.error.URLError("Connection refused"))
+        with pytest.raises(PowerSwitchError):
+            ShellyPowerSwitch("h", urlopen=mock).probe()

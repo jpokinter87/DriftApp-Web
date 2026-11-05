@@ -367,6 +367,16 @@ La protection doit être **armée** (case « Protection pluie » du dashboard, o
 `POST /api/cimier/automation/ {"rain_protection": true}`) pour que la pluie
 commande une fermeture ; désarmée, elle est seulement lue et journalisée.
 
+### Tensions et pastille « prêt » en dev (6.31.0)
+
+Le simulateur sert les voltmètres (id 100 batteries, id 101 chargeur) ; les
+tensions sont relues toutes les 60 s (`cimier.voltages.read_interval_s`) :
+
+```bash
+curl "http://127.0.0.1:8001/dev/voltage?id=100&v=11.8"   # batteries vides → pastille rouge
+python3 -c "import json;d=json.load(open('/dev/shm/cimier_status.json'));print(d['voltages'],d['health'])"
+```
+
 ### Encodeur indisponible
 ```bash
 cat /dev/shm/ems22_position.json  # Verifier fichier

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
 import urllib.request
 
 import pytest
@@ -117,3 +118,39 @@ def test_heater_relay_toggles_independently_of_motion(sim):
     assert payload_on["ison"] is True
     payload_off = _get_json(sim.url + "/relay/3?turn=off")
     assert payload_off["ison"] is False
+
+
+# --- 6.31.0 : sonde sans commutation, voltmètres simulés ---
+
+
+def test_relay_status_without_turn_does_not_switch(sim):
+    assert _get_json(sim.url + "/relay/0?turn=on") == {"ison": True}
+    assert _get_json(sim.url + "/relay/0") == {"ison": True}
+    _get_json(sim.url + "/relay/0?turn=off")
+    assert _get_json(sim.url + "/relay/0") == {"ison": False}
+
+
+def test_voltmeters_have_default_values(sim):
+    from core.hardware.cimier_simulator import VOLTMETER_BATTERY, VOLTMETER_CHARGER
+
+    battery = _get_json(sim.url + f"/rpc/Voltmeter.GetStatus?id={VOLTMETER_BATTERY}")
+    charger = _get_json(sim.url + f"/rpc/Voltmeter.GetStatus?id={VOLTMETER_CHARGER}")
+    assert battery == {"id": VOLTMETER_BATTERY, "voltage": 12.55}
+    assert charger == {"id": VOLTMETER_CHARGER, "voltage": 13.6}
+
+
+def test_dev_voltage_changes_a_value(sim):
+    assert _get_json(sim.url + "/dev/voltage?id=100&v=11.8") == {"id": 100, "voltage": 11.8}
+    assert _get_json(sim.url + "/rpc/Voltmeter.GetStatus?id=100")["voltage"] == 11.8
+
+
+def test_unknown_voltmeter_is_404(sim):
+    with pytest.raises(urllib.error.HTTPError):
+        _get_json(sim.url + "/rpc/Voltmeter.GetStatus?id=7")
+
+
+def test_read_voltage_via_real_http(sim):
+    from core.hardware.shelly_rpc import read_voltage
+
+    host = sim.url.removeprefix("http://")
+    assert read_voltage(host, 101, timeout_s=2.0) == 13.6

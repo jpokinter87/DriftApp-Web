@@ -44,6 +44,9 @@ class NoopPowerSwitch:
     def is_on(self) -> bool:
         return self._state
 
+    def probe(self) -> None:
+        """Rien à joindre : toujours joignable."""
+
 
 class ShellyPowerSwitch:
     """Pilote un Shelly mini relais via API REST.
@@ -95,7 +98,17 @@ class ShellyPowerSwitch:
         )
 
     def _set(self, on: bool) -> None:
-        url = self._build_url(on)
+        self._get(self._build_url(on))
+
+    def probe(self) -> None:
+        """Lit l'état du relais sans le commuter : lève PowerSwitchError si injoignable."""
+        if self._api == "rpc":
+            url = "http://" + self._host + "/rpc/Switch.GetStatus?id=" + str(self._switch_id)
+        else:
+            url = "http://" + self._host + "/relay/" + str(self._switch_id)
+        self._get(url)
+
+    def _get(self, url: str) -> None:
         try:
             with self._urlopen(url, timeout=self._timeout_s) as resp:
                 status = getattr(resp, "status", 200)

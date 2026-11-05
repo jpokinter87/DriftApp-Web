@@ -1,10 +1,11 @@
-"""Dialogue RPC Gen 2 partagé avec les Shelly (``Input.GetStatus``).
+"""Dialogue RPC Gen 2 partagé avec les Shelly (``Input.GetStatus``, ``Voltmeter.GetStatus``).
 
 Un seul endroit où vivent la construction d'URL, le timeout, le typage des
 erreurs et la validation du payload. Consommé par :
 
   - ``ShellySwitchReader`` — butées HAUT/BAS du cimier (Shelly Uni+ .84) ;
-  - ``ShellyRainWeatherProvider`` — capteur de pluie (Shelly Plus Uni .87).
+  - ``ShellyRainWeatherProvider`` — capteur de pluie (Shelly Plus Uni .87) ;
+  - ``VoltageMonitor`` — tensions batteries / chargeur (``read_voltage``).
 
 L'argument ``urlopen`` permet d'injecter un double dans les tests.
 Aucune valeur terrain ici : host, id et timeout viennent de l'appelant.
@@ -39,22 +40,8 @@ def read_input_state(
         ShellyRpcError: hôte injoignable, HTTP ≠ 200, JSON invalide, payload
             sans clé ``state``, ou ``state`` non booléen (entrée *stateless*).
     """
-    opener = urlopen or urllib.request.urlopen
     url = "http://" + host + "/rpc/Input.GetStatus?id=" + str(int(input_id))
-    try:
-        with opener(url, timeout=float(timeout_s)) as resp:
-            status = getattr(resp, "status", 200)
-            raw = resp.read()
-    except urllib.error.URLError as exc:
-        raise ShellyRpcError("Shelly unreachable: " + str(exc.reason)) from exc
-    except OSError as exc:
-        raise ShellyRpcError("Shelly socket error: " + str(exc)) from exc
-    if status != 200:
-        raise ShellyRpcError("Shelly HTTP " + str(status))
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise ShellyRpcError("Shelly JSON invalide: " + str(exc)) from exc
+    payload = _get_json(url, timeout_s, urlopen)
     if not isinstance(payload, dict) or "state" not in payload:
         raise ShellyRpcError("Shelly payload sans 'state': " + repr(payload))
     state = payload["state"]
@@ -71,3 +58,42 @@ def read_input_state(
             "button/analog ou désactivée ? Vérifier Input.GetConfig?id=" + str(int(input_id))
         )
     return state, payload
+
+
+def _get_json(url: str, timeout_s: float, urlopen: Optional[Any]) -> Any:
+    """GET ``url`` et décode le JSON ; toute défaillance devient ShellyRpcError."""
+    opener = urlopen or urllib.request.urlopen
+    try:
+        with opener(url, timeout=float(timeout_s)) as resp:
+            status = getattr(resp, "status", 200)
+            raw = resp.read()
+    except urllib.error.URLError as exc:
+        raise ShellyRpcError("Shelly unreachable: " + str(exc.reason)) from exc
+    except OSError as exc:
+        raise ShellyRpcError("Shelly socket error: " + str(exc)) from exc
+    if status != 200:
+        raise ShellyRpcError("Shelly HTTP " + str(status))
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ShellyRpcError("Shelly JSON invalide: " + str(exc)) from exc
+
+
+def read_voltage(
+    host: str,
+    voltmeter_id: int,
+    timeout_s: float = 3.0,
+    urlopen: Optional[Any] = None,
+) -> float:
+    """Lit ``GET http://<host>/rpc/Voltmeter.GetStatus?id=<n>`` → ``voltage`` en volts.
+
+    Raises:
+        ShellyRpcError: hôte injoignable, HTTP ≠ 200, JSON invalide, ou
+            ``voltage`` absent / non numérique.
+    """
+    url = "http://" + host + "/rpc/Voltmeter.GetStatus?id=" + str(int(voltmeter_id))
+    payload = _get_json(url, timeout_s, urlopen)
+    voltage = payload.get("voltage") if isinstance(payload, dict) else None
+    if isinstance(voltage, bool) or not isinstance(voltage, (int, float)):
+        raise ShellyRpcError("Shelly payload sans 'voltage' numérique: " + repr(payload))
+    return float(voltage)

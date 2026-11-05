@@ -185,6 +185,33 @@
                     Total: <span id="corrections-total" class="corrections-total text-accent-purple font-bold">0.00&deg;</span>
                 </span>
             </div>
+            <!-- CAPTEURS (6.31.0) : pastille « prêt » — tout ce qui est vérifiable au
+                 repos répond (butées Uni+, alim 24 V, capteur de pluie, moteur,
+                 encodeur, service cimier). Rouge = ce qui manque, en clair. -->
+            <div class="col-span-2 flex justify-between items-center gap-2 p-2 bg-obs-input rounded-button"
+                 x-show="$store.dashboard.cimier" x-cloak>
+                <label class="font-bold text-obs-text-secondary">CAPTEURS:</label>
+                <span id="readiness-pill" class="level-pill text-right"
+                      :class="window.readinessClass ? window.readinessClass() : ''"
+                      x-text="window.readinessLabel ? window.readinessLabel() : ''"
+                      role="status" aria-live="polite" aria-label="État des capteurs"></span>
+            </div>
+            <!-- TENSIONS (6.31.0) : batteries du cimier (Uni+ .84) et chargeur
+                 (Plus Uni .87). Fond coloré selon les seuils de config.json. -->
+            <div class="col-span-2 flex justify-between items-center gap-2 p-2 bg-obs-input rounded-button"
+                 x-show="$store.dashboard.cimier?.voltages" x-cloak>
+                <label class="font-bold text-obs-text-secondary">TENSIONS:</label>
+                <span class="flex gap-2 flex-wrap justify-end" role="status" aria-label="Tensions">
+                    <span id="voltage-battery" class="level-pill"
+                          x-show="$store.dashboard.cimier?.voltages?.battery"
+                          :class="window.voltageClass ? window.voltageClass('battery') : ''"
+                          x-text="window.voltageLabel ? window.voltageLabel('battery', 'Batteries') : ''"></span>
+                    <span id="voltage-charger" class="level-pill"
+                          x-show="$store.dashboard.cimier?.voltages?.charger"
+                          :class="window.voltageClass ? window.voltageClass('charger') : ''"
+                          x-text="window.voltageLabel ? window.voltageLabel('charger', 'Chargeur') : ''"></span>
+                </span>
+            </div>
         </div>
 
         <!-- ══ Suivi actif sous la boussole (v6.11, piste 3) ══

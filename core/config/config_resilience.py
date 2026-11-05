@@ -306,6 +306,28 @@ HELP_REGISTRY: dict[str, str] = {
     "cimier.weather_provider.confirm_reads": (
         "Nombre de lectures concordantes exigées avant de changer d'état (anti-rebond)."
     ),
+    # cimier.voltages (cartouche « Tensions », 6.31.0)
+    "cimier.voltages.battery_host": (
+        "Hôte/IP du Shelly dont le voltmètre mesure les batteries du cimier "
+        "(Uni+ des butées). Vide = non lu."
+    ),
+    "cimier.voltages.battery_id": "Index du voltmètre batteries (Voltmeter.GetStatus), 100.",
+    "cimier.voltages.charger_host": (
+        "Hôte/IP du Shelly dont le voltmètre mesure le chargeur (Plus Uni du "
+        "capteur de pluie). Vide = non lu."
+    ),
+    "cimier.voltages.charger_id": "Index du voltmètre chargeur (Voltmeter.GetStatus), 100.",
+    "cimier.voltages.timeout_s": "Délai d'attente (secondes) d'une lecture de tension.",
+    "cimier.voltages.read_interval_s": "Cadence (secondes) des lectures de tension.",
+    "cimier.voltages.journal_interval_s": (
+        "Cadence (secondes) du relevé des tensions dans le journal de nuit."
+    ),
+    "cimier.voltages.battery_good_v": (
+        "Tension (V) à partir de laquelle la pastille est verte. Pleine charge : 12,6 V."
+    ),
+    "cimier.voltages.battery_low_v": (
+        "Tension (V) sous laquelle la pastille est rouge ; ambre entre les deux seuils."
+    ),
     # cimier.automation (scheduler astropy)
     "cimier.automation.mode": (
         "Mode d'automatisation du cimier. « manual » : pilotage manuel. « semi » : "
