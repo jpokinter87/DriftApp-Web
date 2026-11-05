@@ -1665,22 +1665,27 @@ function voltageReading(key) {
     return Alpine.store('dashboard').cimier?.voltages?.[key] || null;
 }
 
-// Seules les batteries sont affichées : le chargeur est par construction
-// toujours à ~12,6 V (Serge, 05/11). Sa tension reste au journal de nuit.
-function voltageLabel(key) {
+function voltageLabel(key, name) {
     const reading = voltageReading(key);
     if (!reading) return '';
-    if (typeof reading.voltage !== 'number') return 'hors tension';
-    return `${reading.voltage.toFixed(2).replace('.', ',')} V`;
+    if (typeof reading.voltage !== 'number') {
+        return key === 'battery' ? `${name} hors tension` : `${name} injoignable`;
+    }
+    return `${name} ${reading.voltage.toFixed(2).replace('.', ',')} V`;
 }
 window.voltageLabel = voltageLabel;
 
+// Mêmes seuils pour les deux mesures : une sortie chargeur sous le seuil
+// « bon » est aussi anormale qu'une batterie faible.
 function voltageClass(key) {
     const voltages = Alpine.store('dashboard').cimier?.voltages;
     const reading = voltageReading(key);
     if (!reading) return '';
-    // Batteries muettes = boîtier cimier hors tension : normal, pas une alarme.
-    if (typeof reading.voltage !== 'number') return 'level-off';
+    if (typeof reading.voltage !== 'number') {
+        // Batteries muettes = boîtier cimier hors tension (normal) ; le Shelly
+        // du chargeur est toujours alimenté : muet, c'est une anomalie.
+        return key === 'battery' ? 'level-off' : 'level-warn';
+    }
     if (reading.voltage >= voltages.battery_good_v) return 'level-ok';
     if (reading.voltage >= voltages.battery_low_v) return 'level-warn';
     return 'level-bad';
