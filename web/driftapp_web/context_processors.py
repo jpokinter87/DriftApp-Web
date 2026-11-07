@@ -1,5 +1,7 @@
 """Context processors pour DriftApp."""
 
+import json
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -8,6 +10,9 @@ except ImportError:
     import tomli as tomllib  # Python < 3.11 fallback
 
 _version_cache = None
+
+# Écrit par scripts/update_driftapp.sh (lu aussi par /api/health/update/status/).
+UPDATE_STATUS_FILE = Path(__file__).resolve().parent.parent.parent / "logs" / "update_status.json"
 
 
 def _get_version():
@@ -27,6 +32,22 @@ def _get_version():
 def app_version(request):
     """Injecte APP_VERSION dans tous les templates."""
     return {"APP_VERSION": _get_version()}
+
+
+def last_software_update(request):
+    """Date de la dernière mise à jour réussie du logiciel (pied de page du dashboard).
+
+    None si aucune mise à jour n'a abouti : jamais lancée (dev), en cours ou en
+    échec (le fichier ne garde que la dernière tentative).
+    """
+    try:
+        status = json.loads(UPDATE_STATUS_FILE.read_text())
+        if status.get("phase") != "done" or status.get("success") is not True:
+            raise ValueError("pas de mise à jour réussie")
+        when = datetime.strptime(status["timestamp"], "%Y-%m-%d %H:%M:%S")
+    except (OSError, ValueError, KeyError, TypeError):
+        return {"LAST_SOFTWARE_UPDATE": None}
+    return {"LAST_SOFTWARE_UPDATE": when.strftime("%d/%m/%Y à %H:%M")}
 
 
 def site_coords(request):

@@ -70,6 +70,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "driftapp_web.context_processors.app_version",
+                "driftapp_web.context_processors.last_software_update",
                 "driftapp_web.context_processors.site_coords",
             ],
         },

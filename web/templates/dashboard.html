@@ -881,7 +881,9 @@
 {% endblock %}
 
 {% block footer_extra %}
-<span id="last-update" class="text-obs-text-muted">Derni&egrave;re mise &agrave; jour: --</span>
+{% if LAST_SOFTWARE_UPDATE %}
+<span class="text-obs-text-muted">Dernière mise à jour : {{ LAST_SOFTWARE_UPDATE }}</span>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

@@ -268,7 +268,6 @@ let state = {
     searchedObject: null,
     searchedCoords: null,  // {ra_deg, dec_deg} si saisie manuelle (v6.17), sinon null
     lastObjectName: null,  // dernier objet suivi : resté dans le champ, ce n'est pas un nom tapé
-    lastUpdate: null,
     trackingInfo: {},  // Pour position_cible, etc.
     gotoInfo: null,    // Pour la modal GOTO
     encoderFrozenLogged: false,  // Pour éviter de logger l'alerte plusieurs fois
@@ -358,7 +357,6 @@ const elements = {
 
     // Logs
     logs: document.getElementById('logs'),
-    lastUpdate: document.getElementById('last-update'),
 
     // Update button
     btnCheckUpdate: document.getElementById('btn-check-update'),
@@ -1969,7 +1967,6 @@ async function updateStatus() {
 
     state.target = motor.target;
     state.trackingObject = motor.tracking_object;
-    state.lastUpdate = new Date();
     state.gotoInfo = motor.goto_info || null;
 
     // v6.4 Phase 3 Plan 02 — propagation sous-dict calibration vers Alpine.store.
@@ -2013,8 +2010,6 @@ async function updateStatus() {
     updateTrackingDisplay(motor);
     updateGotoModal(motor, encoder);
     drawCompass();
-
-    elements.lastUpdate.textContent = `Dernière mise à jour: ${state.lastUpdate.toLocaleTimeString()}`;
 }
 
 function updateServiceStatus(motor, encoder) {
