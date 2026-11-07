@@ -98,8 +98,8 @@ document.addEventListener('alpine:init', () => {
         trackingVisible: false,
         // Cimier state (v6.0 Phase 1) — payload brut de /api/cimier/status/
         cimier: null,
-        // Dernière erreur cimier, affichée jusqu'à acquittement (6.31.7) :
-        // { text, timeLabel, count } ou null.
+        // Erreur cimier gardée par le service jusqu'à acquittement (6.31.8) :
+        // { text, firstLabel, lastLabel, count } ou null.
         cimierAlert: null,
         // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
         cimierCloseConfirmVisible: false,
@@ -1172,6 +1172,23 @@ function cimierErrorText(code) {
     return `Erreur : ${code}`;
 }
 
+// Heure d'une alerte cimier ; la date est ajoutée si ce n'est pas aujourd'hui.
+function cimierAlertTime(iso) {
+    const d = new Date(iso);
+    if (!Number.isFinite(d.getTime())) return '';
+    const time = d.toLocaleTimeString('fr-FR', { hour12: false });
+    if (d.toDateString() === new Date().toDateString()) return time;
+    return `${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} ${time}`;
+}
+
+async function acknowledgeCimierAlert() {
+    const result = await apiCall('/api/cimier/alert/ack/', 'POST');
+    if (result && !result.error) {
+        Alpine.store('dashboard').cimierAlert = null;
+    }
+}
+window.acknowledgeCimierAlert = acknowledgeCimierAlert;
+
 // Seuils de vivacité du cimier_service (fraîcheur de status.last_update).
 const CIMIER_STALE_MS = 90_000;   // service considéré arrêté (lock boutons, skip parking)
 const CIMIER_SILENT_MS = 60_000;  // cascade ouverture tracking bypassée
@@ -1217,16 +1234,15 @@ async function pollCimierStatus() {
             : '';
         pushCimierTimeline(level, `Cimier : ${from} → ${to}${reason}`);
     }
-    // L'erreur reste affichée jusqu'à acquittement (demande Serge, 07/11) :
-    // la timeline est repliée par défaut, la ligne de détail s'efface en 10 s.
-    if (status.state === 'error' && prevState !== 'error') {
-        const text = status.error_message ? cimierErrorText(status.error_message) : 'Erreur';
-        store.cimierAlert = {
-            text,
-            timeLabel: new Date().toLocaleTimeString('fr-FR', { hour12: false }),
-            count: (store.cimierAlert?.count || 0) + 1,
-        };
-    }
+    // Erreur gardée sur disque par le service jusqu'à acquittement (demande
+    // Serge, 07/11) : visible même si le dashboard était éteint à ce moment.
+    const alert = status.alert;
+    store.cimierAlert = alert ? {
+        text: cimierErrorText(alert.error_message),
+        firstLabel: cimierAlertTime(alert.first_at),
+        lastLabel: cimierAlertTime(alert.last_at),
+        count: alert.count || 1,
+    } : null;
 
     // Transitions du capteur de pluie → timeline. Comparé avant assignation,
     // comme l'état cimier juste au-dessus.

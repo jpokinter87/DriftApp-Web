@@ -95,3 +95,6 @@ docs/rapport_anticipation_meridien_v511.pdf
 # État du scheduler cimier (heure du dernier déclenchement de fermeture)
 data/cimier_scheduler_state.json
 data/cimier_scheduler_state.tmp
+# Dernière erreur cimier non acquittée (dashboard)
+data/cimier_alert.json
+data/cimier_alert.tmp

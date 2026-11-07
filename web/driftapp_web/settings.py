@@ -125,6 +125,8 @@ MOTOR_SERVICE_IPC = {
 CIMIER_SERVICE_IPC = {
     "COMMAND_FILE": "/dev/shm/cimier_command.json",
     "STATUS_FILE": "/dev/shm/cimier_status.json",
+    # Sur disque (pas /dev/shm) : l'erreur survit à un redémarrage du Pi.
+    "ALERT_FILE": PROJECT_ROOT / "data" / "cimier_alert.json",
 }
 
 # Configuration DriftApp

@@ -50,15 +50,18 @@ def mock_cimier_ipc(tmp_path, monkeypatch):
     """Pointe le singleton cimier_client vers tmp_path/{cimier_command,cimier_status}.json."""
     cmd_file = tmp_path / "cimier_command.json"
     status_file = tmp_path / "cimier_status.json"
+    alert_file = tmp_path / "cimier_alert.json"
 
     from web.common.cimier_client import cimier_client
 
     monkeypatch.setattr(cimier_client, "command_file", cmd_file)
     monkeypatch.setattr(cimier_client, "status_file", status_file)
+    monkeypatch.setattr(cimier_client, "alert_file", alert_file)
 
     yield {
         "cmd_file": cmd_file,
         "status_file": status_file,
+        "alert_file": alert_file,
     }
 
 
@@ -185,6 +188,44 @@ class TestCimierViewsStatus:
         body = response.json()
         assert body["state"] == "unknown"
         assert "error" in body
+
+
+class TestCimierAlert:
+    """Erreur cimier gardée sur disque jusqu'à acquittement (6.31.8)."""
+
+    ALERT = {
+        "error_message": "cimier_stalled",
+        "action": "close",
+        "first_at": "2026-11-06T21:42:10+00:00",
+        "last_at": "2026-11-07T03:10:00+00:00",
+        "count": 36,
+    }
+
+    def test_status_includes_alert(self, api_client, mock_cimier_ipc):
+        mock_cimier_ipc["status_file"].write_text(json.dumps({"state": "idle"}))
+        mock_cimier_ipc["alert_file"].write_text(json.dumps(self.ALERT))
+        body = api_client.get("/api/cimier/status/").json()
+        assert body["alert"] == self.ALERT
+
+    def test_status_includes_alert_when_service_down(self, api_client, mock_cimier_ipc):
+        mock_cimier_ipc["alert_file"].write_text(json.dumps(self.ALERT))
+        body = api_client.get("/api/cimier/status/").json()
+        assert body["state"] == "unknown"
+        assert body["alert"]["count"] == 36
+
+    def test_status_without_alert(self, api_client, mock_cimier_ipc):
+        mock_cimier_ipc["status_file"].write_text(json.dumps({"state": "idle"}))
+        assert "alert" not in api_client.get("/api/cimier/status/").json()
+
+    def test_ack_removes_alert(self, api_client, mock_cimier_ipc):
+        mock_cimier_ipc["alert_file"].write_text(json.dumps(self.ALERT))
+        response = api_client.post("/api/cimier/alert/ack/", {}, format="json")
+        assert response.status_code == 200
+        assert not mock_cimier_ipc["alert_file"].exists()
+
+    def test_ack_without_alert_is_ok(self, api_client, mock_cimier_ipc):
+        response = api_client.post("/api/cimier/alert/ack/", {}, format="json")
+        assert response.status_code == 200
 
 
 # =============================================================================

@@ -3674,3 +3674,68 @@ class TestCimierStalled:
         service, ps, clock = self._service(ipc_manager, [(False, False)])
         service.execute_command({"id": "milieu", "action": "close"})
         assert ipc_manager.history[-1]["error_message"] == "cycle_timeout"
+
+
+# ======================================================================
+# Alerte persistante jusqu'à acquittement (demande Serge, 07/11/2026)
+# ======================================================================
+
+
+class TestCimierAlert:
+    """Un cycle en erreur laisse data/cimier_alert.json sur disque : le
+    dashboard, éteint pendant la nuit, le montre à la reprise."""
+
+    def _service(self, ipc_manager, script, alert_file):
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=26.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            departure_timeout_s=5.0,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        clock = MockClock()
+        return CimierService(
+            cimier_config=cfg,
+            power_switch=CountingPowerSwitch(),
+            switch_reader=FakeSwitchReader(script=script),
+            ipc_manager=ipc_manager,
+            alert_file=alert_file,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.5,
+        )
+
+    def test_error_cycle_writes_alert(self, ipc_manager, tmp_path) -> None:
+        alert_file = tmp_path / "cimier_alert.json"
+        service = self._service(ipc_manager, [(False, True)], alert_file)
+        service.execute_command({"id": "gel", "action": "open"})
+        alert = json.loads(alert_file.read_text())
+        assert alert["error_message"] == "cimier_stalled"
+        assert alert["action"] == "open"
+        assert alert["count"] == 1
+        assert alert["first_at"] == alert["last_at"]
+
+    def test_repeated_errors_increment_count_and_keep_first_at(self, ipc_manager, tmp_path) -> None:
+        alert_file = tmp_path / "cimier_alert.json"
+        service = self._service(ipc_manager, [(True, False)], alert_file)
+        service.execute_command({"id": "a", "action": "close"})
+        first = json.loads(alert_file.read_text())["first_at"]
+        service._cooldown_end_ts = None
+        service.execute_command({"id": "b", "action": "close"})
+        alert = json.loads(alert_file.read_text())
+        assert alert["count"] == 2
+        assert alert["first_at"] == first
+
+    def test_successful_cycle_writes_no_alert(self, ipc_manager, tmp_path) -> None:
+        alert_file = tmp_path / "cimier_alert.json"
+        script = [(True, False)] + [(False, False)] * 3 + [(False, True)]
+        service = self._service(ipc_manager, script, alert_file)
+        service.execute_command({"id": "ok", "action": "close"})
+        assert not alert_file.exists()
+
+    def test_preflight_error_writes_alert(self, ipc_manager, tmp_path) -> None:
+        alert_file = tmp_path / "cimier_alert.json"
+        service = self._service(ipc_manager, [(True, True)], alert_file)
+        service.execute_command({"id": "deux", "action": "open"})
+        assert json.loads(alert_file.read_text())["error_message"] == "both_switches_triggered"

@@ -128,6 +128,9 @@ LOG_FILE_NAME = "cimier_service.log"
 # Heure du dernier déclenchement de la fermeture de fin de nuit (6.24.1) :
 # survit aux redémarrages, cf. docstring de services/cimier_scheduler.py.
 SCHEDULER_STATE_FILE = Path(__file__).resolve().parents[1] / "data" / "cimier_scheduler_state.json"
+# Dernière erreur de cycle, gardée jusqu'à acquittement depuis le dashboard
+# (Django efface le fichier). Sur disque : survit à un redémarrage du Pi.
+ALERT_FILE = Path(__file__).resolve().parents[1] / "data" / "cimier_alert.json"
 LOG_MAX_BYTES = 1_000_000
 LOG_BACKUP_COUNT = 3
 
@@ -216,6 +219,7 @@ class CimierService:
         motor_ipc: Optional[MotorIpcWriter] = None,
         config_path: Optional[Path] = None,
         scheduler_state_file: Optional[Path] = None,
+        alert_file: Optional[Path] = None,
         voltage_monitor: Optional[VoltageMonitor] = None,
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
@@ -224,6 +228,7 @@ class CimierService:
     ):
         self._config = cimier_config
         self._power_switch = power_switch
+        self._alert_file = alert_file
         self._rain_heater_switch = (
             rain_heater_switch
             if rain_heater_switch is not None
@@ -744,6 +749,7 @@ class CimierService:
             night_journal.append_event("cimier", action=action, result="noop", reason=reason)
             return
         if decision in ("error", "unreachable"):
+            self._record_alert(action, reason)
             self._publish_status(
                 state=STATE_ERROR,
                 phase=PHASE_IDLE,
@@ -934,6 +940,8 @@ class CimierService:
             # Cooldown : démarrer la fenêtre anti-bounce.
             self._cooldown_end_ts = self._clock() + self._config.post_off_quiet_s
             self._last_cycle_error = error_message
+            if error_message:
+                self._record_alert(action, error_message)
             state = STATE_ERROR if error_message else STATE_COOLDOWN
             self._publish_status(
                 state=state,
@@ -1146,6 +1154,33 @@ class CimierService:
         if remaining_quiet_s is not None:
             payload["remaining_quiet_s"] = max(0.0, float(remaining_quiet_s))
         self._ipc.write_status(payload)
+
+    def _record_alert(self, action: str, error_message: str) -> None:
+        """Garde l'erreur sur disque jusqu'à son acquittement (dashboard).
+
+        Les erreurs qui se suivent avant acquittement (relances de fermeture)
+        incrémentent ``count`` et gardent l'heure de la première.
+        """
+        if self._alert_file is None:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            previous = json.loads(self._alert_file.read_text())
+        except (OSError, ValueError):
+            previous = {}
+        alert = {
+            "error_message": error_message,
+            "action": action,
+            "first_at": previous.get("first_at", now),
+            "last_at": now,
+            "count": int(previous.get("count", 0)) + 1,
+        }
+        try:
+            tmp = self._alert_file.with_suffix(".tmp")
+            tmp.write_text(json.dumps(alert))
+            tmp.replace(self._alert_file)
+        except OSError as exc:
+            logger.warning("cimier_event=alert_write_failed exc=%s", exc)
 
     def _last_action_for_status(self) -> str:
         return self._last_action_value
@@ -1538,6 +1573,7 @@ def _build_service_from_config(config_path=None) -> CimierService:
         site_config=cfg.site,
         config_path=config_path,
         scheduler_state_file=SCHEDULER_STATE_FILE,
+        alert_file=ALERT_FILE,
         cycle_poll_interval_s=cfg.cimier.cycle_poll_interval_s,
     )
 

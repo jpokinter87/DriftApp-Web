@@ -19,6 +19,7 @@ urlpatterns = [
     path("close/", views.CloseView.as_view(), name="cimier-close"),
     path("stop/", views.StopView.as_view(), name="cimier-stop"),
     path("status/", views.StatusView.as_view(), name="cimier-status"),
+    path("alert/ack/", views.AlertAckView.as_view(), name="cimier-alert-ack"),
     path("automation/", views.AutomationView.as_view(), name="cimier-automation"),
     path("parking-session/", views.ParkingSessionView.as_view(), name="cimier-parking-session"),
 ]

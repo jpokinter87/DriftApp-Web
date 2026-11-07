@@ -83,6 +83,18 @@ class StatusView(APIView):
         return Response(cimier_client.get_status())
 
 
+class AlertAckView(APIView):
+    """POST /api/cimier/alert/ack/ — acquitte la dernière erreur cimier."""
+
+    def post(self, request):
+        if cimier_client.acknowledge_alert():
+            return Response({"message": "Erreur cimier acquittée"})
+        return Response(
+            {"error": "Impossible d'effacer l'erreur cimier"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+
 class AutomationView(APIView):
     """v6.0 Phase 4 — GET/POST `cimier.automation.mode`.
 

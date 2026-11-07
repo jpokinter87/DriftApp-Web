@@ -36,6 +36,7 @@ class CimierServiceClient:
     def __init__(self):
         self.command_file = Path(settings.CIMIER_SERVICE_IPC["COMMAND_FILE"])
         self.status_file = Path(settings.CIMIER_SERVICE_IPC["STATUS_FILE"])
+        self.alert_file = Path(settings.CIMIER_SERVICE_IPC["ALERT_FILE"])
 
     def _read_json_file_safe(self, file_path: Path) -> Optional[dict]:
         """Lecture atomique avec verrou partagé non-bloquant.
@@ -92,11 +93,23 @@ class CimierServiceClient:
         """
         result = self._read_json_file_safe(self.status_file)
         if result is None:
-            return {
+            result = {
                 "state": "unknown",
                 "error": "Cimier Service non disponible",
             }
+        # Erreur non acquittée : montrée même service arrêté.
+        alert = self._read_json_file_safe(self.alert_file)
+        if alert is not None:
+            result["alert"] = alert
         return result
+
+    def acknowledge_alert(self) -> bool:
+        """Efface l'erreur gardée par cimier_service. False si l'effacement échoue."""
+        try:
+            self.alert_file.unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
 
 
 cimier_client = CimierServiceClient()
