@@ -1254,7 +1254,9 @@ async function pollCimierStatus() {
     // redondant avec le badge et source de confusion signalée terrain.)
     if (elements.cimierDetail) {
         const parts = [];
-        if (status.state === 'error' && status.error_message) {
+        if (status.state === 'error' && status.error_message === 'cimier_stalled') {
+            parts.push('Bloqué : le moteur tourne mais le cimier n\'a pas quitté sa butée');
+        } else if (status.state === 'error' && status.error_message) {
             parts.push(`Erreur : ${status.error_message}`);
         } else if (status.remaining_quiet_s !== undefined && status.remaining_quiet_s > 0) {
             parts.push(`Stabilisation ${status.remaining_quiet_s.toFixed(0)} s`);

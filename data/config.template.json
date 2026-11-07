@@ -101,6 +101,8 @@
     "verbose_logging": false,
     "switch_lost_timeout_s": 3.0,
     "_switch_lost_timeout_s_comment": "6.31.0 — butées (Shelly Uni+) injoignables depuis ce délai en plein cycle → moteur et 24 V coupés, cycle en erreur switches_unreachable. Avant, le moteur tournait à l'aveugle jusqu'à cycle_timeout_s.",
+    "departure_timeout_s": 5.0,
+    "_departure_timeout_s_comment": "Cimier bloqué : si la butée de départ est encore enfoncée après ce délai de moteur, moteur et 24 V coupés, cycle en erreur cimier_stalled. Terrain : elle se libère en moins de 0,7 s (oct.–nov. 2026). Nuit du 06/11/2026 : transmission qui patine par temps froid et humide, 36 cycles de 26 s de moteur sans que le cimier quitte sa butée.",
     "health_check_interval_s": 60.0,
     "_health_check_interval_s_comment": "6.31.0 — cadence (s) du sondage des Shelly joignables au repos (butées, 24 V, capteur de pluie) pour la pastille « prêt » du dashboard.",
     "rain_heater_keepalive_interval_s": 240.0,

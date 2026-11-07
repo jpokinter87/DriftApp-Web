@@ -880,6 +880,9 @@ class CimierService:
             if outcome == "lost":
                 error_message = "switches_unreachable"
                 return
+            if outcome == "stalled":
+                error_message = "cimier_stalled"
+                return
             if outcome == "stopped":
                 error_message = ""  # stop = OK (cleanup garanti)
                 return
@@ -908,6 +911,8 @@ class CimierService:
             duration_ms = int((self._clock() - cycle_start) * 1000)
             if error_message == "cycle_timeout":
                 result = "timeout"
+            elif error_message == "cimier_stalled":
+                result = "stalled"
             elif poll_outcome == "stopped":
                 # Interruption utilisateur pendant le polling — cleanup garanti
                 # mais distinct d'un cycle nominal (Bloc 3 dette T4).
@@ -952,9 +957,19 @@ class CimierService:
             "stopped"  : commande stop reçue.
             "error"    : both_switches au cours du polling.
             "lost"     : butées injoignables depuis ``switch_lost_timeout_s``.
+            "stalled"  : butée de départ encore enfoncée après ``departure_timeout_s``.
         """
         target_key = "open_switch" if action == ACTION_OPEN else "closed_switch"
-        deadline = self._clock() + self._config.cycle_timeout_s
+        departure_key = "closed_switch" if action == ACTION_OPEN else "open_switch"
+        poll_start = self._clock()
+        deadline = poll_start + self._config.cycle_timeout_s
+        # Le cimier part d'une butée : elle se libère en moins de 0,7 s
+        # (terrain, oct.–nov. 2026). Toujours enfoncée passé ce délai, le
+        # moteur tourne sans entraîner le cimier (transmission qui patine,
+        # gel — nuit du 06/11/2026) : on coupe au lieu d'attendre le timeout.
+        # Départ en milieu de course (aucune butée) : rien à surveiller.
+        departure_deadline: Optional[float] = None
+        first_read = True
         # Le moteur tourne : sans butées, rien ne l'arrête avant le timeout du
         # cycle (90 s) et le cimier va en butée mécanique. Quelques lectures
         # ratées sont un trou Wi-Fi ; au-delà de ce délai on coupe.
@@ -1005,6 +1020,20 @@ class CimierService:
                     cmd_id,
                 )
                 return "ok"
+            departure_now = state.closed_switch if action == ACTION_OPEN else state.open_switch
+            if first_read and departure_now:
+                departure_deadline = poll_start + self._config.departure_timeout_s
+            first_read = False
+            if not departure_now:
+                departure_deadline = None  # butée libérée : le cimier bouge
+            if departure_deadline is not None and self._clock() >= departure_deadline:
+                logger.error(
+                    "cimier_event=poll_stalled id=%s switch=%s waited_s=%.1f",
+                    cmd_id,
+                    departure_key,
+                    self._clock() - poll_start,
+                )
+                return "stalled"
             if self._config.verbose_logging or os.environ.get("CIMIER_DEV_MODE"):
                 logger.debug(
                     "cimier_event=poll_status id=%s open_switch=%s closed_switch=%s",

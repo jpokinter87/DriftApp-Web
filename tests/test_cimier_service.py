@@ -3612,3 +3612,65 @@ def test_health_rain_follows_last_read_not_debounced_state(ipc_manager) -> None:
     service.tick()
     assert provider.state == "unreachable"  # pas encore confirmé
     assert ipc_manager.history[-1]["health"]["rain"] is True
+
+
+# ======================================================================
+# Cimier bloqué : la butée de départ ne se libère pas (nuit du 06/11/2026)
+# ======================================================================
+
+
+class TestCimierStalled:
+    """Moteur alimenté mais cimier immobile (transmission qui patine, gel) :
+    la butée de départ reste enfoncée. Terrain : elle se libère en moins
+    de 0,7 s quand tout va bien. On coupe sans attendre cycle_timeout_s."""
+
+    def _service(self, ipc_manager, script, departure_timeout_s=5.0):
+        cfg = CimierConfig(
+            enabled=True,
+            cycle_timeout_s=26.0,
+            post_off_quiet_s=0.0,
+            shelly_settle_s=0.0,
+            departure_timeout_s=departure_timeout_s,
+            power_switch=PowerSwitchConfig(type="noop"),
+        )
+        ps = CountingPowerSwitch()
+        clock = MockClock()
+        service = CimierService(
+            cimier_config=cfg,
+            power_switch=ps,
+            switch_reader=FakeSwitchReader(script=script),
+            ipc_manager=ipc_manager,
+            clock=clock,
+            sleep=clock.sleep,
+            cycle_poll_interval_s=0.5,
+        )
+        return service, ps, clock
+
+    def test_close_stalled_on_open_switch_cuts_early(self, ipc_manager) -> None:
+        # Butée haute toujours enfoncée : le cimier n'a pas bougé.
+        service, ps, clock = self._service(ipc_manager, [(True, False)])
+        service.execute_command({"id": "gel", "action": "close"})
+        assert clock.t < 8.0  # ~5 s de moteur, pas 26
+        assert ps.off_count == 1
+        last = ipc_manager.history[-1]
+        assert last["state"] == STATE_ERROR
+        assert last["error_message"] == "cimier_stalled"
+
+    def test_open_stalled_on_closed_switch_cuts_early(self, ipc_manager) -> None:
+        service, ps, clock = self._service(ipc_manager, [(False, True)])
+        service.execute_command({"id": "gel-open", "action": "open"})
+        assert clock.t < 8.0
+        assert ipc_manager.history[-1]["error_message"] == "cimier_stalled"
+
+    def test_slow_departure_is_not_stalled(self, ipc_manager) -> None:
+        # Preflight + 6 lectures (3 s) sur la butée haute, puis course, puis butée basse.
+        script = [(True, False)] * 7 + [(False, False)] * 10 + [(False, True)]
+        service, ps, clock = self._service(ipc_manager, script)
+        service.execute_command({"id": "lent", "action": "close"})
+        assert ipc_manager.history[-1]["error_message"] == ""
+
+    def test_mid_course_start_falls_back_to_cycle_timeout(self, ipc_manager) -> None:
+        # Aucune butée au départ : rien à surveiller, seul cycle_timeout_s s'applique.
+        service, ps, clock = self._service(ipc_manager, [(False, False)])
+        service.execute_command({"id": "milieu", "action": "close"})
+        assert ipc_manager.history[-1]["error_message"] == "cycle_timeout"

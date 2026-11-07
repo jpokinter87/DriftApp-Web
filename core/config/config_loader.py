@@ -377,6 +377,9 @@ class CimierConfig:
     switch_lost_timeout_s: float = (
         3.0  # butées injoignables en plein cycle depuis ce délai → moteur coupé (6.31.0)
     )
+    departure_timeout_s: float = (
+        5.0  # butée de départ toujours enfoncée après ce délai → cimier bloqué, moteur coupé
+    )
     health_check_interval_s: float = 60.0  # pastille « prêt » : sondage des Shelly (6.31.0)
     rain_heater_keepalive_interval_s: float = (
         240.0  # renvoi périodique de turn_on(), armé ou non (v6.15.8) — relance
@@ -775,6 +778,7 @@ class ConfigLoader:
             switch_lost_timeout_s=float(
                 c.get("switch_lost_timeout_s", defaults.switch_lost_timeout_s)
             ),
+            departure_timeout_s=float(c.get("departure_timeout_s", defaults.departure_timeout_s)),
             health_check_interval_s=float(
                 c.get("health_check_interval_s", defaults.health_check_interval_s)
             ),

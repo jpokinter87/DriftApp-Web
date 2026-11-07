@@ -225,6 +225,10 @@ HELP_REGISTRY: dict[str, str] = {
         "Période (secondes) de relecture des butées HAUT/BAS pendant un cycle. "
         "Terrain : 0.1 (100 ms)."
     ),
+    "cimier.departure_timeout_s": (
+        "Délai (secondes) au bout duquel un cimier qui n'a pas quitté sa butée de "
+        "départ est déclaré bloqué : moteur et 24 V coupés (erreur cimier_stalled)."
+    ),
     "cimier.verbose_logging": (
         "Active les logs détaillés (niveau DEBUG, traces poll_status) du "
         "cimier_service. true pour le diagnostic, false en prod."

@@ -154,3 +154,25 @@ def test_read_voltage_via_real_http(sim):
 
     host = sim.url.removeprefix("http://")
     assert read_voltage(host, 101, timeout_s=2.0) == 13.6
+
+
+# --- Transmission qui patine (nuit du 06/11/2026) ---
+
+
+def test_dev_stall_keeps_the_dome_on_its_switch(sim):
+    assert _get_json(sim.url + "/dev/stall?on=1") == {"stalled": True}
+    _get_json(sim.url + "/relay/0?turn=on")  # 24V
+    _get_json(sim.url + "/relay/2?turn=on")  # UPDN = ouverture
+    _get_json(sim.url + "/relay/1?turn=on")  # MOT on
+    time.sleep(0.3)  # > la moitié de full_travel_s
+    assert _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"] is False  # toujours en bas
+
+
+def test_dev_stall_off_lets_the_dome_move_again(sim):
+    _get_json(sim.url + "/dev/stall?on=1")
+    assert _get_json(sim.url + "/dev/stall?on=0") == {"stalled": False}
+    _get_json(sim.url + "/relay/0?turn=on")
+    _get_json(sim.url + "/relay/2?turn=on")
+    _get_json(sim.url + "/relay/1?turn=on")
+    time.sleep(0.2)
+    assert _get_json(sim.url + "/rpc/Input.GetStatus?id=0")["state"] is True  # a quitté le bas

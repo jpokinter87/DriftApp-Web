@@ -14,6 +14,8 @@
   - capteur de pluie : entrée ``id=2`` du même Uni+ simulé, basculée par
     ``GET /dev/rain?on=0|1`` → ``{"raining": <bool>}``. Convention terrain
     (14/08/2026) : ``state=True`` = pluie.
+  - transmission qui patine : ``GET /dev/stall?on=0|1`` → ``{"stalled": <bool>}``.
+    Le moteur tourne mais le cimier reste immobile (gel, nuit du 06/11/2026).
   - voltmètres (6.31.0) : ``GET /rpc/Voltmeter.GetStatus?id=100|101`` →
     ``{"id": n, "voltage": <V>}`` (100 batteries, 101 chargeur), modifiables
     par ``GET /dev/voltage?id=<n>&v=<V>``.
@@ -127,6 +129,12 @@ class _SilentHandler(BaseHTTPRequestHandler):
             self._send_json(200, {"ison": ison})
             return
 
+        if parsed.path == "/dev/stall":
+            raw = qs.get("on", ["1"])[0].strip().lower()
+            stalled = raw in ("1", "true", "yes", "on")
+            self._send_json(200, {"stalled": sim.set_stall(stalled)})
+            return
+
         if parsed.path == "/dev/rain":
             raw = qs.get("on", ["1"])[0].strip().lower()
             raining = raw in ("1", "true", "yes", "on")
@@ -176,6 +184,7 @@ class CimierSimulator:
         self._power_on = False  # relais 24V
         self._heater_on = False  # relais résistance chauffante (id=3)
         self._raining = False  # entrée pluie simulée (bascule via /dev/rain)
+        self._stalled = False  # transmission qui patine (bascule via /dev/stall)
         self._voltages = {VOLTMETER_BATTERY: 12.55, VOLTMETER_CHARGER: 13.6}
         self._last_advance_ts = None
 
@@ -308,6 +317,12 @@ class CimierSimulator:
             self._raining = bool(raining)
             return self._raining
 
+    def set_stall(self, stalled):
+        """Bascule la transmission qui patine. Retourne l'état courant."""
+        with self._lock:
+            self._stalled = bool(stalled)
+            return self._stalled
+
     # --- animation -----------------------------------------------------
     def _advance_locked(self):
         """Avance le mécanisme du temps écoulé (à appeler sous self._lock)."""
@@ -317,7 +332,7 @@ class CimierSimulator:
             return
         elapsed = now - self._last_advance_ts
         self._last_advance_ts = now
-        if self._power_on and self._mechanism.motor_on:
+        if self._power_on and self._mechanism.motor_on and not self._stalled:
             self._mechanism.advance(elapsed)
 
     def _animate_loop(self):

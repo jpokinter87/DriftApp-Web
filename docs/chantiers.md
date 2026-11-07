@@ -41,13 +41,25 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   +0,1°. Toujours aucun `dome_flip_early_*`.
 - **Réf.** : specs `2026-10-21-bascule-coupole-signal-asiair.md`, `2026-10-23-monture-retournee-en-avance.md`.
 
-### Fermeture du cimier : relance et fin de nuit
-- **Ouvert le** 11/10/2026. 6.21.0 : relance de la fermeture automatique
-  (`close_retry_interval_minutes`). 6.21.2 : fermeture de fin de nuit différée jusqu'à
-  l'arrivée à 45°, droits du fichier de commande cimier. 6.24.1 : une seule fermeture par
-  matin, pas de rejeu de la commande au démarrage.
-- **Prochaine étape** : chercher `automation_close_*` et `cycle_end` dans les nuits à
-  venir. Limite connue : la relance est oubliée si `cimier_service` redémarre.
+### Cimier bloqué : arrêt anticipé du moteur (6.31.4)
+- **Ouvert le** 07/11/2026. Nuit du 06/11 (zip `logs/terrain/2026-11-06.zip`), 4 °C,
+  humide : 9 fermetures manuelles (05:54 → 06:05) puis 27 relances auto (06:41 →
+  08:51) en `cycle_timeout`. `open_switch=true` sur tout le cycle : le cimier n'a jamais
+  quitté la butée haute, moteur 26 s « à vide » (Serge : aucun claquement des rouages).
+  Relance n° 27 réussie à 08:56:35 (butée libérée en < 1 s, course de 22 s) une fois
+  réchauffé. Hypothèse mécanique : transmission qui patine (accouplement humide/gelé),
+  pas un blocage dur. La relance de fermeture (6.21.0 → 6.24.1) est **validée** par
+  cette nuit (`automation_close_confirmed retries=27`) ; limite connue : la relance est
+  oubliée si `cimier_service` redémarre.
+- **6.31.4** : butée de départ encore enfoncée après `cimier.departure_timeout_s` (5 s ;
+  terrain : libérée en 0,05 à 0,61 s sur tous les cycles normaux d'oct.–nov.) → moteur et
+  24 V coupés, `poll_stalled`, `cycle_end result=stalled error=cimier_stalled`, dashboard
+  « Bloqué : le moteur tourne mais le cimier n'a pas quitté sa butée ». Rythme des
+  relances inchangé (choix JP). Dev : `curl "http://127.0.0.1:8001/dev/stall?on=1"`.
+- **Prochaine étape** : à la prochaine nuit froide, chercher `poll_stalled` et
+  `result=stalled` ; vérifier qu'aucun cycle normal n'est coupé à tort (aucun
+  `poll_stalled` suivi d'une course réussie à la relance suivante en < 1 s).
+  Inspection mécanique de la transmission du cimier à proposer à Serge (`/diag-terrain`).
 
 ### Revue critique du 15/10 (6.21.3 → 6.21.7)
 - **État** : tout est livré : suivi en UTC (changement d'heure du 25/10), STOP pendant un
