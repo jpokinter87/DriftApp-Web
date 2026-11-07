@@ -59,7 +59,8 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
 - **Prochaine étape** : à la prochaine nuit froide, chercher `poll_stalled` et
   `result=stalled` ; vérifier qu'aucun cycle normal n'est coupé à tort (aucun
   `poll_stalled` suivi d'une course réussie à la relance suivante en < 1 s).
-  Inspection mécanique de la transmission du cimier à proposer à Serge (`/diag-terrain`).
+  Inspection de la transmission (pignon, accouplement, vis sur l'axe) demandée à Serge le
+  07/11 avec l'annonce de la 6.31.5 : photo attendue.
 
 ### Revue critique du 15/10 (6.21.3 → 6.21.7)
 - **État** : tout est livré : suivi en UTC (changement d'heure du 25/10), STOP pendant un
