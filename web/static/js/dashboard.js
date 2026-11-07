@@ -1163,6 +1163,14 @@ const CIMIER_PHASE_LABELS = {
     cooldown: 'Anti-rebond'
 };
 
+// Texte d'une erreur cimier : libellé clair si connu, sinon le code brut.
+function cimierErrorText(code) {
+    if (code === 'cimier_stalled') {
+        return 'Bloqué : le moteur tourne mais le cimier n\'a pas quitté sa butée';
+    }
+    return `Erreur : ${code}`;
+}
+
 // Seuils de vivacité du cimier_service (fraîcheur de status.last_update).
 const CIMIER_STALE_MS = 90_000;   // service considéré arrêté (lock boutons, skip parking)
 const CIMIER_SILENT_MS = 60_000;  // cascade ouverture tracking bypassée
@@ -1201,7 +1209,12 @@ async function pollCimierStatus() {
         const from = (CIMIER_STATE_LABELS[prevState] || prevState).toLowerCase();
         const to = (CIMIER_STATE_LABELS[status.state] || status.state).toLowerCase();
         const level = status.state === 'error' ? 'ERROR' : 'INFO';
-        pushCimierTimeline(level, `Cimier : ${from} → ${to}`);
+        // L'erreur ne reste que post_off_quiet_s dans le panneau : la raison
+        // doit survivre dans la timeline (nuit du 06/11/2026).
+        const reason = status.state === 'error' && status.error_message
+            ? ` — ${cimierErrorText(status.error_message)}`
+            : '';
+        pushCimierTimeline(level, `Cimier : ${from} → ${to}${reason}`);
     }
 
     // Transitions du capteur de pluie → timeline. Comparé avant assignation,
@@ -1254,10 +1267,8 @@ async function pollCimierStatus() {
     // redondant avec le badge et source de confusion signalée terrain.)
     if (elements.cimierDetail) {
         const parts = [];
-        if (status.state === 'error' && status.error_message === 'cimier_stalled') {
-            parts.push('Bloqué : le moteur tourne mais le cimier n\'a pas quitté sa butée');
-        } else if (status.state === 'error' && status.error_message) {
-            parts.push(`Erreur : ${status.error_message}`);
+        if (status.state === 'error' && status.error_message) {
+            parts.push(cimierErrorText(status.error_message));
         } else if (status.remaining_quiet_s !== undefined && status.remaining_quiet_s > 0) {
             parts.push(`Stabilisation ${status.remaining_quiet_s.toFixed(0)} s`);
         }
