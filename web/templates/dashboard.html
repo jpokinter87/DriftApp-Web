@@ -401,6 +401,20 @@
                 </button>
             </div>
             <div id="cimier-detail" class="mt-2 text-[0.7rem] text-obs-text-muted font-mono min-h-[1rem]"></div>
+            <!-- Erreur cimier gardée jusqu'à acquittement (6.31.7) -->
+            <div x-data x-show="$store.dashboard.cimierAlert" x-cloak
+                 class="config-banner is-error mt-2 flex items-center"
+                 role="alert">
+                <div class="flex-1">
+                    <span class="font-mono" x-text="$store.dashboard.cimierAlert?.timeLabel"></span>
+                    —
+                    <span x-text="$store.dashboard.cimierAlert?.text"></span>
+                    <span x-show="$store.dashboard.cimierAlert?.count > 1"
+                          x-text="`(${$store.dashboard.cimierAlert?.count} erreurs depuis le dernier acquittement)`"></span>
+                </div>
+                <button class="btn btn-secondary whitespace-nowrap"
+                        @click="$store.dashboard.cimierAlert = null">J'ai vu</button>
+            </div>
 
             <!-- ─── Automatisation lifecycle session (v6.0 Phase 4 ; timeline repliable v6.11) ─── -->
             <div class="section-divider mt-2"></div>

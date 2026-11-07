@@ -98,6 +98,9 @@ document.addEventListener('alpine:init', () => {
         trackingVisible: false,
         // Cimier state (v6.0 Phase 1) — payload brut de /api/cimier/status/
         cimier: null,
+        // Dernière erreur cimier, affichée jusqu'à acquittement (6.31.7) :
+        // { text, timeLabel, count } ou null.
+        cimierAlert: null,
         // Cimier close confirmation modal (v6.0 Phase 2 sub-plan 01)
         cimierCloseConfirmVisible: false,
         cimierCloseConfirmObject: null,
@@ -1213,6 +1216,16 @@ async function pollCimierStatus() {
             ? ` — ${cimierErrorText(status.error_message)}`
             : '';
         pushCimierTimeline(level, `Cimier : ${from} → ${to}${reason}`);
+    }
+    // L'erreur reste affichée jusqu'à acquittement (demande Serge, 07/11) :
+    // la timeline est repliée par défaut, la ligne de détail s'efface en 10 s.
+    if (status.state === 'error' && prevState !== 'error') {
+        const text = status.error_message ? cimierErrorText(status.error_message) : 'Erreur';
+        store.cimierAlert = {
+            text,
+            timeLabel: new Date().toLocaleTimeString('fr-FR', { hour12: false }),
+            count: (store.cimierAlert?.count || 0) + 1,
+        };
     }
 
     // Transitions du capteur de pluie → timeline. Comparé avant assignation,
