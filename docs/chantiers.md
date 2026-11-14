@@ -136,7 +136,9 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   des services au démarrage, et aucun WARN timesyncd. Au démarrage
   suivant, plus de saut d'heure dans les logs des services. Modèle du Pi demandé à Serge
   le 27/10 : si c'est un Pi 5, une pile sur le connecteur BAT garde l'heure même sans
-  internet.
+  internet. **13/11** : c'est un Pi 5, et Serge a posé la pile RTC officielle (charge à
+  activer par `dtparam=rtc_bbat_vchg=3000000`). Le saut d'heure au démarrage devrait
+  disparaître ; à confirmer sur un zip.
 
 ### Bouton « Éteindre » du dashboard
 - **Ouvert le** 27/10/2026, livré en 6.29.0 (extinction propre du Pi depuis l'en-tête du
@@ -202,6 +204,64 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   `/etc/xdg/…`) : lui demander `grep -rl firefox ~/.config /etc/xdg 2>/dev/null`.
 
 ## En attente d'un événement
+
+### Capteur 45° : remplacement du microswitch par un capteur optique ou inductif
+- **Ouvert le** 04/11/2026. Serge veut remplacer le microswitch SS-5GL (GPIO27, pull-up,
+  1 au repos, front 1→0 = 45°, `ems22d_calibrated.py`) par un Omron E3Z-D61 NPN
+  (réflexion directe, 12-24 V). Aucun changement de code si sortie NPN en mode L-ON.
+- **Conseillé (message du 04/11)** : alim 12/24 V permanente, 0 V commun avec le Pi,
+  sortie vers GPIO27 via diode 1N5819 (cathode côté capteur) + 10 kΩ vers 3,3 V ; viser
+  hors passage, cible étroite, sensibilité réduite (risque : fausse détection = faux
+  recalage à 45°). Alternative proposée : inductif LJ12A3-4-Z/BX.
+- **05/11, question 1N4148** : déconseillée (Vf ≈ 0,6 V, niveau bas lu à la limite du
+  seuil 0,8 V du Pi) ; 1N5819 à commander, ou pas de diode si E3Z-D61 NPN + 10 kΩ vers
+  3,3 V. Serge doit renvoyer GPIO27 au multimètre (< 0,6 V cible devant, ≈ 3,3 V sans)
+  ou `pinctrl get 27` (lo / hi). 1N5819 commandée par Serge ; on attend la réception,
+  le montage et les premiers tests. Schéma de montage remis :
+  `docs/schema_capteur_45_E3Z-D61.pdf` (généré par `scripts/diagnostics/gen_schema_capteur_45_pdf.py`).
+- **11/11, questions de Serge (réponses données)** : le pull-up interne du Pi est déjà
+  activé par le logiciel (GPIO27 ≈ 3,3 V au repos, microswitch actuel compris). La 10 kΩ
+  externe n'est pas indispensable : elle durcit la ligne contre le pull-up interne faible
+  (≈ 50 kΩ), car câble long près du moteur = parasites (faux recalage), courant de fuite
+  de la sortie NPN et de la diode, ligne tenue dès le boot avant `ems22d`. Courant cible
+  devant ≈ 0,33 mA. **Compatibilité** : résistance + diode posées, le microswitch se
+  branche entre la cathode de la 1N5819 (côté fil noir) et la masse du Pi, sans 12 V ;
+  attendu broche 13 / broche 14 : relâché ≈ 3,3 V, appuyé ≈ 0,2-0,3 V. Puis passage au
+  capteur : noir à la place du microswitch, marron +12 V, bleu 0 V **relié à la masse du
+  Pi** (sinon GPIO27 ne descend jamais), sélecteur sur L (L-ON).
+- **Prochaine étape** : après la pose, contrôle des niveaux ci-dessus (d'abord avec le
+  microswitch derrière la diode, puis avec le capteur), puis zip des logs avec des franchissements dans les deux
+  sens ; lire `recalage | source=switch avant=… ecart=…`. Si l'écart dépend du sens
+  au-delà de 0,3°, recaler au milieu de la cible (démon encodeur). Mettre à jour le PDF de
+  description technique de la coupole.
+
+### Pi bloqué LED rouge au démarrage (13/11)
+- **Ouvert le** 13/11/2026. Serge vient de poser une batterie de sauvegarde pour le Pi et un
+  convertisseur 12 V pour la cellule E3Z-D61 (la diode 1N5819 n'est pas encore arrivée).
+  À 16h27 puis à 17h37, après extinction et rallumage : LED rouge, le Pi ne démarre pas. Il
+  repart après débranchement de tous les fils. Aucun log, le Pi n'ayant pas démarré.
+- **Réponses de Serge (13/11)** : c'est un **Pi 5**. La « batterie » est la pile RTC
+  officielle (rechargeable) sur le connecteur BAT : elle ne garde que l'heure. Elle ne
+  peut pas maintenir le Pi en veille, donc la piste batterie est écartée. Le convertisseur
+  12 V est alimenté par le 36 V, il est donc hors de cause. LED rouge fixe au démarrage
+  raté comme après extinction ; elle reste rouge « des plombes » après extinction (veille
+  normale du Pi 5 tant que son alimentation est branchée). Peu probable : le fil moteur
+  arraché (DM860T sur 36 V séparé). Conseillé : pas de fil noir de la cellule sur GPIO27
+  avant la diode. Charge de la pile conseillée : `dtparam=rtc_bbat_vchg=3000000` dans
+  `/boot/firmware/config.txt` (sans rapport avec la panne).
+- **Suspect n°1 (13/11, 3e échange)** : alimentation officielle 27 W. Seules nouveautés :
+  la pile RTC et un **convertisseur DC-DC buck-boost** ajouté sur l'alimentation 3,3 V de
+  l'encodeur EMS22A, avec une 2e sortie prévue pour le pull-up de GPIO27 (en l'air pour
+  l'instant). Son entrée est inconnue. Si elle est prise sur le Pi : appel de courant à la
+  mise sous tension, le PMIC du Pi 5 reste en veille. Si elle vient d'une autre
+  alimentation : l'encodeur reste alimenté Pi éteint et renvoie du courant dans le Pi par
+  ses broches. Le convertisseur est inutile : encodeur sur le 3,3 V du Pi comme avant, et
+  10 kΩ sur la broche 1 (schéma `docs/schema_capteur_45_E3Z-D61.pdf`).
+- **Prochaine étape** : Serge retire le convertisseur, remet l'encodeur comme avant, et
+  fait 4-5 cycles extinction/allumage : tous doivent démarrer. **14/11** : Serge retire le
+  convertisseur. Montage conseillé : encodeur sur la broche 1 (3,3 V Pi), 10 kΩ entre la
+  broche 17 (3,3 V Pi) et la broche 13 ; jamais de 3,3 V extérieur sur ce qui touche une
+  broche du Pi.
 
 ### Alerte « méridien de l'ASIAIR décalé » (site ou heure de la monture faux)
 - **Ouvert le** 27/10/2026. Nuit du 27/10, NGC 7354 (Céphée, Déc +61°, culmine au nord
