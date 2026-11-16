@@ -229,6 +229,17 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   attendu broche 13 / broche 14 : relâché ≈ 3,3 V, appuyé ≈ 0,2-0,3 V. Puis passage au
   capteur : noir à la place du microswitch, marron +12 V, bleu 0 V **relié à la masse du
   Pi** (sinon GPIO27 ne descend jamais), sélecteur sur L (L-ON).
+- **16/11, premier essai sur table (Serge)** : modèle livré **E3Z-S10N3** (pas la
+  référence Omron E3Z-D61). Le doigt devant la cellule allume la LED : c'est bien la
+  réflexion directe, et le potentiomètre règle la portée. Noir ↔ bleu au multimètre en
+  ohmmètre : infini dans les deux états (mesure sans valeur sur une sortie à transistor
+  alimentée). Noir ↔ +12 V en voltmètre : 0,3 V au repos, 11 V en détection, donc le fil
+  noir est tiré à la masse en détection : **sortie NPN à collecteur ouvert, active en
+  détection**, ce qu'attend `ems22d` (front 1→0). Mesure demandée pour lever le doute
+  sur un pull-up interne vers 12 V : noir ↔ bleu en voltmètre, au repos, rien de branché
+  (≈ 0 V ou flottant : branchement direct possible ; ≈ 12 V : diode obligatoire). Diode
+  1N5819 toujours pas reçue (11 jours), Serge en recommande une. Convertisseur retiré, le
+  Pi redémarre normalement.
 - **Prochaine étape** : après la pose, contrôle des niveaux ci-dessus (d'abord avec le
   microswitch derrière la diode, puis avec le capteur), puis zip des logs avec des franchissements dans les deux
   sens ; lire `recalage | source=switch avant=… ecart=…`. Si l'écart dépend du sens
