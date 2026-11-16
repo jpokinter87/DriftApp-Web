@@ -240,6 +240,12 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   (≈ 0 V ou flottant : branchement direct possible ; ≈ 12 V : diode obligatoire). Diode
   1N5819 toujours pas reçue (11 jours), Serge en recommande une. Convertisseur retiré, le
   Pi redémarre normalement.
+- **16/11, mesure noir ↔ bleu** : 0 V au repos, 0,5 V en détection. Pas de pull-up interne
+  vers 12 V : le fil noir ne peut jamais porter de tension par lui-même. Conseillé :
+  **branchement direct sans diode** (avec la diode, niveau bas ≈ 0,5 + 0,3 V, à la limite
+  du seuil 0,8 V du Pi). Serge pas rassuré : essai sans le Pi proposé d'abord (10 kΩ entre
+  noir et +12 V, noir ↔ bleu ≈ 12 V au repos, < 0,8 V en détection), puis câblage Pi
+  éteint et contrôle broche 13 (≈ 3,3 V / < 0,6 V).
 - **Prochaine étape** : après la pose, contrôle des niveaux ci-dessus (d'abord avec le
   microswitch derrière la diode, puis avec le capteur), puis zip des logs avec des franchissements dans les deux
   sens ; lire `recalage | source=switch avant=… ecart=…`. Si l'écart dépend du sens
