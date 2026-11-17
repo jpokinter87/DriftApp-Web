@@ -246,8 +246,19 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   du seuil 0,8 V du Pi). Serge pas rassuré : essai sans le Pi proposé d'abord (10 kΩ entre
   noir et +12 V, noir ↔ bleu ≈ 12 V au repos, < 0,8 V en détection), puis câblage Pi
   éteint et contrôle broche 13 (≈ 3,3 V / < 0,6 V).
-- **Prochaine étape** : après la pose, contrôle des niveaux ci-dessus (d'abord avec le
-  microswitch derrière la diode, puis avec le capteur), puis zip des logs avec des franchissements dans les deux
+- **17/11, essai sans le Pi (10 kΩ noir ↔ +12 V)** : 1,28 V noir ↔ bleu en détection, au
+  lieu des < 0,8 V annoncés. Pas grave, aucun risque matériel : les 0,8 V étaient une
+  estimation (Omron donne jusqu'à 2 V résiduels), et le E3Z-S10N3 est probablement un
+  modèle compatible à sortie double transistor (≈ 1,1-1,3 V normaux). Sur le Pi, avec
+  10 kΩ vers 3,3 V (≈ 0,33 mA au lieu de 1,1 mA), le niveau bas sera un peu plus faible.
+  Zone non garantie du Pi entre 0,8 V et ≈ 1,3 V : lu 0 le plus souvent, parasites
+  possibles ; `SWITCH_DEBOUNCE_SEC = 2 s` limite l'effet à des recalages répétés vers 45°
+  quand la cible est devant. **Plus de diode** : elle pousserait le niveau bas au-delà de
+  1,5 V. À vérifier : la résistance fait bien 10 kΩ.
+- **Prochaine étape** : capteur câblé Pi éteint, puis Pi allumé, broche 13 cible devant
+  (ou `pinctrl get 27`) : < 0,8 V bon ; 0,8-1,2 V avec `lo` acceptable, à confirmer par
+  une seule ligne `Switch transition` par passage dans les logs ; > 1,2 V ou lo/hi qui
+  alterne : interface transistor ou optocoupleur, ou inductif LJ12A3-4-Z/BX. Puis zip des logs avec des franchissements dans les deux
   sens ; lire `recalage | source=switch avant=… ecart=…`. Si l'écart dépend du sens
   au-delà de 0,3°, recaler au milieu de la cible (démon encodeur). Mettre à jour le PDF de
   description technique de la coupole.
