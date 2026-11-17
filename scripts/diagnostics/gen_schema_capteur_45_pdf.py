@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
 """Génère docs/schema_capteur_45_E3Z-D61.pdf : montage du capteur optique de recalage 45°.
 
 Remplace le microswitch SS-5GL (GPIO27, front 1→0 = 45°) par un capteur E3Z-S10N3 (NPN).
-Aucun changement de code : sortie NPN = niveau bas quand la cible est vue.
-Sans diode (16/11) : sortie à collecteur ouvert mesurée, noir ↔ bleu 0 V au repos et
-0,5 V en détection ; une 1N5819 ajouterait ≈ 0,3 V, à la limite du seuil bas du Pi.
+Aucun changement de code : GPIO27 passe à 0 quand la cible est vue.
+Avec optocoupleur PC817 (17/11) : sur table le capteur commute (10 kΩ vers +12 V :
+12 V sans cible, 1,28 V avec), mais branché en direct le Pi ne le voit pas (masse 12 V
+non commune). L'optocoupleur sépare les masses et met GPIO27 vers 0,2 V en détection.
 10 kΩ sur la broche 17 (3,3 V), la broche 1 restant à l'encodeur (14/11).
 """
 
@@ -21,11 +21,11 @@ NOIR = (20, 20, 20)
 ROUGE = (200, 30, 30)
 VERT = (20, 140, 60)
 GRIS = (110, 110, 110)
+VIOLET = (120, 60, 160)
 
 
 class Schema(Report):
     def body(self, text):
-        # multi_cell laisse x en bout de ligne après une puce : repartir de la marge.
         self.set_x(self.l_margin)
         super().body(text)
 
@@ -84,28 +84,29 @@ class Schema(Report):
 
 pdf = Schema(
     title="Capteur optique de recalage 45°",
-    subtitle="E3Z-S10N3 à la place du microswitch",
+    subtitle="E3Z-S10N3 à la place du microswitch, via optocoupleur PC817",
 )
 
 # ── Page 1 : schéma (paysage) ─────────────────────────────────────────
 pdf.add_page(orientation="L")
 pdf.set_font("DejaVu", "B", 14)
 pdf.set_xy(15, 14)
-pdf.cell(0, 8, "Schéma de câblage — capteur optique 45° (E3Z-S10N3, sortie NPN, sans diode)")
+pdf.cell(0, 8, "Schéma de câblage — capteur optique 45° (E3Z-S10N3) avec optocoupleur PC817")
 pdf.set_font("DejaVu", "", 9)
 pdf.set_xy(15, 22)
 pdf.cell(
     0,
     5,
-    "Remplace le microswitch : même entrée du Pi (broche 13), aucune modification du logiciel.",
+    "Remplace le microswitch : même entrée du Pi (broche 13), aucune modification du logiciel. "
+    "Le 12 V et le Pi restent séparés.",
 )
 
 # Alimentation 12 V
 pdf.box(25, 40, 50, 32)
 pdf.label(50, 47, "Alimentation", 9, "B", align="C")
 pdf.label(50, 52, "12 V continu", 9, "B", align="C")
-pdf.label(50, 57, "(bloc secteur dédié,", 7, color=GRIS, align="C")
-pdf.label(50, 61, "100 mA suffisent)", 7, color=GRIS, align="C")
+pdf.label(50, 57, "(celle déjà utilisée", 7, color=GRIS, align="C")
+pdf.label(50, 61, "pour l'essai sur table)", 7, color=GRIS, align="C")
 pdf.terminal(25, 66)
 pdf.label(28, 66, "0 V", 8, "B", color=BLEU)
 pdf.terminal(75, 66)
@@ -122,13 +123,28 @@ pdf.terminal(75, 102)
 pdf.terminal(75, 124)
 pdf.terminal(50, 136)
 
+# Optocoupleur PC817
+pdf.box(124, 74, 42, 34, fill=(240, 232, 250))
+pdf.label(145, 79, "PC817", 9, "B", align="C")
+pdf.label(145, 91, "LED → transistor", 6.5, color=GRIS, align="C")
+pdf.label(145, 95, "(lumière interne)", 6.5, color=GRIS, align="C")
+for x, y, txt, align in (
+    (125.5, 84, "1 anode", "L"),
+    (125.5, 102, "2 cathode", "L"),
+    (164.5, 84, "4 collecteur", "R"),
+    (164.5, 102, "3 émetteur", "R"),
+):
+    pdf.label(x, y, txt, 6.5, "B", VIOLET, align, w=19)
+for x, y in ((124, 84), (124, 102), (166, 84), (166, 102)):
+    pdf.terminal(x, y)
+
 # Raspberry Pi
 pdf.box(225, 40, 52, 120, fill=(235, 245, 235))
 pdf.label(251, 46, "Raspberry Pi", 9, "B", align="C")
 pdf.label(251, 51, "connecteur 40 broches", 7, color=GRIS, align="C")
 for y, broche, nom, col in (
     (60, "broche 17", "3,3 V", ROUGE),
-    (82, "broche 13", "GPIO27", VERT),
+    (84, "broche 13", "GPIO27", VERT),
     (152, "broche 14", "GND (masse)", BLEU),
 ):
     pdf.terminal(225, y)
@@ -137,36 +153,51 @@ for y, broche, nom, col in (
 
 # Fil marron : capteur + → +12 V
 pdf.wire([(75, 102), (90, 102), (90, 66), (75, 66)], MARRON)
+pdf.dot(90, 66, ROUGE)
 pdf.label(92, 99, "marron", 8, "B", color=MARRON)
 
-# Fils bleus : 0 V commun (alimentation, capteur, Pi)
-pdf.wire([(25, 66), (15, 66), (15, 152), (225, 152)], BLEU)
-pdf.wire([(50, 136), (50, 152)], BLEU)
-pdf.dot(50, 152, BLEU)
-pdf.label(52, 143, "bleu", 8, "B", color=BLEU)
-pdf.label(100, 148, "0 V commun : alimentation + capteur + Pi (indispensable)", 8, "B", BLEU, w=110)
+# +12 V → 2,2 kΩ → anode (broche 1)
+pdf.wire([(90, 66), (115, 66), (115, 70)], ROUGE)
+pdf.resistor_v(115, 70, 80, NOIR)
+pdf.wire([(115, 80), (115, 84), (124, 84)], ROUGE)
+pdf.label(112, 73, "2,2 kΩ", 8, "B", align="R", w=20)
 
-# Fil noir : sortie → directement sur GPIO27 (pas de diode, 16/11)
-pdf.wire([(75, 124), (190, 124), (190, 82)], NOIR)
-pdf.label(92, 121, "noir (sortie) : directement sur la broche 13, sans diode", 8, "B", NOIR, w=100)
+# Fil noir : sortie capteur → cathode (broche 2)
+pdf.wire([(75, 124), (115, 124), (115, 102), (124, 102)], NOIR)
+pdf.label(78, 121, "noir (sortie)", 8, "B", NOIR, w=30)
 
-# Résistance 10 kΩ : 3,3 V → GPIO27
-pdf.wire([(225, 60), (190, 60), (190, 64)], ROUGE)
-pdf.resistor_v(190, 64, 76, NOIR)
-pdf.wire([(190, 76), (190, 82)], VERT)
-pdf.label(170, 68, "10 kΩ", 8, "B", align="R", w=40)
-pdf.label(170, 72.5, "vers 3,3 V, jamais 12 V", 7, color=ROUGE, align="R", w=40)
+# Fils bleus : 0 V du 12 V, côté capteur seulement
+pdf.wire([(25, 66), (15, 66), (15, 146), (50, 146)], BLEU)
+pdf.wire([(50, 136), (50, 146)], BLEU)
+pdf.dot(50, 146, BLEU)
+pdf.label(52, 141, "bleu", 8, "B", color=BLEU)
 
-# Nœud GPIO27
-pdf.wire([(190, 82), (225, 82)], VERT)
-pdf.dot(190, 82, VERT)
+# Côté Pi : 10 kΩ 3,3 V → GPIO27, collecteur → GPIO27, émetteur → GND Pi
+pdf.wire([(225, 60), (190, 60), (190, 66)], ROUGE)
+pdf.resistor_v(190, 66, 78, NOIR)
+pdf.wire([(190, 78), (190, 84)], VERT)
+pdf.label(187, 70, "10 kΩ", 8, "B", align="R", w=20)
+pdf.label(187, 74.5, "(déjà posée)", 7, color=GRIS, align="R", w=20)
+pdf.wire([(166, 84), (225, 84)], VERT)
+pdf.dot(190, 84, VERT)
+pdf.wire([(166, 102), (205, 102), (205, 152), (225, 152)], BLEU)
+pdf.label(207, 120, "masse Pi", 7.5, "B", BLEU)
 
-# Cadre pointillé : à monter près du Pi
+# Séparation des masses
+pdf.set_draw_color(*ROUGE)
+pdf.set_dash_pattern(dash=2, gap=1.5)
+pdf.line(145, 112, 145, 160)
+pdf.set_dash_pattern()
+pdf.label(143, 150, "côté 12 V", 8, "B", ROUGE, "R", 40)
+pdf.label(147, 150, "côté Pi", 8, "B", ROUGE)
+pdf.label(145, 156, "aucun fil ne traverse cette ligne", 7.5, "I", ROUGE, "C", 80)
+
+# Cadre pointillé : plaquette près du Pi
 pdf.set_draw_color(*GRIS)
 pdf.set_dash_pattern(dash=1.5, gap=1.2)
-pdf.rect(150, 55, 58, 32)
+pdf.rect(106, 54, 104, 58)
 pdf.set_dash_pattern()
-pdf.label(152, 84, "à souder près du Pi", 7, "I", GRIS)
+pdf.label(108, 58, "petite plaquette près du Pi", 7, "I", GRIS)
 
 # Encadrés sous le schéma
 pdf.set_xy(15, 165)
@@ -174,11 +205,11 @@ pdf.set_font("DejaVu", "", 8)
 pdf.multi_cell(
     267,
     4.2,
-    "Fonctionnement : sans cible, la résistance tire GPIO27 à 3,3 V (lu 1). Quand le capteur voit "
-    "la cible, son fil noir est relié au 0 V et GPIO27 descend vers 0,5 V (lu 0). Ce passage de 1 à 0 "
-    "recale la coupole à 45°, exactement comme le microswitch. Pas de diode : le fil noir ne fait que "
-    "relier GPIO27 au 0 V, il ne porte jamais de tension par lui-même (mesuré le 16/11 : 0 V au repos, "
-    "0,5 V en détection). Une diode ajouterait 0,3 V et mettrait le niveau bas à la limite du Pi.",
+    "Fonctionnement : sans cible, le capteur ne fait rien, la LED du PC817 est éteinte et la 10 kΩ "
+    "tient GPIO27 à 3,3 V (lu 1). Quand le capteur voit la cible, son fil noir est relié au 0 V du "
+    "12 V : environ 4 mA traversent la 2,2 kΩ et la LED du PC817, dont le transistor relie alors "
+    "GPIO27 à la masse du Pi, vers 0,2 V (lu 0). Ce passage de 1 à 0 recale la coupole à 45°, "
+    "exactement comme le microswitch. Le 12 V et le Pi n'ont aucun fil en commun.",
 )
 pdf.ln(1)
 pdf.set_x(15)
@@ -187,12 +218,13 @@ pdf.set_text_color(*ROUGE)
 pdf.multi_cell(
     267,
     4.2,
-    "Ne jamais brancher le fil marron ni le +12 V sur le Pi. Ne pas alimenter le capteur avec le 36 V "
-    "du driver moteur (le capteur accepte 12 à 24 V) ni avec le Shelly 24 V du cimier (coupé hors cycle).",
+    "Ne jamais brancher un fil du capteur (marron, bleu, noir) ni le 12 V sur le Pi : seules les "
+    "broches 3 et 4 du PC817 vont au Pi. Ne pas alimenter le capteur avec le 36 V du driver moteur "
+    "(le capteur accepte 12 à 24 V) ni avec le Shelly 24 V du cimier (coupé hors cycle).",
 )
 pdf.set_text_color(0, 0, 0)
 
-# ── Page 2 : repérage des broches et essai sur table ─────────────────
+# ── Page 2 : repérage des broches, PC817, essai sur table ────────────
 pdf.add_page()
 pdf.h1("1. Repérer les broches du Pi")
 pdf.body(
@@ -244,52 +276,52 @@ for n in range(1, 19):
         pdf.label(x + 5, y, f"({n})  {nom}", 8, "B" if utile else "", col if utile else GRIS)
 pdf.set_y(y0 + 9 * 7 + 4)
 pdf.body(
-    "Pour le capteur, seules les broches 13, 14 et 17 servent ; la broche 1 reste à l'encodeur. "
-    "Le microswitch actuel est déjà sur la broche 13 (GPIO27) et sur une masse : noter sur quelles "
-    "broches il est branché avant de débrancher."
+    "Côté Pi, seules les broches 13, 14 et 17 servent ; la broche 1 reste à l'encodeur. "
+    "La 10 kΩ entre les broches 13 et 17 déjà posée reste en place."
 )
 
-pdf.h1("2. Essai sur table, sans le Pi")
+pdf.h1("2. Repérer les broches du PC817")
 pdf.body(
-    "Pour vérifier le capteur avant de le relier au Pi : marron sur +12 V, bleu sur 0 V, et une "
-    "résistance de 10 kΩ entre le fil noir et le +12 V. Au voltmètre entre le noir et le bleu :"
+    "Le PC817 est un petit boîtier noir à 4 pattes, deux de chaque côté. Un point (ou une encoche) "
+    "marque la broche 1. Vu de dessus, point en haut à gauche :"
 )
-pdf.bullet("sans cible : environ 12 V ;")
-pdf.bullet("cible devant le capteur : moins de 0,8 V.")
-pdf.warning_box(
-    "Retirer ensuite cette résistance reliée au +12 V. Elle ne doit jamais rester en place quand le "
-    "fil noir va sur le Pi : sur le Pi, la 10 kΩ va au 3,3 V (broche 17), jamais au 12 V."
+pdf.bullet("à gauche, de haut en bas : broche 1 (anode), broche 2 (cathode) : côté 12 V ;")
+pdf.bullet("à droite, de bas en haut : broche 3 (émetteur), broche 4 (collecteur) : côté Pi.")
+pdf.body("La broche 4 est donc en face de la broche 1, la broche 3 en face de la broche 2.")
+
+pdf.h1("3. Essai sur table (déjà fait le 17/11)")
+pdf.body(
+    "Marron sur +12 V, bleu sur 0 V, 10 kΩ entre le noir et le +12 V, voltmètre noir ↔ bleu : "
+    "12 V sans cible, 1,28 V cible devant. Le capteur fonctionne. Retirer cette 10 kΩ reliée au "
+    "+12 V : dans le montage final, c'est la 2,2 kΩ et le PC817 qui prennent sa place."
 )
 
 # ── Page 3 : montage, réglage, contrôle ──────────────────────────────
 pdf.add_page()
-pdf.h1("3. Matériel")
-pdf.bullet("Capteur E3Z-S10N3 (sortie NPN, vérifiée le 16/11 ; une version PNP ne convient pas).")
-pdf.bullet("Bloc d'alimentation 12 V continu, 100 mA ou plus, branché en permanence.")
-pdf.bullet("Résistance 10 kΩ (marron-noir-orange). Pas de diode.")
-pdf.bullet(
-    "Câble à 3 conducteurs entre le capteur et le boîtier du Pi si le câble de 2 m du capteur ne suffit pas "
-    "(l'ancien câble du microswitch n'en a probablement que 2)."
-)
+pdf.h1("4. Matériel")
+pdf.bullet("Capteur E3Z-S10N3 (sortie NPN, vérifiée les 16 et 17/11).")
+pdf.bullet("Optocoupleur PC817 (boîtier à 4 pattes), quelques centimes.")
+pdf.bullet("Résistance 2,2 kΩ (rouge-rouge-rouge), côté 12 V.")
+pdf.bullet("Résistance 10 kΩ (marron-noir-orange) entre les broches 13 et 17 : déjà posée.")
+pdf.bullet("Alimentation 12 V continu branchée en permanence, celle de l'essai sur table.")
 pdf.bullet(
     "Une cible : petite plaque claire et mate fixée sur la partie tournante de la coupole, à 45°."
 )
 
-pdf.h1("4. Montage")
-pdf.step(1, "Arrêter proprement le Pi (menu Arrêter), puis couper son alimentation.")
-pdf.step(2, "Débrancher les deux fils du microswitch sur le Pi.")
-pdf.step(3, "Souder la résistance 10 kΩ près du Pi, entre la broche 13 et la broche 17 (3,3 V).")
-pdf.step(4, "Brancher le capteur : marron sur +12 V, bleu sur 0 V, noir sur la broche 13.")
-pdf.step(5, "Relier le 0 V de l'alimentation 12 V à la masse du Pi, broche 14 (fil bleu commun).")
-pdf.step(6, "Rebrancher l'alimentation 12 V, puis le Pi.")
+pdf.h1("5. Montage")
+pdf.step(1, "Arrêter proprement le Pi (menu Arrêter), puis couper son alimentation et le 12 V.")
+pdf.step(2, "Retirer le fil noir du capteur de la broche 13 et le fil bleu de la broche 14.")
+pdf.step(3, "Côté 12 V : +12 V → 2,2 kΩ → broche 1 du PC817 ; fil noir du capteur → broche 2.")
+pdf.step(4, "Capteur : marron sur +12 V, bleu sur le 0 V de l'alimentation 12 V (pas sur le Pi).")
+pdf.step(5, "Côté Pi : broche 4 du PC817 → broche 13 du Pi ; broche 3 du PC817 → broche 14.")
 pdf.warning_box(
-    "Avant de rallumer le Pi, deux contrôles. Pi débranché, à l'ohmmètre : aucune continuité entre le "
-    "fil marron (+12 V) et la broche 13. Puis alimentation 12 V branchée, Pi toujours éteint, au "
-    "voltmètre entre la broche 13 et la masse : jamais plus de 3,3 V. Sinon, erreur de câblage : ne "
-    "pas allumer."
+    "Avant de rallumer, tout débranché, à l'ohmmètre : aucune continuité entre l'un des fils du "
+    "capteur (marron, bleu, noir) et les broches 13, 14 ou 17 du Pi. Sinon, erreur de câblage : "
+    "ne pas allumer."
 )
+pdf.step(6, "Rebrancher le 12 V, puis le Pi.")
 
-pdf.h1("5. Pose et réglage du capteur")
+pdf.h1("6. Pose et réglage du capteur")
 pdf.bullet(
     "Fixer le capteur sur la partie fixe, face à la trajectoire de la cible, à 2-5 cm de celle-ci. "
     "Rien d'autre ne doit passer devant (fil, échelle, main)."
@@ -303,10 +335,10 @@ pdf.bullet(
     "sur la cible, rapprocher le capteur ou augmenter un peu la portée."
 )
 
-pdf.h1("6. Contrôle après la pose")
-pdf.body("Au multimètre, entre la broche 13 (GPIO27) et la masse :")
-pdf.bullet("cible devant le capteur : moins de 0,8 V (environ 0,5 V attendu) ;")
-pdf.bullet("cible absente : environ 3,3 V.")
+pdf.h1("7. Contrôle après la pose")
+pdf.body("Au multimètre, entre la broche 13 (GPIO27) et la broche 14 (masse) :")
+pdf.bullet("cible absente : environ 3,3 V ;")
+pdf.bullet("cible devant le capteur : moins de 0,4 V (environ 0,2 V attendu).")
 pdf.body(
     "Ou sur le Pi : ouvrir un terminal par-dessus le dashboard (Ctrl+Alt+T), taper « pinctrl get 27 ». "
     "On doit lire « lo » avec la cible devant, « hi » sans. Retour au dashboard par Alt+Tab."

@@ -260,10 +260,19 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   GPIO27). Envoyé : d'abord le noir débranché du Pi, 12 V posé, noir ↔ broche 14 (≈ 0 V
   repos, < 1 V détection, jamais > 3,3 V sinon stop), puis noir sur la broche 13 et Pi
   allumé. On attend les 4 valeurs.
-- **Prochaine étape** : capteur câblé Pi éteint, puis Pi allumé, broche 13 cible devant
-  (ou `pinctrl get 27`) : < 0,8 V bon ; 0,8-1,2 V avec `lo` acceptable, à confirmer par
-  une seule ligne `Switch transition` par passage dans les logs ; > 1,2 V ou lo/hi qui
-  alterne : interface transistor ou optocoupleur, ou inductif LJ12A3-4-Z/BX. Puis zip des logs avec des franchissements dans les deux
+- **17/11, résultats** : noir en l'air ↔ broche 14 = 0 V dans les deux états (normal, sortie
+  à collecteur ouvert sans rappel : aucun 12 V possible vers le Pi). Branché au Pi (10 kΩ
+  vers la broche 17, câblage vérifié), broche 13 et noir restent à 3,3 V même cible devant.
+  Sur table (10 kΩ vers +12 V) le capteur commute bien : 12 V / 1,28 V ; 3 fils
+  marron/bleu/noir. Cause probable : masse du 12 V pas réellement commune avec le Pi (un
+  0 V au voltmètre ne prouve pas la liaison). **Retenu : optocoupleur PC817** (+12 V →
+  2,2 kΩ → anode 1, noir → cathode 2 ; collecteur 4 → broche 13, émetteur 3 → broche 14,
+  10 kΩ broches 13-17 conservée) : masses séparées, niveau bas ≈ 0,2 V, ≈ 4 mA dans la
+  LED. Aucun changement de code. Schéma mis à jour : `docs/schema_capteur_45_E3Z-D61.pdf`.
+- **Prochaine étape** : Serge se procure un PC817 et une 2,2 kΩ, monte selon le schéma,
+  vérifie l'isolement (aucune continuité entre les fils du capteur et les broches
+  13/14/17), puis broche 13 ↔ 14 : ≈ 3,3 V sans cible, < 0,4 V cible devant (ou
+  `pinctrl get 27` lo/hi). Puis zip des logs avec des franchissements dans les deux
   sens ; lire `recalage | source=switch avant=… ecart=…`. Si l'écart dépend du sens
   au-delà de 0,3°, recaler au milieu de la cible (démon encodeur). Mettre à jour le PDF de
   description technique de la coupole.
