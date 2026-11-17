@@ -255,6 +255,11 @@ Code livré et poussé, jamais vu fonctionner sur le Pi (ou une partie seulement
   possibles ; `SWITCH_DEBOUNCE_SEC = 2 s` limite l'effet à des recalages répétés vers 45°
   quand la cible est devant. **Plus de diode** : elle pousserait le niveau bas au-delà de
   1,5 V. À vérifier : la résistance fait bien 10 kΩ.
+- **17/11, 2 kΩ marron ↔ broche 13 avant le 12 V** : pas un court-circuit (ohmmètre sur
+  électronique hors tension : capteur marron→bleu, masse du Pi, diode de protection de
+  GPIO27). Envoyé : d'abord le noir débranché du Pi, 12 V posé, noir ↔ broche 14 (≈ 0 V
+  repos, < 1 V détection, jamais > 3,3 V sinon stop), puis noir sur la broche 13 et Pi
+  allumé. On attend les 4 valeurs.
 - **Prochaine étape** : capteur câblé Pi éteint, puis Pi allumé, broche 13 cible devant
   (ou `pinctrl get 27`) : < 0,8 V bon ; 0,8-1,2 V avec `lo` acceptable, à confirmer par
   une seule ligne `Switch transition` par passage dans les logs ; > 1,2 V ou lo/hi qui
